@@ -1,0 +1,18 @@
+using Microsoft.EntityFrameworkCore;
+using XTemplate.Domain.Invoices;
+using XTemplate.SharedKernel.Specifications;
+
+namespace XTemplate.Persistence.Repositories;
+
+internal sealed class InvoiceRepository(AppDbContext context) : IInvoiceRepository
+{
+    public void Add(Invoice invoice) => context.Invoices.Add(invoice);
+
+    public void Remove(Invoice invoice) => context.Invoices.Remove(invoice);
+
+    public async Task<Invoice?> GetByIdAsync(InvoiceId id, CancellationToken cancellationToken)
+        => await context.Invoices.FirstOrDefaultAsync(invoice => invoice.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<Invoice>> ListAsync(Specification<Invoice> specification, CancellationToken cancellationToken)
+        => await specification.ApplyTo(context.Invoices.AsNoTracking()).ToListAsync(cancellationToken);
+}

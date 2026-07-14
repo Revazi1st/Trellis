@@ -1,7 +1,7 @@
 namespace XTemplate.SharedKernel.Domain;
 
 /// <summary>Consistency boundary. Raise domain events from state transitions; the persistence layer dispatches them on SaveChanges.</summary>
-public abstract class AggregateRoot<TId> : Entity<TId>
+public abstract class AggregateRoot<TId> : Entity<TId>, IHasDomainEvents
     where TId : struct, IStronglyTypedId<TId>
 {
     private readonly List<IDomainEvent> _domainEvents = [];

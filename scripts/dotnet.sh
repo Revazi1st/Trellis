@@ -2,6 +2,8 @@
 # Runs the dotnet CLI inside the official .NET 10 SDK container.
 # Use when no local .NET SDK is installed:  ./scripts/dotnet.sh build XTemplate.slnx
 # NuGet packages persist in the named volume 'xtemplate-nuget' across runs.
+# The host Docker socket is mounted so Testcontainers-based integration tests can
+# start sibling containers; TESTCONTAINERS_HOST_OVERRIDE points them back at the host.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,7 +19,6 @@ if ! command -v "$DOCKER_BIN" >/dev/null 2>&1; then
   fi
 fi
 
-# empty-array expansion breaks bash 3.2 (macOS default) under set -u, hence the ${var+...} idiom
 TTY_ARGS=""
 if [ -t 0 ] && [ -t 1 ]; then
   TTY_ARGS="-it"
@@ -27,6 +28,8 @@ exec "$DOCKER_BIN" run --rm ${TTY_ARGS:+$TTY_ARGS} \
   -v "$REPO_ROOT":/workspace \
   -w /workspace \
   -v xtemplate-nuget:/root/.nuget/packages \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
   -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
   -e DOTNET_NOLOGO=1 \
   mcr.microsoft.com/dotnet/sdk:10.0 \
