@@ -11,6 +11,7 @@ internal sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbCon
         Justification = "Design-time-only throwaway localhost credentials; migrations never run against real databases from here.")]
     public AppDbContext CreateDbContext(string[] args)
         => new(new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql("Host=localhost;Database=xtemplate;Username=postgres;Password=postgres")
+            .UseNpgsql(Environment.GetEnvironmentVariable("XTEMPLATE_DESIGNTIME_DB")
+                ?? "Host=localhost;Database=xtemplate;Username=postgres;Password=postgres")
             .Options);
 }
