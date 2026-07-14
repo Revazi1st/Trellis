@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The API's public surface: pure request/response records. No references, no logic (ADR-0013). -->
+
+</Project>

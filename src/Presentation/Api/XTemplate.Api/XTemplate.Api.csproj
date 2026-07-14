@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\XTemplate.Api.Common\XTemplate.Api.Common.csproj" />
+    <ProjectReference Include="..\XTemplate.Api.Contracts\XTemplate.Api.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\Core\XTemplate.Application\XTemplate.Application.csproj" />
+    <ProjectReference Include="..\..\..\Infrastructure\XTemplate.Infrastructure\XTemplate.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\Infrastructure\XTemplate.Persistence\XTemplate.Persistence.csproj" />
+    <ProjectReference Include="..\..\..\Shared\XTemplate.ServiceDefaults\XTemplate.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

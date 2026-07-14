@@ -1,0 +1,104 @@
+# XTemplate .NET code style — enforced at build via EnforceCodeStyleInBuild (Directory.Build.props)
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml,props,targets,csproj,slnx,config,xml,razor,html,css,js,ts}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.sh]
+end_of_line = lf
+
+[*.cs]
+# ── Usings & namespaces ─────────────────────────────────────────────────────
+csharp_style_namespace_declarations = file_scoped:error
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:error
+dotnet_diagnostic.IDE0005.severity = warning        # remove unnecessary usings
+
+# ── Language preferences ────────────────────────────────────────────────────
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+csharp_prefer_braces = true:error
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_pattern_matching_over_is_with_cast_check = true:warning
+csharp_style_pattern_matching_over_as_with_null_check = true:warning
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_null_check_over_type_check = true:warning
+csharp_prefer_simple_default_expression = true:warning
+csharp_style_prefer_index_operator = true:suggestion
+csharp_style_prefer_range_operator = true:suggestion
+csharp_style_implicit_object_creation_when_type_is_apparent = true:suggestion
+csharp_style_prefer_readonly_struct = true:warning
+csharp_style_prefer_readonly_struct_member = true:warning
+
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
+dotnet_style_prefer_auto_properties = true:warning
+dotnet_style_prefer_conditional_expression_over_assignment = true:suggestion
+dotnet_style_prefer_conditional_expression_over_return = true:suggestion
+dotnet_style_readonly_field = true:error
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:error
+
+# ── Modern C# (12–14) ───────────────────────────────────────────────────────
+csharp_style_prefer_top_level_statements = true:suggestion
+csharp_style_prefer_utf8_string_literals = true:suggestion
+dotnet_style_prefer_compound_assignment = true:warning
+csharp_style_prefer_tuple_swap = true:suggestion
+
+# ── Naming ──────────────────────────────────────────────────────────────────
+dotnet_naming_rule.interfaces_begin_with_i.severity = error
+dotnet_naming_rule.interfaces_begin_with_i.symbols = interfaces
+dotnet_naming_rule.interfaces_begin_with_i.style = prefixed_with_i
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.prefixed_with_i.capitalization = pascal_case
+dotnet_naming_style.prefixed_with_i.required_prefix = I
+
+dotnet_naming_rule.types_pascal_case.severity = error
+dotnet_naming_rule.types_pascal_case.symbols = types_and_members
+dotnet_naming_rule.types_pascal_case.style = pascal_case
+dotnet_naming_symbols.types_and_members.applicable_kinds = class, struct, enum, method, property, event
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+dotnet_naming_rule.private_fields_underscore_camel.severity = error
+dotnet_naming_rule.private_fields_underscore_camel.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore_camel.style = underscore_camel_case
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+
+dotnet_naming_rule.async_methods_suffix.severity = warning
+dotnet_naming_rule.async_methods_suffix.symbols = async_methods
+dotnet_naming_rule.async_methods_suffix.style = async_suffix
+dotnet_naming_symbols.async_methods.applicable_kinds = method
+dotnet_naming_symbols.async_methods.required_modifiers = async
+dotnet_naming_style.async_suffix.capitalization = pascal_case
+dotnet_naming_style.async_suffix.required_suffix = Async
+
+# ── Analyzer severity tuning (curated at M9; keep this block short) ─────────
+dotnet_diagnostic.CA1716.severity = none            # 'Error' is the Result-pattern type name (ADR-0004); VB-keyword clash is irrelevant here
+dotnet_diagnostic.CA1711.severity = none            # IDomainEventHandler is the intentional DDD name; 'EventHandler' suffix rule targets .NET event delegates
+dotnet_diagnostic.CA1848.severity = none            # LoggerMessage source-gen everywhere is overkill for a template
+dotnet_diagnostic.CA1032.severity = none            # standard exception ctors — we use domain errors, not exception hierarchies
+dotnet_diagnostic.MA0004.severity = none            # ConfigureAwait(false): app code (with SynchronizationContext-free hosts) doesn't need it
+dotnet_diagnostic.MA0006.severity = none            # string == is already ordinal; string.Equals(…, StringComparison) does not translate in EF expression trees
+dotnet_diagnostic.MA0048.severity = none            # vertical slices co-locate small related types (response + line + mapper) in one file by design
+dotnet_diagnostic.S1135.severity = suggestion       # TODO tracking — allowed, surfaced gently
+
+[{**/Migrations/**.cs,**/*.Designer.cs}]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none

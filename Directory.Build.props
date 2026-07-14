@@ -1,0 +1,30 @@
+<Project>
+
+  <PropertyGroup Label="Framework">
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Output">
+    <!-- Single artifacts/ tree at repo root: artifacts/<bin|obj|publish>/<Project>/<pivot>. Must be set here, not in a csproj (NETSDK1199).
+         ArtifactsPath is pinned explicitly so projects under nested Directory.Build.props (tests/) don't compute their own root. -->
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Analysis">
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <!-- Warnings block only Release/CI builds; the inner dev loop stays fast. -->
+    <TreatWarningsAsErrors Condition="'$(Configuration)' == 'Release' or '$(ContinuousIntegrationBuild)' == 'true'">true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Documentation">
+    <!-- XML docs feed the built-in OpenAPI generator; CS1591 (missing comment) stays opt-in per type. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

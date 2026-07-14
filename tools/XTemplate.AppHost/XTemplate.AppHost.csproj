@@ -1,0 +1,10 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+
+  <!-- Aspire AppHost SDK version lives inline here (not in Directory.Packages.props); bump via 'aspire update'. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UserSecretsId>xtemplate-apphost-e6c5a3d2</UserSecretsId>
+  </PropertyGroup>
+
+</Project>

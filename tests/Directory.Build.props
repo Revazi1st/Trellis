@@ -1,0 +1,15 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Build.props, $(MSBuildThisFileDirectory)..))" />
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Test naming (Method_Scenario_Outcome) trips CA1707; ConfigureAwait noise (CA2007) has no value in test code. -->
+    <NoWarn>$(NoWarn);CA1707;CA2007</NoWarn>
+    <!-- xunit.v3 test projects are executables running on Microsoft.Testing.Platform (runner selected in global.json). -->
+    <OutputType>Exe</OutputType>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+</Project>

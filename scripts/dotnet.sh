@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Runs the dotnet CLI inside the official .NET 10 SDK container.
+# Use when no local .NET SDK is installed:  ./scripts/dotnet.sh build XTemplate.slnx
+# NuGet packages persist in the named volume 'xtemplate-nuget' across runs.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+DOCKER_BIN="${DOCKER_BIN:-docker}"
+if ! command -v "$DOCKER_BIN" >/dev/null 2>&1; then
+  # Docker Desktop on macOS keeps its CLI out of the default PATH
+  if [ -x "$HOME/.docker/bin/docker" ]; then
+    DOCKER_BIN="$HOME/.docker/bin/docker"
+  else
+    echo "error: docker CLI not found (set DOCKER_BIN)" >&2
+    exit 1
+  fi
+fi
+
+# empty-array expansion breaks bash 3.2 (macOS default) under set -u, hence the ${var+...} idiom
+TTY_ARGS=""
+if [ -t 0 ] && [ -t 1 ]; then
+  TTY_ARGS="-it"
+fi
+
+exec "$DOCKER_BIN" run --rm ${TTY_ARGS:+$TTY_ARGS} \
+  -v "$REPO_ROOT":/workspace \
+  -w /workspace \
+  -v xtemplate-nuget:/root/.nuget/packages \
+  -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+  -e DOTNET_NOLOGO=1 \
+  mcr.microsoft.com/dotnet/sdk:10.0 \
+  dotnet "$@"

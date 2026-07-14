@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Core\XTemplate.SharedKernel\XTemplate.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\src\Core\XTemplate.Domain\XTemplate.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Core\XTemplate.Application\XTemplate.Application.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\XTemplate.Infrastructure\XTemplate.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\XTemplate.Persistence\XTemplate.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Presentation\Api\XTemplate.Api.Contracts\XTemplate.Api.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Presentation\Api\XTemplate.Api.Common\XTemplate.Api.Common.csproj" />
+    <ProjectReference Include="..\..\src\Presentation\Api\XTemplate.Api\XTemplate.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetArchTest.eNhancedEdition" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+</Project>

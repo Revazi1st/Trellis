@@ -1,0 +1,45 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="AGENTS.md" />
+    <File Path="CLAUDE.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="nuget.config" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/Core/">
+    <Project Path="src/Core/XTemplate.SharedKernel/XTemplate.SharedKernel.csproj" />
+    <Project Path="src/Core/XTemplate.Domain/XTemplate.Domain.csproj" />
+    <Project Path="src/Core/XTemplate.Application/XTemplate.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/XTemplate.Infrastructure/XTemplate.Infrastructure.csproj" />
+    <Project Path="src/Infrastructure/XTemplate.Persistence/XTemplate.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/src/Presentation/Api/">
+    <Project Path="src/Presentation/Api/XTemplate.Api.Contracts/XTemplate.Api.Contracts.csproj" />
+    <Project Path="src/Presentation/Api/XTemplate.Api.Common/XTemplate.Api.Common.csproj" />
+    <Project Path="src/Presentation/Api/XTemplate.Api/XTemplate.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Presentation/UI/">
+    <Project Path="src/Presentation/UI/XTemplate.UI.Common/XTemplate.UI.Common.csproj" />
+    <Project Path="src/Presentation/UI/XTemplate.UI.Web/XTemplate.UI.Web.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/XTemplate.ServiceDefaults/XTemplate.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/XTemplate.AppHost/XTemplate.AppHost.csproj" />
+    <Project Path="tools/XTemplate.MigrationService/XTemplate.MigrationService.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/XTemplate.Domain.UnitTests/XTemplate.Domain.UnitTests.csproj" />
+    <Project Path="tests/XTemplate.Application.UnitTests/XTemplate.Application.UnitTests.csproj" />
+    <Project Path="tests/XTemplate.ArchitectureTests/XTemplate.ArchitectureTests.csproj" />
+    <Project Path="tests/XTemplate.IntegrationTests/XTemplate.IntegrationTests.csproj" />
+    <Project Path="tests/XTemplate.ApiTests/XTemplate.ApiTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,35 @@
+# Build output (UseArtifactsOutput=true routes everything here)
+artifacts/
+[Bb]in/
+[Oo]bj/
+
+# IDE
+.idea/
+*.user
+*.suo
+.vs/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Aspire deployment state
+.aspire/
+
+# Claude Code (machine-local files only — .claude/ itself is committed)
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Test / coverage
+TestResults/
+*.trx
+coverage*.json
+coverage*.xml
+*.coverage
+
+# OS
+.DS_Store
+
+# Secrets — never commit
+*.pfx
+*.key
+appsettings.*.local.json
