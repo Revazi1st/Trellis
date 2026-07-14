@@ -73,6 +73,15 @@ dotnet_naming_rule.types_pascal_case.style = pascal_case
 dotnet_naming_symbols.types_and_members.applicable_kinds = class, struct, enum, method, property, event
 dotnet_naming_style.pascal_case.capitalization = pascal_case
 
+# Static/const private fields are PascalCase (this rule is listed first so it wins for static fields)…
+dotnet_naming_rule.private_static_fields_pascal.severity = error
+dotnet_naming_rule.private_static_fields_pascal.symbols = private_static_fields
+dotnet_naming_rule.private_static_fields_pascal.style = pascal_case
+dotnet_naming_symbols.private_static_fields.applicable_kinds = field
+dotnet_naming_symbols.private_static_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_static_fields.required_modifiers = static
+
+# …while instance private fields are _camelCase.
 dotnet_naming_rule.private_fields_underscore_camel.severity = error
 dotnet_naming_rule.private_fields_underscore_camel.symbols = private_fields
 dotnet_naming_rule.private_fields_underscore_camel.style = underscore_camel_case
@@ -81,13 +90,8 @@ dotnet_naming_symbols.private_fields.applicable_accessibilities = private
 dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 dotnet_naming_style.underscore_camel_case.required_prefix = _
 
-dotnet_naming_rule.async_methods_suffix.severity = warning
-dotnet_naming_rule.async_methods_suffix.symbols = async_methods
-dotnet_naming_rule.async_methods_suffix.style = async_suffix
-dotnet_naming_symbols.async_methods.applicable_kinds = method
-dotnet_naming_symbols.async_methods.required_modifiers = async
-dotnet_naming_style.async_suffix.capitalization = pascal_case
-dotnet_naming_style.async_suffix.required_suffix = Async
+# No Async-suffix naming rule: handler methods are named 'Handle' by their CQRS interface contract, and
+# test methods are scenario-named — an Async-suffix rule would fight both. IO-bound helpers still use Async by hand.
 
 # ── Analyzer severity tuning (curated at M9; keep this block short) ─────────
 dotnet_diagnostic.CA1716.severity = none            # 'Error' is the Result-pattern type name (ADR-0004); VB-keyword clash is irrelevant here

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore XTemplate.slnx
+
+      - name: Format check
+        run: dotnet format XTemplate.slnx --no-restore --verify-no-changes --severity warn
+
+      - name: Build (warnings as errors)
+        run: dotnet build XTemplate.slnx --no-restore -c Release
+
+      # ubuntu-latest ships a Docker daemon and this job has a local SDK, so Testcontainers
+      # integration tests and the Aspire orchestration E2E both run here (ADR-0008).
+      - name: Test
+        env:
+          RUN_ASPIRE_E2E: "1"
+        run: dotnet test XTemplate.slnx --no-build -c Release
+
+  # The MAUI mobile head (UI.Mobile) is deferred (ADR-0008/0015) — it cannot build in the default
+  # containerized flow and is not part of this session's scope. When it lands, add a job here:
+  #
+  #   mobile:
+  #     runs-on: macos-latest        # iOS/Mac Catalyst need macOS; Android can run on ubuntu
+  #     steps:
+  #       - uses: actions/checkout@v4
+  #       - uses: actions/setup-dotnet@v4
+  #         with: { global-json-file: global.json }
+  #       - run: dotnet workload install maui-android
+  #       - run: dotnet build src/Presentation/UI/XTemplate.UI.Mobile -f net10.0-android
