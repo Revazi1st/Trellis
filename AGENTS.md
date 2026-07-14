@@ -6,12 +6,20 @@ XTemplate is a rich-DDD, Clean Architecture .NET 10 solution (and eventually a `
 
 ## Commands
 
-No local .NET SDK is required — everything runs through the SDK container:
+Build, unit/architecture tests, and Testcontainers integration tests need no local .NET SDK — they run through the SDK container (`scripts/dotnet.sh`, which uses the `xtemplate-sdk:10.0` image built from `scripts/sdk-image/`):
 
 ```bash
-./scripts/dotnet.sh build XTemplate.slnx        # build everything
-./scripts/dotnet.sh test XTemplate.slnx         # run all tests
-./scripts/dotnet.sh restore XTemplate.slnx
+docker build -t xtemplate-sdk:10.0 scripts/sdk-image   # one-time: SDK + docker CLI
+./scripts/dotnet.sh build XTemplate.slnx               # build everything
+./scripts/dotnet.sh test XTemplate.slnx               # unit + integration tests (E2E skips)
+./scripts/ef.sh migrations add <Name> --project src/Infrastructure/XTemplate.Persistence
+```
+
+**Aspire orchestration needs a real host, not the SDK container** (ADR-0008): `aspire run`, the AppHost F5 loop, and the `Aspire.Hosting.Testing` E2E test (`XTemplate.ApiTests`) require a **local .NET 10 SDK** or CI. The E2E test is opt-in via `RUN_ASPIRE_E2E=1`; with a local SDK:
+
+```bash
+aspire run                                             # whole app (postgres, migrations, api, web) + dashboard
+RUN_ASPIRE_E2E=1 dotnet test tests/XTemplate.ApiTests  # end-to-end HTTP flow
 ```
 
 ## Dependency flow (architecture-test enforced)

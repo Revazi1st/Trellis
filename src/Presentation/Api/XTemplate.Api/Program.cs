@@ -4,20 +4,25 @@ using XTemplate.Api.Common.Endpoints;
 using XTemplate.Application;
 using XTemplate.Infrastructure;
 using XTemplate.Persistence;
+using XTemplate.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// M5 replaces manual configuration with Aspire ServiceDefaults + client integrations.
+builder.AddServiceDefaults();
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure();
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("xtemplate-db")
     ?? throw new InvalidOperationException("Connection string 'xtemplate-db' is not configured."));
+builder.EnrichNpgsqlDbContext<AppDbContext>();
 builder.Services.AddApiCommon();
 builder.Services.AddApiDocumentation();
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
+
+app.MapDefaultEndpoints();
 
 if (app.Environment.IsDevelopment())
 {

@@ -4,6 +4,8 @@
 # NuGet packages persist in the named volume 'xtemplate-nuget' across runs.
 # The host Docker socket is mounted so Testcontainers-based integration tests can
 # start sibling containers; TESTCONTAINERS_HOST_OVERRIDE points them back at the host.
+# Default image is the local build from scripts/sdk-image (SDK + docker CLI, needed by
+# Aspire orchestration); build it once with:  docker build -t xtemplate-sdk:10.0 scripts/sdk-image
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -32,5 +34,5 @@ exec "$DOCKER_BIN" run --rm ${TTY_ARGS:+$TTY_ARGS} \
   -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
   -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
   -e DOTNET_NOLOGO=1 \
-  mcr.microsoft.com/dotnet/sdk:10.0 \
+  "${XT_SDK_IMAGE:-xtemplate-sdk:10.0}" \
   dotnet "$@"

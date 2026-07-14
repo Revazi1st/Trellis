@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\tools\XTemplate.AppHost\XTemplate.AppHost.csproj" />
+    <ProjectReference Include="..\..\src\Presentation\Api\XTemplate.Api.Contracts\XTemplate.Api.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

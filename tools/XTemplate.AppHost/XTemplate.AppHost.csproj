@@ -7,4 +7,15 @@
     <UserSecretsId>xtemplate-apphost-e6c5a3d2</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Docker" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Presentation\Api\XTemplate.Api\XTemplate.Api.csproj" />
+    <ProjectReference Include="..\..\src\Presentation\UI\XTemplate.UI.Web\XTemplate.UI.Web.csproj" />
+    <ProjectReference Include="..\XTemplate.MigrationService\XTemplate.MigrationService.csproj" />
+  </ItemGroup>
+
 </Project>

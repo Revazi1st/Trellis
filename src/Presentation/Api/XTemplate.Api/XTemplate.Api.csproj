@@ -9,4 +9,8 @@
     <ProjectReference Include="..\..\..\Shared\XTemplate.ServiceDefaults\XTemplate.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
 </Project>
