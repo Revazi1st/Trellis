@@ -1,0 +1,90 @@
+@page "/invoices/{Id:guid}"
+@inherits ProtectedPage
+@inject IInvoiceApiClient InvoiceApi
+
+<PageTitle>Invoice — XTemplate</PageTitle>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+else if (_invoice is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <h1>@_invoice.CustomerName</h1>
+    <dl class="summary">
+        <dt>Status</dt><dd>@_invoice.Status</dd>
+        <dt>Email</dt><dd>@_invoice.CustomerEmail</dd>
+        <dt>Total</dt><dd>@_invoice.Total.ToString("N2") @_invoice.Currency</dd>
+        <dt>Due</dt><dd>@(_invoice.DueDate?.ToString("yyyy-MM-dd") ?? "—")</dd>
+    </dl>
+
+    <h2>Lines</h2>
+    <table class="grid">
+        <thead><tr><th>Description</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+            @foreach (InvoiceLineDto line in _invoice.Lines)
+            {
+                <tr><td>@line.Description</td><td class="num">@line.Amount.ToString("N2")</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <AuthorizeView Roles="invoices:write">
+        <div class="actions">
+            @if (_invoice.Status == "Issued")
+            {
+                <button @onclick="PayAsync" disabled="@_busy">Mark paid</button>
+            }
+            @if (_invoice.Status is "Draft" or "Issued")
+            {
+                <button class="danger" @onclick="VoidAsync" disabled="@_busy">Void</button>
+            }
+        </div>
+    </AuthorizeView>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private InvoiceDto? _invoice;
+    private string? _error;
+    private bool _busy;
+
+    protected override Task OnAuthorizedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        ApiResult<InvoiceDto> result = await InvoiceApi.GetAsync(Id);
+        if (result.IsSuccess)
+        {
+            _invoice = result.Value;
+        }
+        else
+        {
+            _error = result.Error;
+        }
+    }
+
+    private async Task PayAsync()
+    {
+        _busy = true;
+        ApiResult<bool> result = await InvoiceApi.PayAsync(Id);
+        _error = result.IsSuccess ? null : result.Error;
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task VoidAsync()
+    {
+        _busy = true;
+        ApiResult<bool> result = await InvoiceApi.VoidAsync(Id);
+        _error = result.IsSuccess ? null : result.Error;
+        _busy = false;
+        await LoadAsync();
+    }
+}

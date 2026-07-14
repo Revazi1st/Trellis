@@ -1,0 +1,64 @@
+@page "/login"
+@inject IAuthApiClient AuthApi
+@inject TokenAuthenticationStateProvider AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in — XTemplate</PageTitle>
+
+<h1>Sign in</h1>
+
+<EditForm Model="_model" OnValidSubmit="SubmitAsync" class="form">
+    <DataAnnotationsValidator />
+
+    <label>
+        Email
+        <InputText @bind-Value="_model.Email" autocomplete="username" />
+    </label>
+    <label>
+        Password
+        <InputText type="password" @bind-Value="_model.Password" autocomplete="current-password" />
+    </label>
+
+    @if (_error is not null)
+    {
+        <p class="error" role="alert">@_error</p>
+    }
+
+    <button type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
+    <p class="hint">Seeded admin: <code>admin@xtemplate.dev</code> / <code>Admin123!</code></p>
+</EditForm>
+
+@code {
+    private readonly Credentials _model = new();
+    private string? _error;
+    private bool _busy;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        ApiResult<TokenResponse> result = await AuthApi.LoginAsync(new LoginRequest(_model.Email, _model.Password));
+
+        if (result.IsSuccess)
+        {
+            await AuthState.SignInAsync(result.Value!.AccessToken, result.Value.RefreshToken);
+            Navigation.NavigateTo("invoices");
+        }
+        else
+        {
+            _error = result.Error;
+            _busy = false;
+        }
+    }
+
+    private sealed class Credentials
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Password { get; set; } = string.Empty;
+    }
+}

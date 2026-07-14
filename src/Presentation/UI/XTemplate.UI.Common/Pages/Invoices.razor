@@ -1,0 +1,59 @@
+@page "/"
+@page "/invoices"
+@inherits ProtectedPage
+@inject IInvoiceApiClient InvoiceApi
+
+<PageTitle>Invoices — XTemplate</PageTitle>
+
+<h1>Overdue invoices</h1>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+else if (_invoices is null)
+{
+    <p>Loading…</p>
+}
+else if (_invoices.Count == 0)
+{
+    <p>No overdue invoices. 🎉</p>
+}
+else
+{
+    <table class="grid">
+        <thead>
+            <tr><th>Customer</th><th>Status</th><th class="num">Total</th><th>Due</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (InvoiceDto invoice in _invoices)
+            {
+                <tr>
+                    <td>@invoice.CustomerName</td>
+                    <td>@invoice.Status</td>
+                    <td class="num">@invoice.Total.ToString("N2") @invoice.Currency</td>
+                    <td>@invoice.DueDate?.ToString("yyyy-MM-dd")</td>
+                    <td><NavLink href="@($"invoices/{invoice.Id}")">View</NavLink></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<InvoiceDto>? _invoices;
+    private string? _error;
+
+    protected override async Task OnAuthorizedAsync()
+    {
+        ApiResult<IReadOnlyList<InvoiceDto>> result = await InvoiceApi.GetOverdueAsync();
+        if (result.IsSuccess)
+        {
+            _invoices = result.Value;
+        }
+        else
+        {
+            _error = result.Error;
+        }
+    }
+}
