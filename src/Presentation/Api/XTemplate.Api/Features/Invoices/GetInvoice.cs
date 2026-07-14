@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using XTemplate.Api.Common.Authentication;
 using XTemplate.Api.Common.Endpoints;
 using XTemplate.Api.Common.Results;
+using XTemplate.Application.Authorization;
 using XTemplate.Api.Contracts.Invoices;
 using XTemplate.Application.Features.Invoices;
 using XTemplate.Application.Features.Invoices.GetInvoice;
@@ -14,6 +16,7 @@ internal sealed class GetInvoice : IEndpoint
     public static void Map(IEndpointRouteBuilder app) => app
         .MapGet("invoices/{id}", Handle)
         .WithName(InvoiceEndpoints.GetInvoiceRouteName)
+        .RequirePermission(Permissions.Invoices.Read)
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Get one invoice with its lines");
 

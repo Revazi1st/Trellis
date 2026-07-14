@@ -4,8 +4,9 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <!-- Test naming (Method_Scenario_Outcome) trips CA1707; ConfigureAwait noise (CA2007) has no value in test code. -->
-    <NoWarn>$(NoWarn);CA1707;CA2007</NoWarn>
+    <!-- Test naming (Method_Scenario_Outcome) trips CA1707; ConfigureAwait noise (CA2007) has no value in test code;
+         a single comprehensive E2E flow reads better as one long method (MA0051). -->
+    <NoWarn>$(NoWarn);CA1707;CA2007;MA0051</NoWarn>
     <!-- xunit.v3 test projects are executables running on Microsoft.Testing.Platform (runner selected in global.json). -->
     <OutputType>Exe</OutputType>
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>

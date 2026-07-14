@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using XTemplate.Application.Abstractions;
 using XTemplate.Domain.Invoices;
+using XTemplate.Persistence.Identity;
 using XTemplate.Persistence.Interceptors;
 using XTemplate.Persistence.Repositories;
 using XTemplate.SharedKernel.Domain;
@@ -34,6 +37,17 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork>(static sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+
+        services.AddIdentityCore<ApplicationUser>(static options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.Password.RequiredLength = 8;
+            })
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<AppDbContext>();
+
+        services.AddScoped<IIdentityService, IdentityService>();
+        services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
 
         return services;
     }

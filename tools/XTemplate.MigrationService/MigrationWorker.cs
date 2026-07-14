@@ -1,15 +1,20 @@
 using System.Diagnostics;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using XTemplate.Application.Authorization;
 using XTemplate.Domain.Common;
 using XTemplate.Domain.Invoices;
 using XTemplate.Persistence;
+using XTemplate.Persistence.Identity;
 
 namespace XTemplate.MigrationService;
 
-/// <summary>Applies EF migrations and seeds sample data, then stops the host — the API waits for successful completion (SSW pattern).</summary>
+/// <summary>Applies EF migrations, seeds roles/permissions/admin and sample data, then stops the host — the API waits for successful completion (SSW pattern).</summary>
 internal sealed class MigrationWorker(
     IServiceProvider serviceProvider,
     IHostApplicationLifetime hostApplicationLifetime,
+    SeedOptions seedOptions,
     ILogger<MigrationWorker> logger) : BackgroundService
 {
     public const string ActivitySourceName = "XTemplate.MigrationService";
@@ -23,9 +28,13 @@ internal sealed class MigrationWorker(
         try
         {
             using IServiceScope scope = serviceProvider.CreateScope();
-            AppDbContext context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            IServiceProvider services = scope.ServiceProvider;
 
+            AppDbContext context = services.GetRequiredService<AppDbContext>();
             await ApplyMigrationsAsync(context, stoppingToken);
+
+            await SeedRolesAndPermissionsAsync(services.GetRequiredService<RoleManager<IdentityRole<Guid>>>());
+            await SeedAdminUserAsync(services.GetRequiredService<UserManager<ApplicationUser>>());
             await SeedSampleDataAsync(context, stoppingToken);
 
             logger.LogInformation("Database migration and seeding completed");
@@ -44,6 +53,48 @@ internal sealed class MigrationWorker(
     {
         var strategy = context.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(() => context.Database.MigrateAsync(cancellationToken));
+    }
+
+    private static async Task SeedRolesAndPermissionsAsync(RoleManager<IdentityRole<Guid>> roleManager)
+    {
+        foreach ((string roleName, IReadOnlyList<string> permissions) in Roles.Permissions)
+        {
+            IdentityRole<Guid>? role = await roleManager.FindByNameAsync(roleName);
+            if (role is null)
+            {
+                role = new IdentityRole<Guid>(roleName) { Id = Guid.CreateVersion7() };
+                await roleManager.CreateAsync(role);
+            }
+
+            var existing = (await roleManager.GetClaimsAsync(role))
+                .Where(c => c.Type == AuthClaims.Permission)
+                .Select(c => c.Value)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (string permission in permissions.Where(p => !existing.Contains(p)))
+            {
+                await roleManager.AddClaimAsync(role, new Claim(AuthClaims.Permission, permission));
+            }
+        }
+    }
+
+    private async Task SeedAdminUserAsync(UserManager<ApplicationUser> userManager)
+    {
+        if (await userManager.FindByEmailAsync(seedOptions.AdminEmail) is not null)
+        {
+            return;
+        }
+
+        var admin = new ApplicationUser
+        {
+            Id = Guid.CreateVersion7(),
+            UserName = seedOptions.AdminEmail,
+            Email = seedOptions.AdminEmail,
+            EmailConfirmed = true,
+        };
+
+        await userManager.CreateAsync(admin, seedOptions.AdminPassword);
+        await userManager.AddToRoleAsync(admin, Roles.Administrator);
     }
 
     private static async Task SeedSampleDataAsync(AppDbContext context, CancellationToken cancellationToken)

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using XTemplate.Api.Common.Authentication;
 using XTemplate.Api.Common.Endpoints;
 using XTemplate.Api.Common.Results;
+using XTemplate.Application.Authorization;
 using XTemplate.Application.Features.Invoices.VoidInvoice;
 using XTemplate.Domain.Invoices;
 using XTemplate.SharedKernel.Messaging;
@@ -11,6 +13,7 @@ internal sealed class VoidInvoice : IEndpoint
 {
     public static void Map(IEndpointRouteBuilder app) => app
         .MapPost("invoices/{id}/void", Handle)
+        .RequirePermission(Permissions.Invoices.Write)
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Void a draft or issued invoice");
 

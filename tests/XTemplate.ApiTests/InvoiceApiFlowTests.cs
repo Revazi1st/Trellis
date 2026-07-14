@@ -1,8 +1,10 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Aspire.Hosting;
 using Aspire.Hosting.Testing;
 using Shouldly;
+using XTemplate.Api.Contracts.Auth;
 using XTemplate.Api.Contracts.Invoices;
 using Xunit;
 
@@ -36,6 +38,16 @@ public sealed class InvoiceApiFlowTests
         // Healthy implies the migration worker already completed (api WaitsForCompletion on it).
         await app.ResourceNotifications.WaitForResourceHealthyAsync("api", ct);
         using HttpClient client = app.CreateHttpClient("api");
+
+        // Invoice endpoints require permissions — anonymous access is rejected.
+        (await client.GetAsync("/api/v1/invoices/overdue", ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // Authenticate as the seeded admin (invoices:read + invoices:write).
+        HttpResponseMessage loginResponse = await client.PostAsJsonAsync(
+            "/api/v1/auth/login", new LoginRequest("admin@xtemplate.dev", "Admin123!"), ct);
+        loginResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        TokenResponse tokens = (await loginResponse.Content.ReadFromJsonAsync<TokenResponse>(ct))!;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
 
         // create draft
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
