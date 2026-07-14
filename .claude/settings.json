@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/dotnet.sh:*)",
+      "Bash(./scripts/ef.sh:*)",
+      "Bash(./scripts/check-docs-drift.sh:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/docs-drift.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

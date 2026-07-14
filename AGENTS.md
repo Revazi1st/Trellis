@@ -1,36 +1,41 @@
 # XTemplate — Agent Instructions
 
-> STUB — completed at milestone M10. Commands and boundaries below are already accurate.
-
-XTemplate is a rich-DDD, Clean Architecture .NET 10 solution (and eventually a `dotnet new` template). Vertical-slice features inside layered projects; Infrastructure and Persistence are peer projects (never reference each other).
+XTemplate is a rich-DDD, Clean Architecture **.NET 10** solution (and eventually a `dotnet new` template). Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
 
 ## Commands
 
-Build, unit/architecture tests, and Testcontainers integration tests need no local .NET SDK — they run through the SDK container (`scripts/dotnet.sh`, which uses the `xtemplate-sdk:10.0` image built from `scripts/sdk-image/`):
+Build, unit/architecture tests, and Testcontainers integration tests run through the SDK container — **no local .NET SDK needed** (`scripts/dotnet.sh` uses the `xtemplate-sdk:10.0` image from `scripts/sdk-image/`):
 
 ```bash
-docker build -t xtemplate-sdk:10.0 scripts/sdk-image   # one-time: SDK + docker CLI
-./scripts/dotnet.sh build XTemplate.slnx               # build everything
-./scripts/dotnet.sh test XTemplate.slnx               # unit + integration tests (E2E skips)
+docker build -t xtemplate-sdk:10.0 scripts/sdk-image   # one-time
+./scripts/dotnet.sh build XTemplate.slnx
+./scripts/dotnet.sh test  XTemplate.slnx               # Aspire E2E skips unless RUN_ASPIRE_E2E=1
+./scripts/dotnet.sh format XTemplate.slnx
 ./scripts/ef.sh migrations add <Name> --project src/Infrastructure/XTemplate.Persistence
 ```
 
-**Aspire orchestration needs a real host, not the SDK container** (ADR-0008): `aspire run`, the AppHost F5 loop, and the `Aspire.Hosting.Testing` E2E test (`XTemplate.ApiTests`) require a **local .NET 10 SDK** or CI. The E2E test is opt-in via `RUN_ASPIRE_E2E=1`; with a local SDK:
-
-```bash
-aspire run                                             # whole app (postgres, migrations, api, web) + dashboard
-RUN_ASPIRE_E2E=1 dotnet test tests/XTemplate.ApiTests  # end-to-end HTTP flow
-```
+**Aspire orchestration needs a real host, not the container** (ADR-0008): `aspire run` and the `Aspire.Hosting.Testing` E2E test need a local .NET 10 SDK or CI. `aspire run` brings up postgres + migrations + api + web. Seeded admin: `admin@xtemplate.dev` / `Admin123!`.
 
 ## Dependency flow (architecture-test enforced)
 
 ```
 SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Api → Api.Common
-Api → Api.Contracts ← UI.Common ;  UI.Web → UI.Common ← UI.Mobile
+Api → Api.Contracts ← UI.Common ;  UI.Web → UI.Common ← UI.Mobile (deferred)
 ```
+
+Dependencies point inward. **Infrastructure and Persistence are peers — never reference each other** (ADR-0002; agents trained on mainstream templates expect a single Infrastructure project — this one splits them).
+
+## How we build things
+
+- **CQRS, no mediator**: hand-rolled `ICommand(Handler)`/`IQuery(Handler)` + decorator pipeline (validation→logging→unit-of-work). Endpoints inject handlers directly.
+- **Result, not exceptions**: return `Result`/`Result<T>`; the API maps errors to RFC 9457 problem details. Exceptions are for the truly unexpected only.
+- **Rich domain**: aggregates via `static Create(...) → Result<T>` + private EF ctor; value objects = sealed records mapped as EF complex types; hand-rolled strongly-typed IDs; domain events dispatched by a SaveChanges interceptor.
+- **Reference feature**: `src/Core/XTemplate.Application/Features/Invoices` + `docs/features/invoices.md`. Copy it (use the `add-feature` skill).
+
+Layer-specific conventions load automatically from `.claude/rules/` when you touch matching files. The "why" behind decisions is in `docs/adr/` — read `docs/INDEX.md` to find them.
 
 ## Boundaries
 
-- **Always**: run build + tests before finishing a change.
-- **Ask first**: adding a NuGet package (check the LICENSE CEILINGS block in `Directory.Packages.props`), adding a project.
-- **Never**: edit files under `Migrations/` by hand; commit secrets; add MediatR/AutoMapper/FluentAssertions/MassTransit (commercial licenses — see `Directory.Packages.props`).
+- **Always**: run build + tests before finishing a change; update `docs/features/<x>.md` when a feature's behavior changes (CI enforces this).
+- **Ask first**: adding a NuGet package (check the LICENSE CEILINGS block in `Directory.Packages.props`); adding a project.
+- **Never**: reference Infrastructure↔Persistence; hand-edit files under `Migrations/`; throw for expected failures instead of returning a `Result`; commit secrets; add MediatR / AutoMapper / FluentAssertions / MassTransit (commercial — see `Directory.Packages.props`).

@@ -38,6 +38,17 @@ jobs:
           RUN_ASPIRE_E2E: "1"
         run: dotnet test XTemplate.slnx --no-build -c Release
 
+  docs-drift:
+    name: Docs drift
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check feature docs are updated
+        run: ./scripts/check-docs-drift.sh origin/${{ github.base_ref }}
+
   # The MAUI mobile head (UI.Mobile) is deferred (ADR-0008/0015) — it cannot build in the default
   # containerized flow and is not part of this session's scope. When it lands, add a job here:
   #

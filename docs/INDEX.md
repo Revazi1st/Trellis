@@ -1,14 +1,19 @@
 # Docs Index
 
-One line per document — agents: start here, read only what the task needs.
+Agent entry point — read only what the task needs.
 
-- [adr/0001-record-architecture-decisions.md](adr/0001-record-architecture-decisions.md) — why and how we write ADRs
-- [adr/0002-infrastructure-persistence-split.md](adr/0002-infrastructure-persistence-split.md) — Infrastructure ∥ Persistence as peer projects (diverges from mainstream templates)
-- [adr/0007-identity-in-persistence-custom-jwt-endpoints.md](adr/0007-identity-in-persistence-custom-jwt-endpoints.md) — Identity in Persistence, JWT minting in Infrastructure, custom auth endpoints, permission-based authorization
-- [adr/0009-test-stack.md](adr/0009-test-stack.md) — test pyramid + free-for-commercial libraries; NetArchTest architecture-fitness rules enforce the layering
-- [adr/0008-containerized-sdk-and-aspire-orchestration.md](adr/0008-containerized-sdk-and-aspire-orchestration.md) — containerized SDK for build/test; Aspire run + E2E need a local SDK or CI (RUN_ASPIRE_E2E=1)
-- [adr/0013-api-contracts-public-surface.md](adr/0013-api-contracts-public-surface.md) — Api.Contracts: dependency-free wire records shared by API, UI clients, and tests
-- [adr/0015-blazor-everywhere-shared-ui.md](adr/0015-blazor-everywhere-shared-ui.md) — one Razor Class Library (UI.Common) for the Blazor web + MAUI mobile heads; platform seams; component-level auth
-- [adr/0017-hand-rolled-specifications.md](adr/0017-hand-rolled-specifications.md) — minimal Specification&lt;T&gt; in SharedKernel; Domain stays dependency-free; no Includes (aggregates load whole)
+## Guides (humans & agents)
+- [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns
+- [development.md](development.md) — prerequisites, commands, running the app, tests
+- [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice
 
-<!-- architecture.md, development.md, features/*.md arrive with their milestones (M4+, completed at M10). -->
+## Decisions (docs/adr/)
+- [0001](adr/0001-record-architecture-decisions.md) — record ADRs
+- [0002](adr/0002-infrastructure-persistence-split.md) — Infrastructure ∥ Persistence peer projects
+- [0007](adr/0007-identity-in-persistence-custom-jwt-endpoints.md) — Identity in Persistence; custom JWT auth; permission-based authz
+- [0008](adr/0008-containerized-sdk-and-aspire-orchestration.md) — containerized SDK for build/test; Aspire run + E2E need local SDK or CI
+- [0009](adr/0009-test-stack.md) — test pyramid + architecture-fitness tests; free-for-commercial libraries
+- [0013](adr/0013-api-contracts-public-surface.md) — Api.Contracts as the API's public surface
+- [0014](adr/0014-ai-documentation-architecture.md) — AI documentation architecture
+- [0015](adr/0015-blazor-everywhere-shared-ui.md) — one Razor Class Library for web + mobile
+- [0017](adr/0017-hand-rolled-specifications.md) — hand-rolled Specification<T>, Domain stays dependency-free
