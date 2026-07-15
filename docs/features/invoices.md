@@ -27,6 +27,10 @@ One `IEndpoint` class per use case on `/api/v1/invoices…`, each `.RequirePermi
 
 **Caching**: `GetInvoice` is cache-aside via `HybridCache` (key `CacheKeys.Invoice(id)`); the mutating endpoints (`AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`) invalidate that key on success. HybridCache uses an in-memory L1 always; a Redis L2 is added when the **`UseRedis`** template toggle is on (Aspire `cache` resource + `AddRedisDistributedCache`).
 
+**Pagination**: `GET /invoices/overdue` is paged — binds `PageRequest` (`?page=&pageSize=`, validated 1..100) and returns `PagedResponse<InvoiceDto>` (items + total count + page metadata). The query flows through the repository's `ListPagedAsync` over the existing `Specification<T>` seam.
+
+**Optimistic concurrency**: `Invoice` carries the Postgres `xmin` concurrency token (`InvoiceConfiguration.UseXmin...`); a conflicting write throws `DbUpdateConcurrencyException`, mapped to **409** by `ConcurrencyExceptionHandler` in the API host.
+
 ## UI (`src/Presentation/UI/XTemplate.UI.Common/Pages/`)
 
 `Invoices` (list), `InvoiceDetail` (view + pay/void), `CreateInvoice` — via `IInvoiceApiClient` over the contracts.

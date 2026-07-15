@@ -8,10 +8,11 @@
 
 <EditForm Model="_model" OnValidSubmit="SubmitAsync" class="form">
     <DataAnnotationsValidator />
+    <ValidationSummary />
 
-    <label>Customer name<InputText @bind-Value="_model.CustomerName" /></label>
-    <label>Customer email<InputText @bind-Value="_model.CustomerEmail" /></label>
-    <label>Currency<InputText @bind-Value="_model.Currency" maxlength="3" /></label>
+    <label>Customer name<InputText @bind-Value="_model.CustomerName" /><ValidationMessage For="() => _model.CustomerName" /></label>
+    <label>Customer email<InputText @bind-Value="_model.CustomerEmail" /><ValidationMessage For="() => _model.CustomerEmail" /></label>
+    <label>Currency<InputText @bind-Value="_model.Currency" maxlength="3" /><ValidationMessage For="() => _model.Currency" /></label>
 
     @if (_error is not null)
     {

@@ -18,13 +18,21 @@ public abstract class Specification<T>
 
     public int? Take { get; private set; }
 
-    /// <summary>Applies the specification to a queryable; usable by EF (expression-tree preserving) and, via AsQueryable, in-memory.</summary>
-    public IQueryable<T> ApplyTo(IQueryable<T> query)
+    /// <summary>Applies only the filter criteria (no ordering or paging) — used to count the full matching set.</summary>
+    public IQueryable<T> ApplyCriteria(IQueryable<T> query)
     {
         foreach (Expression<Func<T, bool>> criterion in _criteria)
         {
             query = query.Where(criterion);
         }
+
+        return query;
+    }
+
+    /// <summary>Applies the specification to a queryable; usable by EF (expression-tree preserving) and, via AsQueryable, in-memory.</summary>
+    public IQueryable<T> ApplyTo(IQueryable<T> query)
+    {
+        query = ApplyCriteria(query);
 
         bool isFirstOrdering = true;
         foreach ((LambdaExpression keySelector, bool descending) in _orderings)

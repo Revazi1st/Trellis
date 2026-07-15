@@ -15,4 +15,19 @@ internal sealed class InvoiceRepository(AppDbContext context) : IInvoiceReposito
 
     public async Task<IReadOnlyList<Invoice>> ListAsync(Specification<Invoice> specification, CancellationToken cancellationToken)
         => await specification.ApplyTo(context.Invoices.AsNoTracking()).ToListAsync(cancellationToken);
+
+    public async Task<PagedList<Invoice>> ListPagedAsync(
+        Specification<Invoice> specification, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        IQueryable<Invoice> source = context.Invoices.AsNoTracking();
+
+        int totalCount = await specification.ApplyCriteria(source).CountAsync(cancellationToken);
+
+        List<Invoice> items = await specification.ApplyTo(source)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedList<Invoice>(items, page, pageSize, totalCount);
+    }
 }

@@ -1,20 +1,23 @@
 using XTemplate.Domain.Invoices;
 using XTemplate.SharedKernel.Messaging;
 using XTemplate.SharedKernel.Results;
+using XTemplate.SharedKernel.Specifications;
 
 namespace XTemplate.Application.Features.Invoices.ListOverdueInvoices;
 
 internal sealed class ListOverdueInvoicesQueryHandler(IInvoiceRepository invoices, TimeProvider timeProvider)
-    : IQueryHandler<ListOverdueInvoicesQuery, IReadOnlyList<InvoiceResponse>>
+    : IQueryHandler<ListOverdueInvoicesQuery, PagedList<InvoiceResponse>>
 {
-    public async Task<Result<IReadOnlyList<InvoiceResponse>>> Handle(
+    public async Task<Result<PagedList<InvoiceResponse>>> Handle(
         ListOverdueInvoicesQuery query,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<Invoice> overdue = await invoices.ListAsync(
+        PagedList<Invoice> page = await invoices.ListPagedAsync(
             InvoiceSpecs.Overdue(timeProvider.GetUtcNow()),
+            query.Page,
+            query.PageSize,
             cancellationToken);
 
-        return Result.Success<IReadOnlyList<InvoiceResponse>>([.. overdue.Select(static i => i.ToResponse())]);
+        return page.Map(static invoice => invoice.ToResponse());
     }
 }

@@ -20,13 +20,31 @@
         </nav>
     </header>
     <main class="content">
-        @Body
+        <ErrorBoundary @ref="_errorBoundary">
+            <ChildContent>
+                @Body
+            </ChildContent>
+            <ErrorContent>
+                <div class="error-panel" role="alert">
+                    <h1>Something went wrong</h1>
+                    <p>An unexpected error occurred. You can try again.</p>
+                    <button @onclick="Recover">Retry</button>
+                </div>
+            </ErrorContent>
+        </ErrorBoundary>
     </main>
 </div>
 
 @code {
     [Inject] private TokenAuthenticationStateProvider AuthState { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private ErrorBoundary? _errorBoundary;
+
+    // Clear a caught error when the user navigates to a new page.
+    protected override void OnParametersSet() => _errorBoundary?.Recover();
+
+    private void Recover() => _errorBoundary?.Recover();
 
     private async Task SignOutAsync()
     {

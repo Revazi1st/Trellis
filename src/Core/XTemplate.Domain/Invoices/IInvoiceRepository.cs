@@ -12,4 +12,7 @@ public interface IInvoiceRepository
     Task<Invoice?> GetByIdAsync(InvoiceId id, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Invoice>> ListAsync(Specification<Invoice> specification, CancellationToken cancellationToken);
+
+    /// <summary>Returns one page of matching aggregates plus the total count.</summary>
+    Task<PagedList<Invoice>> ListPagedAsync(Specification<Invoice> specification, int page, int pageSize, CancellationToken cancellationToken);
 }

@@ -78,11 +78,12 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
 
         using var readScope = CreateScope();
         var list = readScope.ServiceProvider
-            .GetRequiredService<IQueryHandler<ListOverdueInvoicesQuery, IReadOnlyList<InvoiceResponse>>>();
+            .GetRequiredService<IQueryHandler<ListOverdueInvoicesQuery, XTemplate.SharedKernel.Specifications.PagedList<InvoiceResponse>>>();
 
-        var overdue = await list.Handle(new ListOverdueInvoicesQuery(), TestContext.Current.CancellationToken);
+        var overdue = await list.Handle(new ListOverdueInvoicesQuery(Page: 1, PageSize: 20), TestContext.Current.CancellationToken);
 
         overdue.IsSuccess.ShouldBeTrue();
-        overdue.Value.Select(static i => i.CustomerName).ShouldBe(["overdue-june", "overdue-july"]);
+        overdue.Value.TotalCount.ShouldBe(2);
+        overdue.Value.Items.Select(static i => i.CustomerName).ShouldBe(["overdue-june", "overdue-july"]);
     }
 }

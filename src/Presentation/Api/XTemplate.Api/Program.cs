@@ -5,6 +5,7 @@ using Scalar.AspNetCore;
 using XTemplate.Api.Common;
 using XTemplate.Api.Common.Authentication;
 using XTemplate.Api.Common.Endpoints;
+using XTemplate.Api.Common.Hardening;
 using XTemplate.Application;
 using XTemplate.Application.Options;
 using XTemplate.Infrastructure;
@@ -26,14 +27,19 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("xtemplate-db")
     ?? throw new InvalidOperationException("Connection string 'xtemplate-db' is not configured."));
-builder.EnrichNpgsqlDbContext<AppDbContext>();
+builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
 
 AuthTokenOptions authOptions = builder.Configuration.GetSection(AuthTokenOptions.SectionName).Get<AuthTokenOptions>()
     ?? throw new InvalidOperationException($"Configuration section '{AuthTokenOptions.SectionName}' is missing.");
 builder.Services.AddApiAuthentication(authOptions);
 
+builder.Services.AddExceptionHandler<XTemplate.Api.ConcurrencyExceptionHandler>();
 builder.Services.AddApiCommon();
 builder.Services.AddApiDocumentation();
+builder.Services.AddApiHardening(builder.Configuration);
+
+// Database readiness check (untagged → part of /health readiness, excluded from /alive liveness).
+builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 
 // HybridCache: in-memory L1 always; a Redis L2 is added below when the UseRedis feature is enabled.
 builder.Services.AddHybridCache();
@@ -45,6 +51,8 @@ builder.AddRedisDistributedCache("cache");
 var app = builder.Build();
 
 app.UseExceptionHandler();
+
+app.UseApiHardening();
 
 app.MapDefaultEndpoints();
 

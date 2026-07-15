@@ -14,6 +14,13 @@ internal sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.HasKey(static i => i.Id);
         builder.Property(static i => i.Id).ValueGeneratedNever();
 
+        // Optimistic concurrency via the Postgres 'xmin' system column — no schema column added.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
+
         builder.Property(static i => i.CustomerName).HasMaxLength(200);
         builder.Property(static i => i.Currency).HasMaxLength(3);
         builder.Property(static i => i.Status).HasConversion<string>().HasMaxLength(16);

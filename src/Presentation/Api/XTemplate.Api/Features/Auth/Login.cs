@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using XTemplate.Api.Common.Endpoints;
+using XTemplate.Api.Common.Hardening;
 using XTemplate.Api.Common.Results;
 using XTemplate.Api.Contracts.Auth;
 using XTemplate.Application.Features.Auth.Login;
@@ -12,6 +13,7 @@ internal sealed class Login : IEndpoint
     public static void Map(IEndpointRouteBuilder app) => app
         .MapPost("auth/login", Handle)
         .AllowAnonymous()
+        .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
         .WithTags(AuthEndpoints.Tag)
         .WithSummary("Exchange credentials for an access + refresh token pair");
 

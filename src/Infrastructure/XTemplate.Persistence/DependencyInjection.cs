@@ -13,7 +13,9 @@ namespace XTemplate.Persistence;
 public static class DependencyInjection
 {
     public static IServiceCollection AddPersistence(this IServiceCollection services, string connectionString)
-        => services.AddPersistence(options => options.UseNpgsql(connectionString));
+        => services.AddPersistence(options => options.UseNpgsql(
+            connectionString,
+            static npgsql => npgsql.EnableRetryOnFailure()));
 
     public static IServiceCollection AddPersistence(
         this IServiceCollection services,

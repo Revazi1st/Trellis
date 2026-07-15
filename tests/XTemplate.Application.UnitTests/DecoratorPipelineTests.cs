@@ -86,7 +86,7 @@ public sealed class DecoratorPipelineTests
         _provider.GetRequiredService<ICommandHandler<Features.Invoices.PayInvoice.PayInvoiceCommand>>().ShouldNotBeNull();
         _provider.GetRequiredService<ICommandHandler<Features.Invoices.VoidInvoice.VoidInvoiceCommand>>().ShouldNotBeNull();
         _provider.GetRequiredService<IQueryHandler<Features.Invoices.GetInvoice.GetInvoiceQuery, Features.Invoices.InvoiceResponse>>().ShouldNotBeNull();
-        _provider.GetRequiredService<IQueryHandler<Features.Invoices.ListOverdueInvoices.ListOverdueInvoicesQuery, IReadOnlyList<Features.Invoices.InvoiceResponse>>>().ShouldNotBeNull();
+        _provider.GetRequiredService<IQueryHandler<Features.Invoices.ListOverdueInvoices.ListOverdueInvoicesQuery, XTemplate.SharedKernel.Specifications.PagedList<Features.Invoices.InvoiceResponse>>>().ShouldNotBeNull();
         _provider.GetRequiredService<IDomainEventDispatcher>().ShouldNotBeNull();
     }
 }

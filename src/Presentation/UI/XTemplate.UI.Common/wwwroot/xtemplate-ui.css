@@ -26,3 +26,7 @@ button:disabled { opacity: .6; cursor: default; }
 .actions { display: flex; gap: .5rem; margin-top: 1rem; }
 .error { color: var(--danger); }
 .hint { color: var(--muted); font-size: .85rem; }
+
+.error-panel { border: 1px solid var(--danger); border-radius: 8px; padding: 1rem 1.25rem; }
+.validation-message { color: var(--danger); font-size: .85rem; }
+.validation-errors { color: var(--danger); margin: .25rem 0; padding-left: 1rem; }

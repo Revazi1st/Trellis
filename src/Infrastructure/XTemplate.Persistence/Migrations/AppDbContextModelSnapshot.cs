@@ -196,6 +196,12 @@ namespace XTemplate.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.ComplexProperty(typeof(Dictionary<string, object>), "CustomerEmail", "XTemplate.Domain.Invoices.Invoice.CustomerEmail#EmailAddress", b1 =>
                         {
                             b1.IsRequired();

@@ -78,14 +78,13 @@ public static class Extensions
     /// <summary>Development-only by default — expose deliberately (auth/port-filtered) before enabling in production.</summary>
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        if (app.Environment.IsDevelopment())
+        // Readiness: all checks (incl. the database). Liveness: only checks tagged "live".
+        // The default response writer returns just the overall status text — no per-check detail is leaked.
+        app.MapHealthChecks(HealthEndpointPath);
+        app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
         {
-            app.MapHealthChecks(HealthEndpointPath);
-            app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
-            {
-                Predicate = static registration => registration.Tags.Contains("live"),
-            });
-        }
+            Predicate = static registration => registration.Tags.Contains("live"),
+        });
 
         return app;
     }

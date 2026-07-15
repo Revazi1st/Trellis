@@ -13,10 +13,12 @@
     <label>
         Email
         <InputText @bind-Value="_model.Email" autocomplete="username" />
+        <ValidationMessage For="() => _model.Email" />
     </label>
     <label>
         Password
         <InputText type="password" @bind-Value="_model.Password" autocomplete="current-password" />
+        <ValidationMessage For="() => _model.Password" />
     </label>
 
     @if (_error is not null)

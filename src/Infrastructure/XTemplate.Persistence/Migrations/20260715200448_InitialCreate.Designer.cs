@@ -13,7 +13,7 @@ using XTemplate.Persistence;
 namespace XTemplate.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260714231300_InitialCreate")]
+    [Migration("20260715200448_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -198,6 +198,12 @@ namespace XTemplate.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "CustomerEmail", "XTemplate.Domain.Invoices.Invoice.CustomerEmail#EmailAddress", b1 =>
                         {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using XTemplate.Api.Common.Endpoints;
+using XTemplate.Api.Common.Hardening;
 using XTemplate.Api.Common.Results;
 using XTemplate.Api.Contracts.Auth;
 using XTemplate.Application.Features.Auth.RefreshToken;
@@ -12,6 +13,7 @@ internal sealed class Refresh : IEndpoint
     public static void Map(IEndpointRouteBuilder app) => app
         .MapPost("auth/refresh", Handle)
         .AllowAnonymous()
+        .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
         .WithTags(AuthEndpoints.Tag)
         .WithSummary("Rotate a refresh token for a new token pair");
 
