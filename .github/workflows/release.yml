@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+jobs:
+  publish:
+    name: Pack & publish to NuGet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Pack template
+        run: dotnet pack eng/XTemplate.TemplatePack/XTemplate.TemplatePack.csproj -c Release -o ./nupkg -p:Version=${GITHUB_REF_NAME#v}
+      - name: Push to NuGet
+        run: dotnet nuget push "./nupkg/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "${{ secrets.NUGET_API_KEY }}" --skip-duplicate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: ./nupkg/*.nupkg

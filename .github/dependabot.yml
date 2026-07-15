@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # One PR per family keeps the noise down and respects the CPM setup.
+      aspnetcore-efcore:
+        patterns: ["Microsoft.AspNetCore.*", "Microsoft.EntityFrameworkCore.*", "Microsoft.Extensions.*", "Npgsql.*"]
+      aspire:
+        patterns: ["Aspire.*"]
+      opentelemetry:
+        patterns: ["OpenTelemetry.*"]
+      test:
+        patterns: ["xunit*", "Shouldly", "NSubstitute", "Testcontainers*", "Respawn", "Bogus", "NetArchTest*"]
+    # Never let bots cross the license ceilings (ADR-0011).
+    ignore:
+      - dependency-name: "MediatR"
+      - dependency-name: "AutoMapper"
+      - dependency-name: "FluentAssertions"
+      - dependency-name: "MassTransit"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

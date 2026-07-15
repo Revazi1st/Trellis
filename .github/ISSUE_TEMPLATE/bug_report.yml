@@ -1,0 +1,27 @@
+name: Bug report
+description: Report a defect in the template or the generated solution
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. dotnet new xtemplate -n ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Template / .NET SDK version
+      placeholder: "XTemplate.Templates 0.1.0, .NET SDK 10.0.100"
+    validations:
+      required: true

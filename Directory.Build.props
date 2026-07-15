@@ -27,4 +27,22 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <PropertyGroup Label="Reproducibility">
+    <!-- Deterministic, reproducible builds; ContinuousIntegrationBuild is auto-set on CI (also gates warnings-as-errors above).
+         PublishRepositoryUrl + EmbedUntrackedSources enable the SDK's built-in SourceLink for GitHub-hosted repos. -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true' or '$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Supply chain">
+    <!-- NuGet vulnerability auditing on the full graph (transitive included). -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+  </PropertyGroup>
+
 </Project>

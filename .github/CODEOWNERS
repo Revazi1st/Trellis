@@ -1,0 +1,7 @@
+# Default owners for everything (replace with your team/handles).
+*                       @your-org/maintainers
+
+# Architecture decisions and layer rules warrant closer review.
+/docs/adr/              @your-org/architects
+/.claude/rules/         @your-org/architects
+/Directory.Packages.props @your-org/architects
