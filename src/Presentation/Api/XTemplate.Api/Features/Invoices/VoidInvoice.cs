@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Hybrid;
 using XTemplate.Api.Common.Authentication;
 using XTemplate.Api.Common.Caching;
 using XTemplate.Api.Common.Endpoints;
+using XTemplate.Api.Common.Idempotency;
 using XTemplate.Api.Common.Results;
 using XTemplate.Application.Authorization;
 using XTemplate.Application.Features.Invoices.VoidInvoice;
@@ -16,6 +17,7 @@ internal sealed class VoidInvoice : IEndpoint
     public static void Map(IEndpointRouteBuilder app) => app
         .MapPost("invoices/{id}/void", Handle)
         .RequirePermission(Permissions.Invoices.Write)
+        .RequireIdempotency()
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Void a draft or issued invoice");
 

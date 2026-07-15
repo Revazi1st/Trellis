@@ -31,6 +31,10 @@ One `IEndpoint` class per use case on `/api/v1/invoices…`, each `.RequirePermi
 
 **Optimistic concurrency**: `Invoice` carries the Postgres `xmin` concurrency token (`InvoiceConfiguration.UseXmin...`); a conflicting write throws `DbUpdateConcurrencyException`, mapped to **409** by `ConcurrencyExceptionHandler` in the API host.
 
+**Transactional outbox**: `MarkPaid` raises `InvoicePaidDomainEvent`, which the `OutboxWriteInterceptor` persists to `OutboxMessages` in the same transaction; the `OutboxProcessor` background service dispatches it post-commit to `SendReceiptOnInvoicePaid` (ADR-0018). Domain events use primitive types so they serialize.
+
+**Idempotency**: the invoice command endpoints accept an `Idempotency-Key` header; a duplicate key returns **409** (ADR-0018).
+
 ## UI (`src/Presentation/UI/XTemplate.UI.Common/Pages/`)
 
 `Invoices` (list), `InvoiceDetail` (view + pay/void), `CreateInvoice` — via `IInvoiceApiClient` over the contracts.

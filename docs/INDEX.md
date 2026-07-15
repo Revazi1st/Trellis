@@ -25,3 +25,4 @@ Agent entry point — read only what the task needs.
 - [0015](adr/0015-blazor-everywhere-shared-ui.md) — shared render-mode-agnostic Razor Class Library for the Blazor UI
 - [0016](adr/0016-ring-grouped-folders.md) — ring-grouped source folders (Core / Infrastructure / Presentation / Shared)
 - [0017](adr/0017-hand-rolled-specifications.md) — hand-rolled Specification<T>, Domain stays dependency-free
+- [0018](adr/0018-transactional-outbox-and-idempotency.md) — transactional outbox for domain events + command idempotency

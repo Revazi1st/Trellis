@@ -10,7 +10,7 @@ internal sealed class SendReceiptOnInvoicePaid(IEmailSender emailSender)
 {
     public Task Handle(InvoicePaidDomainEvent domainEvent, CancellationToken cancellationToken)
         => emailSender.SendAsync(
-            domainEvent.CustomerEmail.Value,
+            domainEvent.CustomerEmail,
             "Thanks for your payment",
             $"We received the payment for invoice {domainEvent.InvoiceId}.",
             cancellationToken);

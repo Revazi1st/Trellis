@@ -1,7 +1,6 @@
 using NSubstitute;
 using XTemplate.Application.Abstractions;
 using XTemplate.Application.Features.Invoices.EventHandlers;
-using XTemplate.Domain.Common;
 using XTemplate.Domain.Invoices;
 using XTemplate.Domain.Invoices.Events;
 using Xunit;
@@ -18,7 +17,7 @@ public sealed class SendReceiptOnInvoicePaidTests
         var invoiceId = InvoiceId.New();
 
         await handler.Handle(
-            new InvoicePaidDomainEvent(invoiceId, EmailAddress.Create("billing@acme.com").Value),
+            new InvoicePaidDomainEvent(invoiceId, "billing@acme.com"),
             TestContext.Current.CancellationToken);
 
         await emailSender.Received(1).SendAsync(

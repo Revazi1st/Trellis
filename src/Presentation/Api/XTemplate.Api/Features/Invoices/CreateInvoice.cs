@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using XTemplate.Api.Common.Authentication;
 using XTemplate.Api.Common.Endpoints;
+using XTemplate.Api.Common.Idempotency;
 using XTemplate.Api.Common.Results;
 using XTemplate.Api.Contracts.Invoices;
 using XTemplate.Application.Authorization;
@@ -15,6 +16,7 @@ internal sealed class CreateInvoice : IEndpoint
     public static void Map(IEndpointRouteBuilder app) => app
         .MapPost("invoices", Handle)
         .RequirePermission(Permissions.Invoices.Write)
+        .RequireIdempotency()
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Create a draft invoice");
 

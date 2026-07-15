@@ -119,7 +119,7 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
         Status = InvoiceStatus.Paid;
         PaidAtUtc = paidAtUtc;
-        Raise(new InvoicePaidDomainEvent(Id, CustomerEmail));
+        Raise(new InvoicePaidDomainEvent(Id, CustomerEmail.Value));
         return Result.Success();
     }
 

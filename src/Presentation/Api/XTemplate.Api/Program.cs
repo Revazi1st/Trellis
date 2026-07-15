@@ -41,6 +41,9 @@ builder.Services.AddApiHardening(builder.Configuration);
 // Database readiness check (untagged → part of /health readiness, excluded from /alive liveness).
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 
+// Drain the transactional outbox in the long-running API host (ADR-0018).
+builder.Services.AddOutboxProcessing();
+
 // HybridCache: in-memory L1 always; a Redis L2 is added below when the UseRedis feature is enabled.
 builder.Services.AddHybridCache();
 #if (UseRedis)

@@ -108,7 +108,7 @@ public sealed class InvoiceTests
         invoice.Status.ShouldBe(InvoiceStatus.Paid);
         invoice.PaidAtUtc.ShouldBe(PaidAt);
         var paidEvent = invoice.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<InvoicePaidDomainEvent>();
-        paidEvent.CustomerEmail.Value.ShouldBe("billing@acme.com");
+        paidEvent.CustomerEmail.ShouldBe("billing@acme.com");
     }
 
     [Fact]

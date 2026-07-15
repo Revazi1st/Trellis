@@ -13,7 +13,7 @@ using XTemplate.Persistence;
 namespace XTemplate.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260715200448_InitialCreate")]
+    [Migration("20260715203015_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -259,6 +259,20 @@ namespace XTemplate.Persistence.Migrations
                     b.ToTable("InvoiceLines", (string)null);
                 });
 
+            modelBuilder.Entity("XTemplate.Persistence.Idempotency.IdempotencyKey", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("IdempotencyKeys", (string)null);
+                });
+
             modelBuilder.Entity("XTemplate.Persistence.Identity.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -352,6 +366,40 @@ namespace XTemplate.Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("RefreshTokens", (string)null);
+                });
+
+            modelBuilder.Entity("XTemplate.Persistence.Outbox.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProcessedAtUtc", "OccurredAtUtc");
+
+                    b.ToTable("OutboxMessages", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

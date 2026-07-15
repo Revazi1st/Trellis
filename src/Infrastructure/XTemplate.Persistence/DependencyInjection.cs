@@ -3,8 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XTemplate.Application.Abstractions;
 using XTemplate.Domain.Invoices;
+using XTemplate.Persistence.Idempotency;
 using XTemplate.Persistence.Identity;
 using XTemplate.Persistence.Interceptors;
+using XTemplate.Persistence.Outbox;
 using XTemplate.Persistence.Repositories;
 using XTemplate.SharedKernel.Domain;
 
@@ -21,7 +23,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         Action<DbContextOptionsBuilder> configureProvider)
     {
-        services.AddScoped<DomainEventDispatchInterceptor>();
+        services.AddScoped<OutboxWriteInterceptor>();
         services.AddScoped<SoftDeleteInterceptor>();
         services.AddScoped<AuditingInterceptor>();
 
@@ -32,7 +34,7 @@ public static class DependencyInjection
             // Order matters: events first (handlers may change entities), then soft-delete flips,
             // then auditing stamps everything — including what the first two produced.
             options.AddInterceptors(
-                serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>(),
+                serviceProvider.GetRequiredService<OutboxWriteInterceptor>(),
                 serviceProvider.GetRequiredService<SoftDeleteInterceptor>(),
                 serviceProvider.GetRequiredService<AuditingInterceptor>());
         });
@@ -50,7 +52,15 @@ public static class DependencyInjection
 
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
+        services.AddScoped<IIdempotencyStore, IdempotencyStore>();
 
+        return services;
+    }
+
+    /// <summary>Registers the background outbox processor. Call from long-running hosts only (e.g. the API), not the one-shot MigrationService.</summary>
+    public static IServiceCollection AddOutboxProcessing(this IServiceCollection services)
+    {
+        services.AddHostedService<OutboxProcessor>();
         return services;
     }
 }

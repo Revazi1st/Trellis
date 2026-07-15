@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Hybrid;
 using XTemplate.Api.Common.Authentication;
 using XTemplate.Api.Common.Caching;
 using XTemplate.Api.Common.Endpoints;
+using XTemplate.Api.Common.Idempotency;
 using XTemplate.Api.Common.Results;
 using XTemplate.Application.Authorization;
 using XTemplate.Application.Features.Invoices.PayInvoice;
@@ -16,6 +17,7 @@ internal sealed class PayInvoice : IEndpoint
     public static void Map(IEndpointRouteBuilder app) => app
         .MapPost("invoices/{id}/pay", Handle)
         .RequirePermission(Permissions.Invoices.Write)
+        .RequireIdempotency()
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Record payment of an issued invoice");
 

@@ -52,6 +52,18 @@ namespace XTemplate.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "IdempotencyKeys",
+                columns: table => new
+                {
+                    Key = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    CreatedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_IdempotencyKeys", x => x.Key);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Invoices",
                 columns: table => new
                 {
@@ -72,6 +84,23 @@ namespace XTemplate.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Invoices", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "OutboxMessages",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Type = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
+                    Content = table.Column<string>(type: "jsonb", nullable: false),
+                    OccurredAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ProcessedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    Attempts = table.Column<int>(type: "integer", nullable: false),
+                    Error = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_OutboxMessages", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -264,6 +293,11 @@ namespace XTemplate.Persistence.Migrations
                 column: "Status");
 
             migrationBuilder.CreateIndex(
+                name: "IX_OutboxMessages_ProcessedAtUtc_OccurredAtUtc",
+                table: "OutboxMessages",
+                columns: new[] { "ProcessedAtUtc", "OccurredAtUtc" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RefreshTokens_TokenHash",
                 table: "RefreshTokens",
                 column: "TokenHash",
@@ -294,7 +328,13 @@ namespace XTemplate.Persistence.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "IdempotencyKeys");
+
+            migrationBuilder.DropTable(
                 name: "InvoiceLines");
+
+            migrationBuilder.DropTable(
+                name: "OutboxMessages");
 
             migrationBuilder.DropTable(
                 name: "RefreshTokens");

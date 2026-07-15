@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Hybrid;
 using XTemplate.Api.Common.Authentication;
 using XTemplate.Api.Common.Caching;
 using XTemplate.Api.Common.Endpoints;
+using XTemplate.Api.Common.Idempotency;
 using XTemplate.Api.Common.Results;
 using XTemplate.Api.Contracts.Invoices;
 using XTemplate.Application.Authorization;
@@ -17,6 +18,7 @@ internal sealed class IssueInvoice : IEndpoint
     public static void Map(IEndpointRouteBuilder app) => app
         .MapPost("invoices/{id}/issue", Handle)
         .RequirePermission(Permissions.Invoices.Write)
+        .RequireIdempotency()
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Issue a draft invoice, making it payable");
 
