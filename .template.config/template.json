@@ -31,6 +31,13 @@
       "defaultValue": "false",
       "displayName": "Skip restore",
       "description": "Skip the automatic 'dotnet restore' after the project is created."
+    },
+    "UseRedis": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "Use Redis cache",
+      "description": "Add a Redis distributed cache (HybridCache L2) and wire it into the Aspire AppHost."
     }
   },
   "sources": [

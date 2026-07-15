@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.Caching.Hybrid;
 using XTemplate.Api.Common.Authentication;
+using XTemplate.Api.Common.Caching;
 using XTemplate.Api.Common.Endpoints;
 using XTemplate.Api.Common.Results;
 using XTemplate.Api.Contracts.Invoices;
@@ -23,12 +25,21 @@ internal sealed class GetInvoice : IEndpoint
     private static async Task<Results<Ok<InvoiceDto>, ProblemHttpResult>> Handle(
         InvoiceId id,
         IQueryHandler<GetInvoiceQuery, InvoiceResponse> handler,
+        HybridCache cache,
         CancellationToken cancellationToken)
     {
-        var result = await handler.Handle(new GetInvoiceQuery(id), cancellationToken);
+        // Cache-aside: served from HybridCache (in-memory L1, optional Redis L2), invalidated by the write endpoints.
+        InvoiceDto? dto = await cache.GetOrCreateAsync(
+            CacheKeys.Invoice(id.Value),
+            async token =>
+            {
+                var result = await handler.Handle(new GetInvoiceQuery(id), token);
+                return result.IsSuccess ? result.Value.ToDto() : null;
+            },
+            cancellationToken: cancellationToken);
 
-        return result.IsSuccess
-            ? TypedResults.Ok(result.Value.ToDto())
-            : CustomResults.Problem(result.Error);
+        return dto is not null
+            ? TypedResults.Ok(dto)
+            : CustomResults.Problem(InvoiceErrors.NotFound(id));
     }
 }

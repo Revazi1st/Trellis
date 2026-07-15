@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.Caching.Hybrid;
 using XTemplate.Api.Common.Authentication;
+using XTemplate.Api.Common.Caching;
 using XTemplate.Api.Common.Endpoints;
 using XTemplate.Api.Common.Results;
 using XTemplate.Api.Contracts.Invoices;
@@ -22,12 +24,17 @@ internal sealed class IssueInvoice : IEndpoint
         InvoiceId id,
         IssueInvoiceRequest request,
         ICommandHandler<IssueInvoiceCommand> handler,
+        HybridCache cache,
         CancellationToken cancellationToken)
     {
         var result = await handler.Handle(new IssueInvoiceCommand(id, request.DueDate), cancellationToken);
 
-        return result.IsSuccess
-            ? TypedResults.NoContent()
-            : CustomResults.Problem(result.Error);
+        if (result.IsSuccess)
+        {
+            await cache.RemoveAsync(CacheKeys.Invoice(id.Value), cancellationToken);
+            return TypedResults.NoContent();
+        }
+
+        return CustomResults.Problem(result.Error);
     }
 }

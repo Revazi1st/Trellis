@@ -25,6 +25,8 @@ Use-case slices, each = command/query + `internal sealed` handler + validator: `
 
 One `IEndpoint` class per use case on `/api/v1/invoices…`, each `.RequirePermission(Permissions.Invoices.Read|Write)`, mapping `Result` → `TypedResults`/`CustomResults.Problem`. Wire contracts in `Api.Contracts/Invoices/`.
 
+**Caching**: `GetInvoice` is cache-aside via `HybridCache` (key `CacheKeys.Invoice(id)`); the mutating endpoints (`AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`) invalidate that key on success. HybridCache uses an in-memory L1 always; a Redis L2 is added when the **`UseRedis`** template toggle is on (Aspire `cache` resource + `AddRedisDistributedCache`).
+
 ## UI (`src/Presentation/UI/XTemplate.UI.Common/Pages/`)
 
 `Invoices` (list), `InvoiceDetail` (view + pay/void), `CreateInvoice` — via `IInvoiceApiClient` over the contracts.

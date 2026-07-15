@@ -11,6 +11,10 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" />
+    <!--#if (UseRedis) -->
+    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" />
+    <!--#endif -->
   </ItemGroup>
 
 </Project>

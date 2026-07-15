@@ -12,8 +12,16 @@ var migrations = builder.AddProject<Projects.XTemplate_MigrationService>("migrat
     .WithReference(database)
     .WaitFor(database);
 
+#if (UseRedis)
+var cache = builder.AddRedis("cache");
+#endif
+
 var api = builder.AddProject<Projects.XTemplate_Api>("api")
     .WithReference(database)
+#if (UseRedis)
+    .WithReference(cache)
+    .WaitFor(cache)
+#endif
     .WaitForCompletion(migrations)
     .WithHttpHealthCheck("/health");
 

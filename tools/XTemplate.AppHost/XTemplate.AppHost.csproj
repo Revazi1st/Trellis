@@ -8,7 +8,7 @@
   </PropertyGroup>
   <!--#if (IncludeUI) -->
   <PropertyGroup>
-    <!-- Defines the IncludeUI symbol for the template SOURCE so the #if block in Program.cs compiles here.
+    <!-- Defines IncludeUI for the template SOURCE so the #if block in Program.cs compiles here.
          Removed at 'dotnet new' time when the UI is excluded; harmless when included. -->
     <DefineConstants>$(DefineConstants);IncludeUI</DefineConstants>
   </PropertyGroup>
@@ -17,6 +17,9 @@
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.Docker" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <!--#if (UseRedis) -->
+    <PackageReference Include="Aspire.Hosting.Redis" />
+    <!--#endif -->
   </ItemGroup>
 
   <ItemGroup>

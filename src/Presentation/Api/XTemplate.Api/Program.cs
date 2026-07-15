@@ -25,6 +25,13 @@ builder.Services.AddApiAuthentication(authOptions);
 builder.Services.AddApiCommon();
 builder.Services.AddApiDocumentation();
 
+// HybridCache: in-memory L1 always; a Redis L2 is added below when the UseRedis feature is enabled.
+builder.Services.AddHybridCache();
+#if (UseRedis)
+// Aspire registers an IDistributedCache backed by the "cache" Redis resource, which HybridCache uses as its L2.
+builder.AddRedisDistributedCache("cache");
+#endif
+
 var app = builder.Build();
 
 app.UseExceptionHandler();

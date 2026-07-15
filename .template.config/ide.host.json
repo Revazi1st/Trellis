@@ -2,7 +2,26 @@
   "$schema": "http://json.schemastore.org/vs-2017.3.host",
   "icon": "icon.png",
   "symbolInfo": [
-    { "id": "IncludeUI", "name": { "text": "Include Blazor UI" }, "isVisible": true },
-    { "id": "skipRestore", "name": { "text": "Skip restore" }, "isVisible": true }
+    {
+      "id": "IncludeUI",
+      "name": {
+        "text": "Include Blazor UI"
+      },
+      "isVisible": true
+    },
+    {
+      "id": "skipRestore",
+      "name": {
+        "text": "Skip restore"
+      },
+      "isVisible": true
+    },
+    {
+      "id": "UseRedis",
+      "name": {
+        "text": "Use Redis cache"
+      },
+      "isVisible": true
+    }
   ]
 }
