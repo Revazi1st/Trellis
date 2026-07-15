@@ -49,14 +49,3 @@ jobs:
       - name: Check feature docs are updated
         run: ./scripts/check-docs-drift.sh origin/${{ github.base_ref }}
 
-  # The MAUI mobile head (UI.Mobile) is deferred (ADR-0008/0015) — it cannot build in the default
-  # containerized flow and is not part of this session's scope. When it lands, add a job here:
-  #
-  #   mobile:
-  #     runs-on: macos-latest        # iOS/Mac Catalyst need macOS; Android can run on ubuntu
-  #     steps:
-  #       - uses: actions/checkout@v4
-  #       - uses: actions/setup-dotnet@v4
-  #         with: { global-json-file: global.json }
-  #       - run: dotnet workload install maui-android
-  #       - run: dotnet build src/Presentation/UI/XTemplate.UI.Mobile -f net10.0-android

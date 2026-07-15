@@ -1,6 +1,6 @@
 namespace XTemplate.Api.Contracts.Invoices;
 
-/// <summary>Wire contracts for the Invoices feature — shared verbatim by the API host, Blazor web and MAUI mobile clients.</summary>
+/// <summary>Wire contracts for the Invoices feature — shared verbatim by the API host and its clients (the Blazor web UI, tests).</summary>
 public sealed record CreateInvoiceRequest(string CustomerName, string CustomerEmail, string Currency);
 
 public sealed record CreateInvoiceResponse(Guid Id);

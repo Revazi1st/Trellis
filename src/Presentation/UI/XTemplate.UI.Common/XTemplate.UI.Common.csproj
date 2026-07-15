@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
-  <!-- Shared Razor components for BOTH UI.Web (Blazor Web App) and UI.Mobile (MAUI Blazor Hybrid, deferred).
-       Must stay render-mode-agnostic: no web-only or MAUI-only APIs (ADR-0015). -->
+  <!-- Shared Razor components for the Blazor web host. Kept render-mode-agnostic (no host-specific APIs)
+       so the library stays cleanly reusable — see ADR-0015. -->
 
   <ItemGroup>
     <ProjectReference Include="..\..\Api\XTemplate.Api.Contracts\XTemplate.Api.Contracts.csproj" />

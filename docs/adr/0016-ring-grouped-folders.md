@@ -13,7 +13,7 @@ Group projects under `src/` by architectural ring, and mirror the layout with so
 
 - `src/Core/` — SharedKernel, Domain, Application (the inside of the onion; pure C#).
 - `src/Infrastructure/` — Infrastructure ∥ Persistence (driven adapters; peers).
-- `src/Presentation/` — `Api/` (Api.Contracts, Api.Common, Api) and `UI/` (UI.Common, UI.Web, and the deferred UI.Mobile).
+- `src/Presentation/` — `Api/` (Api.Contracts, Api.Common, Api) and `UI/` (UI.Common, UI.Web).
 - `src/Shared/` — ServiceDefaults and other cross-host libraries.
 
 `tools/` holds AppHost + MigrationService; `tests/` stays flat (project names already encode their target).

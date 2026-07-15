@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - **Docker** (Desktop/OrbStack). All build/test runs through the SDK container — no local .NET SDK required for the inner loop.
-- A **local .NET 10 SDK** only if you want `aspire run` (full app) or to build the deferred MAUI head (ADR-0008).
+- A **local .NET 10 SDK** only if you want `aspire run` (the full orchestrated app; ADR-0008).
 
 One-time: build the SDK image (base SDK + docker CLI, needed by Testcontainers/Aspire):
 

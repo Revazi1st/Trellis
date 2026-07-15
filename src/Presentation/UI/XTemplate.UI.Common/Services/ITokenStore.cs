@@ -2,7 +2,7 @@ namespace XTemplate.UI.Common.Services;
 
 /// <summary>
 /// Platform seam for holding the current tokens. UI.Web backs this per-circuit in memory;
-/// UI.Mobile (deferred) will back it with SecureStorage. Kept minimal and synchronous-friendly.
+/// A different host could back it differently (e.g. secure storage). Kept minimal and synchronous-friendly.
 /// </summary>
 public interface ITokenStore
 {

@@ -10,7 +10,7 @@ You verify structural conformance for XTemplate. You do not fix code — you rep
 Check:
 - **Dependency flow** (ADR-0002): `SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Api → Api.Common`; `Api → Api.Contracts ← UI.Common`. Inspect `.csproj` `ProjectReference`s and `using`s.
 - **The peer rule**: `XTemplate.Infrastructure` and `XTemplate.Persistence` must not reference each other.
-- **Purity**: Domain has no EF/ASP.NET; Api.Contracts has no references; UI.Common has no web-only/MAUI-only APIs.
+- **Purity**: Domain has no EF/ASP.NET; Api.Contracts has no references; UI.Common has no host-specific APIs (stays render-mode-agnostic).
 - **New packages**: flagged against the LICENSE CEILINGS block in `Directory.Packages.props`.
 
 Run `./scripts/dotnet.sh test tests/XTemplate.ArchitectureTests` if you need ground truth. Report violations with the offending file and the rule they break, and cite the relevant ADR.

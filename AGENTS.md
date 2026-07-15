@@ -20,7 +20,7 @@ docker build -t xtemplate-sdk:10.0 scripts/sdk-image   # one-time
 
 ```
 SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Api → Api.Common
-Api → Api.Contracts ← UI.Common ;  UI.Web → UI.Common ← UI.Mobile (deferred)
+Api → Api.Contracts ← UI.Common ;  UI.Web → UI.Common
 ```
 
 Dependencies point inward. **Infrastructure and Persistence are peers — never reference each other** (ADR-0002; agents trained on mainstream templates expect a single Infrastructure project — this one splits them).

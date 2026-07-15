@@ -14,7 +14,6 @@ XTemplate is a rich-DDD, Clean Architecture .NET 10 solution. Projects are group
         └──────── Presentation ────────────────
              Api ──► Api.Common
              Api ──► Api.Contracts ◄── UI.Common ◄── UI.Web
-                                       UI.Common ◄── UI.Mobile (deferred)
              Shared: ServiceDefaults (Aspire) — referenced by hosts
 ```
 
@@ -36,6 +35,6 @@ Rule of thumb: **dependencies point inward.** The Domain knows nothing about EF,
 - **Result over exceptions** — operations return `Result`/`Result<T>`; the API maps errors to RFC 9457 problem details at one seam. (ADR-0004)
 - **Rich domain** — aggregates with factories + private EF constructors, value objects as EF complex types, hand-rolled strongly-typed IDs, domain events dispatched by an EF SaveChanges interceptor. (ADR-0005, ADR-0006)
 - **Auth** — ASP.NET Core Identity + JWT with permission claims; permission-based authorization; single-use refresh tokens. (ADR-0007)
-- **One UI, two heads** — a shared Razor Class Library renders in the Blazor web host and (later) a MAUI mobile host. (ADR-0015)
+- **Shared UI library** — a render-mode-agnostic Razor Class Library (`UI.Common`) holds the pages/components/typed client, consumed by the Blazor web host. (ADR-0015)
 
 Decisions and their rationale live in [`docs/adr/`](adr/). The canonical feature to copy is [Invoices](features/invoices.md).
