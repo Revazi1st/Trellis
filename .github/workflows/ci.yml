@@ -28,6 +28,9 @@ jobs:
       - name: Format check
         run: dotnet format XTemplate.slnx --no-restore --verify-no-changes --severity warn
 
+      - name: ADR link check
+        run: ./scripts/check-adr-links.sh
+
       - name: Build (warnings as errors)
         run: dotnet build XTemplate.slnx --no-restore -c Release
 

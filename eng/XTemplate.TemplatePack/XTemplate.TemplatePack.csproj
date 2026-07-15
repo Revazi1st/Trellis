@@ -9,6 +9,10 @@
     <PackageTags>dotnet-new;templates;clean-architecture;ddd;aspire;blazor</PackageTags>
     <Version>0.1.0</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/your-org/xtemplate</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/your-org/xtemplate</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
 
     <TargetFramework>netstandard2.0</TargetFramework>
     <IncludeContentInPack>true</IncludeContentInPack>
