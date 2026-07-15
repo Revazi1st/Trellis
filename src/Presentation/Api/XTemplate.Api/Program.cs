@@ -1,3 +1,6 @@
+#if (UseSerilog)
+using Serilog;
+#endif
 using Scalar.AspNetCore;
 using XTemplate.Api.Common;
 using XTemplate.Api.Common.Authentication;
@@ -11,6 +14,13 @@ using XTemplate.ServiceDefaults;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
+#if (UseSerilog)
+builder.Services.AddSerilog(static (services, config) => config
+    .ReadFrom.Configuration(services.GetRequiredService<IConfiguration>())
+    .Enrich.FromLogContext()
+    .WriteTo.Console());
+#endif
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);

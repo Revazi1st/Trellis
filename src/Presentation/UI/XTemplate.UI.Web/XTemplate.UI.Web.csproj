@@ -5,4 +5,10 @@
     <ProjectReference Include="..\..\..\Shared\XTemplate.ServiceDefaults\XTemplate.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <!--#if (UseSerilog) -->
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+  <!--#endif -->
+
 </Project>

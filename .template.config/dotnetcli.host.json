@@ -12,6 +12,10 @@
     "UseRedis": {
       "longName": "use-redis",
       "shortName": ""
+    },
+    "UseSerilog": {
+      "longName": "use-serilog",
+      "shortName": ""
     }
   }
 }

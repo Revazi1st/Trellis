@@ -12,6 +12,9 @@
   <ItemGroup>
     <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" />
+    <!--#if (UseSerilog) -->
+    <PackageReference Include="Serilog.AspNetCore" />
+    <!--#endif -->
     <!--#if (UseRedis) -->
     <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" />
     <!--#endif -->

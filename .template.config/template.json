@@ -38,6 +38,13 @@
       "defaultValue": "false",
       "displayName": "Use Redis cache",
       "description": "Add a Redis distributed cache (HybridCache L2) and wire it into the Aspire AppHost."
+    },
+    "UseSerilog": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "Use Serilog",
+      "description": "Use Serilog for structured logging (console sink) in the API and web hosts, alongside OpenTelemetry."
     }
   },
   "sources": [
