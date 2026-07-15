@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "XTemplate",
+  "classifications": [
+    "Web",
+    "Clean Architecture",
+    "DDD",
+    "Aspire",
+    "API"
+  ],
+  "identity": "XTemplate.Solution.CSharp",
+  "name": "XTemplate Clean Architecture Solution",
+  "shortName": "xtemplate",
+  "sourceName": "XTemplate",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "solution"
+  },
+  "symbols": {
+    "IncludeUI": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "true",
+      "displayName": "Include Blazor UI",
+      "description": "Include the Blazor web UI (UI.Common + UI.Web) and wire it into the Aspire AppHost."
+    },
+    "skipRestore": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "Skip restore",
+      "description": "Skip the automatic 'dotnet restore' after the project is created."
+    }
+  },
+  "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "exclude": [
+        "**/bin/**",
+        "**/obj/**",
+        "artifacts/**",
+        ".git/**",
+        ".idea/**",
+        ".vs/**",
+        ".vscode/**",
+        "eng/**",
+        "**/.template-test/**",
+        ".claude/settings.local.json",
+        "CLAUDE.local.md",
+        "**/*.user"
+      ],
+      "modifiers": [
+        {
+          "condition": "(!IncludeUI)",
+          "exclude": [
+            "src/Presentation/UI/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "primaryOutputs": [
+    {
+      "path": "XTemplate.slnx"
+    }
+  ],
+  "postActions": [
+    {
+      "id": "restore",
+      "condition": "(!skipRestore)",
+      "description": "Restore NuGet packages",
+      "manualInstructions": [
+        {
+          "text": "Run 'dotnet restore'"
+        }
+      ],
+      "actionId": "210D431B-A78B-4D2F-B762-4ED3E3EA9025",
+      "continueOnError": true
+    },
+    {
+      "id": "make scripts executable",
+      "condition": "(OS != \"Windows_NT\")",
+      "description": "Make the helper scripts executable",
+      "manualInstructions": [
+        {
+          "text": "Run 'chmod +x scripts/*.sh'"
+        }
+      ],
+      "actionId": "3A7C4B45-1F5D-4A30-959A-51B88E82B5D2",
+      "args": {
+        "executable": "/bin/chmod",
+        "args": "+x scripts/dotnet.sh scripts/ef.sh scripts/check-docs-drift.sh"
+      },
+      "continueOnError": true
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+name: Template CI
+
+on:
+  push:
+    branches: [main]
+    paths: [".template.config/**", "eng/**", "XTemplate.slnx", ".github/workflows/template-ci.yml"]
+  pull_request:
+    branches: [main]
+    paths: [".template.config/**", "eng/**", "XTemplate.slnx"]
+  workflow_dispatch:
+
+jobs:
+  instantiate:
+    name: Instantiate & build (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default
+            args: ""
+            out: Acme.Shop
+          - name: no-ui
+            args: "--include-ui false"
+            out: Acme.Api
+          - name: name-with-spaces
+            args: ""
+            out: "My Cool App"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install template from source
+        run: dotnet new install .
+
+      - name: Instantiate
+        run: dotnet new xtemplate -n "${{ matrix.out }}" -o ../generated ${{ matrix.args }}
+
+      - name: Build generated solution
+        working-directory: ../generated
+        run: dotnet build *.slnx -c Release
+
+  pack:
+    name: Pack template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Pack
+        run: dotnet pack eng/XTemplate.TemplatePack/XTemplate.TemplatePack.csproj -o ./nupkg
+      - name: Install packed template (smoke)
+        run: dotnet new install ./nupkg/*.nupkg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: template-package
+          path: ./nupkg/*.nupkg

@@ -6,6 +6,13 @@
     <OutputType>Exe</OutputType>
     <UserSecretsId>xtemplate-apphost-e6c5a3d2</UserSecretsId>
   </PropertyGroup>
+  <!--#if (IncludeUI) -->
+  <PropertyGroup>
+    <!-- Defines the IncludeUI symbol for the template SOURCE so the #if block in Program.cs compiles here.
+         Removed at 'dotnet new' time when the UI is excluded; harmless when included. -->
+    <DefineConstants>$(DefineConstants);IncludeUI</DefineConstants>
+  </PropertyGroup>
+  <!--#endif -->
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.Docker" />
@@ -14,7 +21,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Presentation\Api\XTemplate.Api\XTemplate.Api.csproj" />
+    <!--#if (IncludeUI) -->
     <ProjectReference Include="..\..\src\Presentation\UI\XTemplate.UI.Web\XTemplate.UI.Web.csproj" />
+    <!--#endif -->
     <ProjectReference Include="..\XTemplate.MigrationService\XTemplate.MigrationService.csproj" />
   </ItemGroup>
 

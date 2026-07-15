@@ -1,0 +1,3 @@
+<Project>
+  <!-- Intentionally empty: stops the packaging project from inheriting the root net10.0 build settings. -->
+</Project>

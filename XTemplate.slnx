@@ -24,10 +24,13 @@
     <Project Path="src/Presentation/Api/XTemplate.Api.Common/XTemplate.Api.Common.csproj" />
     <Project Path="src/Presentation/Api/XTemplate.Api/XTemplate.Api.csproj" />
   </Folder>
+  <!--#if (IncludeUI) -->
   <Folder Name="/src/Presentation/UI/">
     <Project Path="src/Presentation/UI/XTemplate.UI.Common/XTemplate.UI.Common.csproj" />
     <Project Path="src/Presentation/UI/XTemplate.UI.Web/XTemplate.UI.Web.csproj" />
   </Folder>
+  <!--#endif -->
+
   <Folder Name="/src/Shared/">
     <Project Path="src/Shared/XTemplate.ServiceDefaults/XTemplate.ServiceDefaults.csproj" />
   </Folder>

@@ -17,10 +17,12 @@ var api = builder.AddProject<Projects.XTemplate_Api>("api")
     .WaitForCompletion(migrations)
     .WithHttpHealthCheck("/health");
 
+#if (IncludeUI)
 builder.AddProject<Projects.XTemplate_UI_Web>("web")
     .WithReference(api)
     .WaitFor(api)
     .WithExternalHttpEndpoints();
+#endif
 
 // 'aspire publish' target: docker-compose artifacts; images built via dotnet publish /t:PublishContainer — no Dockerfiles.
 builder.AddDockerComposeEnvironment("compose");
