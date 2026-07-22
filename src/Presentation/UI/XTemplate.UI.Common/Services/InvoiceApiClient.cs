@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using XTemplate.Api.Contracts.Common;
 using XTemplate.Api.Contracts.Invoices;
 
 namespace XTemplate.UI.Common.Services;
@@ -72,8 +73,9 @@ internal sealed class InvoiceApiClient(HttpClient httpClient) : IInvoiceApiClien
             return ApiResult.Failure<IReadOnlyList<InvoiceDto>>(await DescribeAsync(response, cancellationToken));
         }
 
-        IReadOnlyList<InvoiceDto>? list = await response.Content.ReadFromJsonAsync<IReadOnlyList<InvoiceDto>>(cancellationToken);
-        return ApiResult.Success<IReadOnlyList<InvoiceDto>>(list ?? []);
+        // The endpoint returns a PagedResponse envelope, not a bare array.
+        PagedResponse<InvoiceDto>? page = await response.Content.ReadFromJsonAsync<PagedResponse<InvoiceDto>>(cancellationToken);
+        return ApiResult.Success<IReadOnlyList<InvoiceDto>>(page?.Items ?? []);
     }
 
     private static async Task<string> DescribeAsync(HttpResponseMessage response, CancellationToken cancellationToken)

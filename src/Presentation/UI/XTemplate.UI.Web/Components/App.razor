@@ -6,10 +6,13 @@
     <base href="/" />
     <link rel="stylesheet" href="_content/XTemplate.UI.Common/xtemplate-ui.css" />
     <link rel="icon" href="data:," />
-    <HeadOutlet />
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 <body>
-    <Routes />
+    @* The host applies interactivity; UI.Common stays render-mode-agnostic (ADR-0015).
+       Without this, AddInteractiveServerRenderMode() only *enables* the mode and every
+       page renders as static SSR — EditForm handlers never fire. *@
+    <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>
