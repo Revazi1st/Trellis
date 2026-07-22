@@ -58,18 +58,28 @@ Then in Rider/VS Code, using the **`http (dev container)`** launch profiles — 
 2. Run **XTemplate.Api** (profile `http (dev container)`) → <http://localhost:5171>, Scalar at `/scalar/v1`.
 3. Run **XTemplate.UI.Web** (profile `http (dev container)`) → <http://localhost:5170>.
 
-**Pick the profile explicitly in the run-configuration dropdown.** Running the bare project
-configuration applies no profile at all, and the app fails with
-`Connection string 'xtemplate-db' is not configured`.
+**Any run configuration works**, because `devcontainer.json` sets `ASPNETCORE_ENVIRONMENT` and the
+connection string via `containerEnv` — every process in the container inherits them. That matters
+because Rider generates *two* configurations per project and they look almost identical:
 
-Ports 5170/5171 reach the host browser because Rider forwards listening ports automatically (the
-client binds `127.0.0.1:<port>`); `forwardPorts` just declares them for VS Code. Step 3 sets
-`Services__api__http__0`, which stands in for the Aspire service-discovery reference the UI uses
-for the API (`https+http://api`) — nothing resolves that outside Aspire.
+| Configuration | Type | Port |
+|---|---|---|
+| `XTemplate.Api: http (dev container)` | .NET Launch Settings Profile | 5171 (5170 for the UI) |
+| `XTemplate.Api` | .NET Project — **ignores `launchSettings.json` entirely** | 8080 (the SDK image default) |
 
-> The connection string is passed as a **command-line argument**, not an environment variable. The
-> env form `ConnectionStrings__xtemplate-db` contains a dash, which is not a valid POSIX shell
-> identifier, so `sh`-wrapped launchers silently drop it and the app falls back to `localhost`.
+The bare one runs the built binary with no arguments and none of the profile's environment, so
+before the `containerEnv` fix it died with `Connection string 'xtemplate-db' is not configured`.
+Prefer the profile configurations: only they give the API and the UI *distinct* ports.
+
+Ports reach the host browser because Rider forwards them (the client binds `127.0.0.1:<port>`) —
+it forwards what `forwardPorts` declares, which is why 8080 is listed too. Never add `appPort`:
+`docker -p` would bind the same host ports and collide with that forwarder.
+
+> **Two gotchas worth knowing.** The connection string is also passed as a *command-line argument*
+> in the profiles, because the env form `ConnectionStrings__xtemplate-db` contains a dash — not a
+> valid POSIX shell identifier — so `sh`-wrapped launchers silently drop it. And
+> `appsettings.Development.json` points at `host.docker.internal`, with the host `http`/`https`
+> profiles overriding back to `localhost`.
 
 > Port **5433**, not 5432: a native PostgreSQL install commonly owns 5432, and the clash fails
 > confusingly — it connects, then rejects the password. Override with `POSTGRES_PORT` and match it
