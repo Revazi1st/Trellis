@@ -58,9 +58,18 @@ Then in Rider/VS Code, using the **`http (dev container)`** launch profiles — 
 2. Run **XTemplate.Api** (profile `http (dev container)`) → <http://localhost:5171>, Scalar at `/scalar/v1`.
 3. Run **XTemplate.UI.Web** (profile `http (dev container)`) → <http://localhost:5170>.
 
-Ports 5170/5171 are in `forwardPorts`, so they open in the host browser. Step 3 sets
+**Pick the profile explicitly in the run-configuration dropdown.** Running the bare project
+configuration applies no profile at all, and the app fails with
+`Connection string 'xtemplate-db' is not configured`.
+
+Ports 5170/5171 reach the host browser because Rider forwards listening ports automatically (the
+client binds `127.0.0.1:<port>`); `forwardPorts` just declares them for VS Code. Step 3 sets
 `Services__api__http__0`, which stands in for the Aspire service-discovery reference the UI uses
 for the API (`https+http://api`) — nothing resolves that outside Aspire.
+
+> The connection string is passed as a **command-line argument**, not an environment variable. The
+> env form `ConnectionStrings__xtemplate-db` contains a dash, which is not a valid POSIX shell
+> identifier, so `sh`-wrapped launchers silently drop it and the app falls back to `localhost`.
 
 > Port **5433**, not 5432: a native PostgreSQL install commonly owns 5432, and the clash fails
 > confusingly — it connects, then rejects the password. Override with `POSTGRES_PORT` and match it
