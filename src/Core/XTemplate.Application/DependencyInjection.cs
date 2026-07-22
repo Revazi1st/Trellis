@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using XTemplate.Application.Observability;
 using XTemplate.SharedKernel.Decorators;
 using XTemplate.SharedKernel.Domain;
 using XTemplate.SharedKernel.Messaging;
@@ -23,6 +24,7 @@ public static class DependencyInjection
                 .AsImplementedInterfaces().WithScopedLifetime());
 
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddSingleton<InvoiceMetrics>();
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
 
         // Decoration order: first Decorate call is the innermost wrapper.

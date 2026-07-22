@@ -106,7 +106,7 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
         Status = InvoiceStatus.Issued;
         DueDate = dueDate;
-        Raise(new InvoiceIssuedDomainEvent(Id));
+        Raise(new InvoiceIssuedDomainEvent(Id, Currency));
         return Result.Success();
     }
 

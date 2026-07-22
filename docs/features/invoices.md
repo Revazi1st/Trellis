@@ -35,6 +35,8 @@ One `IEndpoint` class per use case on `/api/v1/invoices…`, each `.RequirePermi
 
 **Idempotency**: the invoice command endpoints accept an `Idempotency-Key` header; a duplicate key returns **409** (ADR-0018).
 
+**Business metrics**: `InvoiceMetrics` (meter `XTemplate.Invoices`) exports `xtemplate.invoices.issued` (tagged by currency) and `xtemplate.invoices.paid`, incremented by outbox-dispatched event handlers so they count only committed events.
+
 ## UI (`src/Presentation/UI/XTemplate.UI.Common/Pages/`)
 
 `Invoices` (list), `InvoiceDetail` (view + pay/void), `CreateInvoice` — via `IInvoiceApiClient` over the contracts.

@@ -7,6 +7,7 @@ using XTemplate.Api.Common.Authentication;
 using XTemplate.Api.Common.Endpoints;
 using XTemplate.Api.Common.Hardening;
 using XTemplate.Application;
+using XTemplate.Application.Observability;
 using XTemplate.Application.Options;
 using XTemplate.Infrastructure;
 using XTemplate.Persistence;
@@ -24,6 +25,9 @@ builder.Services.AddSerilog(static (services, config) => config
 #endif
 
 builder.Services.AddApplication();
+
+// Export the Invoices business meter (counters are incremented by outbox-dispatched event handlers).
+builder.Services.AddOpenTelemetry().WithMetrics(static metrics => metrics.AddMeter(InvoiceMetrics.MeterName));
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("xtemplate-db")
     ?? throw new InvalidOperationException("Connection string 'xtemplate-db' is not configured."));
