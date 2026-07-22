@@ -26,6 +26,9 @@ jobs:
           - name: name-with-spaces
             args: ""
             out: "My Cool App"
+          - name: all-options
+            args: "--use-redis true --use-serilog true --use-multitenancy true --include-ui-tests true"
+            out: Acme.Full
     steps:
       - uses: actions/checkout@v4
 

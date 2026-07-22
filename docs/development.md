@@ -39,6 +39,20 @@ Because this adds a column, **regenerate the initial migration** in the generate
 ./scripts/ef.sh migrations add InitialCreate --project src/Infrastructure/XTemplate.Persistence
 ```
 
+## UI tests (optional)
+
+Generate with `--include-ui-tests` to add `tests/XTemplate.UiTests` (Playwright). The project always
+builds, but the browser tests are **opt-in at run time** — they need real browsers and a running app:
+
+```bash
+aspire run                                    # in another terminal
+pwsh artifacts/bin/XTemplate.UiTests/debug/playwright.ps1 install chromium
+RUN_UI_TESTS=1 dotnet test tests/XTemplate.UiTests
+```
+
+Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-free
+(the same opt-in pattern as the Aspire E2E test).
+
 ## Tests
 
 | Project | What it needs |
@@ -47,6 +61,7 @@ Because this adds a column, **regenerate the initial migration** in the generate
 | IntegrationTests | Docker (Testcontainers spins up PostgreSQL) |
 | ArchitectureTests | nothing |
 | ApiTests | `RUN_ASPIRE_E2E=1` + a local SDK or CI (Aspire orchestration) — otherwise the E2E skips; contract tests always run |
+| UiTests (optional) | `RUN_UI_TESTS=1` + installed browsers + a running app — otherwise the browser test skips |
 
 ## Conventions
 

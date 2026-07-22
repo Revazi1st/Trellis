@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Browser-driven UI tests. The project always builds (so the code is compile-verified),
+       but the browser tests are opt-in: set RUN_UI_TESTS=1 and install browsers first
+       (`pwsh bin/.../playwright.ps1 install chromium`). CI runs them; the container skips them. -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+</Project>

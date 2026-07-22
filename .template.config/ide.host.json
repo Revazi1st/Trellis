@@ -36,6 +36,13 @@
         "text": "Use multi-tenancy"
       },
       "isVisible": true
+    },
+    {
+      "id": "IncludeUiTests",
+      "name": {
+        "text": "Include Playwright UI tests"
+      },
+      "isVisible": true
     }
   ]
 }

@@ -52,6 +52,13 @@
       "defaultValue": "false",
       "displayName": "Use multi-tenancy",
       "description": "Add a tenant seam: ITenantContext (claim/header), a TenantId shadow column and a \"Tenant\" EF query filter. Regenerate the initial migration after enabling."
+    },
+    "IncludeUiTests": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "Include Playwright UI tests",
+      "description": "Include a browser-driven UI test project (Playwright). Tests are opt-in at run time via RUN_UI_TESTS=1."
     }
   },
   "sources": [
@@ -85,6 +92,12 @@
             "src/Core/XTemplate.Application/Abstractions/ITenantContext.cs",
             "src/Presentation/Api/XTemplate.Api.Common/Http/TenantContext.cs",
             "src/Infrastructure/XTemplate.Persistence/Interceptors/TenantInterceptor.cs"
+          ]
+        },
+        {
+          "condition": "(!IncludeUiTests || !IncludeUI)",
+          "exclude": [
+            "tests/XTemplate.UiTests/**"
           ]
         }
       ]

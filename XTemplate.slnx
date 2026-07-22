@@ -44,5 +44,8 @@
     <Project Path="tests/XTemplate.ArchitectureTests/XTemplate.ArchitectureTests.csproj" />
     <Project Path="tests/XTemplate.IntegrationTests/XTemplate.IntegrationTests.csproj" />
     <Project Path="tests/XTemplate.ApiTests/XTemplate.ApiTests.csproj" />
+    <!--#if (IncludeUiTests) -->
+    <Project Path="tests/XTemplate.UiTests/XTemplate.UiTests.csproj" />
+    <!--#endif -->
   </Folder>
 </Solution>
