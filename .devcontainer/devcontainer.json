@@ -28,6 +28,9 @@
   },
 
   // Reach the running app from the host browser: API 5171, Blazor UI 5170.
+  // appPort publishes them with real docker -p (JetBrains honors this); forwardPorts
+  // is the IDE-level equivalent that VS Code uses. Both, so either IDE works.
+  "appPort": [5170, 5171],
   "forwardPorts": [5170, 5171],
   "portsAttributes": {
     "5170": { "label": "Blazor UI" },
