@@ -1,0 +1,46 @@
+# Development dependencies only — the .NET projects themselves run from your IDE
+# (see the "http (dev container)" launch profiles) or from `aspire run`.
+#
+#   docker compose up -d                    # postgres
+#   docker compose --profile redis up -d    # postgres + redis (for --use-redis)
+#
+# Ports are published on the host so both a host IDE and the dev container can
+# reach them (the dev container connects via host.docker.internal).
+services:
+  postgres:
+    # Major version pinned to match the Aspire AppHost: postgres data volumes do
+    # not survive a major-version bump.
+    image: postgres:18
+    environment:
+      POSTGRES_DB: xtemplate
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    # 5433, not 5432: a native PostgreSQL install commonly owns 5432, and a port
+    # clash there fails confusingly (it connects, then rejects the password).
+    # Override with POSTGRES_PORT=... and match it in your launch profile.
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      # postgres:18+ stores data in a major-version subdirectory, so the mount goes
+      # at /var/lib/postgresql (NOT .../data — that errors out on startup).
+      # See https://github.com/docker-library/postgres/pull/1259
+      - xtemplate-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d xtemplate"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8
+    profiles: ["redis"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  xtemplate-pgdata:

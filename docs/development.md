@@ -39,8 +39,41 @@ orchestrator work from inside it too, and it shares the `xtemplate-nuget` packag
 
 ## Running the app
 
-- **With a local SDK**: `aspire run` — brings up PostgreSQL, the migration worker, the API (Scalar at `/scalar/v1`), and the Blazor web app, with the Aspire dashboard. Seeded admin: `admin@xtemplate.dev` / `Admin123!`.
-- **Containerized smoke**: see the `run-app` skill — run Postgres + migration worker + API (+ web) as sibling containers on one network.
+Seeded admin for every option below: `admin@xtemplate.dev` / `Admin123!`.
+
+### From the IDE, in the dev container (no local SDK)
+
+`aspire run` **cannot** drive the app from inside a container — the orchestrator would run the
+projects in the container while starting PostgreSQL as a sibling on the host, and the two cannot
+reach each other (ADR-0008). Run the dependencies with Compose and the projects from the IDE:
+
+```bash
+docker compose up -d          # PostgreSQL on host port 5433
+```
+
+Then in Rider/VS Code, using the **`http (dev container)`** launch profiles — they point at
+`host.docker.internal:5433`, because inside the dev container `localhost` is the container itself:
+
+1. Run **XTemplate.MigrationService** (profile `migrate (dev container)`) once — applies migrations and seeds.
+2. Run **XTemplate.Api** (profile `http (dev container)`) → <http://localhost:5171>, Scalar at `/scalar/v1`.
+3. Run **XTemplate.UI.Web** (profile `http (dev container)`) → <http://localhost:5170>.
+
+Ports 5170/5171 are in `forwardPorts`, so they open in the host browser. Step 3 sets
+`Services__api__http__0`, which stands in for the Aspire service-discovery reference the UI uses
+for the API (`https+http://api`) — nothing resolves that outside Aspire.
+
+> Port **5433**, not 5432: a native PostgreSQL install commonly owns 5432, and the clash fails
+> confusingly — it connects, then rejects the password. Override with `POSTGRES_PORT` and match it
+> in the launch profile. Redis (for `--use-redis`) is behind a profile: `docker compose --profile redis up -d`.
+
+### With a local SDK
+
+`aspire run` — PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire
+dashboard, all wired together. This is the best loop when a host SDK is available.
+
+### Containerized smoke
+
+See the `run-app` skill — Postgres + migration worker + API (+ web) as sibling containers on one network.
 
 ## Multi-tenancy (optional)
 

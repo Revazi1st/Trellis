@@ -27,6 +27,13 @@
     "DOTNET_NOLOGO": "1"
   },
 
+  // Reach the running app from the host browser: API 5171, Blazor UI 5170.
+  "forwardPorts": [5170, 5171],
+  "portsAttributes": {
+    "5170": { "label": "Blazor UI" },
+    "5171": { "label": "API" }
+  },
+
   "customizations": {
     "jetbrains": {
       "backend": "Rider"

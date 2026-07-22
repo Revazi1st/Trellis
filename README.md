@@ -32,11 +32,24 @@ on the host. See [docs/development.md](docs/development.md).
 
 ## Run it
 
+With a local .NET SDK, one command wires up everything:
+
 ```bash
 aspire run        # PostgreSQL + migrations + API (Scalar at /scalar/v1) + Blazor UI + dashboard
 ```
 
-Seeded admin: `admin@xtemplate.dev` / `Admin123!`. See [docs/development.md](docs/development.md) for the containerized (no-local-SDK) workflow.
+From the **dev container** (no local SDK), start the dependencies and launch the projects from your
+IDE with the `… (dev container)` profiles — `aspire run` can't orchestrate from inside a container
+([ADR-0008](docs/adr/0008-containerized-sdk-and-aspire-orchestration.md)):
+
+```bash
+docker compose up -d    # PostgreSQL on host port 5433
+```
+
+then run **MigrationService** once, then **XTemplate.Api** (<http://localhost:5171>) and
+**XTemplate.UI.Web** (<http://localhost:5170>).
+
+Seeded admin: `admin@xtemplate.dev` / `Admin123!`. Full detail in [docs/development.md](docs/development.md).
 
 ## Architecture
 
