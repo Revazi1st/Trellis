@@ -18,4 +18,4 @@ Consumers: `Api` binds them in endpoints and maps them to/from Application comma
 - One definition of the wire shape, referenced everywhere — no drift between server and clients.
 - Contracts stay free of domain types and behavior; mapping Application responses → contracts is explicit in the endpoints (`ContractMappings`).
 - A future public client SDK can ship this assembly as-is.
-- No versioning machinery in v1 (single `/api/v1` group); when needed, versioned contract namespaces are an additive change.
+- API versioning is handled by `Asp.Versioning` (URL segment, `/api/v{version:apiVersion}`, supported versions reported in a header). Adding a v2 is additive: a new version on the set plus versioned contract namespaces — the contracts assembly is unversioned by design and grows sibling namespaces.

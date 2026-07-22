@@ -40,6 +40,7 @@ builder.Services.AddApiAuthentication(authOptions);
 builder.Services.AddExceptionHandler<XTemplate.Api.ConcurrencyExceptionHandler>();
 builder.Services.AddApiCommon();
 builder.Services.AddApiDocumentation();
+builder.Services.AddApiVersioningDefaults();
 builder.Services.AddApiHardening(builder.Configuration);
 
 // Database readiness check (untagged → part of /health readiness, excluded from /alive liveness).
@@ -72,7 +73,7 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGroup("/api/v1").MapEndpoints(typeof(Program).Assembly);
+app.MapVersionedApiGroup().MapEndpoints(typeof(Program).Assembly);
 
 await app.RunAsync();
 
