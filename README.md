@@ -22,6 +22,12 @@ Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 | `--use-serilog` | off | Serilog structured logging (console) alongside OpenTelemetry |
 | `--skip-restore` | off | Skip the automatic `dotnet restore` |
 
+## Develop it
+
+No .NET SDK on your machine? Open the solution and choose **Reopen in Dev Container** — the IDE
+backend runs inside the SDK image, so you get full IntelliSense/build/debug with nothing installed
+on the host. See [docs/development.md](docs/development.md).
+
 ## Run it
 
 ```bash

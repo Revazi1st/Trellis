@@ -1,0 +1,38 @@
+{
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
+  "name": "XTemplate — .NET 10 (Docker-only)",
+
+  // Reuses the same image the CLI scripts use: .NET SDK + docker CLI.
+  // Keeping one image means the IDE and ./scripts/dotnet.sh behave identically.
+  "build": {
+    "dockerfile": "../scripts/sdk-image/Dockerfile",
+    "context": ".."
+  },
+
+  // Match the mount path used by scripts/dotnet.sh so obj/ and artifacts/ stay
+  // valid across both (project.assets.json records absolute paths).
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+
+  "mounts": [
+    // Testcontainers integration tests and the Aspire orchestrator start sibling containers.
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    // Share the NuGet cache with ./scripts/dotnet.sh — nothing is cached on the host.
+    "source=xtemplate-nuget,target=/root/.nuget/packages,type=volume"
+  ],
+
+  "containerEnv": {
+    "TESTCONTAINERS_HOST_OVERRIDE": "host.docker.internal",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_NOLOGO": "1"
+  },
+
+  "customizations": {
+    "jetbrains": {
+      "backend": "Rider"
+    }
+  },
+
+  // Warm the cache so IntelliSense resolves immediately on first open.
+  "postCreateCommand": "dotnet restore XTemplate.slnx"
+}

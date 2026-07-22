@@ -11,6 +11,23 @@ One-time: build the SDK image (base SDK + docker CLI, needed by Testcontainers/A
 docker build -t xtemplate-sdk:10.0 scripts/sdk-image
 ```
 
+## IDE: open in the dev container (recommended)
+
+This repo is **Docker-only** — there is no .NET SDK on the host, so an IDE cannot resolve types
+locally. `.devcontainer/devcontainer.json` fixes that by running the IDE backend *inside* the same
+SDK image the scripts use.
+
+**Rider**: open the solution → Rider detects `.devcontainer` and offers *"Reopen in Dev Container"*
+(or use **File → Remote Development → Dev Containers**). VS Code: *Dev Containers: Reopen in Container*.
+
+You then get full IntelliSense, build, debug, and test in the IDE, while nothing is installed on the
+host. The container mounts the Docker socket, so Testcontainers integration tests and the Aspire
+orchestrator work from inside it too, and it shares the `xtemplate-nuget` package volume with
+`./scripts/dotnet.sh` (same `/workspace` path, so build output stays valid across both).
+
+> Without the dev container the IDE will show unresolved-type errors for the whole BCL. That is
+> expected on a host with no SDK — it is not a problem with the code.
+
 ## Everyday commands
 
 ```bash
