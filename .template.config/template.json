@@ -15,7 +15,8 @@
   "preferNameDirectory": true,
   "tags": {
     "language": "C#",
-    "type": "solution"
+    "type": "solution",
+    "editorTreatAs": "solution"
   },
   "symbols": {
     "IncludeUI": {
