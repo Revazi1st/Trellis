@@ -45,6 +45,13 @@
       "defaultValue": "false",
       "displayName": "Use Serilog",
       "description": "Use Serilog for structured logging (console sink) in the API and web hosts, alongside OpenTelemetry."
+    },
+    "UseMultitenancy": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "Use multi-tenancy",
+      "description": "Add a tenant seam: ITenantContext (claim/header), a TenantId shadow column and a \"Tenant\" EF query filter. Regenerate the initial migration after enabling."
     }
   },
   "sources": [
@@ -70,6 +77,14 @@
           "condition": "(!IncludeUI)",
           "exclude": [
             "src/Presentation/UI/**"
+          ]
+        },
+        {
+          "condition": "(!UseMultitenancy)",
+          "exclude": [
+            "src/Core/XTemplate.Application/Abstractions/ITenantContext.cs",
+            "src/Presentation/Api/XTemplate.Api.Common/Http/TenantContext.cs",
+            "src/Infrastructure/XTemplate.Persistence/Interceptors/TenantInterceptor.cs"
           ]
         }
       ]

@@ -13,5 +13,17 @@ internal sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbCon
         => new(new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(Environment.GetEnvironmentVariable("XTEMPLATE_DESIGNTIME_DB")
                 ?? "Host=localhost;Database=xtemplate;Username=postgres;Password=postgres")
-            .Options);
+            .Options
+#if (UseMultitenancy)
+            , new DesignTimeTenantContext()
+#endif
+            );
+
+#if (UseMultitenancy)
+    /// <summary>Design time has no request, so no tenant — the filter is inert while scaffolding migrations.</summary>
+    private sealed class DesignTimeTenantContext : XTemplate.Application.Abstractions.ITenantContext
+    {
+        public string? TenantId => null;
+    }
+#endif
 }

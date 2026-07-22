@@ -8,8 +8,12 @@ using XTemplate.SharedKernel.Domain;
 namespace XTemplate.Persistence;
 
 /// <summary>The single write model for this service: domain aggregates plus ASP.NET Core Identity. Implements the SharedKernel commit boundary.</summary>
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
-    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options), IUnitOfWork
+public sealed class AppDbContext(
+    DbContextOptions<AppDbContext> options
+#if (UseMultitenancy)
+    , XTemplate.Application.Abstractions.ITenantContext tenantContext
+#endif
+    ) : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options), IUnitOfWork
 {
     public DbSet<Invoice> Invoices => Set<Invoice>();
 
@@ -17,6 +21,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     {
         base.OnModelCreating(builder);
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+#if (UseMultitenancy)
+        // Named filter so callers can opt out explicitly: IgnoreQueryFilters(["Tenant"]).
+        // The lambda captures this DbContext, so EF re-evaluates the tenant per query.
+        builder.Entity<Invoice>().HasQueryFilter(
+            "Tenant",
+            invoice => EF.Property<string>(invoice, Interceptors.TenantInterceptor.TenantIdProperty) == tenantContext.TenantId);
+#endif
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

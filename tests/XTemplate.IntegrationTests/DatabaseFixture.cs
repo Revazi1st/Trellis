@@ -26,7 +26,11 @@ public sealed class DatabaseFixture : IAsyncLifetime
             .UseNpgsql(ConnectionString)
             .Options;
 
-        await using (var context = new AppDbContext(options))
+        await using (var context = new AppDbContext(options
+#if (UseMultitenancy)
+            , new FixtureTenantContext()
+#endif
+            ))
         {
             await context.Database.MigrateAsync();
         }
@@ -41,6 +45,13 @@ public sealed class DatabaseFixture : IAsyncLifetime
             TablesToIgnore = [new Table("__EFMigrationsHistory")],
         });
     }
+
+#if (UseMultitenancy)
+    private sealed class FixtureTenantContext : XTemplate.Application.Abstractions.ITenantContext
+    {
+        public string? TenantId => null;
+    }
+#endif
 
     public async Task ResetAsync() => await _respawner!.ResetAsync(_connection!);
 

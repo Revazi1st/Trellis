@@ -16,6 +16,10 @@
     "UseSerilog": {
       "longName": "use-serilog",
       "shortName": ""
+    },
+    "UseMultitenancy": {
+      "longName": "use-multitenancy",
+      "shortName": ""
     }
   }
 }

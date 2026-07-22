@@ -38,6 +38,12 @@ internal sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         // EF 10 named query filter — selectively disabled via IgnoreQueryFilters(["SoftDeleted"]).
         builder.HasQueryFilter("SoftDeleted", static i => i.DeletedAtUtc == null);
 
+#if (UseMultitenancy)
+        // Tenant discriminator: a shadow property keeps the domain model free of infrastructure concerns.
+        builder.Property<string>(Interceptors.TenantInterceptor.TenantIdProperty).HasMaxLength(64);
+        builder.HasIndex(Interceptors.TenantInterceptor.TenantIdProperty);
+#endif
+
         builder.HasIndex(static i => i.Status);
     }
 }

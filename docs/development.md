@@ -25,6 +25,20 @@ docker build -t xtemplate-sdk:10.0 scripts/sdk-image
 - **With a local SDK**: `aspire run` — brings up PostgreSQL, the migration worker, the API (Scalar at `/scalar/v1`), and the Blazor web app, with the Aspire dashboard. Seeded admin: `admin@xtemplate.dev` / `Admin123!`.
 - **Containerized smoke**: see the `run-app` skill — run Postgres + migration worker + API (+ web) as sibling containers on one network.
 
+## Multi-tenancy (optional)
+
+Generate with `--use-multitenancy` to add the tenant seam: `ITenantContext` (resolved from the
+`tenant` claim, falling back to the `X-Tenant-Id` header), a `TenantId` shadow column stamped by
+`TenantInterceptor`, and a named `"Tenant"` EF query filter (opt out with
+`IgnoreQueryFilters(["Tenant"])`). See ADR-0019.
+
+Because this adds a column, **regenerate the initial migration** in the generated project:
+
+```bash
+./scripts/ef.sh migrations remove --project src/Infrastructure/XTemplate.Persistence
+./scripts/ef.sh migrations add InitialCreate --project src/Infrastructure/XTemplate.Persistence
+```
+
 ## Tests
 
 | Project | What it needs |

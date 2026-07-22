@@ -29,6 +29,13 @@
         "text": "Use Serilog"
       },
       "isVisible": true
+    },
+    {
+      "id": "UseMultitenancy",
+      "name": {
+        "text": "Use multi-tenancy"
+      },
+      "isVisible": true
     }
   ]
 }

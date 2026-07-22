@@ -14,6 +14,9 @@ public static class DependencyInjection
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
+#if (UseMultitenancy)
+        services.AddScoped<XTemplate.Application.Abstractions.ITenantContext, TenantContext>();
+#endif
 
         services.AddProblemDetails();
         services.AddExceptionHandler<ProblemDetailsExceptionHandler>();

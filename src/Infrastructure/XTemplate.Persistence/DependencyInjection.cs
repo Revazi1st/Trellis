@@ -26,6 +26,9 @@ public static class DependencyInjection
         services.AddScoped<OutboxWriteInterceptor>();
         services.AddScoped<SoftDeleteInterceptor>();
         services.AddScoped<AuditingInterceptor>();
+#if (UseMultitenancy)
+        services.AddScoped<TenantInterceptor>();
+#endif
 
         services.AddDbContext<AppDbContext>((serviceProvider, options) =>
         {
@@ -36,7 +39,11 @@ public static class DependencyInjection
             options.AddInterceptors(
                 serviceProvider.GetRequiredService<OutboxWriteInterceptor>(),
                 serviceProvider.GetRequiredService<SoftDeleteInterceptor>(),
-                serviceProvider.GetRequiredService<AuditingInterceptor>());
+                serviceProvider.GetRequiredService<AuditingInterceptor>()
+#if (UseMultitenancy)
+                , serviceProvider.GetRequiredService<TenantInterceptor>()
+#endif
+                );
         });
 
         services.AddScoped<IUnitOfWork>(static sp => sp.GetRequiredService<AppDbContext>());
