@@ -21,20 +21,42 @@
     "source=xtemplate-nuget,target=/root/.nuget/packages,type=volume"
   ],
 
+  // Container-wide so EVERY launch works — including Rider's bare ".NET Project"
+  // run configuration, which executes the built binary with no arguments and none
+  // of launchSettings.json's environment. Inheriting from the container is the only
+  // channel that reaches it. No shell is involved (the IDE backend spawns the
+  // process directly), so the dash in "xtemplate-db" is safe here.
   "containerEnv": {
+    "ASPNETCORE_ENVIRONMENT": "Development",
+    "DOTNET_ENVIRONMENT": "Development",
+    "ConnectionStrings__xtemplate-db": "Host=host.docker.internal;Port=5433;Database=xtemplate;Username=postgres;Password=postgres",
+    "Services__api__http__0": "http://localhost:5171",
     "TESTCONTAINERS_HOST_OVERRIDE": "host.docker.internal",
     "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
     "DOTNET_NOLOGO": "1"
+  },
+
+  // Same values via remoteEnv: applied by the IDE when it spawns processes, so it
+  // can take effect on a restart where containerEnv needs a full recreate.
+  "remoteEnv": {
+    "ASPNETCORE_ENVIRONMENT": "Development",
+    "DOTNET_ENVIRONMENT": "Development",
+    "ConnectionStrings__xtemplate-db": "Host=host.docker.internal;Port=5433;Database=xtemplate;Username=postgres;Password=postgres",
+    "Services__api__http__0": "http://localhost:5171"
   },
 
   // Reach the running app from the host browser: API 5171, Blazor UI 5170.
   // Declarative only — Rider forwards listening ports automatically (the client
   // binds 127.0.0.1:<port> on the host). Do NOT add "appPort": docker -p would
   // bind the same host ports and collide with that forwarder.
-  "forwardPorts": [5170, 5171],
+  // 8080 is the SDK image's ASPNETCORE_HTTP_PORTS default, which is what Rider's
+  // bare ".NET Project" configuration binds (it applies no launch profile). The
+  // profiles use 5170/5171; only those give the API and UI distinct ports.
+  "forwardPorts": [5170, 5171, 8080],
   "portsAttributes": {
     "5170": { "label": "Blazor UI" },
-    "5171": { "label": "API" }
+    "5171": { "label": "API" },
+    "8080": { "label": "app (no launch profile)" }
   },
 
   "customizations": {
