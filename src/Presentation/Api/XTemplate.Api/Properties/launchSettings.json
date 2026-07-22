@@ -24,9 +24,9 @@
       "dotnetRunMessages": true,
       "launchBrowser": false,
       "applicationUrl": "http://0.0.0.0:5171",
+      "commandLineArgs": "--ConnectionStrings:xtemplate-db=Host=host.docker.internal;Port=5433;Database=xtemplate;Username=postgres;Password=postgres",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "ConnectionStrings__xtemplate-db": "Host=host.docker.internal;Port=5433;Database=xtemplate;Username=postgres;Password=postgres"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     }
   }

@@ -4,17 +4,17 @@
     "migrate": {
       "commandName": "Project",
       "dotnetRunMessages": true,
+      "commandLineArgs": "--ConnectionStrings:xtemplate-db=Host=localhost;Port=5433;Database=xtemplate;Username=postgres;Password=postgres",
       "environmentVariables": {
-        "DOTNET_ENVIRONMENT": "Development",
-        "ConnectionStrings__xtemplate-db": "Host=localhost;Port=5433;Database=xtemplate;Username=postgres;Password=postgres"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "migrate (dev container)": {
       "commandName": "Project",
       "dotnetRunMessages": true,
+      "commandLineArgs": "--ConnectionStrings:xtemplate-db=Host=host.docker.internal;Port=5433;Database=xtemplate;Username=postgres;Password=postgres",
       "environmentVariables": {
-        "DOTNET_ENVIRONMENT": "Development",
-        "ConnectionStrings__xtemplate-db": "Host=host.docker.internal;Port=5433;Database=xtemplate;Username=postgres;Password=postgres"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }
