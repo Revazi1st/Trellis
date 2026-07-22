@@ -6,6 +6,18 @@ All notable changes to XTemplate are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **Template package was unusable.** `dotnet pack` flattened the whole repo into `content/`
+  (293 entries, none nested), dropped colliding files (`NU5118`) and omitted
+  `.template.config/`, so `dotnet new install XTemplate.Templates` could not work at all.
+  Packing now preserves the tree via `PackagePath="content\%(RecursiveDir)…"`.
+- **Project names containing a dot produced a solution that did not compile.** `AddXTemplateUi`
+  became `AddAcme.ShopUi`, and Aspire's `Projects.XTemplate_Api` became `Projects.Acme.Shop_Api`.
+  The DI extension is renamed `AddSharedUi` (name-independent, like every sibling), and derived
+  symbols now map the name to Aspire's `_`/`-` forms for project classes and resource names.
+- `.template.config/` no longer ships into generated projects.
+- `scripts/check-adr-links.sh` is now made executable by the post-action; CI runs it.
+
 ### Added
 - Rich-DDD Clean Architecture .NET 10 solution: SharedKernel, Domain, Application,
   Infrastructure ∥ Persistence, Api (+ Common/Contracts), Blazor UI (+ Common),

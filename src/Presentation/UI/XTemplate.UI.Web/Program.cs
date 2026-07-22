@@ -23,7 +23,7 @@ builder.Services.AddRazorComponents()
 
 // Per-circuit token store (Blazor Server) + shared UI services pointing at the API via service discovery.
 builder.Services.AddScoped<ITokenStore, CircuitTokenStore>();
-builder.Services.AddXTemplateUi(static (_, client) =>
+builder.Services.AddSharedUi(static (_, client) =>
     // Not a hardcoded URL: "https+http://api" is an Aspire service-discovery reference resolved to the API's real endpoint at runtime.
 #pragma warning disable S1075
     client.BaseAddress = new Uri("https+http://api"));

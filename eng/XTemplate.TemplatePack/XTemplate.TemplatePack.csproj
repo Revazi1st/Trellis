@@ -30,9 +30,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Pack the whole repo (from two levels up) as template content, minus build output and packaging infra. -->
+    <!-- Pack the whole repo (from two levels up) as template content, minus build output and packaging infra.
+         PackagePath with %(RecursiveDir) is REQUIRED: these items live outside the project cone, so
+         ContentTargetFolders cannot derive a relative path and would flatten all 293 files into
+         content/ — dropping colliding names (Program.cs, appsettings.json, ...) and losing
+         .template.config/, which makes the package unrecognisable as a template. -->
     <Content Include="..\..\**\*"
-             Exclude="..\..\**\bin\**;..\..\**\obj\**;..\..\artifacts\**;..\..\.git\**;..\..\.idea\**;..\..\.vs\**;..\..\eng\**;..\..\**\.template-test\**;..\..\.claude\settings.local.json" />
+             Exclude="..\..\**\bin\**;..\..\**\obj\**;..\..\artifacts\**;..\..\.git\**;..\..\.idea\**;..\..\.vs\**;..\..\eng\**;..\..\**\.template-test\**;..\..\.claude\settings.local.json"
+             PackagePath="content\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Remove="**\*" />
   </ItemGroup>
 

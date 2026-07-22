@@ -59,7 +59,30 @@
       "defaultValue": "false",
       "displayName": "Include Playwright UI tests",
       "description": "Include a browser-driven UI test project (Playwright). Tests are opt-in at run time via RUN_UI_TESTS=1."
+    },
+    "aspireProjectPrefix": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "aspireProjectForm",
+      "replaces": "XTemplate_",
+      "description": "Aspire generates Projects.<AssemblyName with '.' replaced by '_'>. Without this, a dotted name like Acme.Shop would emit Projects.Acme.Shop_Api, which does not exist."
+    },
+    "aspireResourcePrefix": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "aspireResourceForm",
+      "replaces": "xtemplate-",
+      "description": "Aspire resource names allow only letters, digits and hyphens, so dots in the project name must become hyphens."
     }
+  },
+  "forms": {
+    "dotsToUnderscores": { "identifier": "replace", "pattern": "\\.", "replacement": "_" },
+    "appendUnderscore": { "identifier": "replace", "pattern": "$", "replacement": "_" },
+    "aspireProjectForm": { "identifier": "chain", "steps": [ "dotsToUnderscores", "appendUnderscore" ] },
+    "lower": { "identifier": "lowerCase" },
+    "dotsToHyphens": { "identifier": "replace", "pattern": "\\.", "replacement": "-" },
+    "appendHyphen": { "identifier": "replace", "pattern": "$", "replacement": "-" },
+    "aspireResourceForm": { "identifier": "chain", "steps": [ "lower", "dotsToHyphens", "appendHyphen" ] }
   },
   "sources": [
     {
@@ -77,7 +100,8 @@
         "**/.template-test/**",
         ".claude/settings.local.json",
         "CLAUDE.local.md",
-        "**/*.user"
+        "**/*.user",
+        ".template.config/**"
       ],
       "modifiers": [
         {
@@ -133,7 +157,7 @@
       "actionId": "3A7C4B45-1F5D-4A30-959A-51B88E82B5D2",
       "args": {
         "executable": "/bin/chmod",
-        "args": "+x scripts/dotnet.sh scripts/ef.sh scripts/check-docs-drift.sh"
+        "args": "+x scripts/dotnet.sh scripts/ef.sh scripts/check-docs-drift.sh scripts/check-adr-links.sh"
       },
       "continueOnError": true
     }

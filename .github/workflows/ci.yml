@@ -17,6 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A template installed from a NuGet package loses the Unix executable bit, and the
+      # chmod post-action only runs when the host allows script post-actions. Restore it
+      # explicitly so generated projects work regardless.
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -49,6 +55,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
       - name: Check feature docs are updated
         run: ./scripts/check-docs-drift.sh origin/${{ github.base_ref }}
 

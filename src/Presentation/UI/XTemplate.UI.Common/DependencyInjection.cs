@@ -15,7 +15,9 @@ public static class DependencyInjection
     /// The host supplies <paramref name="configureApiClient"/> (base address — e.g. service discovery)
     /// and must register its own <see cref="ITokenStore"/> for the platform.
     /// </summary>
-    public static IServiceCollection AddXTemplateUi(
+    // Deliberately not named after the project: the template substitutes the project name into
+    // identifiers, and a name containing a dot (e.g. "Acme.Shop") would emit invalid C#.
+    public static IServiceCollection AddSharedUi(
         this IServiceCollection services,
         Action<IServiceProvider, HttpClient> configureApiClient)
     {
