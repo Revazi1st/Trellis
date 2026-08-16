@@ -26,6 +26,7 @@ public sealed class ContractSerializationTests
             new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero),
             null,
             500.00m,
+            7,
             [new InvoiceLineDto(Guid.CreateVersion7(), "Design", 150.50m)]);
 
         string json = JsonSerializer.Serialize(dto, Options);

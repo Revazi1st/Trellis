@@ -37,6 +37,22 @@ orchestrator work from inside it too, and it shares the `xtemplate-nuget` packag
 ./scripts/ef.sh migrations add <Name> --project src/Infrastructure/XTemplate.Persistence
 ```
 
+## Secrets
+
+`Authentication:SigningKey` gates API startup — missing or under 32 characters and the API
+refuses to boot. `appsettings.Development.json` ships a dev-only key so F5 works out of the box;
+to use your own, set a user secret (the API csproj has a `UserSecretsId`):
+
+```bash
+dotnet user-secrets set "Authentication:SigningKey" "<random 32+ chars>" \
+    --project src/Presentation/Api/XTemplate.Api
+```
+
+Run it where the app runs (dev container or local SDK) — user secrets live under that
+environment's home directory, so setting them through the ephemeral `./scripts/dotnet.sh`
+container does not persist. Never commit a real key; production takes it from the
+environment/secret store (see [deployment.md](deployment.md)).
+
 ## Running the app
 
 Seeded admin for every option below: `admin@xtemplate.dev` / `Admin123!`.

@@ -122,11 +122,23 @@ jobs:
           UI_TESTS_BASE_URL: http://localhost:5170
         run: dotnet test tests/XTemplate.UiTests -c Release --no-build
 
+      # The committed OpenAPI document is the API's public contract artifact (ADR-0013):
+      # regenerating it against the running app catches accidental wire-contract changes.
+      - name: OpenAPI contract diff
+        run: |
+          ./scripts/export-openapi.sh http://localhost:5171
+          git diff --exit-code docs/api/openapi.v1.json || {
+            echo "::error::The API's OpenAPI document changed. If intentional, regenerate docs/api/openapi.v1.json (scripts/export-openapi.sh) and commit it."
+            exit 1
+          }
+
   docs-drift:
     name: Docs drift
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'pull_request'
+    # The docs-not-needed label is the documented escape hatch (ADR-0014) for refactors that
+    # genuinely change no behavior.
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'docs-not-needed')
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

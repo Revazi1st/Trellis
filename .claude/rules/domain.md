@@ -12,6 +12,7 @@ The domain is pure: **BCL + SharedKernel only** — never reference EF Core, ASP
 - **State changes** return `Result`/`Result<T>` and `Raise(...)` a domain event when something noteworthy happened. Never throw for expected rule violations — return an `Error` from the aggregate's `*Errors` class.
 - **Value objects** are `sealed record`s with a `static Create(...) → Result<T>`; no `ValueObject` base class (records give value equality). Map them as EF complex types in Persistence.
 - **Strongly-typed IDs**: `readonly record struct XId(Guid Value) : IStronglyTypedId<XId>, IParsable<XId>` with `New() => Guid.CreateVersion7()`. Register the EF converter in `AppDbContext.ConfigureConventions`.
+- **Domain events** are `sealed record`s with **`[DomainEventName("feature.event.vN")]`** — the stable wire name stored with outbox rows (renames must never orphan in-flight messages). Members must be primitives, `Guid`, `DateTimeOffset`, or strongly-typed IDs: the serialization fitness test (`DomainEventSerializationTests`) round-trips every event through the outbox serializer and fails on anything exotic.
 - **Specifications** live here: one `static` factory per query shape on a `{Aggregate}Specs` class, returning `Specification<T>`.
 
 Reference: `Invoice` (`src/Core/XTemplate.Domain/Invoices/`). Copy its shape. See `docs/features/invoices.md`.

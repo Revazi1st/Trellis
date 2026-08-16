@@ -18,6 +18,7 @@ public sealed record InvoiceDto(
     DateTimeOffset? DueDate,
     DateTimeOffset? PaidAtUtc,
     decimal Total,
+    uint Version,
     IReadOnlyList<InvoiceLineDto> Lines);
 
 public sealed record InvoiceLineDto(Guid Id, string Description, decimal Amount);

@@ -73,12 +73,12 @@ namespace XTemplate.Persistence.Migrations
                     Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
                     DueDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     PaidAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
                     CreatedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     CreatedBy = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     ModifiedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     ModifiedBy = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     DeletedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
                     CustomerEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false)
                 },
                 constraints: table =>

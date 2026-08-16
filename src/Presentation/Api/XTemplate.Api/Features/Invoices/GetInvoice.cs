@@ -22,11 +22,12 @@ internal sealed class GetInvoice : IEndpoint
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Get one invoice with its lines");
 
-    private static async Task<Results<Ok<InvoiceDto>, ProblemHttpResult>> Handle(
+    private static async Task<Results<Ok<InvoiceDto>, StatusCodeHttpResult, ProblemHttpResult>> Handle(
         InvoiceId id,
         IQueryHandler<GetInvoiceQuery, InvoiceResponse> handler,
         CacheKeys cacheKeys,
         HybridCache cache,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         // Cache-aside: served from HybridCache (in-memory L1, optional Redis L2), invalidated by the write endpoints.
@@ -42,7 +43,14 @@ internal sealed class GetInvoice : IEndpoint
 
         if (dto is not null)
         {
-            return TypedResults.Ok(dto);
+            // The xmin concurrency token doubles as a weak ETag: pollers pay a 304 instead of the
+            // full aggregate when nothing changed.
+            string etag = $"W/\"{dto.Version}\"";
+            httpContext.Response.Headers.ETag = etag;
+
+            return httpContext.Request.Headers.IfNoneMatch.Contains(etag, StringComparer.Ordinal)
+                ? TypedResults.StatusCode(StatusCodes.Status304NotModified)
+                : TypedResults.Ok(dto);
         }
 
         // Never pin a miss: GetOrCreateAsync stored the null, and leaving it would keep answering 404

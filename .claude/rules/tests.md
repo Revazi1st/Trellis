@@ -8,7 +8,7 @@ paths: ["tests/**/*.cs"]
 - **xUnit v3** + **Shouldly** (`value.ShouldBe(...)`). Mocks: **NSubstitute**. Never FluentAssertions or Moq.
 - Test names: `Method_Scenario_Outcome`.
 - **Domain.UnitTests**: pure, no mocks. **Application.UnitTests**: handlers/decorators with faked ports (`Substitute.For<...>`), `FakeTimeProvider` for time.
-- **IntegrationTests**: real PostgreSQL via `IntegrationTestBase` (Testcontainers + Respawn) — exercise the real Application pipeline against a real DB. **Do not mock EF or the DbContext.**
-- **ArchitectureTests**: add a rule here when you introduce a new layer boundary.
-- **ApiTests**: E2E via Aspire (opt-in `RUN_ASPIRE_E2E=1`) + always-on contract-serialization guards.
+- **IntegrationTests**: real PostgreSQL via `IntegrationTestBase` (Testcontainers + Respawn) — exercise the real Application pipeline against a real DB. **Do not mock EF or the DbContext.** Includes the migration-drift guard (`HasPendingModelChanges` — a model change without a migration fails here) and the domain-event serialization fitness test.
+- **ArchitectureTests**: `LayerDependencyTests` for boundaries — add a rule when you introduce one. `ConventionTests` enforce the rules files (sealed non-public handlers, `internal sealed` endpoints, value-object `Create → Result<T>` shape, aggregate encapsulation, sealed-record events) — a new convention gets a test, not just prose.
+- **ApiTests/InProcess**: `ApiFactory` (`WebApplicationFactory` + Testcontainers PostgreSQL) runs the **real HTTP pipeline** — JWT 401/403, permission policies, idempotency reserve/duplicate/release, the auth rate limit, RFC 9457 shape — inside the SDK container on every `test` run. Aspire E2E stays opt-in (`RUN_ASPIRE_E2E=1`); contract-serialization guards are always on.
 - Use `TestContext.Current.CancellationToken` for cancellable calls.

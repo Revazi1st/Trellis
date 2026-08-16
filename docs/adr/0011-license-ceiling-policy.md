@@ -18,7 +18,7 @@ Maintain a **LICENSE CEILINGS** block at the top of `Directory.Packages.props` n
 | FluentAssertions | ≥ 8.0.0 | Xceed, proprietary | Shouldly |
 | MassTransit | ≥ 9.0.0 | Massient, commercial | Wolverine/Rebus if messaging needed |
 
-The whole shipped stack is free-for-commercial. `AGENTS.md` and the `Ask first: adding a NuGet package` boundary route package additions through this file. A CI license-scan is a candidate future gate.
+The whole shipped stack is free-for-commercial. `AGENTS.md` and the `Ask first: adding a NuGet package` boundary route package additions through this file. The ceiling is enforced, not advisory: the `EnforceLicenseCeilings` target in `Directory.Build.props` fails the build on any forbidden `PackageReference`, and Dependabot's ignore list blocks the bot-upgrade path.
 
 ## Consequences
 

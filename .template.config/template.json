@@ -13,6 +13,12 @@
   "shortName": "xtemplate",
   "sourceName": "XTemplate",
   "preferNameDirectory": true,
+  "constraints": {
+    "sdk": {
+      "type": "sdk-version",
+      "args": "[10.0.100,)"
+    }
+  },
   "tags": {
     "language": "C#",
     "type": "solution",
@@ -102,7 +108,9 @@
         ".claude/settings.local.json",
         "CLAUDE.local.md",
         "**/*.user",
-        ".template.config/**"
+        ".template.config/**",
+        ".github/workflows/template-ci.yml",
+        ".github/workflows/release.yml"
       ],
       "modifiers": [
         {
@@ -160,8 +168,25 @@
       "actionId": "3A7C4B45-1F5D-4A30-959A-51B88E82B5D2",
       "args": {
         "executable": "/bin/chmod",
-        "args": "+x scripts/dotnet.sh scripts/ef.sh scripts/check-docs-drift.sh scripts/check-adr-links.sh"
+        "args": "+x scripts/dotnet.sh scripts/ef.sh scripts/check-docs-drift.sh scripts/check-adr-links.sh scripts/check-template-toggles.sh scripts/export-openapi.sh"
       },
+      "continueOnError": true
+    },
+    {
+      "id": "next steps",
+      "description": "Print the first steps",
+      "actionId": "AC1156F7-BB77-4DB8-B28F-24EEBCCA1E5C",
+      "manualInstructions": [
+        {
+          "text": "No local .NET SDK? Build the SDK image once — the exact docker build one-liner is at the top of scripts/dotnet.sh — then verify with: ./scripts/dotnet.sh test <YourSolution>.slnx"
+        },
+        {
+          "text": "Run it (local SDK): aspire run  —  seeded admin admin@xtemplate.dev / Admin123!"
+        },
+        {
+          "text": "Enabled --use-multitenancy? Regenerate the initial migration first (see docs/development.md)."
+        }
+      ],
       "continueOnError": true
     }
   ]

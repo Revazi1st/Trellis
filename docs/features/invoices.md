@@ -37,9 +37,19 @@ One `IEndpoint` class per use case on `/api/v1/invoices…`, each `.RequirePermi
 
 **Business metrics**: `InvoiceMetrics` (meter `XTemplate.Invoices`) exports `xtemplate.invoices.issued` (tagged by currency) and `xtemplate.invoices.paid`, incremented by outbox-dispatched event handlers so they count only committed events.
 
+**Conditional GET**: `InvoiceDto.Version` surfaces the xmin concurrency token, `GET /invoices/{id}`
+emits it as a weak ETag, and `If-None-Match` answers **304** — pollers stop re-downloading unchanged
+aggregates. (Conditional writes stay guarded by xmin → 409 at commit; an `If-Match` precondition is
+a candidate follow-up.)
+
+**OpenAPI**: the document declares the bearer security scheme (Scalar can authorize), documents the
+`Idempotency-Key` header + 409 on every `RequireIdempotency()` endpoint and 401/403 on secured ones,
+and is committed at `docs/api/openapi.v1.json` — CI regenerates it against the running app and fails
+on drift (`scripts/export-openapi.sh`).
+
 ## UI (`src/Presentation/UI/XTemplate.UI.Common/Pages/`)
 
-`Invoices` (paged list with pager controls), `InvoiceDetail` (view + pay/void; action errors are kept separate from load errors so they survive the post-action reload), `CreateInvoice` — via `IInvoiceApiClient` over the contracts. The session outlives the 15-minute access token: `TokenAuthenticationStateProvider` checks `exp` and rotates through `POST /auth/refresh` (single-flight, since refresh tokens are single-use); `BearerTokenHandler` always attaches a currently-valid token via `IAccessTokenSource`.
+`Invoices` (paged list with pager controls), `InvoiceDetail` (the full lifecycle: add lines and issue while Draft, pay/void after; action errors are kept separate from load errors so they survive the post-action reload), `CreateInvoice` — via `IInvoiceApiClient` over the contracts. The session outlives the 15-minute access token: `TokenAuthenticationStateProvider` checks `exp` and rotates through `POST /auth/refresh` (single-flight, since refresh tokens are single-use); `BearerTokenHandler` always attaches a currently-valid token via `IAccessTokenSource`.
 
 ## Tests
 

@@ -31,6 +31,37 @@ public class Result
     public static Result Failure(Error error) => new(false, error);
 
     public static Result<TValue> Failure<TValue>(Error error) => new(default, false, error);
+
+    /// <summary>
+    /// Success when every result succeeded; otherwise a single error carrying ALL the failures
+    /// (nested <see cref="ValidationError"/>s are flattened) — so a caller creating several value
+    /// objects reports every problem at once instead of one 400 at a time.
+    /// </summary>
+    public static Result Combine(params Result[] results)
+    {
+        List<Error> errors = [];
+        foreach (Result result in results)
+        {
+            if (result.IsFailure)
+            {
+                if (result.Error is ValidationError validation)
+                {
+                    errors.AddRange(validation.Errors);
+                }
+                else
+                {
+                    errors.Add(result.Error);
+                }
+            }
+        }
+
+        return errors.Count switch
+        {
+            0 => Success(),
+            1 => Failure(errors[0]),
+            _ => Failure(new ValidationError(errors)),
+        };
+    }
 }
 
 /// <summary>A <see cref="Result"/> carrying a value when successful. Accessing <see cref="Value"/> on a failure throws.</summary>

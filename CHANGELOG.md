@@ -6,6 +6,36 @@ All notable changes to XTemplate are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Result combinators** (`Bind`/`Map`/`Tap`/`Ensure` + async overloads, `Result.Combine` that
+  aggregates every value-object failure into one response) and a **`Currency` value object** —
+  `CreateInvoiceCommandHandler` is the refactored showcase. `Money` now rejects sub-cent scale
+  (the database silently truncated it before), `Zero` validates its code, subtraction can no
+  longer mint negative money, and `Entity<TId>` gained `==`/`!=` consistent with `Equals`.
+- **Use-case telemetry**: the logging decorator now logs failures *and throws* with elapsed time
+  under a correlation scope (a SaveChanges crash previously produced no use-case log at all), and a
+  new tracing decorator emits one span per use case (pipeline: Validation → Logging → Tracing →
+  UnitOfWork).
+- **OpenAPI as a contract**: bearer security scheme (Scalar can finally authorize),
+  `Idempotency-Key` header + 409 documented on idempotent endpoints, 401/403 on secured ones, and
+  the document is committed at `docs/api/openapi.v1.json` with a CI diff gate
+  (`scripts/export-openapi.sh`).
+- **Conditional GET**: `InvoiceDto.Version` exposes the xmin token; `GET /invoices/{id}` emits a
+  weak ETag and honors `If-None-Match` with 304.
+- **RFC 9457 everywhere**: 429s carry a problem body + `Retry-After`; JwtBearer 401/403 challenges
+  carry problem bodies instead of empty responses.
+- **Complete UI lifecycle**: add-line + issue controls on the invoice detail page (drafts are no
+  longer dead ends) and a Register page.
+- **Template UX**: `dotnet new xtemplate` prints next steps, an SDK-version constraint fails wrong
+  hosts at instantiation instead of first build, maintainer-only workflows (template-ci, release)
+  no longer ship into generated repos, and `scripts/check-template-toggles.sh` guards toggle
+  wiring in CI.
+- **Docs & AI assets**: production `docs/deployment.md` and `docs/upgrading.md`; `docs/features/auth.md`;
+  layer rules for Infrastructure/SharedKernel/tools plus post-audit conventions in the existing
+  rules; `remove-feature` and `add-toggle` skills; the `docs-not-needed` PR-label escape hatch the
+  docs promised; Dependabot now watches the container images; SharedKernel primitives
+  (dispatcher, entity equality, paged list, ID JSON) got direct unit tests.
+
 ### Reliability & testing
 - **Outbox, production-shaped**: skip-locked batch claiming (replicas never double-dispatch),
   exponential backoff (30s→4m instead of five retries in 25 seconds), explicit
@@ -117,9 +147,9 @@ All notable changes to XTemplate are documented here. The format follows
   interceptors, ASP.NET Identity + JWT + permission authorization, HybridCache.
 - Full test pyramid (unit, architecture, integration via Testcontainers, E2E via
   Aspire.Hosting.Testing) and CI (format, warnings-as-errors, docs-drift).
-- `dotnet new xtemplate` templatization with toggles: `IncludeUI`, `UseRedis`,
-  `UseSerilog`, `skipRestore`.
+- `dotnet new xtemplate` templatization with toggles: `IncludeUI`, `UseRedis`, `UseSerilog`,
+  `UseMultitenancy`, `IncludeUiTests`, `skipRestore`.
 - AI-friendly repo: AGENTS.md/CLAUDE.md, `.claude` rules/agents/skills/hooks,
-  `.mcp.json`, dual human/AI docs, 17 ADRs.
+  `.mcp.json`, dual human/AI docs, 19 ADRs.
 
 [Unreleased]: https://github.com/your-org/xtemplate/commits/main

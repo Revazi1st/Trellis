@@ -21,5 +21,6 @@ internal static class ContractMappings
             response.DueDate,
             response.PaidAtUtc,
             response.Total,
+            response.Version,
             [.. response.Lines.Select(static line => new InvoiceLineDto(line.Id, line.Description, line.Amount))]);
 }

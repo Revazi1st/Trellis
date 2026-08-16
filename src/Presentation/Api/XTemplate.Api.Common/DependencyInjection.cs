@@ -30,10 +30,16 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>OpenAPI 3.1 document generation with typed-ID schema support; UI is mapped per-environment in the host.</summary>
+    /// <summary>OpenAPI 3.1 document generation with typed-ID schemas, the bearer security scheme and idempotency metadata; UI is mapped per-environment in the host.</summary>
     public static IServiceCollection AddApiDocumentation(this IServiceCollection services)
     {
-        services.AddOpenApi(static options => options.AddSchemaTransformer<StronglyTypedIdSchemaTransformer>());
+        services.AddOpenApi(static options =>
+        {
+            options.AddSchemaTransformer<StronglyTypedIdSchemaTransformer>();
+            options.AddDocumentTransformer<SecuritySchemeTransformer>();
+            options.AddOperationTransformer<SecurityRequirementOperationTransformer>();
+            options.AddOperationTransformer<IdempotencyOperationTransformer>();
+        });
         return services;
     }
 }

@@ -13,7 +13,7 @@ using XTemplate.Persistence;
 namespace XTemplate.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260816180352_InitialCreate")]
+    [Migration("20260816185501_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -199,7 +199,7 @@ namespace XTemplate.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
-                    b.Property<uint>("xmin")
+                    b.Property<uint>("Version")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("xid")

@@ -118,19 +118,21 @@ internal sealed class MigrationWorker(
         }
 
         EmailAddress email = EmailAddress.Create("billing@sample.dev").Value;
+        Currency usd = Currency.Create("USD").Value;
+        Currency eur = Currency.Create("EUR").Value;
 
-        Invoice overdue = Invoice.Create("Overdue Industries", email, "USD").Value;
-        overdue.AddLine("Consulting", Money.Create(1200m, "USD").Value);
+        Invoice overdue = Invoice.Create("Overdue Industries", email, usd).Value;
+        overdue.AddLine("Consulting", Money.Create(1200m, usd).Value);
         overdue.Issue(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
 
-        Invoice paid = Invoice.Create("Prompt Payers Ltd", email, "EUR").Value;
-        paid.AddLine("Design sprint", Money.Create(4800m, "EUR").Value);
+        Invoice paid = Invoice.Create("Prompt Payers Ltd", email, eur).Value;
+        paid.AddLine("Design sprint", Money.Create(4800m, eur).Value);
         paid.Issue(new DateTimeOffset(2026, 6, 15, 0, 0, 0, TimeSpan.Zero));
         paid.MarkPaid(new DateTimeOffset(2026, 6, 20, 9, 30, 0, TimeSpan.Zero));
         paid.ClearDomainEvents();   // seeding is not a business payment — no receipt email
 
-        Invoice draft = Invoice.Create("Draft & Co", email, "USD").Value;
-        draft.AddLine("Discovery workshop", Money.Create(950m, "USD").Value);
+        Invoice draft = Invoice.Create("Draft & Co", email, usd).Value;
+        draft.AddLine("Discovery workshop", Money.Create(950m, usd).Value);
 
         context.Invoices.AddRange(overdue, paid, draft);
         await context.SaveChangesAsync(cancellationToken);

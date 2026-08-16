@@ -44,9 +44,13 @@ Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 prob
 
 ## UI
 
-`Login.razor` signs in via `IAuthApiClient`; `TokenAuthenticationStateProvider` (UI.Common) checks
-`exp` and transparently rotates through `/auth/refresh` (single-flight) so the session outlives the
-access token; a failed rotation signs the circuit out.
+`Login.razor` signs in and `Register.razor` creates a Member account via `IAuthApiClient`;
+`TokenAuthenticationStateProvider` (UI.Common) checks `exp` and transparently rotates through
+`/auth/refresh` (single-flight) so the session outlives the access token; a failed rotation signs
+the circuit out.
+
+Auth rejections are RFC 9457 everywhere: JwtBearer challenges (401) and forbidden (403) responses
+carry problem-details bodies, and rate-limited requests get a 429 problem with `Retry-After`.
 
 ## Tests
 

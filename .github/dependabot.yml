@@ -26,3 +26,21 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+
+  # The SDK image every build/test runs through (scripts/dotnet.sh, dev container, CI).
+  - package-ecosystem: docker
+    directory: "/scripts/sdk-image"
+    schedule:
+      interval: weekly
+
+  # Dev-dependency images (postgres, redis) in docker-compose.yml.
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Dev container Features (.devcontainer/devcontainer.json is found from the repo root).
+  - package-ecosystem: devcontainers
+    directory: "/"
+    schedule:
+      interval: weekly

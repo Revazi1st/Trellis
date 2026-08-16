@@ -6,7 +6,7 @@ namespace XTemplate.Application.UnitTests.Invoices;
 internal static class InvoiceTestData
 {
     public static Invoice Draft()
-        => Invoice.Create("ACME Corp", EmailAddress.Create("billing@acme.com").Value, "USD").Value;
+        => Invoice.Create("ACME Corp", EmailAddress.Create("billing@acme.com").Value, Currency.Create("USD").Value).Value;
 
     public static Invoice Issued()
     {

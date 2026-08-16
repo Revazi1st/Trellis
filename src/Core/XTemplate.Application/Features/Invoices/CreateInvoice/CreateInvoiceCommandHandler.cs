@@ -11,19 +11,19 @@ internal sealed class CreateInvoiceCommandHandler(IInvoiceRepository invoices)
     public Task<Result<InvoiceId>> Handle(CreateInvoiceCommand command, CancellationToken cancellationToken)
     {
         Result<EmailAddress> email = EmailAddress.Create(command.CustomerEmail);
-        if (email.IsFailure)
+        Result<Currency> currency = Currency.Create(command.Currency);
+
+        // Combine validates every value object before failing, so the caller sees all the problems
+        // at once instead of fixing them one 400 at a time.
+        Result combined = Result.Combine(email, currency);
+        if (combined.IsFailure)
         {
-            return Task.FromResult<Result<InvoiceId>>(email.Error);
+            return Task.FromResult(Result.Failure<InvoiceId>(combined.Error));
         }
 
-        Result<Invoice> invoice = Invoice.Create(command.CustomerName, email.Value, command.Currency);
-        if (invoice.IsFailure)
-        {
-            return Task.FromResult<Result<InvoiceId>>(invoice.Error);
-        }
-
-        invoices.Add(invoice.Value);
-
-        return Task.FromResult<Result<InvoiceId>>(invoice.Value.Id);
+        return Task.FromResult(
+            Invoice.Create(command.CustomerName, email.Value, currency.Value)
+                .Tap(invoices.Add)
+                .Map(static invoice => invoice.Id));
     }
 }

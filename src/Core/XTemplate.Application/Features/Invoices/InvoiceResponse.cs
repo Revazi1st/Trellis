@@ -12,6 +12,7 @@ public sealed record InvoiceResponse(
     DateTimeOffset? DueDate,
     DateTimeOffset? PaidAtUtc,
     decimal Total,
+    uint Version,
     IReadOnlyList<InvoiceLineResponse> Lines);
 
 public sealed record InvoiceLineResponse(Guid Id, string Description, decimal Amount);
@@ -28,5 +29,6 @@ public static class InvoiceMappings
             invoice.DueDate,
             invoice.PaidAtUtc,
             invoice.Total.Amount,
+            invoice.Version,
             [.. invoice.Lines.Select(static line => new InvoiceLineResponse(line.Id.Value, line.Description, line.Amount.Amount))]);
 }

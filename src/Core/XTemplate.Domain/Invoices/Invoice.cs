@@ -45,6 +45,14 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
     public Money Total => _lines.Aggregate(Money.Zero(Currency), static (sum, line) => sum + line.Amount);
 
+    /// <summary>
+    /// Optimistic-concurrency token (Postgres xmin, mapped in Persistence). Surfaces as the API's
+    /// ETag so clients can do conditional requests; never set by domain code.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1144:Unused private types or members should be removed",
+        Justification = "EF Core writes the database-generated xmin value through this setter.")]
+    public uint Version { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     public string? CreatedBy { get; set; }
@@ -55,20 +63,14 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
     public DateTimeOffset? DeletedAtUtc { get; set; }
 
-    public static Result<Invoice> Create(string? customerName, EmailAddress customerEmail, string currency)
+    public static Result<Invoice> Create(string? customerName, EmailAddress customerEmail, Common.Currency currency)
     {
         if (string.IsNullOrWhiteSpace(customerName))
         {
             return InvoiceErrors.EmptyCustomerName;
         }
 
-        Result<Money> currencyProbe = Money.Create(0m, currency);
-        if (currencyProbe.IsFailure)
-        {
-            return currencyProbe.Error;
-        }
-
-        return new Invoice(InvoiceId.New(), customerName.Trim(), customerEmail, currencyProbe.Value.Currency);
+        return new Invoice(InvoiceId.New(), customerName.Trim(), customerEmail, currency.Code);
     }
 
     public Result AddLine(string? description, Money amount)

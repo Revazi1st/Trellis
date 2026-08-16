@@ -41,7 +41,7 @@
          files — LICENSE, CODEOWNERS, Dockerfile — whose "file path" is itself extension-less and
          therefore treated as a folder, nesting them one level deep (content/LICENSE/LICENSE). -->
     <Content Include="..\..\**\*"
-             Exclude="..\..\**\bin\**;..\..\**\obj\**;..\..\artifacts\**;..\..\.git\**;..\..\.idea\**;..\..\.vs\**;..\..\eng\**;..\..\**\.template-test\**;..\..\.claude\settings.local.json"
+             Exclude="..\..\**\bin\**;..\..\**\obj\**;..\..\artifacts\**;..\..\.git\**;..\..\.idea\**;..\..\.vs\**;..\..\eng\**;..\..\**\.template-test\**;..\..\.claude\settings.local.json;..\..\.github\workflows\template-ci.yml;..\..\.github\workflows\release.yml"
              PackagePath="content" />
     <Compile Remove="**\*" />
   </ItemGroup>

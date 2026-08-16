@@ -80,9 +80,19 @@ public sealed class IdempotencyFilter : IEndpointFilter
     };
 }
 
+/// <summary>Endpoint marker so the OpenAPI transformer can document the header and the 409 outcome.</summary>
+public sealed class IdempotencyMetadata
+{
+    public static readonly IdempotencyMetadata Instance = new();
+
+    private IdempotencyMetadata()
+    {
+    }
+}
+
 public static class IdempotencyExtensions
 {
     /// <summary>Applies opt-in idempotency to a state-changing endpoint.</summary>
     public static RouteHandlerBuilder RequireIdempotency(this RouteHandlerBuilder builder)
-        => builder.AddEndpointFilter<IdempotencyFilter>();
+        => builder.AddEndpointFilter<IdempotencyFilter>().WithMetadata(IdempotencyMetadata.Instance);
 }

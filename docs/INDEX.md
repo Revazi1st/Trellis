@@ -5,7 +5,10 @@ Agent entry point — read only what the task needs.
 ## Guides (humans & agents)
 - [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns
 - [development.md](development.md) — prerequisites, commands, running the app, tests
+- [deployment.md](deployment.md) — container images, the migration job, required production config, probes, OTLP
+- [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge
 - [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice
+- [features/auth.md](features/auth.md) — Identity + JWT, refresh rotation/revocation, permissions, lockout
 
 ## Decisions (docs/adr/)
 - [0001](adr/0001-record-architecture-decisions.md) — record ADRs

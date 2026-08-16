@@ -28,9 +28,13 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
 
         // Decoration order: first Decorate call is the innermost wrapper.
-        // Effective pipeline: Validation → Logging → UnitOfWork → handler.
+        // Effective pipeline: Validation → Logging → Tracing → UnitOfWork → handler.
         services.Decorate(typeof(ICommandHandler<>), typeof(UnitOfWorkDecorators.CommandHandler<>));
         services.Decorate(typeof(ICommandHandler<,>), typeof(UnitOfWorkDecorators.CommandHandler<,>));
+
+        services.Decorate(typeof(ICommandHandler<>), typeof(TracingDecorators.CommandHandler<>));
+        services.Decorate(typeof(ICommandHandler<,>), typeof(TracingDecorators.CommandHandler<,>));
+        services.Decorate(typeof(IQueryHandler<,>), typeof(TracingDecorators.QueryHandler<,>));
 
         services.Decorate(typeof(ICommandHandler<>), typeof(LoggingDecorators.CommandHandler<>));
         services.Decorate(typeof(ICommandHandler<,>), typeof(LoggingDecorators.CommandHandler<,>));

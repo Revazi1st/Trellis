@@ -31,7 +31,9 @@ builder.Services.AddApplication();
 // and the outbox meter + trace source (dispatch spans rejoin the originating request's trace).
 builder.Services.AddOpenTelemetry()
     .WithMetrics(static metrics => metrics.AddMeter(InvoiceMetrics.MeterName, XTemplate.Persistence.Outbox.OutboxMetrics.MeterName))
-    .WithTracing(static tracing => tracing.AddSource(XTemplate.Persistence.Outbox.OutboxMetrics.ActivitySourceName));
+    .WithTracing(static tracing => tracing.AddSource(
+        XTemplate.Persistence.Outbox.OutboxMetrics.ActivitySourceName,
+        XTemplate.SharedKernel.Decorators.TracingDecorators.ActivitySourceName));
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("xtemplate-db")
     ?? throw new InvalidOperationException("Connection string 'xtemplate-db' is not configured."));

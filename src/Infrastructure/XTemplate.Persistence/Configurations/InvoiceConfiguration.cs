@@ -15,7 +15,8 @@ internal sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(static i => i.Id).ValueGeneratedNever();
 
         // Optimistic concurrency via the Postgres 'xmin' system column — no schema column added.
-        builder.Property<uint>("xmin")
+        // Surfaced as Invoice.Version so the API can emit it as an ETag.
+        builder.Property(static i => i.Version)
             .HasColumnName("xmin")
             .HasColumnType("xid")
             .ValueGeneratedOnAddOrUpdate()

@@ -12,7 +12,7 @@ public sealed class InvoiceTests
     private static readonly DateTimeOffset PaidAt = new(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
 
     private static Invoice CreateDraft()
-        => Invoice.Create("ACME Corp", EmailAddress.Create("billing@acme.com").Value, "USD").Value;
+        => Invoice.Create("ACME Corp", EmailAddress.Create("billing@acme.com").Value, Currency.Create("USD").Value).Value;
 
     private static Invoice CreateIssued()
     {
@@ -35,13 +35,8 @@ public sealed class InvoiceTests
 
     [Fact]
     public void Create_rejects_blank_customer_name()
-        => Invoice.Create("  ", EmailAddress.Create("a@b.co").Value, "USD")
+        => Invoice.Create("  ", EmailAddress.Create("a@b.co").Value, Currency.Create("USD").Value)
             .Error.ShouldBe(InvoiceErrors.EmptyCustomerName);
-
-    [Fact]
-    public void Create_rejects_invalid_currency()
-        => Invoice.Create("ACME", EmailAddress.Create("a@b.co").Value, "X")
-            .Error.ShouldBe(MoneyErrors.InvalidCurrency);
 
     [Fact]
     public void AddLine_accumulates_total()

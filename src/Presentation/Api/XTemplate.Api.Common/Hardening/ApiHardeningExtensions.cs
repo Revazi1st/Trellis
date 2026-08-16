@@ -38,20 +38,7 @@ public static class ApiHardeningExtensions
         });
 
         // Rate limiting: a global partition per client + a stricter fixed window for auth endpoints.
-        services.AddRateLimiter(options =>
-        {
-            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    ClientKey(context),
-                    _ => new FixedWindowRateLimiterOptions { PermitLimit = 100, Window = TimeSpan.FromMinutes(1) }));
-
-            options.AddPolicy(AuthRateLimitPolicy, context =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    ClientKey(context),
-                    _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
-        });
+        services.AddRateLimiter(ConfigureRateLimiter);
 
         // CORS: allowed origins come from configuration ("Cors:AllowedOrigins"); none by default (same-origin only).
         string[] allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
@@ -92,6 +79,43 @@ public static class ApiHardeningExtensions
     {
         app.UseRateLimiter();
         return app;
+    }
+
+    private static void ConfigureRateLimiter(Microsoft.AspNetCore.RateLimiting.RateLimiterOptions options)
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        // A bodyless 429 leaves clients guessing; RFC 9457 + Retry-After lets them back off correctly.
+        options.OnRejected = static async (context, cancellationToken) =>
+        {
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
+            {
+                context.HttpContext.Response.Headers.RetryAfter =
+                    ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            await context.HttpContext.Response.WriteAsJsonAsync(
+                new Microsoft.AspNetCore.Mvc.ProblemDetails
+                {
+                    Title = "Too many requests",
+                    Detail = "Rate limit exceeded. Retry after the interval in the Retry-After header.",
+                    Status = StatusCodes.Status429TooManyRequests,
+                },
+                options: null,
+                contentType: "application/problem+json",
+                cancellationToken);
+        };
+
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                ClientKey(context),
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 100, Window = TimeSpan.FromMinutes(1) }));
+
+        options.AddPolicy(AuthRateLimitPolicy, context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                ClientKey(context),
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
     }
 
     /// <summary>Per authenticated user (stable id claim), else per client IP (X-Forwarded-For aware).</summary>

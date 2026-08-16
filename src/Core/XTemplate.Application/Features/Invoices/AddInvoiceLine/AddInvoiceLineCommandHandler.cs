@@ -16,12 +16,7 @@ internal sealed class AddInvoiceLineCommandHandler(IInvoiceRepository invoices)
             return Result.Failure(InvoiceErrors.NotFound(command.InvoiceId));
         }
 
-        Result<Money> amount = Money.Create(command.Amount, invoice.Currency);
-        if (amount.IsFailure)
-        {
-            return Result.Failure(amount.Error);
-        }
-
-        return invoice.AddLine(command.Description, amount.Value);
+        return Money.Create(command.Amount, invoice.Currency)
+            .Bind(amount => invoice.AddLine(command.Description, amount));
     }
 }

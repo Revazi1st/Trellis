@@ -1,0 +1,834 @@
+{
+    "openapi": "3.1.1",
+    "info": {
+        "title": "XTemplate.Api | v1",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:5171/"
+        }
+    ],
+    "paths": {
+        "/api/v{version}/invoices/{id}/lines": {
+            "post": {
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Add a line to a draft invoice",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+                        "schema": {
+                            "maxLength": 128,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AddInvoiceLineRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Missing or invalid access token."
+                    },
+                    "403": {
+                        "description": "Authenticated, but lacking the required permission."
+                    },
+                    "409": {
+                        "description": "Duplicate request \u2014 this Idempotency-Key was already processed."
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v{version}/invoices": {
+            "post": {
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Create a draft invoice",
+                "parameters": [
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+                        "schema": {
+                            "maxLength": 128,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateInvoiceRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateInvoiceResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid access token."
+                    },
+                    "403": {
+                        "description": "Authenticated, but lacking the required permission."
+                    },
+                    "409": {
+                        "description": "Duplicate request \u2014 this Idempotency-Key was already processed."
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v{version}/invoices/{id}": {
+            "get": {
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Get one invoice with its lines",
+                "operationId": "GetInvoice",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvoiceDto"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid access token."
+                    },
+                    "403": {
+                        "description": "Authenticated, but lacking the required permission."
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v{version}/invoices/{id}/issue": {
+            "post": {
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Issue a draft invoice, making it payable",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+                        "schema": {
+                            "maxLength": 128,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IssueInvoiceRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Missing or invalid access token."
+                    },
+                    "403": {
+                        "description": "Authenticated, but lacking the required permission."
+                    },
+                    "409": {
+                        "description": "Duplicate request \u2014 this Idempotency-Key was already processed."
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v{version}/invoices/overdue": {
+            "get": {
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "List issued invoices past their due date, oldest first (paged)",
+                "parameters": [
+                    {
+                        "name": "Page",
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^-?(?:0|[1-9]\\d*)$",
+                            "type": [
+                                "integer",
+                                "string"
+                            ],
+                            "format": "int32",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "PageSize",
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^-?(?:0|[1-9]\\d*)$",
+                            "type": [
+                                "integer",
+                                "string"
+                            ],
+                            "format": "int32",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PagedResponseOfInvoiceDto"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid access token."
+                    },
+                    "403": {
+                        "description": "Authenticated, but lacking the required permission."
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v{version}/invoices/{id}/pay": {
+            "post": {
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Record payment of an issued invoice",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+                        "schema": {
+                            "maxLength": 128,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Missing or invalid access token."
+                    },
+                    "403": {
+                        "description": "Authenticated, but lacking the required permission."
+                    },
+                    "409": {
+                        "description": "Duplicate request \u2014 this Idempotency-Key was already processed."
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v{version}/invoices/{id}/void": {
+            "post": {
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Void a draft or issued invoice",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+                        "schema": {
+                            "maxLength": 128,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Missing or invalid access token."
+                    },
+                    "403": {
+                        "description": "Authenticated, but lacking the required permission."
+                    },
+                    "409": {
+                        "description": "Duplicate request \u2014 this Idempotency-Key was already processed."
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v{version}/auth/login": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Exchange credentials for an access + refresh token pair",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v{version}/auth/logout": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Invalidate a refresh token (sign out this session)",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LogoutRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v{version}/auth/refresh": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Rotate a refresh token for a new token pair",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RefreshRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v{version}/auth/register": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Create a new account",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RegisterResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v{version}/auth/revoke-all": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Sign out everywhere: invalidate all of the caller's refresh tokens (e.g. after a password change)",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Missing or invalid access token."
+                    },
+                    "403": {
+                        "description": "Authenticated, but lacking the required permission."
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AddInvoiceLineRequest": {
+                "required": [
+                    "description",
+                    "amount"
+                ],
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+                        "type": [
+                            "number",
+                            "string"
+                        ],
+                        "format": "double"
+                    }
+                }
+            },
+            "CreateInvoiceRequest": {
+                "required": [
+                    "customerName",
+                    "customerEmail",
+                    "currency"
+                ],
+                "type": "object",
+                "properties": {
+                    "customerName": {
+                        "type": "string"
+                    },
+                    "customerEmail": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "string"
+                    }
+                }
+            },
+            "CreateInvoiceResponse": {
+                "required": [
+                    "id"
+                ],
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                }
+            },
+            "InvoiceDto": {
+                "required": [
+                    "id",
+                    "customerName",
+                    "customerEmail",
+                    "currency",
+                    "status",
+                    "dueDate",
+                    "paidAtUtc",
+                    "total",
+                    "version",
+                    "lines"
+                ],
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "customerName": {
+                        "type": "string"
+                    },
+                    "customerEmail": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "dueDate": {
+                        "type": [
+                            "null",
+                            "string"
+                        ],
+                        "format": "date-time"
+                    },
+                    "paidAtUtc": {
+                        "type": [
+                            "null",
+                            "string"
+                        ],
+                        "format": "date-time"
+                    },
+                    "total": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+                        "type": [
+                            "number",
+                            "string"
+                        ],
+                        "format": "double"
+                    },
+                    "version": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "uint32"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/InvoiceLineDto"
+                        }
+                    }
+                }
+            },
+            "InvoiceLineDto": {
+                "required": [
+                    "id",
+                    "description",
+                    "amount"
+                ],
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+                        "type": [
+                            "number",
+                            "string"
+                        ],
+                        "format": "double"
+                    }
+                }
+            },
+            "IssueInvoiceRequest": {
+                "required": [
+                    "dueDate"
+                ],
+                "type": "object",
+                "properties": {
+                    "dueDate": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "LoginRequest": {
+                "required": [
+                    "email",
+                    "password"
+                ],
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    }
+                }
+            },
+            "LogoutRequest": {
+                "required": [
+                    "refreshToken"
+                ],
+                "type": "object",
+                "properties": {
+                    "refreshToken": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PagedResponseOfInvoiceDto": {
+                "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "totalCount",
+                    "totalPages",
+                    "hasNextPage",
+                    "hasPreviousPage"
+                ],
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/InvoiceDto"
+                        }
+                    },
+                    "page": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    },
+                    "pageSize": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    },
+                    "totalCount": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    },
+                    "totalPages": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    },
+                    "hasNextPage": {
+                        "type": "boolean"
+                    },
+                    "hasPreviousPage": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "RefreshRequest": {
+                "required": [
+                    "refreshToken"
+                ],
+                "type": "object",
+                "properties": {
+                    "refreshToken": {
+                        "type": "string"
+                    }
+                }
+            },
+            "RegisterRequest": {
+                "required": [
+                    "email",
+                    "password"
+                ],
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    }
+                }
+            },
+            "RegisterResponse": {
+                "required": [
+                    "userId"
+                ],
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                }
+            },
+            "TokenResponse": {
+                "required": [
+                    "accessToken",
+                    "refreshToken",
+                    "expiresInSeconds"
+                ],
+                "type": "object",
+                "properties": {
+                    "accessToken": {
+                        "type": "string"
+                    },
+                    "refreshToken": {
+                        "type": "string"
+                    },
+                    "expiresInSeconds": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "Bearer": {
+                "type": "http",
+                "description": "Access token from POST /auth/login; rotate via POST /auth/refresh.",
+                "scheme": "bearer",
+                "bearerFormat": "JSON Web Token"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Invoices"
+        },
+        {
+            "name": "Auth"
+        }
+    ]
+}

@@ -85,6 +85,11 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
+      - name: Toggle consistency check
+        run: |
+          chmod +x scripts/check-template-toggles.sh
+          ./scripts/check-template-toggles.sh
+
       - name: Pack
         run: dotnet pack eng/XTemplate.TemplatePack/XTemplate.TemplatePack.csproj -o ./nupkg
       # The `instantiate` job validates the SOURCE tree (template.json's exclude list); real users

@@ -1,6 +1,6 @@
 # XTemplate — Agent Instructions
 
-XTemplate is a rich-DDD, Clean Architecture **.NET 10** solution (and eventually a `dotnet new` template). Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
+XTemplate is a rich-DDD, Clean Architecture **.NET 10** solution and a `dotnet new` template (packed from `eng/XTemplate.TemplatePack`). Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
 
 ## Commands
 
