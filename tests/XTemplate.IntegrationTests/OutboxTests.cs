@@ -36,8 +36,10 @@ public sealed class OutboxTests(DatabaseFixture database) : IntegrationTestBase(
             .Where(m => m.ProcessedAtUtc == null)
             .ToListAsync(TestContext.Current.CancellationToken);
 
-        // Both raised events are captured (InvoiceIssued has no handler; InvoicePaid triggers the receipt).
-        pending.ShouldContain(m => m.Type.Contains("InvoicePaidDomainEvent", System.StringComparison.Ordinal));
+        // Both raised events are captured (InvoiceIssued has no email handler; InvoicePaid triggers
+        // the receipt). Rows carry the stable wire name, never the CLR type.
+        pending.ShouldContain(m => m.Type == "invoices.paid.v1");
+        pending.ShouldContain(m => m.Type == "invoices.issued.v1");
         pending.Count.ShouldBe(2);
     }
 
@@ -52,7 +54,8 @@ public sealed class OutboxTests(DatabaseFixture database) : IntegrationTestBase(
         }
 
         var processor = new OutboxProcessor(
-            Services.GetRequiredService<IServiceScopeFactory>(), Time, NullLogger<OutboxProcessor>.Instance);
+            Services.GetRequiredService<IServiceScopeFactory>(), Time,
+            new OutboxMetrics(new TestMeterFactory()), NullLogger<OutboxProcessor>.Instance);
         await processor.ProcessBatchAsync(TestContext.Current.CancellationToken);
 
         await EmailSender.Received(1).SendAsync(
@@ -74,5 +77,15 @@ public sealed class OutboxTests(DatabaseFixture database) : IntegrationTestBase(
         await Services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
             .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), TestContext.Current.CancellationToken);
         return id;
+    }
+
+    internal sealed class TestMeterFactory : System.Diagnostics.Metrics.IMeterFactory
+    {
+        public System.Diagnostics.Metrics.Meter Create(System.Diagnostics.Metrics.MeterOptions options) => new(options);
+
+        public void Dispose()
+        {
+            // Meters are owned by their consumers in tests.
+        }
     }
 }

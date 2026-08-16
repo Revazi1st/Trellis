@@ -71,6 +71,23 @@ public sealed class LayerDependencyTests
             .GetResult()
             .ShouldBeCompliant();
 
+#if (IncludeUI)
+    [Fact]
+    public void Ui_talks_to_the_api_only_through_contracts_never_inner_layers()
+        => Types.InAssembly(Architecture.UiCommonAssembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                Architecture.SharedKernel,
+                Architecture.Domain,
+                Architecture.Application,
+                Architecture.Infrastructure,
+                Architecture.Persistence,
+                Architecture.Presentation + ".Common",   // Api.Common is host plumbing, not a UI dependency
+                Architecture.EntityFramework)
+            .GetResult()
+            .ShouldBeCompliant();
+#endif
+
     [Fact]
     public void Api_contracts_are_a_pure_dependency_free_surface()
         => Types.InAssembly(Architecture.ApiContractsAssembly)

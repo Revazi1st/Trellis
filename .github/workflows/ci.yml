@@ -46,20 +46,81 @@ jobs:
 
       # ubuntu-latest ships a Docker daemon and this job has a local SDK, so Testcontainers
       # integration tests and the Aspire orchestration E2E both run here (ADR-0008).
-      - name: Test
+      # Coverage is collected OUT of process (dotnet-coverage wraps the run): the in-process MTP
+      # coverage extension aborts the xunit.v3 host, which is why coverage was absent for a while.
+      - name: Test (with coverage)
         env:
           RUN_ASPIRE_E2E: "1"
-        run: dotnet test XTemplate.slnx --no-build -c Release
+        run: |
+          dotnet tool restore
+          dotnet dotnet-coverage collect -f cobertura -o coverage.cobertura.xml \
+            "dotnet test XTemplate.slnx --no-build -c Release -- --report-trx --results-directory TestResults"
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage
+          path: coverage.cobertura.xml
 
       # A flaky Testcontainers/Aspire run must not have to be reproduced blind.
-      # (TRX reports need the Microsoft.Testing.Extensions.TrxReport package — candidate follow-up.)
       - name: Upload test results on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-results
-          path: "**/TestResults"
+          path: TestResults
           if-no-files-found: ignore
+
+  ui-tests:
+    name: Playwright UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Start PostgreSQL
+        run: docker compose up -d --wait
+
+      - name: Build
+        run: dotnet build XTemplate.slnx -c Release
+
+      - name: Migrate & seed
+        env:
+          DOTNET_ENVIRONMENT: Development
+        run: dotnet run --project tools/XTemplate.MigrationService -c Release --no-build --no-launch-profile -- "--ConnectionStrings:xtemplate-db=Host=localhost;Port=5433;Database=xtemplate;Username=postgres;Password=postgres"
+
+      - name: Start API and Web
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+        run: |
+          dotnet run --project src/Presentation/Api/XTemplate.Api -c Release --no-build --no-launch-profile -- \
+            "--ConnectionStrings:xtemplate-db=Host=localhost;Port=5433;Database=xtemplate;Username=postgres;Password=postgres" \
+            --urls http://localhost:5171 &
+          Services__api__http__0=http://localhost:5171 \
+            dotnet run --project src/Presentation/UI/XTemplate.UI.Web -c Release --no-build --no-launch-profile -- \
+            --urls http://localhost:5170 &
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:5170/alive >/dev/null 2>&1 && curl -fsS http://localhost:5171/alive >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "::error::API/Web did not become ready" && exit 1
+
+      - name: Install Playwright browsers
+        run: pwsh artifacts/bin/XTemplate.UiTests/release/playwright.ps1 install chromium --with-deps
+
+      - name: Run browser tests
+        env:
+          RUN_UI_TESTS: "1"
+          UI_TESTS_BASE_URL: http://localhost:5170
+        run: dotnet test tests/XTemplate.UiTests -c Release --no-build
 
   docs-drift:
     name: Docs drift

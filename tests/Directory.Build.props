@@ -13,4 +13,9 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Enables the report-trx runner option so CI can attach test results to failed runs. -->
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+  </ItemGroup>
+
 </Project>

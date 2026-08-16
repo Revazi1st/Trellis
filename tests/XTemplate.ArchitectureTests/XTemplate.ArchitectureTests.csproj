@@ -9,7 +9,18 @@
     <ProjectReference Include="..\..\src\Presentation\Api\XTemplate.Api.Contracts\XTemplate.Api.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Presentation\Api\XTemplate.Api.Common\XTemplate.Api.Common.csproj" />
     <ProjectReference Include="..\..\src\Presentation\Api\XTemplate.Api\XTemplate.Api.csproj" />
+    <!--#if (IncludeUI) -->
+    <ProjectReference Include="..\..\src\Presentation\UI\XTemplate.UI.Common\XTemplate.UI.Common.csproj" />
+    <!--#endif -->
   </ItemGroup>
+
+  <!--#if (IncludeUI) -->
+  <PropertyGroup>
+    <!-- Defines IncludeUI for the template SOURCE so the UI fitness tests compile here.
+         Removed at 'dotnet new' time when the UI is excluded. -->
+    <DefineConstants>$(DefineConstants);IncludeUI</DefineConstants>
+  </PropertyGroup>
+  <!--#endif -->
 
   <ItemGroup>
     <PackageReference Include="NetArchTest.eNhancedEdition" />

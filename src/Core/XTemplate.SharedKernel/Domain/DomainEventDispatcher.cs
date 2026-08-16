@@ -12,28 +12,38 @@ public sealed class DomainEventDispatcher(IServiceProvider serviceProvider) : ID
     {
         foreach (IDomainEvent domainEvent in domainEvents)
         {
-            IHandlerInvoker invoker = Invokers.GetOrAdd(
-                domainEvent.GetType(),
-                static eventType => (IHandlerInvoker)Activator.CreateInstance(
-                    typeof(TypedHandlerInvoker<>).MakeGenericType(eventType))!);
-
-            await invoker.Invoke(domainEvent, serviceProvider, cancellationToken);
+            await InvokerFor(domainEvent).Invoke(domainEvent, serviceProvider, completedHandlers: null, cancellationToken);
         }
     }
 
+    public Task Dispatch(IDomainEvent domainEvent, ISet<string> completedHandlers, CancellationToken cancellationToken)
+        => InvokerFor(domainEvent).Invoke(domainEvent, serviceProvider, completedHandlers, cancellationToken);
+
+    private static IHandlerInvoker InvokerFor(IDomainEvent domainEvent) => Invokers.GetOrAdd(
+        domainEvent.GetType(),
+        static eventType => (IHandlerInvoker)Activator.CreateInstance(
+            typeof(TypedHandlerInvoker<>).MakeGenericType(eventType))!);
+
     private interface IHandlerInvoker
     {
-        Task Invoke(IDomainEvent domainEvent, IServiceProvider serviceProvider, CancellationToken cancellationToken);
+        Task Invoke(IDomainEvent domainEvent, IServiceProvider serviceProvider, ISet<string>? completedHandlers, CancellationToken cancellationToken);
     }
 
     private sealed class TypedHandlerInvoker<TEvent> : IHandlerInvoker
         where TEvent : IDomainEvent
     {
-        public async Task Invoke(IDomainEvent domainEvent, IServiceProvider serviceProvider, CancellationToken cancellationToken)
+        public async Task Invoke(IDomainEvent domainEvent, IServiceProvider serviceProvider, ISet<string>? completedHandlers, CancellationToken cancellationToken)
         {
             foreach (IDomainEventHandler<TEvent> handler in serviceProvider.GetServices<IDomainEventHandler<TEvent>>())
             {
+                string handlerName = handler.GetType().FullName!;
+                if (completedHandlers?.Contains(handlerName) == true)
+                {
+                    continue;
+                }
+
                 await handler.Handle((TEvent)domainEvent, cancellationToken);
+                completedHandlers?.Add(handlerName);
             }
         }
     }

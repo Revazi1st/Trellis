@@ -5,22 +5,31 @@ using XTemplate.SharedKernel.Domain;
 
 namespace XTemplate.Persistence.Outbox;
 
-/// <summary>Serializes domain events for the outbox and resolves their CLR types on the way back.</summary>
+/// <summary>
+/// Serializes domain events for the outbox and resolves their types on the way back — keyed by the
+/// event's stable <see cref="DomainEventNameAttribute"/> name, never the CLR type: renaming or
+/// moving a class must not orphan in-flight rows during a rolling deploy.
+/// </summary>
 internal static class DomainEventSerialization
 {
     // Strongly-typed IDs round-trip as their inner GUID via this factory (see SharedKernel).
     public static readonly JsonSerializerOptions Options = CreateOptions();
 
-    // FullName → Type map of every IDomainEvent in the domain assembly (built once).
-    private static readonly FrozenDictionary<string, Type> EventTypes = BuildEventTypeMap();
+    private static readonly FrozenDictionary<string, Type> TypesByName = BuildEventTypeMap();
 
-    public static string TypeNameOf(IDomainEvent domainEvent) => domainEvent.GetType().FullName!;
+    private static readonly FrozenDictionary<Type, string> NamesByType =
+        TypesByName.ToFrozenDictionary(static pair => pair.Value, static pair => pair.Key);
+
+    public static string TypeNameOf(IDomainEvent domainEvent)
+        => NamesByType.TryGetValue(domainEvent.GetType(), out string? name)
+            ? name
+            : throw MissingName(domainEvent.GetType());
 
     public static string Serialize(IDomainEvent domainEvent)
         => JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), Options);
 
     public static IDomainEvent? Deserialize(string typeName, string content)
-        => EventTypes.TryGetValue(typeName, out Type? type)
+        => TypesByName.TryGetValue(typeName, out Type? type)
             ? (IDomainEvent?)JsonSerializer.Deserialize(content, type, Options)
             : null;
 
@@ -38,6 +47,12 @@ internal static class DomainEventSerialization
 
         return domainAssembly.GetTypes()
             .Where(static t => t is { IsAbstract: false, IsInterface: false } && typeof(IDomainEvent).IsAssignableFrom(t))
-            .ToFrozenDictionary(static t => t.FullName!, static t => t);
+            .ToFrozenDictionary(
+                static t => t.GetCustomAttribute<DomainEventNameAttribute>()?.Name ?? throw MissingName(t),
+                static t => t);
     }
+
+    private static InvalidOperationException MissingName(Type eventType) => new(
+        $"Domain event '{eventType.FullName}' has no [DomainEventName(\"...\")]. Every event needs a stable, "
+        + "versioned wire name so outbox rows survive refactoring (see the serialization fitness test).");
 }

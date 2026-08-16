@@ -6,6 +6,33 @@ All notable changes to XTemplate are documented here. The format follows
 
 ## [Unreleased]
 
+### Reliability & testing
+- **Outbox, production-shaped**: skip-locked batch claiming (replicas never double-dispatch),
+  exponential backoff (30s→4m instead of five retries in 25 seconds), explicit
+  Pending/Processed/DeadLettered status with a critical log + `xtemplate.outbox.dead_lettered`
+  metric (exhausted and unresolvable messages were previously dropped in silence), per-handler
+  completion tracking (retries never re-run a handler that succeeded — no double emails or
+  double-counted metrics), stable versioned wire names via `[DomainEventName]` (refactoring never
+  orphans in-flight rows), and `traceparent` + tenant propagation across the async boundary.
+- **Data retention**: a janitor prunes processed outbox rows, stale idempotency keys and dead
+  refresh tokens (previously all three tables grew forever); the outbox pending-scan index is now
+  partial, so it stays small regardless of history.
+- **In-process API tests** (`WebApplicationFactory` + Testcontainers): the real HTTP pipeline —
+  JWT 401/403, permission policies, RFC 9457 shape, idempotency reserve/duplicate/release, the
+  auth rate limit — now runs inside the SDK container on every `./scripts/dotnet.sh test`.
+  Previously nothing covered the Presentation ring in the default loop.
+- New integration tests: idempotency concurrent-reserve race, tenancy isolation + ambient-tenant
+  restore (compiled into tenant-enabled generated solutions; the all-options template-CI leg runs
+  them), migration-drift guard (`HasPendingModelChanges`), domain-event serialization fitness.
+- **Conventions enforced, not asserted**: architecture tests now verify value objects (sealed
+  records with `Create → Result<T>`), aggregates (no public constructors/setters), domain events
+  (sealed records), endpoints (internal sealed), and — with the UI included — that the UI depends
+  only on `Api.Contracts`. The ADR-0011 license ceilings became an MSBuild error instead of prose.
+- **CI**: code coverage via out-of-process `dotnet-coverage` (the in-process collector crashed the
+  xunit.v3 host), TRX results attached to failed runs, and a Playwright job that actually boots
+  PostgreSQL + API + Web and runs the browser tests (they had never executed in any pipeline);
+  the browser suite gained wrong-password and create-invoice flows.
+
 ### Security
 - **Account lockout**: five failed sign-ins lock the account for 15 minutes (403
   `Auth.AccountLockedOut`); a successful login resets the counter. Previously the Identity lockout
@@ -68,6 +95,9 @@ All notable changes to XTemplate are documented here. The format follows
 - The Blazor invoice list showed only the first page with no controls (pager added), and a failed
   action's error message was wiped by the reload that followed it.
 - Pinned transitive `SSH.NET` to 2026.0.0 (GHSA-q939-rpr3-3284 flagged by NuGetAudit).
+- **`--use-serilog` solutions could not build in Release** — `WriteTo.Console()` without a format
+  provider is CA1305, and generated solutions treat warnings as errors in Release. Found by
+  actually building a generated all-options solution end to end.
 - **Template package was unusable.** `dotnet pack` flattened the whole repo into `content/`
   (293 entries, none nested), dropped colliding files (`NU5118`) and omitted
   `.template.config/`, so `dotnet new install XTemplate.Templates` could not work at all.

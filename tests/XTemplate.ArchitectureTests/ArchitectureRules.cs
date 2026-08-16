@@ -25,4 +25,8 @@ internal static class Architecture
     public static Assembly InfrastructureAssembly => typeof(Infrastructure.DependencyInjection).Assembly;
     public static Assembly PersistenceAssembly => typeof(Persistence.DependencyInjection).Assembly;
     public static Assembly ApiContractsAssembly => typeof(InvoiceDto).Assembly;
+    public static Assembly ApiAssembly => typeof(Program).Assembly;
+#if (IncludeUI)
+    public static Assembly UiCommonAssembly => typeof(XTemplate.UI.Common.DependencyInjection).Assembly;
+#endif
 }

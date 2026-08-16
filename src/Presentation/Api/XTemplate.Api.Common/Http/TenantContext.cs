@@ -16,6 +16,12 @@ internal sealed class TenantContext(IHttpContextAccessor httpContextAccessor) : 
     {
         get
         {
+            // Non-request flows (outbox dispatch) restore the originating tenant ambiently.
+            if (AmbientTenant.CurrentTenantId is { } ambient)
+            {
+                return ambient;
+            }
+
             HttpContext? context = httpContextAccessor.HttpContext;
             if (context is null)
             {

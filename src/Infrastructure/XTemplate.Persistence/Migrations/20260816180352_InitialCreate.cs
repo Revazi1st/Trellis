@@ -91,12 +91,16 @@ namespace XTemplate.Persistence.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Type = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
+                    Type = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     Content = table.Column<string>(type: "jsonb", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
                     OccurredAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    NextAttemptAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     ProcessedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     Attempts = table.Column<int>(type: "integer", nullable: false),
-                    Error = table.Column<string>(type: "text", nullable: true)
+                    Error = table.Column<string>(type: "text", nullable: true),
+                    CompletedHandlers = table.Column<string>(type: "text", nullable: true),
+                    TraceParent = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -299,9 +303,10 @@ namespace XTemplate.Persistence.Migrations
                 column: "Status");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OutboxMessages_ProcessedAtUtc_OccurredAtUtc",
+                name: "IX_OutboxMessages_NextAttemptAtUtc_OccurredAtUtc",
                 table: "OutboxMessages",
-                columns: new[] { "ProcessedAtUtc", "OccurredAtUtc" });
+                columns: new[] { "NextAttemptAtUtc", "OccurredAtUtc" },
+                filter: "\"Status\" = 0");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RefreshTokens_TokenHash",

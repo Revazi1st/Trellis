@@ -45,4 +45,22 @@
     <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
 
+  <!-- The LICENSE CEILINGS in Directory.Packages.props are enforced, not advisory (ADR-0011).
+       Catches direct references; Dependabot's ignore list covers the bot-upgrade path.
+       CAUTION: 'dotnet new' evaluates Condition attributes containing item syntax (%/@) and mangles
+       them in generated output (the reason this repo uses XML-comment conditionals, ADR-0010) —
+       hence the double-Exclude intersection and the property-only Error condition. -->
+  <Target Name="EnforceLicenseCeilings" BeforeTargets="CollectPackageReferences">
+    <ItemGroup>
+      <_ForbiddenPackageNames Include="MediatR;AutoMapper;FluentAssertions;MassTransit;Moq" />
+      <_AllowedPackageReferences Include="@(PackageReference)" Exclude="@(_ForbiddenPackageNames)" />
+      <_LicenseViolations Include="@(PackageReference)" Exclude="@(_AllowedPackageReferences)" />
+    </ItemGroup>
+    <PropertyGroup>
+      <_LicenseViolationList>@(_LicenseViolations)</_LicenseViolationList>
+    </PropertyGroup>
+    <Error Condition="'$(_LicenseViolationList)' != ''"
+      Text="Package(s) '$(_LicenseViolationList)' violate the license-ceiling policy (ADR-0011; see LICENSE CEILINGS in Directory.Packages.props for the free alternatives)." />
+  </Target>
+
 </Project>

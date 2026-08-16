@@ -115,6 +115,7 @@
           "condition": "(!UseMultitenancy)",
           "exclude": [
             "src/Core/XTemplate.Application/Abstractions/ITenantContext.cs",
+            "src/Core/XTemplate.Application/Abstractions/AmbientTenant.cs",
             "src/Presentation/Api/XTemplate.Api.Common/Http/TenantContext.cs",
             "src/Infrastructure/XTemplate.Persistence/Interceptors/TenantInterceptor.cs",
             "src/Infrastructure/XTemplate.Persistence/SystemTenantContext.cs"

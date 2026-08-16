@@ -13,7 +13,7 @@ using XTemplate.Persistence;
 namespace XTemplate.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260816174323_InitialCreate")]
+    [Migration("20260816180352_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -377,6 +377,9 @@ namespace XTemplate.Persistence.Migrations
                     b.Property<int>("Attempts")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CompletedHandlers")
+                        .HasColumnType("text");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -384,20 +387,31 @@ namespace XTemplate.Persistence.Migrations
                     b.Property<string>("Error")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("OccurredAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("ProcessedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Type")
                         .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProcessedAtUtc", "OccurredAtUtc");
+                    b.HasIndex("NextAttemptAtUtc", "OccurredAtUtc")
+                        .HasFilter("\"Status\" = 0");
 
                     b.ToTable("OutboxMessages", (string)null);
                 });

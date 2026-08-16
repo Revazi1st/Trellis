@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using XTemplate.Application.Abstractions;
 using XTemplate.Domain.Invoices;
@@ -71,7 +72,21 @@ public static class DependencyInjection
     /// <summary>Registers the background outbox processor. Call from long-running hosts only (e.g. the API), not the one-shot MigrationService.</summary>
     public static IServiceCollection AddOutboxProcessing(this IServiceCollection services)
     {
+        services.AddSingleton<OutboxMetrics>();
         services.AddHostedService<OutboxProcessor>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the retention janitor that prunes processed outbox rows, stale idempotency keys and
+    /// dead refresh tokens (windows from the "Retention" section). Long-running hosts only.
+    /// </summary>
+    public static IServiceCollection AddDataRetention(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddSingleton(
+            configuration.GetSection(Maintenance.RetentionOptions.SectionName).Get<Maintenance.RetentionOptions>()
+            ?? new Maintenance.RetentionOptions());
+        services.AddHostedService<Maintenance.DataRetentionJanitor>();
         return services;
     }
 }

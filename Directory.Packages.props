@@ -89,6 +89,11 @@
 
   <ItemGroup Label="Testing">
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <!-- In-process API endpoint tests (WebApplicationFactory) — runs inside the SDK container, unlike the Aspire E2E. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
+    <!-- TRX reports for CI failure artifacts (out-of-process safe, unlike the in-process coverage extension).
+         Version must track the Microsoft.Testing.Platform that xunit.v3 runs on, or the runner fails to load. -->
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="1.9.1" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="NSubstitute" Version="6.0.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />

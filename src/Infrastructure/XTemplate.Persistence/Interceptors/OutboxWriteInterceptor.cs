@@ -1,5 +1,9 @@
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+#if (UseMultitenancy)
+using XTemplate.Application.Abstractions;
+#endif
 using XTemplate.Persistence.Outbox;
 using XTemplate.SharedKernel.Domain;
 
@@ -11,7 +15,12 @@ namespace XTemplate.Persistence.Interceptors;
 /// background OutboxProcessor dispatches them after commit — so side effects never run on a
 /// rolled-back or retried transaction. Registered first in the interceptor chain.
 /// </summary>
-public sealed class OutboxWriteInterceptor(TimeProvider timeProvider) : SaveChangesInterceptor
+public sealed class OutboxWriteInterceptor(
+    TimeProvider timeProvider
+#if (UseMultitenancy)
+    , ITenantContext tenantContext
+#endif
+    ) : SaveChangesInterceptor
 {
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
@@ -55,6 +64,13 @@ public sealed class OutboxWriteInterceptor(TimeProvider timeProvider) : SaveChan
                 Type = DomainEventSerialization.TypeNameOf(domainEvent),
                 Content = DomainEventSerialization.Serialize(domainEvent),
                 OccurredAtUtc = now,
+                NextAttemptAtUtc = now,
+                // Carried across the async boundary: dispatch spans join the originating trace, and
+                // handlers run under the originating tenant.
+                TraceParent = Activity.Current?.Id,
+#if (UseMultitenancy)
+                TenantId = tenantContext.TenantId,
+#endif
             })];
 
         foreach (IHasDomainEvents aggregate in aggregates)

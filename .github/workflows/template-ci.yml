@@ -55,6 +55,16 @@ jobs:
         # dotnet new loops forever on the unanswerable prompt.
         run: dotnet new xtemplate -n "${{ matrix.out }}" -o ../generated --allow-scripts yes ${{ matrix.args }}
 
+      - name: Regenerate the initial migration
+        if: ${{ matrix.test }}
+        working-directory: ../generated
+        # Multi-tenancy adds columns, so the shipped migration must be regenerated after enabling —
+        # the same step docs/development.md tells consumers to run.
+        run: |
+          dotnet tool restore
+          dotnet dotnet-ef migrations remove --force --project src/Infrastructure/*.Persistence
+          dotnet dotnet-ef migrations add InitialCreate --project src/Infrastructure/*.Persistence
+
       - name: Build generated solution
         working-directory: ../generated
         run: dotnet build *.slnx -c Release

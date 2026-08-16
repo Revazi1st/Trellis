@@ -15,7 +15,8 @@ builder.AddServiceDefaults();
 builder.Services.AddSerilog(static (services, config) => config
     .ReadFrom.Configuration(services.GetRequiredService<IConfiguration>())
     .Enrich.FromLogContext()
-    .WriteTo.Console());
+    // Explicit format provider: log output must not vary with the host's locale (CA1305).
+    .WriteTo.Console(formatProvider: System.Globalization.CultureInfo.InvariantCulture));
 #endif
 
 builder.Services.AddRazorComponents()

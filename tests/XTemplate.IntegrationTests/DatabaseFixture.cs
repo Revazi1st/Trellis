@@ -11,6 +11,8 @@ namespace XTemplate.IntegrationTests;
 /// <summary>One real PostgreSQL container per test collection; migrations applied once, Respawn wipes data between tests.</summary>
 public sealed class DatabaseFixture : IAsyncLifetime
 {
+    // Deliberately NOT WithReuse(true): reuse is experimental and the Ryuk reaper kills "reusable"
+    // containers when a parallel test assembly's session ends, failing whoever is still connected.
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
 
     private NpgsqlConnection? _connection;
