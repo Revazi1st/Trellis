@@ -21,6 +21,8 @@ var cache = builder.AddRedis("cache");
 #endif
 
 var api = builder.AddProject<Projects.Trellis_Api>("api", static options => options.ExcludeLaunchProfile = true)
+    // With no launch profile, endpoints must be declared here; Aspire assigns the port.
+    .WithHttpEndpoint()
     .WithReference(database)
 #if (UseRedis)
     .WithReference(cache)
@@ -31,6 +33,7 @@ var api = builder.AddProject<Projects.Trellis_Api>("api", static options => opti
 
 #if (IncludeUI)
 var web = builder.AddProject<Projects.Trellis_UI_Web>("web", static options => options.ExcludeLaunchProfile = true)
+    .WithHttpEndpoint()
     .WithReference(api)
     .WaitFor(api)
     .WithExternalHttpEndpoints();
