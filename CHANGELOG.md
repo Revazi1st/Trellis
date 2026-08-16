@@ -84,6 +84,18 @@ All notable changes to Trellis are documented here. The format follows
   section (tagging without notes fails the release).
 
 ### Fixed
+- **`aspire run` (and the Aspire E2E) pointed every resource at the wrong database.** The IDE
+  launch profiles pass a hardcoded dev connection string as a command-line argument (needed for
+  the dev-container flow), and arguments outrank the connection string Aspire injects — so
+  Aspire-launched resources silently targeted the compose database instead of the provisioned
+  one. The AppHost now excludes launch profiles for its project resources and sets Development
+  explicitly in run mode. Found by the first CI run in the project's history.
+- **`--include-ui false` solutions did not compile in Release** — the AppHost's `api` variable
+  became unused (S1481) once the UI block was stripped; the run-mode environment block now uses
+  it unconditionally.
+- **Project names containing spaces produce broken solutions** (the engine renames paths and
+  namespaces differently); the unsupported matrix leg is gone and the README documents the
+  naming rule.
 - **`--use-multitenancy` generated an app that could never start.** `ITenantContext` was registered
   only in the API host; the MigrationService (and the integration-test host) could not resolve
   `AppDbContext`, the migration worker exited nonzero and the API waited on it forever. A

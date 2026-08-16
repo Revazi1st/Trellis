@@ -8,7 +8,11 @@ var postgres = builder.AddPostgres("postgres")
 
 var database = postgres.AddDatabase("trellis-db", databaseName: "trellis");
 
-var migrations = builder.AddProject<Projects.Trellis_MigrationService>("migrations")
+// Launch profiles are EXCLUDED for Aspire-launched resources on purpose: the IDE profiles carry a
+// hardcoded dev connection string as a command-line ARG (for the dev-container flow), and args
+// outrank the connection string Aspire injects — every resource would silently point at the
+// compose database instead of the provisioned one. Aspire assigns endpoints itself.
+var migrations = builder.AddProject<Projects.Trellis_MigrationService>("migrations", static options => options.ExcludeLaunchProfile = true)
     .WithReference(database)
     .WaitFor(database);
 
@@ -16,7 +20,7 @@ var migrations = builder.AddProject<Projects.Trellis_MigrationService>("migratio
 var cache = builder.AddRedis("cache");
 #endif
 
-var api = builder.AddProject<Projects.Trellis_Api>("api")
+var api = builder.AddProject<Projects.Trellis_Api>("api", static options => options.ExcludeLaunchProfile = true)
     .WithReference(database)
 #if (UseRedis)
     .WithReference(cache)
@@ -26,11 +30,22 @@ var api = builder.AddProject<Projects.Trellis_Api>("api")
     .WithHttpHealthCheck("/health");
 
 #if (IncludeUI)
-builder.AddProject<Projects.Trellis_UI_Web>("web")
+var web = builder.AddProject<Projects.Trellis_UI_Web>("web", static options => options.ExcludeLaunchProfile = true)
     .WithReference(api)
     .WaitFor(api)
     .WithExternalHttpEndpoints();
 #endif
+
+if (builder.ExecutionContext.IsRunMode)
+{
+    // Local `aspire run` behaves like F5: Development settings — demo seed data, Scalar, the dev
+    // signing key. Publish mode deliberately sets nothing; the deployment environment decides.
+    migrations.WithEnvironment("DOTNET_ENVIRONMENT", "Development");
+    api.WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");
+#if (IncludeUI)
+    web.WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");
+#endif
+}
 
 // 'aspire publish' target: docker-compose artifacts; images built via dotnet publish /t:PublishContainer — no Dockerfiles.
 builder.AddDockerComposeEnvironment("compose");

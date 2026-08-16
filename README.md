@@ -19,6 +19,10 @@ dotnet new install Trellis.Templates
 dotnet new trellis -n Your.Project
 ```
 
+Use a .NET-style project name — letters, digits and dots (`Acme.Shop`). Names with spaces are not
+supported: the templating engine renames files and namespaces differently and the solution will
+not build.
+
 Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 
 | Flag | Default | What it adds |

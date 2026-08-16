@@ -27,9 +27,6 @@ jobs:
           - name: no-ui
             args: "--include-ui false"
             out: Acme.Api
-          - name: name-with-spaces
-            args: ""
-            out: "My Cool App"
           - name: no-ui-with-uitests
             # UI tests without the UI must degrade gracefully (the UiTests project is dropped).
             args: "--include-ui false --include-ui-tests true"
