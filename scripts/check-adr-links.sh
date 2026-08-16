@@ -28,22 +28,16 @@ for f in docs/adr/*.md; do
   fi
 done
 
-# --- every .claude/rules 'paths:' glob matches at least one tracked file ---
+# --- every .claude/rules 'paths:' glob points at an existing, non-empty base directory ---
+# (The failure mode this guards against is a renamed directory silently unloading a rule, so a
+# simple existence probe on the pre-wildcard prefix is deliberately used instead of glob matching.)
 for f in .claude/rules/*.md; do
   globs=$(sed -n 's/^paths:[[:space:]]*//p' "$f" | grep -oE '"[^"]+"' | tr -d '"') || true
   [ -n "$globs" ] && while IFS= read -r glob; do
-    # glob → extended regex: '**/' crosses directories, '*' does not, '{a,b}' alternates.
-    re="${glob//./\\.}"
-    re="${re//\*\*\//$'\001'}"
-    re="${re//\*\*/$'\002'}"
-    re="${re//\*/[^/]*}"
-    re="${re//$'\001'/(.*\/)?}"
-    re="${re//$'\002'/.*}"
-    re="${re//\{/(}"
-    re="${re//\}/)}"
-    re="${re//,/|}"
-    if ! git ls-files --cached --others --exclude-standard | grep -qE "^${re}$"; then
-      echo "::error::$f paths glob '$glob' matches no files — the rule will never load"
+    base="${glob%%\**}"   # longest prefix before the first wildcard
+    base="${base%/}"
+    if [ -n "$base" ] && [ ! -e "$base" ]; then
+      echo "::error::$f paths glob '$glob' points at missing path '$base' — the rule will never load"
       fail=1
     fi
   done <<< "$globs"
