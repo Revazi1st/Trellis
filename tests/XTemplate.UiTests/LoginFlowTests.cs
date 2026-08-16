@@ -21,6 +21,8 @@ public sealed class LoginFlowTests
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
         await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/login");
+        // Wait for the Blazor Server circuit to attach — values typed before it are lost.
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         await page.FillAsync("input[autocomplete='username']", UiTestEnvironment.SeededAdminEmail);
         await page.FillAsync("input[autocomplete='current-password']", UiTestEnvironment.SeededAdminPassword);
@@ -41,6 +43,7 @@ public sealed class LoginFlowTests
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
         await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/login");
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await page.FillAsync("input[autocomplete='username']", UiTestEnvironment.SeededAdminEmail);
         await page.FillAsync("input[autocomplete='current-password']", "definitely-not-the-password");
         await page.ClickAsync("button[type='submit']");
@@ -60,12 +63,16 @@ public sealed class LoginFlowTests
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
         await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/login");
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await page.FillAsync("input[autocomplete='username']", UiTestEnvironment.SeededAdminEmail);
         await page.FillAsync("input[autocomplete='current-password']", UiTestEnvironment.SeededAdminPassword);
         await page.ClickAsync("button[type='submit']");
         await page.WaitForURLAsync("**/invoices", new() { Timeout = 15_000 });
 
-        await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/invoices/new");
+        // Navigate via the nav link: per-circuit tokens do not survive a full page load (ADR-0007),
+        // so a GotoAsync here would bounce back to the login page.
+        await page.ClickAsync("a.nav-link:has-text('New')");
+        await page.WaitForURLAsync("**/invoices/new", new() { Timeout = 15_000 });
         string customer = $"Browser Test {Guid.NewGuid():N}";
         await page.FillAsync("label:has-text('Customer name') input", customer);
         await page.FillAsync("label:has-text('Customer email') input", "browser@test.dev");
@@ -77,7 +84,7 @@ public sealed class LoginFlowTests
             new System.Text.RegularExpressions.Regex(
                 "/invoices/[0-9a-fA-F-]{36}$", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(5)),
             new() { Timeout = 15_000 });
-        (await page.Locator("h1").InnerTextAsync()).ShouldBe(customer);
+        await page.Locator("h1", new() { HasText = customer }).WaitForAsync(new() { Timeout = 15_000 });
     }
 }
 

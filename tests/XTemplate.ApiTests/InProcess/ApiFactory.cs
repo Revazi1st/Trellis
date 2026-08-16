@@ -1,5 +1,9 @@
 extern alias apihost;
 
+#if (UseRedis)
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+#endif
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -46,6 +50,11 @@ public sealed class ApiFactory : WebApplicationFactory<apihost::Program>, IAsync
     {
         builder.UseSetting("ConnectionStrings:xtemplate-db", _postgres.GetConnectionString());
         builder.UseSetting("Authentication:SigningKey", "in-process-test-signing-key-32-chars-minimum!!");
+#if (UseRedis)
+        // The UseRedis toggle wires a Redis L2 into HybridCache via Aspire; there is no Redis in
+        // this host, so drop the distributed cache and run L1-only — otherwise every cache touch 500s.
+        builder.ConfigureServices(static services => services.RemoveAll<IDistributedCache>());
+#endif
     }
 
     /// <summary>A client authenticated as the seeded admin (all permissions).</summary>
