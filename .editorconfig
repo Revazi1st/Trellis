@@ -1,4 +1,4 @@
-# XTemplate .NET code style — enforced at build via EnforceCodeStyleInBuild (Directory.Build.props)
+# Trellis .NET code style — enforced at build via EnforceCodeStyleInBuild (Directory.Build.props)
 root = true
 
 [*]

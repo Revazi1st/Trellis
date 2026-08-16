@@ -1,6 +1,6 @@
 ---
 description: Building-block conventions for the SharedKernel
-paths: ["src/Core/XTemplate.SharedKernel/**/*.cs"]
+paths: ["src/Core/Trellis.SharedKernel/**/*.cs"]
 ---
 
 # SharedKernel rules

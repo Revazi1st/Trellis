@@ -9,9 +9,9 @@ Every host publishes its own image with the SDK's built-in containerization; the
 Dockerfiles to drift out of sync with the projects:
 
 ```bash
-dotnet publish src/Presentation/Api/XTemplate.Api /t:PublishContainer
-dotnet publish tools/XTemplate.MigrationService /t:PublishContainer
-dotnet publish src/Presentation/UI/XTemplate.UI.Web /t:PublishContainer   # if the UI is included
+dotnet publish src/Presentation/Api/Trellis.Api /t:PublishContainer
+dotnet publish tools/Trellis.MigrationService /t:PublishContainer
+dotnet publish src/Presentation/UI/Trellis.UI.Web /t:PublishContainer   # if the UI is included
 ```
 
 Base image, exposed port and entry point derive from the project; registry and tag are MSBuild
@@ -24,7 +24,7 @@ the way. The generated compose file already encodes the ordering below.
 
 ## Migrations: a one-shot pre-deploy job
 
-`XTemplate.MigrationService` applies EF migrations, seeds roles/permissions and the admin user,
+`Trellis.MigrationService` applies EF migrations, seeds roles/permissions and the admin user,
 then exits. **Exit code 0 gates the API** — the AppHost expresses this as
 `WaitForCompletion(migrations)`; in Kubernetes make it a Job (or init container) the API rollout
 depends on. Nonzero exit means migration or seeding failed — do not start the new API version.
@@ -45,7 +45,7 @@ fails the rollout, not the first request.
 
 | Setting | Required | Effect |
 |---|---|---|
-| `ConnectionStrings__xtemplate-db` | yes (API + migration job) | PostgreSQL connection string. The name contains a dash — settable in compose/k8s env maps, but not via POSIX `export`; use a `.env` file or manifest. |
+| `ConnectionStrings__trellis-db` | yes (API + migration job) | PostgreSQL connection string. The name contains a dash — settable in compose/k8s env maps, but not via POSIX `export`; use a `.env` file or manifest. |
 | `Authentication__SigningKey` | yes | JWT HMAC-SHA256 key, **≥ 32 characters or the API refuses to boot**. Store in a secret store; rotate by redeploying (outstanding access tokens die within `AccessTokenMinutes`). |
 | `Seed__AdminPassword` | yes (migration job, fresh DB) | Bootstrap admin credential; seeding refuses the default outside Development. |
 | `ForwardedHeaders__KnownProxies__0…` / `ForwardedHeaders__KnownNetworks__0…` | behind ingress | IPs / CIDR ranges of trusted proxies. Without them `X-Forwarded-For` is ignored (loopback-only default — spoof-safe) and every caller shares the ingress IP's rate-limit bucket. |
@@ -68,7 +68,7 @@ open readiness endpoint is still a free DB-status oracle.
 Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every host exports logs, metrics and traces via OTLP
 (the exporter is registered only when the variable is present). Worth alerting on:
 
-- `xtemplate.outbox.dead_lettered` — a domain event exhausted its retries or lost its handler;
+- `trellis.outbox.dead_lettered` — a domain event exhausted its retries or lost its handler;
   dead-lettered rows are the alert queue and are kept 30 days by default.
 - Outbox dispatch spans rejoin the originating request's trace (`traceparent` is persisted with
   the message), so a failed handler is visible under the request that caused it.

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Core\Trellis.Application\Trellis.Application.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\Trellis.Infrastructure\Trellis.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\Trellis.Persistence\Trellis.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Shared\Trellis.ServiceDefaults\Trellis.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+</Project>

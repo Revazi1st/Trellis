@@ -9,7 +9,7 @@ The Presentation layer needs a web UI. Blazor was chosen partly so the UI could 
 
 ## Decision
 
-`XTemplate.UI.Common` is a Razor Class Library holding all pages, components, the typed API client (over `Api.Contracts`), the client-side auth state, and shared styling. It is consumed by **`UI.Web`**, a Blazor Web App (InteractiveServer).
+`Trellis.UI.Common` is a Razor Class Library holding all pages, components, the typed API client (over `Api.Contracts`), the client-side auth state, and shared styling. It is consumed by **`UI.Web`**, a Blazor Web App (InteractiveServer).
 
 To stay reusable, `UI.Common` is kept **render-mode-agnostic**:
 

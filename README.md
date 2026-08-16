@@ -1,16 +1,22 @@
-# XTemplate
+# Trellis
 
-[![CI](https://github.com/your-org/xtemplate/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/xtemplate/actions/workflows/ci.yml)
+[![CI](https://github.com/Revazi1st/trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/Revazi1st/trellis/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 
 A best-practices .NET 10 **solution template**: rich DDD, Clean Architecture with vertical-slice features, feature-based Minimal APIs, separate Infrastructure and Persistence, ASP.NET Identity + JWT, Aspire orchestration, a Blazor UI, and a deeply **AI-friendly** repository (dual human/AI docs, Claude Code rules/agents/skills/hooks). Every major feature is a toggle, so you scaffold only what you need.
 
+> **Why "Trellis"?** A trellis is the lattice frame a gardener puts up for climbing plants: it
+> carries the weight and shapes the direction of growth, and once the plant fills out, the frame
+> disappears under the leaves. That is exactly what this template aims to be — the load-bearing
+> structure (layers, pipeline, conventions, CI) your application grows over until the scaffolding
+> fades from view.
+
 ## Use the template
 
 ```bash
-dotnet new install XTemplate.Templates
-dotnet new xtemplate -n Your.Project
+dotnet new install Trellis.Templates
+dotnet new trellis -n Your.Project
 ```
 
 Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
@@ -46,10 +52,10 @@ IDE with the `… (dev container)` profiles — `aspire run` can't orchestrate f
 docker compose up -d    # PostgreSQL on host port 5433
 ```
 
-then run **MigrationService** once, then **XTemplate.Api** (<http://localhost:5171>) and
-**XTemplate.UI.Web** (<http://localhost:5170>).
+then run **MigrationService** once, then **Trellis.Api** (<http://localhost:5171>) and
+**Trellis.UI.Web** (<http://localhost:5170>).
 
-Seeded admin: `admin@xtemplate.dev` / `Admin123!`. Full detail in [docs/development.md](docs/development.md).
+Seeded admin: `admin@trellis.dev` / `Admin123!`. Full detail in [docs/development.md](docs/development.md).
 
 ## Architecture
 

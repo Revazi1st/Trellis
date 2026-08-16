@@ -1,0 +1,67 @@
+@page "/"
+@page "/invoices"
+@inherits ProtectedPage
+@inject IInvoiceApiClient InvoiceApi
+
+<PageTitle>Invoices — Trellis</PageTitle>
+
+<h1>Overdue invoices</h1>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+else if (_page is null)
+{
+    <p>Loading…</p>
+}
+else if (_page.TotalCount == 0)
+{
+    <p>No overdue invoices. 🎉</p>
+}
+else
+{
+    <table class="grid">
+        <thead>
+            <tr><th>Customer</th><th>Status</th><th class="num">Total</th><th>Due</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (InvoiceDto invoice in _page.Items)
+            {
+                <tr>
+                    <td>@invoice.CustomerName</td>
+                    <td>@invoice.Status</td>
+                    <td class="num">@invoice.Total.ToString("N2") @invoice.Currency</td>
+                    <td>@invoice.DueDate?.ToString("yyyy-MM-dd")</td>
+                    <td><NavLink href="@($"invoices/{invoice.Id}")">View</NavLink></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <nav class="pager" aria-label="Pagination">
+        <button @onclick="() => LoadAsync(_page!.Page - 1)" disabled="@(!_page.HasPreviousPage)">Previous</button>
+        <span>Page @_page.Page of @_page.TotalPages (@_page.TotalCount overdue)</span>
+        <button @onclick="() => LoadAsync(_page!.Page + 1)" disabled="@(!_page.HasNextPage)">Next</button>
+    </nav>
+}
+
+@code {
+    private PagedResponse<InvoiceDto>? _page;
+    private string? _error;
+
+    protected override Task OnAuthorizedAsync() => LoadAsync(1);
+
+    private async Task LoadAsync(int page)
+    {
+        ApiResult<PagedResponse<InvoiceDto>> result = await InvoiceApi.GetOverdueAsync(page);
+        if (result.IsSuccess)
+        {
+            _page = result.Value;
+        }
+        else
+        {
+            _error = result.Error;
+        }
+    }
+}

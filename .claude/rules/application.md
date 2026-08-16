@@ -1,6 +1,6 @@
 ---
 description: CQRS use-case conventions for the Application layer
-paths: ["src/Core/XTemplate.Application/**/*.cs"]
+paths: ["src/Core/Trellis.Application/**/*.cs"]
 ---
 
 # Application layer rules

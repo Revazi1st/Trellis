@@ -3,7 +3,7 @@
 Identity, JWT access tokens, rotating refresh tokens, and permission-based authorization (ADR-0007:
 Identity lives in Persistence; the API maps custom endpoints — no `MapIdentityApi`).
 
-## Application (`src/Core/XTemplate.Application/Features/Auth/`)
+## Application (`src/Core/Trellis.Application/Features/Auth/`)
 
 Slices: `Login`, `Register`, `RefreshToken`, `Logout`, `RevokeSessions` — command + `internal sealed`
 handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refresh). Ports:
@@ -28,7 +28,7 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   invoices only in Development. Outside Development it refuses to seed the well-known default
   admin password — set `Seed__AdminPassword`.
 
-## API (`src/Presentation/Api/XTemplate.Api/Features/Auth/`)
+## API (`src/Presentation/Api/Trellis.Api/Features/Auth/`)
 
 | Method | Route | Auth |
 |---|---|---|

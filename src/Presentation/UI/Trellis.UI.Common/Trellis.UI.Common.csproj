@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!-- Shared Razor components for the Blazor web host. Kept render-mode-agnostic (no host-specific APIs)
+       so the library stays cleanly reusable — see ADR-0015. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Api\Trellis.Api.Contracts\Trellis.Api.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+  </ItemGroup>
+
+</Project>

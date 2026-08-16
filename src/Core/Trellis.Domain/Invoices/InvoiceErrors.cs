@@ -1,0 +1,30 @@
+using Trellis.SharedKernel.Results;
+
+namespace Trellis.Domain.Invoices;
+
+public static class InvoiceErrors
+{
+    public static readonly Error EmptyCustomerName =
+        Error.Validation("Invoice.EmptyCustomerName", "A customer name is required.");
+
+    public static readonly Error NotDraft =
+        Error.Conflict("Invoice.NotDraft", "Lines can only be changed while the invoice is a draft.");
+
+    public static readonly Error NoLines =
+        Error.Validation("Invoice.NoLines", "An invoice needs at least one line before it can be issued.");
+
+    public static readonly Error NotIssued =
+        Error.Conflict("Invoice.NotIssued", "Only an issued invoice can be paid.");
+
+    public static readonly Error AlreadyFinalized =
+        Error.Conflict("Invoice.AlreadyFinalized", "A paid or voided invoice cannot be changed.");
+
+    public static readonly Error EmptyLineDescription =
+        Error.Validation("Invoice.EmptyLineDescription", "A line description is required.");
+
+    public static readonly Error CurrencyMismatch =
+        Error.Validation("Invoice.CurrencyMismatch", "The line currency must match the invoice currency.");
+
+    public static Error NotFound(InvoiceId id) =>
+        Error.NotFound("Invoice.NotFound", $"Invoice '{id}' was not found.");
+}

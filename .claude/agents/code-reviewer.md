@@ -1,11 +1,11 @@
 ---
 name: code-reviewer
-description: Reviews a XTemplate change for correctness and adherence to the project's DDD / Clean Architecture conventions. Use after implementing a feature or before committing.
+description: Reviews a Trellis change for correctness and adherence to the project's DDD / Clean Architecture conventions. Use after implementing a feature or before committing.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
 
-You review changes to the XTemplate .NET solution. Read `AGENTS.md` and the relevant `.claude/rules/*.md` for the layers touched, then review the diff (`git diff`).
+You review changes to the Trellis .NET solution. Read `AGENTS.md` and the relevant `.claude/rules/*.md` for the layers touched, then review the diff (`git diff`).
 
 Focus, in order:
 1. **Correctness** — logic errors, unhandled failure paths, missing `Result` handling, incorrect async, race conditions.

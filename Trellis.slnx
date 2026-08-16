@@ -1,0 +1,51 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="AGENTS.md" />
+    <File Path="CLAUDE.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="nuget.config" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/Core/">
+    <Project Path="src/Core/Trellis.SharedKernel/Trellis.SharedKernel.csproj" />
+    <Project Path="src/Core/Trellis.Domain/Trellis.Domain.csproj" />
+    <Project Path="src/Core/Trellis.Application/Trellis.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/Trellis.Infrastructure/Trellis.Infrastructure.csproj" />
+    <Project Path="src/Infrastructure/Trellis.Persistence/Trellis.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/src/Presentation/Api/">
+    <Project Path="src/Presentation/Api/Trellis.Api.Contracts/Trellis.Api.Contracts.csproj" />
+    <Project Path="src/Presentation/Api/Trellis.Api.Common/Trellis.Api.Common.csproj" />
+    <Project Path="src/Presentation/Api/Trellis.Api/Trellis.Api.csproj" />
+  </Folder>
+  <!--#if (IncludeUI) -->
+  <Folder Name="/src/Presentation/UI/">
+    <Project Path="src/Presentation/UI/Trellis.UI.Common/Trellis.UI.Common.csproj" />
+    <Project Path="src/Presentation/UI/Trellis.UI.Web/Trellis.UI.Web.csproj" />
+  </Folder>
+  <!--#endif -->
+
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/Trellis.ServiceDefaults/Trellis.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Trellis.AppHost/Trellis.AppHost.csproj" />
+    <Project Path="tools/Trellis.MigrationService/Trellis.MigrationService.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Trellis.Domain.UnitTests/Trellis.Domain.UnitTests.csproj" />
+    <Project Path="tests/Trellis.Application.UnitTests/Trellis.Application.UnitTests.csproj" />
+    <Project Path="tests/Trellis.ArchitectureTests/Trellis.ArchitectureTests.csproj" />
+    <Project Path="tests/Trellis.IntegrationTests/Trellis.IntegrationTests.csproj" />
+    <Project Path="tests/Trellis.ApiTests/Trellis.ApiTests.csproj" />
+    <!--#if (IncludeUiTests && IncludeUI) -->
+    <Project Path="tests/Trellis.UiTests/Trellis.UiTests.csproj" />
+    <!--#endif -->
+  </Folder>
+</Solution>

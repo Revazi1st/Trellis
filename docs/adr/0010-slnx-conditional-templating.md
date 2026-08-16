@@ -14,7 +14,7 @@ Ship a **`.slnx`** and use **XML-comment conditionals** inside it:
 ```xml
 <!--#if (IncludeUI) -->
 <Folder Name="/src/Presentation/UI/">
-  <Project Path="src/Presentation/UI/XTemplate.UI.Web/XTemplate.UI.Web.csproj" />
+  <Project Path="src/Presentation/UI/Trellis.UI.Web/Trellis.UI.Web.csproj" />
 </Folder>
 <!--#endif -->
 ```

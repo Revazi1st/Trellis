@@ -1,0 +1,148 @@
+@page "/invoices/{Id:guid}"
+@inherits ProtectedPage
+@inject IInvoiceApiClient InvoiceApi
+
+<PageTitle>Invoice — Trellis</PageTitle>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+else if (_invoice is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <h1>@_invoice.CustomerName</h1>
+
+    @if (_actionError is not null)
+    {
+        <p class="error" role="alert">@_actionError</p>
+    }
+
+    <dl class="summary">
+        <dt>Status</dt><dd>@_invoice.Status</dd>
+        <dt>Email</dt><dd>@_invoice.CustomerEmail</dd>
+        <dt>Total</dt><dd>@_invoice.Total.ToString("N2") @_invoice.Currency</dd>
+        <dt>Due</dt><dd>@(_invoice.DueDate?.ToString("yyyy-MM-dd") ?? "—")</dd>
+    </dl>
+
+    <h2>Lines</h2>
+    <table class="grid">
+        <thead><tr><th>Description</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+            @foreach (InvoiceLineDto line in _invoice.Lines)
+            {
+                <tr><td>@line.Description</td><td class="num">@line.Amount.ToString("N2")</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <AuthorizeView Roles="invoices:write">
+        @if (_invoice.Status == "Draft")
+        {
+            <h2>Add line</h2>
+            <div class="form">
+                <label>Description<input @bind="_newLineDescription" /></label>
+                <label>Amount<input type="number" step="0.01" min="0" @bind="_newLineAmount" /></label>
+                <button @onclick="AddLineAsync" disabled="@_busy">Add line</button>
+            </div>
+
+            <h2>Issue</h2>
+            <div class="form">
+                <label>Due date<input type="date" @bind="_dueDate" @bind:format="yyyy-MM-dd" /></label>
+                <button @onclick="IssueAsync" disabled="@(_busy || _invoice.Lines.Count == 0)">Issue invoice</button>
+                @if (_invoice.Lines.Count == 0)
+                {
+                    <p class="hint">Add at least one line before issuing.</p>
+                }
+            </div>
+        }
+
+        <div class="actions">
+            @if (_invoice.Status == "Issued")
+            {
+                <button @onclick="PayAsync" disabled="@_busy">Mark paid</button>
+            }
+            @if (_invoice.Status is "Draft" or "Issued")
+            {
+                <button class="danger" @onclick="VoidAsync" disabled="@_busy">Void</button>
+            }
+        </div>
+    </AuthorizeView>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private InvoiceDto? _invoice;
+    private string? _error;
+    private string? _actionError;
+    private bool _busy;
+    private string _newLineDescription = string.Empty;
+    private decimal _newLineAmount;
+    private DateTime _dueDate = DateTime.UtcNow.Date.AddDays(14);
+
+    protected override Task OnAuthorizedAsync() => LoadAsync();
+
+    // Load errors and action errors are separate fields: LoadAsync resets only its own, so a failed
+    // action's message survives the reload that follows it.
+    private async Task LoadAsync()
+    {
+        _error = null;
+        ApiResult<InvoiceDto> result = await InvoiceApi.GetAsync(Id);
+        if (result.IsSuccess)
+        {
+            _invoice = result.Value;
+        }
+        else
+        {
+            _error = result.Error;
+        }
+    }
+
+    private async Task PayAsync()
+    {
+        _busy = true;
+        ApiResult<bool> result = await InvoiceApi.PayAsync(Id);
+        _actionError = result.IsSuccess ? null : result.Error;
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task VoidAsync()
+    {
+        _busy = true;
+        ApiResult<bool> result = await InvoiceApi.VoidAsync(Id);
+        _actionError = result.IsSuccess ? null : result.Error;
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task AddLineAsync()
+    {
+        _busy = true;
+        ApiResult<bool> result = await InvoiceApi.AddLineAsync(Id, new AddInvoiceLineRequest(_newLineDescription, _newLineAmount));
+        _actionError = result.IsSuccess ? null : result.Error;
+        if (result.IsSuccess)
+        {
+            _newLineDescription = string.Empty;
+            _newLineAmount = 0;
+        }
+
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task IssueAsync()
+    {
+        _busy = true;
+        // The bound DateTime comes back Unspecified from the date input; the API expects a UTC instant.
+        var dueDate = new DateTimeOffset(DateTime.SpecifyKind(_dueDate.Date, DateTimeKind.Utc));
+        ApiResult<bool> result = await InvoiceApi.IssueAsync(Id, new IssueInvoiceRequest(dueDate));
+        _actionError = result.IsSuccess ? null : result.Error;
+        _busy = false;
+        await LoadAsync();
+    }
+}

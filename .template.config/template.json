@@ -1,6 +1,6 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "XTemplate",
+  "author": "Trellis",
   "classifications": [
     "Web",
     "Clean Architecture",
@@ -8,10 +8,10 @@
     "Aspire",
     "API"
   ],
-  "identity": "XTemplate.Solution.CSharp",
-  "name": "XTemplate Clean Architecture Solution",
-  "shortName": "xtemplate",
-  "sourceName": "XTemplate",
+  "identity": "Trellis.Solution.CSharp",
+  "name": "Trellis Clean Architecture Solution",
+  "shortName": "trellis",
+  "sourceName": "Trellis",
   "preferNameDirectory": true,
   "constraints": {
     "sdk": {
@@ -71,14 +71,14 @@
       "type": "derived",
       "valueSource": "name",
       "valueTransform": "aspireProjectForm",
-      "replaces": "XTemplate_",
+      "replaces": "Trellis_",
       "description": "Aspire generates Projects.<AssemblyName with '.' replaced by '_'>. Without this, a dotted name like Acme.Shop would emit Projects.Acme.Shop_Api, which does not exist."
     },
     "aspireResourcePrefix": {
       "type": "derived",
       "valueSource": "name",
       "valueTransform": "aspireResourceForm",
-      "replaces": "xtemplate-",
+      "replaces": "trellis-",
       "description": "Aspire resource names allow only letters, digits and hyphens, so dots in the project name must become hyphens."
     }
   },
@@ -122,17 +122,17 @@
         {
           "condition": "(!UseMultitenancy)",
           "exclude": [
-            "src/Core/XTemplate.Application/Abstractions/ITenantContext.cs",
-            "src/Core/XTemplate.Application/Abstractions/AmbientTenant.cs",
-            "src/Presentation/Api/XTemplate.Api.Common/Http/TenantContext.cs",
-            "src/Infrastructure/XTemplate.Persistence/Interceptors/TenantInterceptor.cs",
-            "src/Infrastructure/XTemplate.Persistence/SystemTenantContext.cs"
+            "src/Core/Trellis.Application/Abstractions/ITenantContext.cs",
+            "src/Core/Trellis.Application/Abstractions/AmbientTenant.cs",
+            "src/Presentation/Api/Trellis.Api.Common/Http/TenantContext.cs",
+            "src/Infrastructure/Trellis.Persistence/Interceptors/TenantInterceptor.cs",
+            "src/Infrastructure/Trellis.Persistence/SystemTenantContext.cs"
           ]
         },
         {
           "condition": "(!IncludeUiTests || !IncludeUI)",
           "exclude": [
-            "tests/XTemplate.UiTests/**"
+            "tests/Trellis.UiTests/**"
           ]
         }
       ]
@@ -140,7 +140,7 @@
   ],
   "primaryOutputs": [
     {
-      "path": "XTemplate.slnx"
+      "path": "Trellis.slnx"
     }
   ],
   "postActions": [
@@ -181,7 +181,7 @@
           "text": "No local .NET SDK? Build the SDK image once — the exact docker build one-liner is at the top of scripts/dotnet.sh — then verify with: ./scripts/dotnet.sh test <YourSolution>.slnx"
         },
         {
-          "text": "Run it (local SDK): aspire run  —  seeded admin admin@xtemplate.dev / Admin123!"
+          "text": "Run it (local SDK): aspire run  —  seeded admin admin@trellis.dev / Admin123!"
         },
         {
           "text": "Enabled --use-multitenancy? Regenerate the initial migration first (see docs/development.md)."

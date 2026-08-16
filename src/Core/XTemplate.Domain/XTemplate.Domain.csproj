@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <!-- The domain is deliberately dependency-free: BCL + SharedKernel only. -->
-
-  <ItemGroup>
-    <ProjectReference Include="..\XTemplate.SharedKernel\XTemplate.SharedKernel.csproj" />
-  </ItemGroup>
-
-</Project>

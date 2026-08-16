@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="_content/Trellis.UI.Common/trellis-ui.css" />
+    <link rel="icon" href="data:," />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+<body>
+    @* The host applies interactivity; UI.Common stays render-mode-agnostic (ADR-0015).
+       Without this, AddInteractiveServerRenderMode() only *enables* the mode and every
+       page renders as static SSR — EditForm handlers never fire. *@
+    <Routes @rendermode="InteractiveServer" />
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

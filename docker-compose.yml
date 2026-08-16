@@ -12,7 +12,7 @@ services:
     # not survive a major-version bump.
     image: postgres:18
     environment:
-      POSTGRES_DB: xtemplate
+      POSTGRES_DB: trellis
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     # 5433, not 5432: a native PostgreSQL install commonly owns 5432, and a port
@@ -24,9 +24,9 @@ services:
       # postgres:18+ stores data in a major-version subdirectory, so the mount goes
       # at /var/lib/postgresql (NOT .../data — that errors out on startup).
       # See https://github.com/docker-library/postgres/pull/1259
-      - xtemplate-pgdata:/var/lib/postgresql
+      - trellis-pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d xtemplate"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d trellis"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -43,4 +43,4 @@ services:
       retries: 20
 
 volumes:
-  xtemplate-pgdata:
+  trellis-pgdata:

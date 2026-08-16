@@ -31,6 +31,6 @@ jobs:
           languages: csharp
           build-mode: manual
       - name: Build
-        run: dotnet build XTemplate.slnx -c Release
+        run: dotnet build Trellis.slnx -c Release
       - name: Analyze
         uses: github/codeql-action/analyze@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3

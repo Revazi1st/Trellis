@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\tools\Trellis.AppHost\Trellis.AppHost.csproj" />
+    <!-- Aliased: both the AppHost and the Api define a top-level Program; the in-process factory needs the Api's. -->
+    <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api\Trellis.Api.csproj" Aliases="apihost" />
+    <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api.Contracts\Trellis.Api.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Testing" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+</Project>

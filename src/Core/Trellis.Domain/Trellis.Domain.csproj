@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The domain is deliberately dependency-free: BCL + SharedKernel only. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Trellis.SharedKernel\Trellis.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

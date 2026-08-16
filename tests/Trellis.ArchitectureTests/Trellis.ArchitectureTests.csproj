@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Core\Trellis.SharedKernel\Trellis.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\src\Core\Trellis.Domain\Trellis.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Core\Trellis.Application\Trellis.Application.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\Trellis.Infrastructure\Trellis.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\Trellis.Persistence\Trellis.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api.Contracts\Trellis.Api.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api.Common\Trellis.Api.Common.csproj" />
+    <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api\Trellis.Api.csproj" />
+    <!--#if (IncludeUI) -->
+    <ProjectReference Include="..\..\src\Presentation\UI\Trellis.UI.Common\Trellis.UI.Common.csproj" />
+    <!--#endif -->
+  </ItemGroup>
+
+  <!--#if (IncludeUI) -->
+  <PropertyGroup>
+    <!-- Defines IncludeUI for the template SOURCE so the UI fitness tests compile here.
+         Removed at 'dotnet new' time when the UI is excluded. -->
+    <DefineConstants>$(DefineConstants);IncludeUI</DefineConstants>
+  </PropertyGroup>
+  <!--#endif -->
+
+  <ItemGroup>
+    <PackageReference Include="NetArchTest.eNhancedEdition" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+</Project>

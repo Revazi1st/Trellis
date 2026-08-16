@@ -3,10 +3,10 @@ name: Template CI
 on:
   push:
     branches: [main]
-    paths: [".template.config/**", "eng/**", "XTemplate.slnx", ".github/workflows/template-ci.yml"]
+    paths: [".template.config/**", "eng/**", "Trellis.slnx", ".github/workflows/template-ci.yml"]
   pull_request:
     branches: [main]
-    paths: [".template.config/**", "eng/**", "XTemplate.slnx"]
+    paths: [".template.config/**", "eng/**", "Trellis.slnx"]
   workflow_dispatch:
 
 permissions:
@@ -53,7 +53,7 @@ jobs:
       - name: Instantiate
         # --allow-scripts yes: the chmod post-action otherwise prompts, and on a non-TTY
         # dotnet new loops forever on the unanswerable prompt.
-        run: dotnet new xtemplate -n "${{ matrix.out }}" -o ../generated --allow-scripts yes ${{ matrix.args }}
+        run: dotnet new trellis -n "${{ matrix.out }}" -o ../generated --allow-scripts yes ${{ matrix.args }}
 
       - name: Regenerate the initial migration
         if: ${{ matrix.test }}
@@ -91,13 +91,13 @@ jobs:
           ./scripts/check-template-toggles.sh
 
       - name: Pack
-        run: dotnet pack eng/XTemplate.TemplatePack/XTemplate.TemplatePack.csproj -o ./nupkg
+        run: dotnet pack eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj -o ./nupkg
       # The `instantiate` job validates the SOURCE tree (template.json's exclude list); real users
       # install the .nupkg, whose content set comes from the pack csproj — verify that artifact too.
       - name: Instantiate & build from the packed template
         run: |
           dotnet new install ./nupkg/*.nupkg
-          dotnet new xtemplate -n Acme.Packed -o "$RUNNER_TEMP/packed" --skip-restore true --allow-scripts yes
+          dotnet new trellis -n Acme.Packed -o "$RUNNER_TEMP/packed" --skip-restore true --allow-scripts yes
           dotnet build "$RUNNER_TEMP"/packed/*.slnx -c Release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

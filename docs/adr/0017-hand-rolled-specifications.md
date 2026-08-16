@@ -9,7 +9,7 @@ The original plan used Ardalis.Specification (MIT, free, well-maintained) for do
 
 ## Decision
 
-`XTemplate.SharedKernel.Specifications.Specification<T>` — ~80 lines: `Where` (AND-composed), `OrderBy`/`OrderByDescending` (chained as ThenBy), `Paginate`, plus `ApplyTo(IQueryable<T>)` (expression-preserving, EF-translatable) and `Evaluate(IEnumerable<T>)` for unit tests.
+`Trellis.SharedKernel.Specifications.Specification<T>` — ~80 lines: `Where` (AND-composed), `OrderBy`/`OrderByDescending` (chained as ThenBy), `Paginate`, plus `ApplyTo(IQueryable<T>)` (expression-preserving, EF-translatable) and `Evaluate(IEnumerable<T>)` for unit tests.
 
 Deliberately absent:
 

@@ -1,20 +1,20 @@
-# XTemplate — Agent Instructions
+# Trellis — Agent Instructions
 
-XTemplate is a rich-DDD, Clean Architecture **.NET 10** solution and a `dotnet new` template (packed from `eng/XTemplate.TemplatePack`). Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
+Trellis is a rich-DDD, Clean Architecture **.NET 10** solution and a `dotnet new` template (packed from `eng/Trellis.TemplatePack`). Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
 
 ## Commands
 
-Build, unit/architecture tests, and Testcontainers integration tests run through the SDK container — **no local .NET SDK needed** (`scripts/dotnet.sh` uses the `xtemplate-sdk:10.0` image from `scripts/sdk-image/`):
+Build, unit/architecture tests, and Testcontainers integration tests run through the SDK container — **no local .NET SDK needed** (`scripts/dotnet.sh` uses the `trellis-sdk:10.0` image from `scripts/sdk-image/`):
 
 ```bash
-docker build -t xtemplate-sdk:10.0 scripts/sdk-image   # one-time
-./scripts/dotnet.sh build XTemplate.slnx
-./scripts/dotnet.sh test  XTemplate.slnx               # Aspire E2E skips unless RUN_ASPIRE_E2E=1
-./scripts/dotnet.sh format XTemplate.slnx
-./scripts/ef.sh migrations add <Name> --project src/Infrastructure/XTemplate.Persistence
+docker build -t trellis-sdk:10.0 scripts/sdk-image   # one-time
+./scripts/dotnet.sh build Trellis.slnx
+./scripts/dotnet.sh test  Trellis.slnx               # Aspire E2E skips unless RUN_ASPIRE_E2E=1
+./scripts/dotnet.sh format Trellis.slnx
+./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence
 ```
 
-**Aspire orchestration needs a real host, not the container** (ADR-0008): `aspire run` and the `Aspire.Hosting.Testing` E2E test need a local .NET 10 SDK or CI. `aspire run` brings up postgres + migrations + api + web. Seeded admin: `admin@xtemplate.dev` / `Admin123!`.
+**Aspire orchestration needs a real host, not the container** (ADR-0008): `aspire run` and the `Aspire.Hosting.Testing` E2E test need a local .NET 10 SDK or CI. `aspire run` brings up postgres + migrations + api + web. Seeded admin: `admin@trellis.dev` / `Admin123!`.
 
 ## Dependency flow (architecture-test enforced)
 
@@ -30,7 +30,7 @@ Dependencies point inward. **Infrastructure and Persistence are peers — never 
 - **CQRS, no mediator**: hand-rolled `ICommand(Handler)`/`IQuery(Handler)` + decorator pipeline (validation→logging→unit-of-work). Endpoints inject handlers directly.
 - **Result, not exceptions**: return `Result`/`Result<T>`; the API maps errors to RFC 9457 problem details. Exceptions are for the truly unexpected only.
 - **Rich domain**: aggregates via `static Create(...) → Result<T>` + private EF ctor; value objects = sealed records mapped as EF complex types; hand-rolled strongly-typed IDs; domain events dispatched by a SaveChanges interceptor.
-- **Reference feature**: `src/Core/XTemplate.Application/Features/Invoices` + `docs/features/invoices.md`. Copy it (use the `add-feature` skill).
+- **Reference feature**: `src/Core/Trellis.Application/Features/Invoices` + `docs/features/invoices.md`. Copy it (use the `add-feature` skill).
 
 Layer-specific conventions load automatically from `.claude/rules/` when you touch matching files. The "why" behind decisions is in `docs/adr/` — read `docs/INDEX.md` to find them.
 

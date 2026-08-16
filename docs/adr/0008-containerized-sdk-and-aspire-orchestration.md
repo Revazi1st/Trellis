@@ -11,9 +11,9 @@ Aspire is different. Its orchestrator (DCP) runs *project* resources (api, web, 
 
 ## Decision
 
-- **Build, unit tests, architecture tests, and Testcontainers integration tests** run in the SDK container — the default `scripts/dotnet.sh` path. To give Aspire's DCP a container runtime to talk to, the wrapper uses a thin local image (`scripts/sdk-image/`, tag `xtemplate-sdk:10.0`) that adds the `docker` CLI to the base SDK image.
+- **Build, unit tests, architecture tests, and Testcontainers integration tests** run in the SDK container — the default `scripts/dotnet.sh` path. To give Aspire's DCP a container runtime to talk to, the wrapper uses a thin local image (`scripts/sdk-image/`, tag `trellis-sdk:10.0`) that adds the `docker` CLI to the base SDK image.
 - **Aspire orchestration** (`aspire run`, the AppHost F5 loop, `aspire publish/deploy`) and the **`Aspire.Hosting.Testing` E2E test** require a real host environment — a **local .NET 10 SDK** or **CI**. They are not supported from inside the SDK container.
-- The E2E test (`XTemplate.ApiTests.InvoiceApiFlowTests`) is **opt-in**: it runs only when `RUN_ASPIRE_E2E=1`, and otherwise skips with an explanatory message, so the containerized `dotnet test` stays green. CI sets `RUN_ASPIRE_E2E=1` (GitHub Actions ubuntu runners have both a local SDK and a host Docker daemon — the natively supported layout). `XTemplate.ApiTests` also carries fast contract-serialization tests that always run, so the assembly never reports "zero tests ran".
+- The E2E test (`Trellis.ApiTests.InvoiceApiFlowTests`) is **opt-in**: it runs only when `RUN_ASPIRE_E2E=1`, and otherwise skips with an explanatory message, so the containerized `dotnet test` stays green. CI sets `RUN_ASPIRE_E2E=1` (GitHub Actions ubuntu runners have both a local SDK and a host Docker daemon — the natively supported layout). `Trellis.ApiTests` also carries fast contract-serialization tests that always run, so the assembly never reports "zero tests ran".
 
 ## Consequences
 

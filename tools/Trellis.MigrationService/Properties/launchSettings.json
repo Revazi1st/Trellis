@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "migrate": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "--ConnectionStrings:trellis-db=Host=localhost;Port=5433;Database=trellis;Username=postgres;Password=postgres",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "migrate (dev container)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "--ConnectionStrings:trellis-db=Host=host.docker.internal;Port=5433;Database=trellis;Username=postgres;Password=postgres",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

@@ -9,7 +9,7 @@ The template needs authentication and authorization that is self-contained (no e
 
 ## Decision
 
-**Identity lives in Persistence.** `ApplicationUser : IdentityUser<Guid>`, `AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>`, the `IIdentityService` implementation, and the rotating `RefreshToken` store all sit in `XTemplate.Persistence/Identity`. Identity is a persistence-backed subsystem (it owns tables and queries), so this keeps Infrastructure and Persistence cleanly parallel — the strongest justification for the split.
+**Identity lives in Persistence.** `ApplicationUser : IdentityUser<Guid>`, `AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>`, the `IIdentityService` implementation, and the rotating `RefreshToken` store all sit in `Trellis.Persistence/Identity`. Identity is a persistence-backed subsystem (it owns tables and queries), so this keeps Infrastructure and Persistence cleanly parallel — the strongest justification for the split.
 
 **Token *minting* lives in Infrastructure.** `JwtTokenProvider` (`ITokenProvider`) turns an `AuthenticatedUser` into a signed JWT and opaque refresh token — pure token concerns, no persistence — matching the peer arrangement.
 

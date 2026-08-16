@@ -1,6 +1,6 @@
-# Contributing to XTemplate
+# Contributing to Trellis
 
-Thanks for helping improve XTemplate. This is both a working solution and a
+Thanks for helping improve Trellis. This is both a working solution and a
 `dotnet new` template, so changes should keep the reference solution green and
 the template instantiable.
 
@@ -9,10 +9,10 @@ the template instantiable.
 No local .NET SDK is required — everything runs through the SDK container:
 
 ```bash
-docker build -t xtemplate-sdk:10.0 scripts/sdk-image   # one-time
-./scripts/dotnet.sh build XTemplate.slnx
-./scripts/dotnet.sh test  XTemplate.slnx
-./scripts/dotnet.sh format XTemplate.slnx
+docker build -t trellis-sdk:10.0 scripts/sdk-image   # one-time
+./scripts/dotnet.sh build Trellis.slnx
+./scripts/dotnet.sh test  Trellis.slnx
+./scripts/dotnet.sh format Trellis.slnx
 ```
 
 With a local .NET 10 SDK you can also `aspire run` the full app. See
@@ -20,7 +20,7 @@ With a local .NET 10 SDK you can also `aspire run` the full app. See
 
 ## Before opening a PR
 
-- `dotnet build XTemplate.slnx -warnaserror` and `dotnet test` are green.
+- `dotnet build Trellis.slnx -warnaserror` and `dotnet test` are green.
 - `dotnet format --verify-no-changes` is clean.
 - New/changed features update their doc under `docs/features/` (the CI docs-drift
   check enforces this) and, if you made a load-bearing decision, add an ADR

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Trellis.UI.Common\Trellis.UI.Common.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Trellis.ServiceDefaults\Trellis.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <!--#if (UseSerilog) -->
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+  <!--#endif -->
+
+</Project>

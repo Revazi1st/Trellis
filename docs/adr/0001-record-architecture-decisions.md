@@ -5,7 +5,7 @@
 
 ## Context
 
-XTemplate is both a working solution and a template others will instantiate. Its structural choices — some of which deliberately diverge from mainstream .NET templates — need durable, discoverable rationale. Short, dated, immutable decision records are also excellent context for AI agents, which read them to answer "why is it built this way?" without human steering.
+Trellis is both a working solution and a template others will instantiate. Its structural choices — some of which deliberately diverge from mainstream .NET templates — need durable, discoverable rationale. Short, dated, immutable decision records are also excellent context for AI agents, which read them to answer "why is it built this way?" without human steering.
 
 ## Decision
 

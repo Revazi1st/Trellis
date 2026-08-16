@@ -8,7 +8,7 @@
 One-time: build the SDK image (base SDK + docker CLI, needed by Testcontainers/Aspire):
 
 ```bash
-docker build -t xtemplate-sdk:10.0 scripts/sdk-image
+docker build -t trellis-sdk:10.0 scripts/sdk-image
 ```
 
 ## IDE: open in the dev container (recommended)
@@ -22,7 +22,7 @@ SDK image the scripts use.
 
 You then get full IntelliSense, build, debug, and test in the IDE, while nothing is installed on the
 host. The container mounts the Docker socket, so Testcontainers integration tests and the Aspire
-orchestrator work from inside it too, and it shares the `xtemplate-nuget` package volume with
+orchestrator work from inside it too, and it shares the `trellis-nuget` package volume with
 `./scripts/dotnet.sh` (same `/workspace` path, so build output stays valid across both).
 
 > Without the dev container the IDE will show unresolved-type errors for the whole BCL. That is
@@ -31,10 +31,10 @@ orchestrator work from inside it too, and it shares the `xtemplate-nuget` packag
 ## Everyday commands
 
 ```bash
-./scripts/dotnet.sh build XTemplate.slnx            # build
-./scripts/dotnet.sh test XTemplate.slnx             # all tests (Aspire E2E skips unless RUN_ASPIRE_E2E=1)
-./scripts/dotnet.sh format XTemplate.slnx           # apply formatting
-./scripts/ef.sh migrations add <Name> --project src/Infrastructure/XTemplate.Persistence
+./scripts/dotnet.sh build Trellis.slnx            # build
+./scripts/dotnet.sh test Trellis.slnx             # all tests (Aspire E2E skips unless RUN_ASPIRE_E2E=1)
+./scripts/dotnet.sh format Trellis.slnx           # apply formatting
+./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence
 ```
 
 ## Secrets
@@ -45,7 +45,7 @@ to use your own, set a user secret (the API csproj has a `UserSecretsId`):
 
 ```bash
 dotnet user-secrets set "Authentication:SigningKey" "<random 32+ chars>" \
-    --project src/Presentation/Api/XTemplate.Api
+    --project src/Presentation/Api/Trellis.Api
 ```
 
 Run it where the app runs (dev container or local SDK) — user secrets live under that
@@ -55,7 +55,7 @@ environment/secret store (see [deployment.md](deployment.md)).
 
 ## Running the app
 
-Seeded admin for every option below: `admin@xtemplate.dev` / `Admin123!`.
+Seeded admin for every option below: `admin@trellis.dev` / `Admin123!`.
 
 ### From the IDE, in the dev container (no local SDK)
 
@@ -70,9 +70,9 @@ docker compose up -d          # PostgreSQL on host port 5433
 Then in Rider/VS Code, using the **`http (dev container)`** launch profiles — they point at
 `host.docker.internal:5433`, because inside the dev container `localhost` is the container itself:
 
-1. Run **XTemplate.MigrationService** (profile `migrate (dev container)`) once — applies migrations and seeds.
-2. Run **XTemplate.Api** (profile `http (dev container)`) → <http://localhost:5171>, Scalar at `/scalar/v1`.
-3. Run **XTemplate.UI.Web** (profile `http (dev container)`) → <http://localhost:5170>.
+1. Run **Trellis.MigrationService** (profile `migrate (dev container)`) once — applies migrations and seeds.
+2. Run **Trellis.Api** (profile `http (dev container)`) → <http://localhost:5171>, Scalar at `/scalar/v1`.
+3. Run **Trellis.UI.Web** (profile `http (dev container)`) → <http://localhost:5170>.
 
 **Any run configuration works**, because `devcontainer.json` sets `ASPNETCORE_ENVIRONMENT` and the
 connection string via `containerEnv` — every process in the container inherits them. That matters
@@ -80,11 +80,11 @@ because Rider generates *two* configurations per project and they look almost id
 
 | Configuration | Type | Port |
 |---|---|---|
-| `XTemplate.Api: http (dev container)` | .NET Launch Settings Profile | 5171 (5170 for the UI) |
-| `XTemplate.Api` | .NET Project — **ignores `launchSettings.json` entirely** | 8080 (the SDK image default) |
+| `Trellis.Api: http (dev container)` | .NET Launch Settings Profile | 5171 (5170 for the UI) |
+| `Trellis.Api` | .NET Project — **ignores `launchSettings.json` entirely** | 8080 (the SDK image default) |
 
 The bare one runs the built binary with no arguments and none of the profile's environment, so
-before the `containerEnv` fix it died with `Connection string 'xtemplate-db' is not configured`.
+before the `containerEnv` fix it died with `Connection string 'trellis-db' is not configured`.
 Prefer the profile configurations: only they give the API and the UI *distinct* ports.
 
 Ports reach the host browser because Rider forwards them (the client binds `127.0.0.1:<port>`) —
@@ -92,7 +92,7 @@ it forwards what `forwardPorts` declares, which is why 8080 is listed too. Never
 `docker -p` would bind the same host ports and collide with that forwarder.
 
 > **Two gotchas worth knowing.** The connection string is also passed as a *command-line argument*
-> in the profiles, because the env form `ConnectionStrings__xtemplate-db` contains a dash — not a
+> in the profiles, because the env form `ConnectionStrings__trellis-db` contains a dash — not a
 > valid POSIX shell identifier — so `sh`-wrapped launchers silently drop it. And
 > `appsettings.Development.json` points at `host.docker.internal`, with the host `http`/`https`
 > profiles overriding back to `localhost`.
@@ -120,19 +120,19 @@ Generate with `--use-multitenancy` to add the tenant seam: `ITenantContext` (res
 Because this adds a column, **regenerate the initial migration** in the generated project:
 
 ```bash
-./scripts/ef.sh migrations remove --project src/Infrastructure/XTemplate.Persistence
-./scripts/ef.sh migrations add InitialCreate --project src/Infrastructure/XTemplate.Persistence
+./scripts/ef.sh migrations remove --project src/Infrastructure/Trellis.Persistence
+./scripts/ef.sh migrations add InitialCreate --project src/Infrastructure/Trellis.Persistence
 ```
 
 ## UI tests (optional)
 
-Generate with `--include-ui-tests` to add `tests/XTemplate.UiTests` (Playwright). The project always
+Generate with `--include-ui-tests` to add `tests/Trellis.UiTests` (Playwright). The project always
 builds, but the browser tests are **opt-in at run time** — they need real browsers and a running app:
 
 ```bash
 aspire run                                    # in another terminal
-pwsh artifacts/bin/XTemplate.UiTests/debug/playwright.ps1 install chromium
-RUN_UI_TESTS=1 dotnet test tests/XTemplate.UiTests
+pwsh artifacts/bin/Trellis.UiTests/debug/playwright.ps1 install chromium
+RUN_UI_TESTS=1 dotnet test tests/Trellis.UiTests
 ```
 
 Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-free

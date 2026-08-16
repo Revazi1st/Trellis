@@ -4,7 +4,7 @@
 
 ## Checklist
 
-- [ ] `dotnet build XTemplate.slnx -warnaserror` and `dotnet test` are green
+- [ ] `dotnet build Trellis.slnx -warnaserror` and `dotnet test` are green
 - [ ] `dotnet format --verify-no-changes` is clean
 - [ ] Feature docs updated under `docs/features/` (if behavior changed)
 - [ ] An ADR added under `docs/adr/` (if a load-bearing decision was made)

@@ -1,6 +1,6 @@
 ---
 description: Rich-DDD conventions for the Domain layer
-paths: ["src/Core/XTemplate.Domain/**/*.cs"]
+paths: ["src/Core/Trellis.Domain/**/*.cs"]
 ---
 
 # Domain layer rules
@@ -15,4 +15,4 @@ The domain is pure: **BCL + SharedKernel only** — never reference EF Core, ASP
 - **Domain events** are `sealed record`s with **`[DomainEventName("feature.event.vN")]`** — the stable wire name stored with outbox rows (renames must never orphan in-flight messages). Members must be primitives, `Guid`, `DateTimeOffset`, or strongly-typed IDs: the serialization fitness test (`DomainEventSerializationTests`) round-trips every event through the outbox serializer and fails on anything exotic.
 - **Specifications** live here: one `static` factory per query shape on a `{Aggregate}Specs` class, returning `Specification<T>`.
 
-Reference: `Invoice` (`src/Core/XTemplate.Domain/Invoices/`). Copy its shape. See `docs/features/invoices.md`.
+Reference: `Invoice` (`src/Core/Trellis.Domain/Invoices/`). Copy its shape. See `docs/features/invoices.md`.

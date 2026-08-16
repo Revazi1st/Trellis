@@ -1,6 +1,6 @@
 ---
 name: add-feature
-description: Scaffold a new vertical-slice feature (aggregate or use case) by copying the Invoices reference slice end-to-end. Use when adding a new domain concept or use case to XTemplate.
+description: Scaffold a new vertical-slice feature (aggregate or use case) by copying the Invoices reference slice end-to-end. Use when adding a new domain concept or use case to Trellis.
 disable-model-invocation: false
 ---
 
@@ -22,6 +22,6 @@ The `Invoice` slice is the canonical pattern. To add a feature, mirror it across
 Also add: the aggregate + value objects + strongly-typed ID(s) + events + `{Aggregate}Errors` + `{Aggregate}Specs` in `Domain/{Feature}/`; an `IEntityTypeConfiguration<T>` + repository + `ConfigureConventions` ID line in Persistence; then `./scripts/ef.sh migrations add Add{Feature}` (see the `add-migration` skill); Domain.UnitTests + IntegrationTests.
 
 ## Finish
-- `./scripts/dotnet.sh build XTemplate.slnx && ./scripts/dotnet.sh test XTemplate.slnx`
+- `./scripts/dotnet.sh build Trellis.slnx && ./scripts/dotnet.sh test Trellis.slnx`
 - Add a permission constant to `Permissions` if the feature is protected, and grant it to a role in the MigrationService seed.
 - **Update `docs/features/{feature}.md`** (copy the invoices doc's shape).

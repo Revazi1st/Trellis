@@ -11,10 +11,10 @@ Invoices is scaffolding — every real project deletes it. Two rules first:
 - **Add your own first feature before removing this one** (`add-feature` skill). Several infrastructure tests use `Invoice` as their fixture aggregate; port them to your aggregate instead of deleting the coverage.
 - **Delete from the Domain outward.** Removing `Domain/Invoices` first turns every consumer into a compile error, so the compiler dictates each following step. Starting at the UI leaves dead inner code compiling silently.
 
-After each step `./scripts/dotnet.sh build XTemplate.slnx` — the error frontier should move outward; nothing disappears quietly.
+After each step `./scripts/dotnet.sh build Trellis.slnx` — the error frontier should move outward; nothing disappears quietly.
 
 ## 1. Domain
-Delete `src/Core/XTemplate.Domain/Invoices/` (aggregate, line entity, IDs, events, errors, specs, `IInvoiceRepository`). `Domain/Common` is shared, not invoice-owned: `EmailAddress` is used by Auth (`RegisterCommandValidator`) — keep it. `Money` + `Currency` have no other consumer today — delete them (and `MoneyTests`) unless your features want them.
+Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events, errors, specs, `IInvoiceRepository`). `Domain/Common` is shared, not invoice-owned: `EmailAddress` is used by Auth (`RegisterCommandValidator`) — keep it. `Money` + `Currency` have no other consumer today — delete them (and `MoneyTests`) unless your features want them.
 
 ## 2. Application
 - Delete `Features/Invoices/` (7 use-case slices + `EventHandlers/` + `InvoiceResponse.cs`) and `Observability/InvoiceMetrics.cs`.
@@ -34,7 +34,7 @@ Delete `src/Core/XTemplate.Domain/Invoices/` (aggregate, line entity, IDs, event
 
 ## 5. UI (if included)
 - Delete `Pages/Invoices.razor`, `Pages/InvoiceDetail.razor`, `Pages/CreateInvoice.razor`, `Services/IInvoiceApiClient.cs`, `Services/InvoiceApiClient.cs`.
-- `DependencyInjection.cs`: the `IInvoiceApiClient` registration. `Layout/MainLayout.razor`: the Invoices nav link. `_Imports.razor`: `@using XTemplate.Api.Contracts.Invoices`.
+- `DependencyInjection.cs`: the `IInvoiceApiClient` registration. `Layout/MainLayout.razor`: the Invoices nav link. `_Imports.razor`: `@using Trellis.Api.Contracts.Invoices`.
 - `Invoices.razor` owned the home route `/` — give the UI a new home page or login redirects into a 404.
 
 ## 6. MigrationService
@@ -49,9 +49,9 @@ Delete `SeedSampleDataAsync` and its call in `MigrationWorker.cs` (plus dead usi
 Delete `docs/features/invoices.md`; fix the mentions of the slice as the reference pattern in `AGENTS.md`, `.claude/rules/` and `.claude/skills/add-feature/`. A final `grep -ri invoice` catches stragglers (XML doc comments citing it as an example may simply be reworded).
 
 ## 9. Migration + finish
-Delete `src/Infrastructure/XTemplate.Persistence/Migrations/` and regenerate the single initial migration (pre-release convention, see `add-migration`):
+Delete `src/Infrastructure/Trellis.Persistence/Migrations/` and regenerate the single initial migration (pre-release convention, see `add-migration`):
 ```bash
-./scripts/ef.sh migrations add InitialCreate --project src/Infrastructure/XTemplate.Persistence
-./scripts/dotnet.sh build XTemplate.slnx && ./scripts/dotnet.sh test XTemplate.slnx
+./scripts/ef.sh migrations add InitialCreate --project src/Infrastructure/Trellis.Persistence
+./scripts/dotnet.sh build Trellis.slnx && ./scripts/dotnet.sh test Trellis.slnx
 ```
 The migration-drift test (`HasPendingModelChanges`) fails if the snapshot no longer matches the model.

@@ -1,6 +1,6 @@
 # Upgrading a generated project
 
-`dotnet new xtemplate` takes a snapshot — nothing updates a generated project afterwards.
+`dotnet new trellis` takes a snapshot — nothing updates a generated project afterwards.
 Adopting a later template version is a regenerate-and-diff exercise, not a package bump.
 
 ## 1. Read the changelog
@@ -12,8 +12,8 @@ idempotency) are called out there, and some entries carry migration notes of the
 ## 2. Regenerate into a scratch directory and diff
 
 ```bash
-dotnet new install XTemplate.Templates::<new-version>
-dotnet new xtemplate -n YourProject -o /tmp/yourproject-next \
+dotnet new install Trellis.Templates::<new-version>
+dotnet new trellis -n YourProject -o /tmp/yourproject-next \
     --include-ui true --use-redis false …   # the SAME name and options you generated with
 git diff --no-index . /tmp/yourproject-next
 ```
@@ -43,9 +43,9 @@ while upgrading (`--use-multitenancy` adds a `TenantId` column):
 - **No deployed database yet**: keep the pre-release convention — regenerate the initial
   migration (`./scripts/ef.sh migrations remove` + `migrations add InitialCreate`).
 - **Deployed database**: add a new migration on top
-  (`./scripts/ef.sh migrations add <Name> --project src/Infrastructure/XTemplate.Persistence`)
+  (`./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence`)
   and never regenerate `InitialCreate` — the database's `__EFMigrationsHistory` already records
   the old one, and a rewritten history cannot be applied to it.
 
-Either way, finish with `./scripts/dotnet.sh test XTemplate.slnx` — the migration-drift guard
+Either way, finish with `./scripts/dotnet.sh test Trellis.slnx` — the migration-drift guard
 (`HasPendingModelChanges`) fails if the model and the migrations disagree.

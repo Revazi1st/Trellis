@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please **do not** open a public issue for security vulnerabilities. Instead, use
-[GitHub's private vulnerability reporting](https://github.com/your-org/xtemplate/security/advisories/new)
+[GitHub's private vulnerability reporting](https://github.com/Revazi1st/trellis/security/advisories/new)
 (Security → Report a vulnerability), or email the maintainers.
 
 We aim to acknowledge reports within a few business days and to ship a fix or
@@ -11,7 +11,7 @@ mitigation promptly, crediting reporters who wish to be named.
 
 ## Scope & hardening notes
 
-XTemplate ships auth and infrastructure defaults intended as a **starting point**;
+Trellis ships auth and infrastructure defaults intended as a **starting point**;
 review these before production:
 
 - **JWT signing key** — `Authentication:SigningKey` must be a strong secret supplied

@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
-  "name": "XTemplate — .NET 10 (Docker-only)",
+  "name": "Trellis — .NET 10 (Docker-only)",
 
   // Reuses the same image the CLI scripts use: .NET SDK + docker CLI.
   // Keeping one image means the IDE and ./scripts/dotnet.sh behave identically.
@@ -18,18 +18,18 @@
     // Testcontainers integration tests and the Aspire orchestrator start sibling containers.
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     // Share the NuGet cache with ./scripts/dotnet.sh — nothing is cached on the host.
-    "source=xtemplate-nuget,target=/root/.nuget/packages,type=volume"
+    "source=trellis-nuget,target=/root/.nuget/packages,type=volume"
   ],
 
   // Container-wide so EVERY launch works — including Rider's bare ".NET Project"
   // run configuration, which executes the built binary with no arguments and none
   // of launchSettings.json's environment. Inheriting from the container is the only
   // channel that reaches it. No shell is involved (the IDE backend spawns the
-  // process directly), so the dash in "xtemplate-db" is safe here.
+  // process directly), so the dash in "trellis-db" is safe here.
   "containerEnv": {
     "ASPNETCORE_ENVIRONMENT": "Development",
     "DOTNET_ENVIRONMENT": "Development",
-    "ConnectionStrings__xtemplate-db": "Host=host.docker.internal;Port=5433;Database=xtemplate;Username=postgres;Password=postgres",
+    "ConnectionStrings__trellis-db": "Host=host.docker.internal;Port=5433;Database=trellis;Username=postgres;Password=postgres",
     "Services__api__http__0": "http://localhost:5171",
     "TESTCONTAINERS_HOST_OVERRIDE": "host.docker.internal",
     "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
@@ -41,7 +41,7 @@
   "remoteEnv": {
     "ASPNETCORE_ENVIRONMENT": "Development",
     "DOTNET_ENVIRONMENT": "Development",
-    "ConnectionStrings__xtemplate-db": "Host=host.docker.internal;Port=5433;Database=xtemplate;Username=postgres;Password=postgres",
+    "ConnectionStrings__trellis-db": "Host=host.docker.internal;Port=5433;Database=trellis;Username=postgres;Password=postgres",
     "Services__api__http__0": "http://localhost:5171"
   },
 
@@ -66,5 +66,5 @@
   },
 
   // Warm the cache so IntelliSense resolves immediately on first open.
-  "postCreateCommand": "dotnet restore XTemplate.slnx"
+  "postCreateCommand": "dotnet restore Trellis.slnx"
 }

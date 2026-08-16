@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs dotnet-ef inside the SDK container (tool pinned in .config/dotnet-tools.json).
-# Example: ./scripts/ef.sh migrations add AddCustomers --project src/Infrastructure/XTemplate.Persistence
+# Example: ./scripts/ef.sh migrations add AddCustomers --project src/Infrastructure/Trellis.Persistence
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,8 +20,8 @@ fi
 exec "$DOCKER_BIN" run --rm \
   -v "$REPO_ROOT":/workspace \
   -w /workspace \
-  -v xtemplate-nuget:/root/.nuget/packages \
+  -v trellis-nuget:/root/.nuget/packages \
   -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
   -e DOTNET_NOLOGO=1 \
-  "${XT_SDK_IMAGE:-xtemplate-sdk:10.0}" \
+  "${TRELLIS_SDK_IMAGE:-trellis-sdk:10.0}" \
   sh -c 'dotnet tool restore >/dev/null && dotnet dotnet-ef "$@"' ef "$@"

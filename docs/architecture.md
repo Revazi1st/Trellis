@@ -1,8 +1,8 @@
 # Architecture
 
-XTemplate is a rich-DDD, Clean Architecture .NET 10 solution. Projects are grouped by architectural ring; features are vertical slices inside the layers.
+Trellis is a rich-DDD, Clean Architecture .NET 10 solution. Projects are grouped by architectural ring; features are vertical slices inside the layers.
 
-## Dependency flow (enforced by `XTemplate.ArchitectureTests`)
+## Dependency flow (enforced by `Trellis.ArchitectureTests`)
 
 ```
                  ┌─────────────── Core ───────────────┐

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to XTemplate are documented here. The format follows
+All notable changes to Trellis are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -26,7 +26,7 @@ All notable changes to XTemplate are documented here. The format follows
   carry problem bodies instead of empty responses.
 - **Complete UI lifecycle**: add-line + issue controls on the invoice detail page (drafts are no
   longer dead ends) and a Register page.
-- **Template UX**: `dotnet new xtemplate` prints next steps, an SDK-version constraint fails wrong
+- **Template UX**: `dotnet new trellis` prints next steps, an SDK-version constraint fails wrong
   hosts at instantiation instead of first build, maintainer-only workflows (template-ci, release)
   no longer ship into generated repos, and `scripts/check-template-toggles.sh` guards toggle
   wiring in CI.
@@ -39,7 +39,7 @@ All notable changes to XTemplate are documented here. The format follows
 ### Reliability & testing
 - **Outbox, production-shaped**: skip-locked batch claiming (replicas never double-dispatch),
   exponential backoff (30s→4m instead of five retries in 25 seconds), explicit
-  Pending/Processed/DeadLettered status with a critical log + `xtemplate.outbox.dead_lettered`
+  Pending/Processed/DeadLettered status with a critical log + `trellis.outbox.dead_lettered`
   metric (exhausted and unresolvable messages were previously dropped in silence), per-handler
   completion tracking (retries never re-run a handler that succeeded — no double emails or
   double-counted metrics), stable versioned wire names via `[DomainEventName]` (refactoring never
@@ -95,7 +95,7 @@ All notable changes to XTemplate are documented here. The format follows
 - **The packed template misplaced its three extension-less files** (`LICENSE`, `CODEOWNERS`,
   `scripts/sdk-image/Dockerfile` became directories nesting the file), breaking the generated dev
   container. `PackagePath` is now the bare `content` folder, which NuGet expands per-file correctly.
-- **`dotnet new xtemplate` hung forever on non-TTY hosts** — the chmod post-action prompts, and
+- **`dotnet new trellis` hung forever on non-TTY hosts** — the chmod post-action prompts, and
   with no TTY `dotnet new` loops on the unanswerable prompt. CI instantiation passes
   `--allow-scripts yes` (interactive use still gets the normal prompt).
 - **Blazor sessions died after 15 minutes.** The refresh token was stored but never used and `exp`
@@ -130,10 +130,10 @@ All notable changes to XTemplate are documented here. The format follows
   actually building a generated all-options solution end to end.
 - **Template package was unusable.** `dotnet pack` flattened the whole repo into `content/`
   (293 entries, none nested), dropped colliding files (`NU5118`) and omitted
-  `.template.config/`, so `dotnet new install XTemplate.Templates` could not work at all.
+  `.template.config/`, so `dotnet new install Trellis.Templates` could not work at all.
   Packing now preserves the tree via `PackagePath="content\%(RecursiveDir)…"`.
-- **Project names containing a dot produced a solution that did not compile.** `AddXTemplateUi`
-  became `AddAcme.ShopUi`, and Aspire's `Projects.XTemplate_Api` became `Projects.Acme.Shop_Api`.
+- **Project names containing a dot produced a solution that did not compile.** `AddTrellisUi`
+  became `AddAcme.ShopUi`, and Aspire's `Projects.Trellis_Api` became `Projects.Acme.Shop_Api`.
   The DI extension is renamed `AddSharedUi` (name-independent, like every sibling), and derived
   symbols now map the name to Aspire's `_`/`-` forms for project classes and resource names.
 - `.template.config/` no longer ships into generated projects.
@@ -147,9 +147,9 @@ All notable changes to XTemplate are documented here. The format follows
   interceptors, ASP.NET Identity + JWT + permission authorization, HybridCache.
 - Full test pyramid (unit, architecture, integration via Testcontainers, E2E via
   Aspire.Hosting.Testing) and CI (format, warnings-as-errors, docs-drift).
-- `dotnet new xtemplate` templatization with toggles: `IncludeUI`, `UseRedis`, `UseSerilog`,
+- `dotnet new trellis` templatization with toggles: `IncludeUI`, `UseRedis`, `UseSerilog`,
   `UseMultitenancy`, `IncludeUiTests`, `skipRestore`.
 - AI-friendly repo: AGENTS.md/CLAUDE.md, `.claude` rules/agents/skills/hooks,
   `.mcp.json`, dual human/AI docs, 19 ADRs.
 
-[Unreleased]: https://github.com/your-org/xtemplate/commits/main
+[Unreleased]: https://github.com/Revazi1st/trellis/commits/main

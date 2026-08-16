@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Runs the dotnet CLI inside the official .NET 10 SDK container.
-# Use when no local .NET SDK is installed:  ./scripts/dotnet.sh build XTemplate.slnx
-# NuGet packages persist in the named volume 'xtemplate-nuget' across runs.
+# Use when no local .NET SDK is installed:  ./scripts/dotnet.sh build Trellis.slnx
+# NuGet packages persist in the named volume 'trellis-nuget' across runs.
 # The host Docker socket is mounted so Testcontainers-based integration tests can
 # start sibling containers; TESTCONTAINERS_HOST_OVERRIDE points them back at the host.
 # Default image is the local build from scripts/sdk-image (SDK + docker CLI, needed by
-# Aspire orchestration); build it once with:  docker build -t xtemplate-sdk:10.0 scripts/sdk-image
+# Aspire orchestration); build it once with:  docker build -t trellis-sdk:10.0 scripts/sdk-image
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,10 +29,10 @@ fi
 exec "$DOCKER_BIN" run --rm ${TTY_ARGS:+$TTY_ARGS} \
   -v "$REPO_ROOT":/workspace \
   -w /workspace \
-  -v xtemplate-nuget:/root/.nuget/packages \
+  -v trellis-nuget:/root/.nuget/packages \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
   -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
   -e DOTNET_NOLOGO=1 \
-  "${XT_SDK_IMAGE:-xtemplate-sdk:10.0}" \
+  "${TRELLIS_SDK_IMAGE:-trellis-sdk:10.0}" \
   dotnet "$@"
