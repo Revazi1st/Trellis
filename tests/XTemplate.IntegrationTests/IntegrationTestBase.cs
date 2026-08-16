@@ -38,6 +38,9 @@ public abstract class IntegrationTestBase(DatabaseFixture database) : IAsyncLife
         services.AddSingleton<TimeProvider>(Time);
         services.AddSingleton(EmailSender);
         services.AddSingleton<ICurrentUser>(new TestCurrentUser());
+#if (UseMultitenancy)
+        services.AddSingleton<XTemplate.Application.Abstractions.ITenantContext, SystemTenantContext>();
+#endif
         services.AddApplication();
         services.AddPersistence(database.ConnectionString);
 

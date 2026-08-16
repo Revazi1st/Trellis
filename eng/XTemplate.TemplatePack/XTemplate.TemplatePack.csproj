@@ -31,13 +31,18 @@
 
   <ItemGroup>
     <!-- Pack the whole repo (from two levels up) as template content, minus build output and packaging infra.
-         PackagePath with %(RecursiveDir) is REQUIRED: these items live outside the project cone, so
-         ContentTargetFolders cannot derive a relative path and would flatten all 293 files into
+         An explicit PackagePath is REQUIRED: these items live outside the project cone, so
+         ContentTargetFolders cannot derive a relative path and would flatten all files into
          content/ — dropping colliding names (Program.cs, appsettings.json, ...) and losing
-         .template.config/, which makes the package unrecognisable as a template. -->
+         .template.config/, which makes the package unrecognisable as a template.
+         The path must be the bare folder "content": NuGet treats an extension-less PackagePath as a
+         destination FOLDER and appends %(RecursiveDir)%(Filename)%(Extension) itself. Spelling the
+         file name out (content\%(RecursiveDir)%(Filename)%(Extension)) breaks the extension-less
+         files — LICENSE, CODEOWNERS, Dockerfile — whose "file path" is itself extension-less and
+         therefore treated as a folder, nesting them one level deep (content/LICENSE/LICENSE). -->
     <Content Include="..\..\**\*"
              Exclude="..\..\**\bin\**;..\..\**\obj\**;..\..\artifacts\**;..\..\.git\**;..\..\.idea\**;..\..\.vs\**;..\..\eng\**;..\..\**\.template-test\**;..\..\.claude\settings.local.json"
-             PackagePath="content\%(RecursiveDir)%(Filename)%(Extension)" />
+             PackagePath="content" />
     <Compile Remove="**\*" />
   </ItemGroup>
 

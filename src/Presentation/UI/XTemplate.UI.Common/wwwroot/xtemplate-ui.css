@@ -24,6 +24,8 @@ button:disabled { opacity: .6; cursor: default; }
 .summary { display: grid; grid-template-columns: auto 1fr; gap: .25rem 1rem; }
 .summary dt { color: var(--muted); }
 .actions { display: flex; gap: .5rem; margin-top: 1rem; }
+.pager { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; }
+.pager span { color: var(--muted); font-size: .9rem; }
 .error { color: var(--danger); }
 .hint { color: var(--muted); font-size: .85rem; }
 

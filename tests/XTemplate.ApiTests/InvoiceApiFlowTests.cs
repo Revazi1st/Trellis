@@ -5,6 +5,7 @@ using Aspire.Hosting;
 using Aspire.Hosting.Testing;
 using Shouldly;
 using XTemplate.Api.Contracts.Auth;
+using XTemplate.Api.Contracts.Common;
 using XTemplate.Api.Contracts.Invoices;
 using Xunit;
 
@@ -75,11 +76,11 @@ public sealed class InvoiceApiFlowTests
         invoice.Total.ShouldBe(500.00m);
         invoice.Lines.Count.ShouldBe(2);
 
-        // overdue listing includes it (plus the seeded sample)
-        IReadOnlyList<InvoiceDto> overdue =
-            (await client.GetFromJsonAsync<IReadOnlyList<InvoiceDto>>("/api/v1/invoices/overdue", ct))!;
-        overdue.ShouldContain(i => i.Id == id);
-        overdue.ShouldContain(i => i.CustomerName == "Overdue Industries");   // seeded by the migration worker
+        // overdue listing includes it (plus the seeded sample) — the endpoint returns a paged envelope
+        PagedResponse<InvoiceDto> overdue =
+            (await client.GetFromJsonAsync<PagedResponse<InvoiceDto>>("/api/v1/invoices/overdue", ct))!;
+        overdue.Items.ShouldContain(i => i.Id == id);
+        overdue.Items.ShouldContain(i => i.CustomerName == "Overdue Industries");   // seeded by the migration worker
 
         // pay
         (await client.PostAsync($"/api/v1/invoices/{id}/pay", content: null, ct))

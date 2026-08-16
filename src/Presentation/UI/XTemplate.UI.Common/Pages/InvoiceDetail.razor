@@ -15,6 +15,12 @@ else if (_invoice is null)
 else
 {
     <h1>@_invoice.CustomerName</h1>
+
+    @if (_actionError is not null)
+    {
+        <p class="error" role="alert">@_actionError</p>
+    }
+
     <dl class="summary">
         <dt>Status</dt><dd>@_invoice.Status</dd>
         <dt>Email</dt><dd>@_invoice.CustomerEmail</dd>
@@ -52,10 +58,13 @@ else
 
     private InvoiceDto? _invoice;
     private string? _error;
+    private string? _actionError;
     private bool _busy;
 
     protected override Task OnAuthorizedAsync() => LoadAsync();
 
+    // Load errors and action errors are separate fields: LoadAsync resets only its own, so a failed
+    // action's message survives the reload that follows it.
     private async Task LoadAsync()
     {
         _error = null;
@@ -74,7 +83,7 @@ else
     {
         _busy = true;
         ApiResult<bool> result = await InvoiceApi.PayAsync(Id);
-        _error = result.IsSuccess ? null : result.Error;
+        _actionError = result.IsSuccess ? null : result.Error;
         _busy = false;
         await LoadAsync();
     }
@@ -83,7 +92,7 @@ else
     {
         _busy = true;
         ApiResult<bool> result = await InvoiceApi.VoidAsync(Id);
-        _error = result.IsSuccess ? null : result.Error;
+        _actionError = result.IsSuccess ? null : result.Error;
         _busy = false;
         await LoadAsync();
     }

@@ -116,7 +116,8 @@
           "exclude": [
             "src/Core/XTemplate.Application/Abstractions/ITenantContext.cs",
             "src/Presentation/Api/XTemplate.Api.Common/Http/TenantContext.cs",
-            "src/Infrastructure/XTemplate.Persistence/Interceptors/TenantInterceptor.cs"
+            "src/Infrastructure/XTemplate.Persistence/Interceptors/TenantInterceptor.cs",
+            "src/Infrastructure/XTemplate.Persistence/SystemTenantContext.cs"
           ]
         },
         {

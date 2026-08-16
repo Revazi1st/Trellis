@@ -11,16 +11,7 @@ internal static class JwtClaims
 {
     public static IReadOnlyList<Claim> Read(string accessToken)
     {
-        string[] parts = accessToken.Split('.');
-        if (parts.Length != 3)
-        {
-            return [];
-        }
-
-        byte[] payload = Base64UrlDecode(parts[1]);
-        Dictionary<string, JsonElement>? map =
-            JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(payload);
-
+        Dictionary<string, JsonElement>? map = ParsePayload(accessToken);
         if (map is null)
         {
             return [];
@@ -40,6 +31,33 @@ internal static class JwtClaims
         }
 
         return claims;
+    }
+
+    /// <summary>The token's <c>exp</c> claim, or null when absent/unreadable (treat as expired).</summary>
+    public static DateTimeOffset? GetExpiration(string accessToken)
+        => ParsePayload(accessToken) is { } map
+           && map.TryGetValue("exp", out JsonElement exp)
+           && exp.TryGetInt64(out long unixSeconds)
+            ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds)
+            : null;
+
+    private static Dictionary<string, JsonElement>? ParsePayload(string accessToken)
+    {
+        string[] parts = accessToken.Split('.');
+        if (parts.Length != 3)
+        {
+            return null;
+        }
+
+        try
+        {
+            byte[] payload = Base64UrlDecode(parts[1]);
+            return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(payload);
+        }
+        catch (Exception exception) when (exception is FormatException or JsonException)
+        {
+            return null;
+        }
     }
 
     private static byte[] Base64UrlDecode(string input)

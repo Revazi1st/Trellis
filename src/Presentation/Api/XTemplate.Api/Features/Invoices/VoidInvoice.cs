@@ -24,6 +24,7 @@ internal sealed class VoidInvoice : IEndpoint
     private static async Task<Results<NoContent, ProblemHttpResult>> Handle(
         InvoiceId id,
         ICommandHandler<VoidInvoiceCommand> handler,
+        CacheKeys cacheKeys,
         HybridCache cache,
         CancellationToken cancellationToken)
     {
@@ -31,7 +32,7 @@ internal sealed class VoidInvoice : IEndpoint
 
         if (result.IsSuccess)
         {
-            await cache.RemoveAsync(CacheKeys.Invoice(id.Value), cancellationToken);
+            await cache.RemoveAsync(cacheKeys.Invoice(id.Value), cancellationToken);
             return TypedResults.NoContent();
         }
 

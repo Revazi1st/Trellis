@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
+using XTemplate.Api.Common.Caching;
 using XTemplate.Api.Common.Http;
 using XTemplate.Api.Common.OpenApi;
 using XTemplate.Application.Abstractions;
@@ -17,6 +18,8 @@ public static class DependencyInjection
 #if (UseMultitenancy)
         services.AddScoped<XTemplate.Application.Abstractions.ITenantContext, TenantContext>();
 #endif
+
+        services.AddScoped<CacheKeys>();
 
         services.AddProblemDetails();
         services.AddExceptionHandler<ProblemDetailsExceptionHandler>();

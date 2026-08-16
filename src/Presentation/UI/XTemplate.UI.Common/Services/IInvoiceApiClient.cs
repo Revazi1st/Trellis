@@ -1,10 +1,12 @@
+using XTemplate.Api.Contracts.Common;
 using XTemplate.Api.Contracts.Invoices;
 
 namespace XTemplate.UI.Common.Services;
 
 public interface IInvoiceApiClient
 {
-    Task<ApiResult<IReadOnlyList<InvoiceDto>>> GetOverdueAsync(CancellationToken cancellationToken = default);
+    Task<ApiResult<PagedResponse<InvoiceDto>>> GetOverdueAsync(
+        int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
 
     Task<ApiResult<InvoiceDto>> GetAsync(Guid id, CancellationToken cancellationToken = default);
 

@@ -71,6 +71,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
+app.UseApiRateLimiting();   // after authentication so partitions key on the real user, not "anonymous"
 app.UseAuthorization();
 
 app.MapVersionedApiGroup().MapEndpoints(typeof(Program).Assembly);

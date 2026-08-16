@@ -1,12 +1,16 @@
+using System.Net;
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using IPNetwork = System.Net.IPNetwork;
 
 namespace XTemplate.Api.Common.Hardening;
 
-/// <summary>Cross-cutting API host hardening: rate limiting, CORS, request timeouts.</summary>
+/// <summary>Cross-cutting API host hardening: forwarded headers, rate limiting, CORS, request timeouts.</summary>
 public static class ApiHardeningExtensions
 {
     public const string AuthRateLimitPolicy = "auth";
@@ -14,6 +18,25 @@ public static class ApiHardeningExtensions
 
     public static IServiceCollection AddApiHardening(this IServiceCollection services, IConfiguration configuration)
     {
+        // Behind a proxy/ingress, RemoteIpAddress is the proxy — every caller would share one rate-limit
+        // partition. Honour X-Forwarded-For, but only from proxies explicitly trusted via the
+        // ForwardedHeaders configuration section: KnownProxies takes IP addresses and KnownNetworks
+        // takes CIDR ranges. The default trusts loopback only, so untrusted callers cannot spoof.
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+
+            foreach (string proxy in configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+            {
+                options.KnownProxies.Add(IPAddress.Parse(proxy));
+            }
+
+            foreach (string network in configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+            {
+                options.KnownIPNetworks.Add(IPNetwork.Parse(network));
+            }
+        });
+
         // Rate limiting: a global partition per client + a stricter fixed window for auth endpoints.
         services.AddRateLimiter(options =>
         {
@@ -51,17 +74,29 @@ public static class ApiHardeningExtensions
         return services;
     }
 
-    /// <summary>Middleware order: timeouts → CORS → rate limiter. Call before mapping endpoints.</summary>
+    /// <summary>Early middleware: forwarded headers → timeouts → CORS. Call before authentication.</summary>
     public static WebApplication UseApiHardening(this WebApplication app)
     {
+        app.UseForwardedHeaders();
         app.UseRequestTimeouts();
         app.UseCors(DefaultCorsPolicy);
+        return app;
+    }
+
+    /// <summary>
+    /// Rate limiting partitions on the authenticated principal, so this must run AFTER
+    /// <c>UseAuthentication()</c> — any earlier and every request is still anonymous, collapsing
+    /// authenticated traffic into shared per-IP buckets.
+    /// </summary>
+    public static WebApplication UseApiRateLimiting(this WebApplication app)
+    {
         app.UseRateLimiter();
         return app;
     }
 
+    /// <summary>Per authenticated user (stable id claim), else per client IP (X-Forwarded-For aware).</summary>
     private static string ClientKey(HttpContext context)
-        => context.User.Identity?.Name
+        => context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
            ?? context.Connection.RemoteIpAddress?.ToString()
            ?? "anonymous";
 }

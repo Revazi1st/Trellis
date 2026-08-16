@@ -25,12 +25,14 @@ internal sealed class GetInvoice : IEndpoint
     private static async Task<Results<Ok<InvoiceDto>, ProblemHttpResult>> Handle(
         InvoiceId id,
         IQueryHandler<GetInvoiceQuery, InvoiceResponse> handler,
+        CacheKeys cacheKeys,
         HybridCache cache,
         CancellationToken cancellationToken)
     {
         // Cache-aside: served from HybridCache (in-memory L1, optional Redis L2), invalidated by the write endpoints.
+        string cacheKey = cacheKeys.Invoice(id.Value);
         InvoiceDto? dto = await cache.GetOrCreateAsync(
-            CacheKeys.Invoice(id.Value),
+            cacheKey,
             async token =>
             {
                 var result = await handler.Handle(new GetInvoiceQuery(id), token);
@@ -38,8 +40,14 @@ internal sealed class GetInvoice : IEndpoint
             },
             cancellationToken: cancellationToken);
 
-        return dto is not null
-            ? TypedResults.Ok(dto)
-            : CustomResults.Problem(InvoiceErrors.NotFound(id));
+        if (dto is not null)
+        {
+            return TypedResults.Ok(dto);
+        }
+
+        // Never pin a miss: GetOrCreateAsync stored the null, and leaving it would keep answering 404
+        // for the full TTL even after the invoice appears.
+        await cache.RemoveAsync(cacheKey, cancellationToken);
+        return CustomResults.Problem(InvoiceErrors.NotFound(id));
     }
 }

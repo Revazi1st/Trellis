@@ -11,6 +11,10 @@ builder.AddServiceDefaults();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSingleton<XTemplate.Application.Abstractions.ICurrentUser, SystemCurrentUser>();
+#if (UseMultitenancy)
+// AppDbContext and the TenantInterceptor require an ITenantContext; outside an HTTP request there is no tenant.
+builder.Services.AddSingleton<XTemplate.Application.Abstractions.ITenantContext, SystemTenantContext>();
+#endif
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("xtemplate-db")
     ?? throw new InvalidOperationException("Connection string 'xtemplate-db' is not configured."));
 builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);

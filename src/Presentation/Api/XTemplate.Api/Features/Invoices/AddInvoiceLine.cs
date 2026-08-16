@@ -26,6 +26,7 @@ internal sealed class AddInvoiceLine : IEndpoint
         InvoiceId id,
         AddInvoiceLineRequest request,
         ICommandHandler<AddInvoiceLineCommand> handler,
+        CacheKeys cacheKeys,
         HybridCache cache,
         CancellationToken cancellationToken)
     {
@@ -35,7 +36,7 @@ internal sealed class AddInvoiceLine : IEndpoint
 
         if (result.IsSuccess)
         {
-            await cache.RemoveAsync(CacheKeys.Invoice(id.Value), cancellationToken);
+            await cache.RemoveAsync(cacheKeys.Invoice(id.Value), cancellationToken);
             return TypedResults.NoContent();
         }
 

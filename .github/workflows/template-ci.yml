@@ -26,9 +26,15 @@ jobs:
           - name: name-with-spaces
             args: ""
             out: "My Cool App"
+          - name: no-ui-with-uitests
+            # UI tests without the UI must degrade gracefully (the UiTests project is dropped).
+            args: "--include-ui false --include-ui-tests true"
+            out: Acme.Headless
           - name: all-options
             args: "--use-redis true --use-serilog true --use-multitenancy true --include-ui-tests true"
             out: Acme.Full
+            # Build alone missed a runtime-only DI failure once (ITenantContext); run the generated tests too.
+            test: true
     steps:
       - uses: actions/checkout@v4
 
@@ -41,11 +47,20 @@ jobs:
         run: dotnet new install .
 
       - name: Instantiate
-        run: dotnet new xtemplate -n "${{ matrix.out }}" -o ../generated ${{ matrix.args }}
+        # --allow-scripts yes: the chmod post-action otherwise prompts, and on a non-TTY
+        # dotnet new loops forever on the unanswerable prompt.
+        run: dotnet new xtemplate -n "${{ matrix.out }}" -o ../generated --allow-scripts yes ${{ matrix.args }}
 
       - name: Build generated solution
         working-directory: ../generated
         run: dotnet build *.slnx -c Release
+
+      - name: Test generated solution
+        if: ${{ matrix.test }}
+        working-directory: ../generated
+        # Aspire E2E and Playwright stay opt-in (not set here); everything else runs for real,
+        # including the Testcontainers integration tests.
+        run: dotnet test *.slnx -c Release --no-build
 
   pack:
     name: Pack template

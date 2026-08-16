@@ -1,10 +1,13 @@
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
 using XTemplate.Application.Features.Invoices.CreateInvoice;
+using XTemplate.Application.Options;
 using XTemplate.Domain.Invoices;
+using XTemplate.SharedKernel.Decorators;
 using XTemplate.SharedKernel.Domain;
 using XTemplate.SharedKernel.Messaging;
 using XTemplate.SharedKernel.Results;
@@ -26,7 +29,24 @@ public sealed class DecoratorPipelineTests
         services.AddSingleton(_invoices);
         services.AddSingleton(_unitOfWork);
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(new AuthTokenOptions());   // the one non-interface handler dependency
         services.AddApplication();
+
+        // Fake every remaining outward port any handler needs — discovered, not hand-listed, so new
+        // slices' ports are covered automatically. Ports are the non-generic interfaces in constructor
+        // signatures; generic interfaces here are the pipeline's own contracts (handlers, validators).
+        foreach (Type port in typeof(DependencyInjection).Assembly.GetTypes()
+                     .Where(static t => t is { IsClass: true, IsAbstract: false })
+                     .SelectMany(static t => t.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                     .SelectMany(static c => c.GetParameters())
+                     .Select(static p => p.ParameterType)
+                     .Where(static t => t.IsInterface && !t.IsGenericType)
+                     .Distinct()
+                     .Where(port => services.All(d => d.ServiceType != port)))
+        {
+            services.AddSingleton(port, Substitute.For([port], []));
+        }
+
         _provider = services.BuildServiceProvider();
     }
 
@@ -78,15 +98,53 @@ public sealed class DecoratorPipelineTests
     }
 
     [Fact]
-    public void Every_use_case_resolves_from_the_container()
+    public void Every_use_case_resolves_through_the_full_decorator_pipeline()
     {
-        _provider.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>().ShouldNotBeNull();
-        _provider.GetRequiredService<ICommandHandler<Features.Invoices.AddInvoiceLine.AddInvoiceLineCommand>>().ShouldNotBeNull();
-        _provider.GetRequiredService<ICommandHandler<Features.Invoices.IssueInvoice.IssueInvoiceCommand>>().ShouldNotBeNull();
-        _provider.GetRequiredService<ICommandHandler<Features.Invoices.PayInvoice.PayInvoiceCommand>>().ShouldNotBeNull();
-        _provider.GetRequiredService<ICommandHandler<Features.Invoices.VoidInvoice.VoidInvoiceCommand>>().ShouldNotBeNull();
-        _provider.GetRequiredService<IQueryHandler<Features.Invoices.GetInvoice.GetInvoiceQuery, Features.Invoices.InvoiceResponse>>().ShouldNotBeNull();
-        _provider.GetRequiredService<IQueryHandler<Features.Invoices.ListOverdueInvoices.ListOverdueInvoicesQuery, XTemplate.SharedKernel.Specifications.PagedList<Features.Invoices.InvoiceResponse>>>().ShouldNotBeNull();
+        // Discover every command/query in the assembly by reflection — a hand-maintained list silently
+        // stops covering new slices (it once missed all three Auth commands).
+        List<(Type Message, Type HandlerService)> useCases = [.. typeof(DependencyInjection).Assembly.GetTypes()
+            .Where(static t => t is { IsClass: true, IsAbstract: false })
+            .SelectMany(static t => t.GetInterfaces()
+                .Select(i => HandlerServiceFor(t, i))
+                .OfType<Type>()
+                .Select(handler => (Message: t, HandlerService: handler)))];
+
+        // Auth (3) + Invoices (7) today — a floor so a refactor that hides slices from the scan fails loudly.
+        useCases.Count.ShouldBeGreaterThanOrEqualTo(10);
+
+        foreach ((Type message, Type handlerService) in useCases)
+        {
+            object handler = _provider.GetRequiredService(handlerService);
+
+            // The outermost wrapper must be the validation decorator — this pins the documented
+            // Validation → Logging → UnitOfWork → handler order for every use case, current and future.
+            handler.GetType().DeclaringType.ShouldBe(typeof(ValidationDecorators),
+                $"{message.Name} did not resolve through the decorator pipeline");
+        }
+
         _provider.GetRequiredService<IDomainEventDispatcher>().ShouldNotBeNull();
+    }
+
+    private static Type? HandlerServiceFor(Type message, Type contract)
+    {
+        if (contract == typeof(ICommand))
+        {
+            return typeof(ICommandHandler<>).MakeGenericType(message);
+        }
+
+        if (!contract.IsGenericType)
+        {
+            return null;
+        }
+
+        Type definition = contract.GetGenericTypeDefinition();
+        if (definition == typeof(ICommand<>))
+        {
+            return typeof(ICommandHandler<,>).MakeGenericType(message, contract.GenericTypeArguments[0]);
+        }
+
+        return definition == typeof(IQuery<>)
+            ? typeof(IQueryHandler<,>).MakeGenericType(message, contract.GenericTypeArguments[0])
+            : null;
     }
 }

@@ -26,6 +26,7 @@ internal sealed class IssueInvoice : IEndpoint
         InvoiceId id,
         IssueInvoiceRequest request,
         ICommandHandler<IssueInvoiceCommand> handler,
+        CacheKeys cacheKeys,
         HybridCache cache,
         CancellationToken cancellationToken)
     {
@@ -33,7 +34,7 @@ internal sealed class IssueInvoice : IEndpoint
 
         if (result.IsSuccess)
         {
-            await cache.RemoveAsync(CacheKeys.Invoice(id.Value), cancellationToken);
+            await cache.RemoveAsync(cacheKeys.Invoice(id.Value), cancellationToken);
             return TypedResults.NoContent();
         }
 
