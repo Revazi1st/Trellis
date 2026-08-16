@@ -13,7 +13,7 @@ using XTemplate.Persistence;
 namespace XTemplate.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260715203015_InitialCreate")]
+    [Migration("20260816174323_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -458,6 +458,15 @@ namespace XTemplate.Persistence.Migrations
                     b.HasOne("XTemplate.Domain.Invoices.Invoice", null)
                         .WithMany("Lines")
                         .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XTemplate.Persistence.Identity.RefreshToken", b =>
+                {
+                    b.HasOne("XTemplate.Persistence.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

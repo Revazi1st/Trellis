@@ -459,6 +459,15 @@ namespace XTemplate.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("XTemplate.Persistence.Identity.RefreshToken", b =>
+                {
+                    b.HasOne("XTemplate.Persistence.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("XTemplate.Domain.Invoices.Invoice", b =>
                 {
                     b.Navigation("Lines");

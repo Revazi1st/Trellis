@@ -75,11 +75,15 @@ public static class Extensions
         return builder;
     }
 
-    /// <summary>Development-only by default — expose deliberately (auth/port-filtered) before enabling in production.</summary>
+    /// <summary>
+    /// Anonymous probe endpoints, mapped in every environment: orchestrator health checks (the
+    /// AppHost's WithHttpHealthCheck, compose/k8s probes) must reach them without credentials.
+    /// Keep them internal — do not route /health or /alive through the public ingress; the
+    /// response writer leaks only the overall status text either way.
+    /// </summary>
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
         // Readiness: all checks (incl. the database). Liveness: only checks tagged "live".
-        // The default response writer returns just the overall status text — no per-check detail is leaked.
         app.MapHealthChecks(HealthEndpointPath);
         app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
         {

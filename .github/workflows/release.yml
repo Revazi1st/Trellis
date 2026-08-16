@@ -4,20 +4,91 @@ on:
   push:
     tags: ["v*.*.*"]
 
+permissions:
+  contents: read
+
 jobs:
-  publish:
-    name: Pack & publish to NuGet
+  test:
+    name: Gate — build & test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
+      - name: Build (warnings as errors)
+        run: dotnet build XTemplate.slnx -c Release
+      - name: Test
+        env:
+          RUN_ASPIRE_E2E: "1"
+        run: dotnet test XTemplate.slnx --no-build -c Release
+
+  publish:
+    name: Pack, verify & publish
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write      # create the GitHub Release
+      id-token: write      # NuGet trusted publishing (OIDC) + provenance
+      attestations: write  # actions/attest-build-provenance
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Verify CHANGELOG has notes for this version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          grep -q "^## \[$VERSION\]" CHANGELOG.md || {
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' section — write the release notes before tagging."
+            exit 1
+          }
+
       - name: Pack template
         run: dotnet pack eng/XTemplate.TemplatePack/XTemplate.TemplatePack.csproj -c Release -o ./nupkg -p:Version=${GITHUB_REF_NAME#v}
+
+      # Publish exactly what a user will install: instantiate from the .nupkg and build it.
+      - name: Smoke-test the packed template
+        run: |
+          dotnet new install ./nupkg/*.nupkg
+          dotnet new xtemplate -n Acme.Smoke -o "$RUNNER_TEMP/smoke" --skip-restore true --allow-scripts yes
+          dotnet build "$RUNNER_TEMP"/smoke/*.slnx -c Release
+
+      # Trusted publishing (OIDC): no long-lived API key. Configure the trusted publisher on
+      # nuget.org (this repo + this workflow) and set the NUGET_USER repository variable to the
+      # nuget.org profile name that owns the package.
+      - name: NuGet login (trusted publishing)
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Push to NuGet
-        run: dotnet nuget push "./nupkg/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "${{ secrets.NUGET_API_KEY }}" --skip-duplicate
-      - uses: actions/upload-artifact@v4
+        run: dotnet nuget push "./nupkg/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --skip-duplicate
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: ./nupkg/*.nupkg
+
+      - name: Create GitHub Release from the CHANGELOG section
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { grab = 1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > release-notes.md
+          gh release create "$GITHUB_REF_NAME" ./nupkg/*.nupkg --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: nupkg
           path: ./nupkg/*.nupkg

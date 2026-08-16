@@ -12,4 +12,7 @@ public static class AuthErrors
 
     public static readonly Error EmailAlreadyInUse =
         Error.Conflict("Auth.EmailAlreadyInUse", "An account with this email already exists.");
+
+    public static readonly Error AccountLockedOut =
+        Error.Forbidden("Auth.AccountLockedOut", "The account is temporarily locked after too many failed sign-in attempts. Try again later.");
 }

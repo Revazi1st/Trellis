@@ -53,6 +53,10 @@ public static class DependencyInjection
             {
                 options.User.RequireUniqueEmail = true;
                 options.Password.RequiredLength = 8;
+                // Per-account brute-force defense; the API's auth rate limit is only per source.
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AppDbContext>();

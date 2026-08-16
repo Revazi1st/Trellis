@@ -37,11 +37,26 @@ internal sealed class IdentityService(
     {
         ApplicationUser? user = await userManager.FindByEmailAsync(email);
 
-        if (user is null || !await userManager.CheckPasswordAsync(user, password))
+        if (user is null)
         {
             return Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials);
         }
 
+        if (await userManager.IsLockedOutAsync(user))
+        {
+            return Result.Failure<AuthenticatedUser>(AuthErrors.AccountLockedOut);
+        }
+
+        if (!await userManager.CheckPasswordAsync(user, password))
+        {
+            // Counts toward lockout; Identity locks the account at the configured threshold.
+            await userManager.AccessFailedAsync(user);
+            return Result.Failure<AuthenticatedUser>(await userManager.IsLockedOutAsync(user)
+                ? AuthErrors.AccountLockedOut
+                : AuthErrors.InvalidCredentials);
+        }
+
+        await userManager.ResetAccessFailedCountAsync(user);
         return await BuildAuthenticatedUserAsync(user);
     }
 

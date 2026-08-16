@@ -6,6 +6,26 @@ All notable changes to XTemplate are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- **Account lockout**: five failed sign-ins lock the account for 15 minutes (403
+  `Auth.AccountLockedOut`); a successful login resets the counter. Previously the Identity lockout
+  columns were dead schema and per-account brute force was unthrottled.
+- **Fail-fast JWT signing key**: the API refuses to start when `Authentication:SigningKey` is
+  missing or under 32 characters (previously an empty key surfaced as an opaque token-stack error,
+  possibly only on first login). The API project now has a `UserSecretsId` for dev keys.
+- **Seed guards**: demo invoices seed only in Development, and the MigrationService refuses to seed
+  the well-known default admin password outside Development.
+- **Session revocation**: new `POST /auth/logout` (revoke one refresh token, idempotent) and
+  `POST /auth/revoke-all` (sign out everywhere). Presenting an already-consumed refresh token now
+  revokes the user's whole session family (stolen-token replay detection, OAuth BCP) with a logged
+  warning. `RefreshTokens` gained the missing FK to `AspNetUsers` (cascade); the initial migration
+  was regenerated (pre-release convention).
+- **Workflow hardening**: least-privilege `permissions:` and `timeout-minutes` on all jobs; actions
+  pinned by commit SHA; releases are gated on build+tests and an instantiate-from-the-nupkg smoke,
+  publish via NuGet trusted publishing (OIDC — set the `NUGET_USER` repo variable) instead of a
+  long-lived API key, attach build provenance, and create a GitHub Release from the CHANGELOG
+  section (tagging without notes fails the release).
+
 ### Fixed
 - **`--use-multitenancy` generated an app that could never start.** `ITenantContext` was registered
   only in the API host; the MigrationService (and the integration-test host) could not resolve

@@ -14,6 +14,7 @@ namespace XTemplate.MigrationService;
 internal sealed class MigrationWorker(
     IServiceProvider serviceProvider,
     IHostApplicationLifetime hostApplicationLifetime,
+    IHostEnvironment environment,
     SeedOptions seedOptions,
     ILogger<MigrationWorker> logger) : BackgroundService
 {
@@ -35,7 +36,12 @@ internal sealed class MigrationWorker(
 
             await SeedRolesAndPermissionsAsync(services.GetRequiredService<RoleManager<IdentityRole<Guid>>>());
             await SeedAdminUserAsync(services.GetRequiredService<UserManager<ApplicationUser>>());
-            await SeedSampleDataAsync(context, stoppingToken);
+
+            // Demo invoices are a local-dev convenience only.
+            if (environment.IsDevelopment())
+            {
+                await SeedSampleDataAsync(context, stoppingToken);
+            }
 
             logger.LogInformation("Database migration and seeding completed");
         }
@@ -83,6 +89,13 @@ internal sealed class MigrationWorker(
         if (await userManager.FindByEmailAsync(seedOptions.AdminEmail) is not null)
         {
             return;
+        }
+
+        if (!environment.IsDevelopment() && seedOptions.UsesDefaultAdminPassword)
+        {
+            throw new InvalidOperationException(
+                "Refusing to seed the well-known default admin password outside Development. "
+                + $"Set {SeedOptions.SectionName}__AdminPassword (and consider {SeedOptions.SectionName}__AdminEmail) for this environment.");
         }
 
         var admin = new ApplicationUser

@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <PropertyGroup>
+    <!-- Dev-time home for Authentication:SigningKey and other secrets (dotnet user-secrets set ...). -->
+    <UserSecretsId>xtemplate-api</UserSecretsId>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\XTemplate.Api.Common\XTemplate.Api.Common.csproj" />
     <ProjectReference Include="..\XTemplate.Api.Contracts\XTemplate.Api.Contracts.csproj" />

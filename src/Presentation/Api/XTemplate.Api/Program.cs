@@ -35,6 +35,16 @@ builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableR
 
 AuthTokenOptions authOptions = builder.Configuration.GetSection(AuthTokenOptions.SectionName).Get<AuthTokenOptions>()
     ?? throw new InvalidOperationException($"Configuration section '{AuthTokenOptions.SectionName}' is missing.");
+if (authOptions.SigningKey.Length < 32)
+{
+    // Fail at startup, not on the first login: an empty key would otherwise surface as an opaque
+    // SymmetricSecurityKey/IDX10653 error deep inside the token stack.
+    throw new InvalidOperationException(
+        "Authentication:SigningKey is missing or shorter than 32 characters (256 bits for HMAC-SHA256). "
+        + "Set it via user secrets in development (dotnet user-secrets set \"Authentication:SigningKey\" \"<random 32+ chars>\") "
+        + "or via the environment/secret store in production.");
+}
+
 builder.Services.AddApiAuthentication(authOptions);
 
 builder.Services.AddExceptionHandler<XTemplate.Api.ConcurrencyExceptionHandler>();

@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -14,8 +17,9 @@ jobs:
   build-test:
     name: Build & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # A template installed from a NuGet package loses the Unix executable bit, and the
       # chmod post-action only runs when the host allows script post-actions. Restore it
@@ -24,7 +28,7 @@ jobs:
         run: chmod +x scripts/*.sh
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
 
@@ -47,16 +51,26 @@ jobs:
           RUN_ASPIRE_E2E: "1"
         run: dotnet test XTemplate.slnx --no-build -c Release
 
+      # A flaky Testcontainers/Aspire run must not have to be reproduced blind.
+      # (TRX reports need the Microsoft.Testing.Extensions.TrxReport package — candidate follow-up.)
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-results
+          path: "**/TestResults"
+          if-no-files-found: ignore
+
   docs-drift:
     name: Docs drift
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
       - name: Check feature docs are updated
         run: ./scripts/check-docs-drift.sh origin/${{ github.base_ref }}
-

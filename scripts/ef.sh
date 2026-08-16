@@ -15,11 +15,13 @@ if ! command -v "$DOCKER_BIN" >/dev/null 2>&1; then
   fi
 fi
 
+# Same image as dotnet.sh (a second multi-GB image buys nothing); quoted "$@" so arguments
+# containing spaces (e.g. migration names) survive the inner shell.
 exec "$DOCKER_BIN" run --rm \
   -v "$REPO_ROOT":/workspace \
   -w /workspace \
   -v xtemplate-nuget:/root/.nuget/packages \
   -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
   -e DOTNET_NOLOGO=1 \
-  mcr.microsoft.com/dotnet/sdk:10.0 \
-  sh -c "dotnet tool restore >/dev/null && dotnet dotnet-ef $*"
+  "${XT_SDK_IMAGE:-xtemplate-sdk:10.0}" \
+  sh -c 'dotnet tool restore >/dev/null && dotnet dotnet-ef "$@"' ef "$@"

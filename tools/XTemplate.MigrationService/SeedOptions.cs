@@ -8,7 +8,14 @@ internal sealed class SeedOptions
 {
     public const string SectionName = "Seed";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2068:Hard-coded credentials are security-sensitive",
+        Justification = "Local-dev bootstrap value only; the worker refuses to seed it outside Development.")]
+    public const string DefaultAdminPassword = "Admin123!";
+
     public string AdminEmail { get; init; } = "admin@xtemplate.dev";
 
-    public string AdminPassword { get; init; } = "Admin123!";
+    public string AdminPassword { get; init; } = DefaultAdminPassword;
+
+    /// <summary>The well-known local-dev password must never reach a real environment (guarded in the worker).</summary>
+    public bool UsesDefaultAdminPassword => string.Equals(AdminPassword, DefaultAdminPassword, StringComparison.Ordinal);
 }

@@ -9,10 +9,14 @@ on:
     paths: [".template.config/**", "eng/**", "XTemplate.slnx"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   instantiate:
     name: Instantiate & build (${{ matrix.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -36,10 +40,10 @@ jobs:
             # Build alone missed a runtime-only DI failure once (ITenantContext); run the generated tests too.
             test: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
 
@@ -63,18 +67,24 @@ jobs:
         run: dotnet test *.slnx -c Release --no-build
 
   pack:
-    name: Pack template
+    name: Pack & verify package
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
       - name: Pack
         run: dotnet pack eng/XTemplate.TemplatePack/XTemplate.TemplatePack.csproj -o ./nupkg
-      - name: Install packed template (smoke)
-        run: dotnet new install ./nupkg/*.nupkg
-      - uses: actions/upload-artifact@v4
+      # The `instantiate` job validates the SOURCE tree (template.json's exclude list); real users
+      # install the .nupkg, whose content set comes from the pack csproj — verify that artifact too.
+      - name: Instantiate & build from the packed template
+        run: |
+          dotnet new install ./nupkg/*.nupkg
+          dotnet new xtemplate -n Acme.Packed -o "$RUNNER_TEMP/packed" --skip-restore true --allow-scripts yes
+          dotnet build "$RUNNER_TEMP"/packed/*.slnx -c Release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: template-package
           path: ./nupkg/*.nupkg
