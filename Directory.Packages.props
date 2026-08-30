@@ -22,7 +22,7 @@
 
   <ItemGroup Label="Analyzers (all projects)">
     <GlobalPackageReference Include="SonarAnalyzer.CSharp" Version="10.29.0.143774" />
-    <GlobalPackageReference Include="Meziantou.Analyzer" Version="3.0.122" />
+    <GlobalPackageReference Include="Meziantou.Analyzer" Version="3.0.194" />
   </ItemGroup>
 
   <ItemGroup Label="Domain / Application">
