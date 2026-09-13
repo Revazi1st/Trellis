@@ -29,8 +29,8 @@
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup Label="Persistence">
@@ -43,8 +43,8 @@
 
   <ItemGroup Label="Infrastructure">
     <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.1" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup Label="API">
@@ -54,7 +54,7 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.10.0" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.16.11" />
     <PackageVersion Include="Asp.Versioning.Http" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.7.0" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.10.0" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.9" />
   </ItemGroup>
 
@@ -78,8 +78,8 @@
     <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.4.6" />
     <PackageVersion Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.4.6" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
-    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
@@ -103,7 +103,7 @@
     <PackageVersion Include="Bogus" Version="35.6.5" />
     <PackageVersion Include="NetArchTest.eNhancedEdition" Version="1.4.5" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.61.0" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.7.0" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.10.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
   </ItemGroup>
 
