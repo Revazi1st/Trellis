@@ -1,10 +1,16 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+<Project Sdk="Aspire.AppHost.Sdk/13.5.4">
 
   <!-- Aspire AppHost SDK version lives inline here (not in Directory.Packages.props); bump via 'aspire update'. -->
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <UserSecretsId>trellis-apphost-e6c5a3d2</UserSecretsId>
+    <!-- Aspire 13.5 can download a DCP + dashboard "CLI bundle" into the build. We deliberately do
+         not: `aspire run` is a local-host workflow that brings its own CLI (ADR-0008), and CI only
+         ever drives the AppHost through Aspire.Hosting.Testing, which the E2E proves works without
+         the bundle. Opting out keeps restore lean; ASPIRE010 only nags about the choice. -->
+    <AspireUseCliBundle>false</AspireUseCliBundle>
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
   </PropertyGroup>
   <!--#if (IncludeUI) -->
   <PropertyGroup>

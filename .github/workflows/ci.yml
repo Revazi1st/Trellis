@@ -101,17 +101,23 @@ jobs:
         env:
           ASPNETCORE_ENVIRONMENT: Development
         run: |
+          mkdir -p "$RUNNER_TEMP/applogs"
+          # Capture each host's output: when readiness times out, the startup exception is the only
+          # thing that explains why, and a bare "did not become ready" hides it (a dependency bump
+          # that breaks Program.cs looks identical to a slow boot otherwise).
           dotnet run --project src/Presentation/Api/Trellis.Api -c Release --no-build --no-launch-profile -- \
             "--ConnectionStrings:trellis-db=Host=localhost;Port=5433;Database=trellis;Username=postgres;Password=postgres" \
-            --urls http://localhost:5171 &
+            --urls http://localhost:5171 > "$RUNNER_TEMP/applogs/api.log" 2>&1 &
           Services__api__http__0=http://localhost:5171 \
             dotnet run --project src/Presentation/UI/Trellis.UI.Web -c Release --no-build --no-launch-profile -- \
-            --urls http://localhost:5170 &
+            --urls http://localhost:5170 > "$RUNNER_TEMP/applogs/web.log" 2>&1 &
           for i in $(seq 1 60); do
             curl -fsS http://localhost:5170/alive >/dev/null 2>&1 && curl -fsS http://localhost:5171/alive >/dev/null 2>&1 && exit 0
             sleep 2
           done
-          echo "::error::API/Web did not become ready" && exit 1
+          echo "::group::api.log"; cat "$RUNNER_TEMP/applogs/api.log" || true; echo "::endgroup::"
+          echo "::group::web.log"; cat "$RUNNER_TEMP/applogs/web.log" || true; echo "::endgroup::"
+          echo "::error::API/Web did not become ready (see the api.log / web.log groups above)" && exit 1
 
       - name: Install Playwright browsers
         run: pwsh artifacts/bin/Trellis.UiTests/release/playwright.ps1 install chromium --with-deps

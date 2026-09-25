@@ -30,7 +30,7 @@ public sealed class DomainEventSerializationTests
             names.Add(attribute.Name);
         }
 
-        names.ShouldBeUnique();
+        names.ShouldBeUnique(StringComparer.Ordinal);
     }
 
     [Fact]

@@ -15,6 +15,12 @@ jobs:
   analyze:
     name: Analyze (C#)
     runs-on: ubuntu-latest
+    # Code scanning is a GitHub Advanced Security feature: free for PUBLIC repositories, paid for
+    # private ones. While this repo is private the analysis itself succeeds but the SARIF upload
+    # fails with "Code scanning is not enabled for this repository", turning every scheduled run
+    # red (and mailing the owner weekly). Gate on visibility instead of deleting the workflow:
+    # it stays dormant while private and starts working by itself the moment the repo goes public.
+    if: github.event.repository.visibility == 'public'
     timeout-minutes: 45
     permissions:
       security-events: write

@@ -55,8 +55,8 @@ public sealed class DomainEventDispatcherTests
         await Should.ThrowAsync<InvalidOperationException>(
             () => dispatcher.Dispatch(domainEvent, completed, CancellationToken.None));
         succeeded.Calls.ShouldBe(1);
-        completed.ShouldContain(typeof(RecordingHandler).FullName!);
-        completed.ShouldNotContain(typeof(FlakyHandler).FullName!);
+        completed.ShouldContain(typeof(RecordingHandler).FullName!, StringComparer.Ordinal);
+        completed.ShouldNotContain(typeof(FlakyHandler).FullName!, StringComparer.Ordinal);
 
         // Retry (as the outbox would, with the persisted set): only the flaky handler runs again.
         flaky.Throw = false;

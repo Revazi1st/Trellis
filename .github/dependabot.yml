@@ -6,11 +6,27 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     groups:
-      # One PR per family keeps the noise down and respects the CPM setup.
-      aspnetcore-efcore:
-        patterns: ["Microsoft.AspNetCore.*", "Microsoft.EntityFrameworkCore.*", "Microsoft.Extensions.*", "Npgsql.*"]
-      aspire:
-        patterns: ["Aspire.*"]
+      # ONE group for the whole Microsoft/Aspire graph — deliberately coarse.
+      #
+      # Central Package Management with CentralPackageTransitivePinningEnabled turns any pin that
+      # sits BELOW a transitive requirement into a hard NU1109 "package downgrade" build error.
+      # Two traps make that easy to hit if these move in separate PRs:
+      #   1. "Microsoft.Extensions.*" spans two independent version lines — the runtime/BCL packages
+      #      (10.0.x) and the dotnet/extensions ones like ServiceDiscovery / Http.Resilience /
+      #      Caching.Hybrid (10.x). Bumping the second line raises its floor on the first.
+      #   2. Aspire is the loudest consumer of those floors: Aspire 13.4.6 wants
+      #      Microsoft.Extensions.* >= 10.0.12, so an Aspire bump in isolation breaks restore.
+      # Grouping them means one PR moves the pin and the requirement together. The same reasoning
+      # covers IdentityModel/OpenApi, which are pinned only to satisfy AspNetCore's transitives.
+      microsoft:
+        patterns:
+          - "Microsoft.AspNetCore.*"
+          - "Microsoft.EntityFrameworkCore.*"
+          - "Microsoft.Extensions.*"
+          - "Microsoft.IdentityModel.*"
+          - "Microsoft.OpenApi"
+          - "Aspire.*"
+          - "Npgsql.*"
       opentelemetry:
         patterns: ["OpenTelemetry.*"]
       test:
