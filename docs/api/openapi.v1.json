@@ -16,6 +16,7 @@
                     "Invoices"
                 ],
                 "summary": "Add a line to a draft invoice",
+                "description": "Appends a line to a Draft invoice. Lines can only be changed while the invoice is a draft, and the line currency must match the invoice currency; both are rejected with a 409/400 problem document rather than an exception.",
                 "parameters": [
                     {
                         "name": "id",
@@ -72,6 +73,7 @@
                     "Invoices"
                 ],
                 "summary": "Create a draft invoice",
+                "description": "Creates an invoice in Draft state with no lines. The currency is fixed at creation and every line added later must match it. Send an Idempotency-Key header so a retried request cannot create a second invoice.",
                 "parameters": [
                     {
                         "name": "Idempotency-Key",
@@ -127,6 +129,7 @@
                     "Invoices"
                 ],
                 "summary": "Get one invoice with its lines",
+                "description": "Returns one invoice with its lines and computed total. Responses are served through the read cache, which every write on the same invoice invalidates.",
                 "operationId": "GetInvoice",
                 "parameters": [
                     {
@@ -169,6 +172,7 @@
                     "Invoices"
                 ],
                 "summary": "Issue a draft invoice, making it payable",
+                "description": "Moves a Draft invoice to Issued, making it payable and fixing its total. An invoice needs at least one line before it can be issued.",
                 "parameters": [
                     {
                         "name": "id",
@@ -225,6 +229,7 @@
                     "Invoices"
                 ],
                 "summary": "List issued invoices past their due date, oldest first (paged)",
+                "description": "Issued invoices whose due date has passed, oldest first. Paged via the standard page/pageSize parameters; the response is the PagedResponse envelope, never a bare array.",
                 "parameters": [
                     {
                         "name": "Page",
@@ -284,6 +289,7 @@
                     "Invoices"
                 ],
                 "summary": "Record payment of an issued invoice",
+                "description": "Records payment of an Issued invoice and moves it to Paid. Only an issued invoice can be paid.",
                 "parameters": [
                     {
                         "name": "id",
@@ -330,6 +336,7 @@
                     "Invoices"
                 ],
                 "summary": "Void a draft or issued invoice",
+                "description": "Cancels a Draft or Issued invoice. A paid or already-voided invoice cannot be changed and is rejected with a 409.",
                 "parameters": [
                     {
                         "name": "id",
@@ -376,6 +383,7 @@
                     "Auth"
                 ],
                 "summary": "Exchange credentials for an access + refresh token pair",
+                "description": "Validates credentials and returns a short-lived access token plus a single-use refresh token. Rate limited more strictly than the rest of the API.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -406,6 +414,7 @@
                     "Auth"
                 ],
                 "summary": "Invalidate a refresh token (sign out this session)",
+                "description": "Invalidates a single refresh token. Idempotent, and it never triggers stolen-token replay detection \u2014 that is what separates a logout from presenting an already-consumed token.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -429,6 +438,7 @@
                     "Auth"
                 ],
                 "summary": "Rotate a refresh token for a new token pair",
+                "description": "Exchanges a refresh token for a new token pair. Refresh tokens are single-use: presenting a consumed one is treated as a replay and revokes every outstanding token for that user.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -459,6 +469,7 @@
                     "Auth"
                 ],
                 "summary": "Create a new account",
+                "description": "Creates a new account with the default member role. The account can sign in immediately; permissions come from its roles.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -489,6 +500,7 @@
                     "Auth"
                 ],
                 "summary": "Sign out everywhere: invalidate all of the caller's refresh tokens (e.g. after a password change)",
+                "description": "Invalidates every live refresh token belonging to the caller, signing them out on all devices. Use after a password change or a suspected token compromise.",
                 "responses": {
                     "204": {
                         "description": "No Content"

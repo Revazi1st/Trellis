@@ -15,7 +15,9 @@ internal sealed class Login : IEndpoint
         .AllowAnonymous()
         .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
         .WithTags(AuthEndpoints.Tag)
-        .WithSummary("Exchange credentials for an access + refresh token pair");
+        .WithSummary("Exchange credentials for an access + refresh token pair")
+        .WithDescription(
+            "Validates credentials and returns a short-lived access token plus a single-use refresh token. Rate limited more strictly than the rest of the API.");
 
     private static async Task<Results<Ok<TokenResponse>, ProblemHttpResult>> Handle(
         LoginRequest request,

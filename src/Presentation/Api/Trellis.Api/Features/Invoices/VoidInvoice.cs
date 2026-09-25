@@ -19,7 +19,9 @@ internal sealed class VoidInvoice : IEndpoint
         .RequirePermission(Permissions.Invoices.Write)
         .RequireIdempotency()
         .WithTags(InvoiceEndpoints.Tag)
-        .WithSummary("Void a draft or issued invoice");
+        .WithSummary("Void a draft or issued invoice")
+        .WithDescription(
+            "Cancels a Draft or Issued invoice. A paid or already-voided invoice cannot be changed and is rejected with a 409.");
 
     private static async Task<Results<NoContent, ProblemHttpResult>> Handle(
         InvoiceId id,

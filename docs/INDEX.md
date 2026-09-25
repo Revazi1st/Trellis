@@ -9,6 +9,8 @@ Agent entry point — read only what the task needs.
 - [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge
 - [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice
 - [features/auth.md](features/auth.md) — Identity + JWT, refresh rotation/revocation, permissions, lockout
+- [features/exchange-rates.md](features/exchange-rates.md) — the reference outbound HTTP integration (typed client, per-client resilience, cached probe)
+- [threat-model.md](threat-model.md) — assets, mitigations that exist today, known gaps to decide before production
 
 ## Decisions (docs/adr/)
 - [0001](adr/0001-record-architecture-decisions.md) — record ADRs
@@ -30,3 +32,4 @@ Agent entry point — read only what the task needs.
 - [0017](adr/0017-hand-rolled-specifications.md) — hand-rolled Specification<T>, Domain stays dependency-free
 - [0018](adr/0018-transactional-outbox-and-idempotency.md) — transactional outbox for domain events + command idempotency
 - [0019](adr/0019-multitenancy-toggle.md) — multi-tenancy as an opt-in template toggle
+- [0020](adr/0020-outbound-http-integrations.md) — outbound HTTP integrations: typed client, per-client resilience, validated options

@@ -17,7 +17,9 @@ internal sealed class Logout : IEndpoint
         .AllowAnonymous()
         .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
         .WithTags(AuthEndpoints.Tag)
-        .WithSummary("Invalidate a refresh token (sign out this session)");
+        .WithSummary("Invalidate a refresh token (sign out this session)")
+        .WithDescription(
+            "Invalidates a single refresh token. Idempotent, and it never triggers stolen-token replay detection — that is what separates a logout from presenting an already-consumed token.");
 
     private static async Task<Results<NoContent, ProblemHttpResult>> Handle(
         LogoutRequest request,

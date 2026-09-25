@@ -20,7 +20,9 @@ internal sealed class GetInvoice : IEndpoint
         .WithName(InvoiceEndpoints.GetInvoiceRouteName)
         .RequirePermission(Permissions.Invoices.Read)
         .WithTags(InvoiceEndpoints.Tag)
-        .WithSummary("Get one invoice with its lines");
+        .WithSummary("Get one invoice with its lines")
+        .WithDescription(
+            "Returns one invoice with its lines and computed total. Responses are served through the read cache, which every write on the same invoice invalidates.");
 
     private static async Task<Results<Ok<InvoiceDto>, StatusCodeHttpResult, ProblemHttpResult>> Handle(
         InvoiceId id,

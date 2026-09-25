@@ -31,6 +31,7 @@ Dependencies point inward. **Infrastructure and Persistence are peers — never 
 - **Result, not exceptions**: return `Result`/`Result<T>`; the API maps errors to RFC 9457 problem details. Exceptions are for the truly unexpected only.
 - **Rich domain**: aggregates via `static Create(...) → Result<T>` + private EF ctor; value objects = sealed records mapped as EF complex types; hand-rolled strongly-typed IDs; domain events dispatched by a SaveChanges interceptor.
 - **Reference feature**: `src/Core/Trellis.Application/Features/Invoices` + `docs/features/invoices.md`. Copy it (use the `add-feature` skill).
+- **Reference integration**: calling a third party goes through `src/Infrastructure/Trellis.Infrastructure/ExternalApis/` + `docs/features/exchange-rates.md` (ADR-0020) — typed client behind a port returning `Result`, resilience overridden per client (ServiceDefaults' blanket handler cancels every attempt at 10s), options validated at boot.
 
 Layer-specific conventions load automatically from `.claude/rules/` when you touch matching files. The "why" behind decisions is in `docs/adr/` — read `docs/INDEX.md` to find them.
 

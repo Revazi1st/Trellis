@@ -1,0 +1,25 @@
+# Config for the CI secret scan (.github/workflows/ci.yml -> gitleaks). Extends the default rule set
+# and allowlists ONLY values that are committed on purpose: development placeholders and fixed test
+# keys. Real secrets belong in user-secrets locally and in the platform's secret store in every other
+# environment — see docs/threat-model.md.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-benign committed placeholders and test fixtures"
+paths = [
+    # Example/templated config carries <fill-me> placeholders, never real values.
+    '''.*\.example$''',
+    # The committed OpenAPI contract is generated output; any "key"-shaped string in it is a schema
+    # property name, not a credential.
+    '''docs/api/openapi\.v1\.json$''',
+]
+regexes = [
+    # The development signing key, which is committed deliberately and is unusable anywhere else:
+    # the API refuses to boot in any environment without its own configured key.
+    '''dev-only-signing-key-change-me-please-32-bytes-minimum!!''',
+    # The in-process API test host's fixed signing key.
+    '''in-process-test-signing-key-32-chars-minimum!!''',
+    # Local-only Postgres credentials for the dev compose stack and Testcontainers.
+    '''Username=postgres;Password=postgres''',
+]

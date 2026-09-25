@@ -20,7 +20,9 @@ internal sealed class IssueInvoice : IEndpoint
         .RequirePermission(Permissions.Invoices.Write)
         .RequireIdempotency()
         .WithTags(InvoiceEndpoints.Tag)
-        .WithSummary("Issue a draft invoice, making it payable");
+        .WithSummary("Issue a draft invoice, making it payable")
+        .WithDescription(
+            "Moves a Draft invoice to Issued, making it payable and fixing its total. An invoice needs at least one line before it can be issued.");
 
     private static async Task<Results<NoContent, ProblemHttpResult>> Handle(
         InvoiceId id,

@@ -20,7 +20,9 @@ internal sealed class AddInvoiceLine : IEndpoint
         .RequirePermission(Permissions.Invoices.Write)
         .RequireIdempotency()
         .WithTags(InvoiceEndpoints.Tag)
-        .WithSummary("Add a line to a draft invoice");
+        .WithSummary("Add a line to a draft invoice")
+        .WithDescription(
+            "Appends a line to a Draft invoice. Lines can only be changed while the invoice is a draft, and the line currency must match the invoice currency; both are rejected with a 409/400 problem document rather than an exception.");
 
     private static async Task<Results<NoContent, ProblemHttpResult>> Handle(
         InvoiceId id,

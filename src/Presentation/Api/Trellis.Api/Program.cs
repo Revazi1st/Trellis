@@ -6,9 +6,9 @@ using Trellis.Api.Common;
 using Trellis.Api.Common.Authentication;
 using Trellis.Api.Common.Endpoints;
 using Trellis.Api.Common.Hardening;
+using Trellis.Api.Common.Http;
 using Trellis.Application;
 using Trellis.Application.Observability;
-using Trellis.Application.Options;
 using Trellis.Infrastructure;
 using Trellis.Persistence;
 using Trellis.ServiceDefaults;
@@ -39,19 +39,11 @@ builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trell
     ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
 builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
 
-AuthTokenOptions authOptions = builder.Configuration.GetSection(AuthTokenOptions.SectionName).Get<AuthTokenOptions>()
-    ?? throw new InvalidOperationException($"Configuration section '{AuthTokenOptions.SectionName}' is missing.");
-if (authOptions.SigningKey.Length < 32)
-{
-    // Fail at startup, not on the first login: an empty key would otherwise surface as an opaque
-    // SymmetricSecurityKey/IDX10653 error deep inside the token stack.
-    throw new InvalidOperationException(
-        "Authentication:SigningKey is missing or shorter than 32 characters (256 bits for HMAC-SHA256). "
-        + "Set it via user secrets in development (dotnet user-secrets set \"Authentication:SigningKey\" \"<random 32+ chars>\") "
-        + "or via the environment/secret store in production.");
-}
-
-builder.Services.AddApiAuthentication(authOptions);
+// This host mints and validates tokens, so a missing or too-short signing key must stop it at boot
+// with an actionable message rather than fail the first login. AddApiAuthentication then reads those
+// same validated options — the Authentication section is never bound a second time.
+builder.Services.RequireValidTokenOptions();
+builder.Services.AddApiAuthentication();
 
 builder.Services.AddExceptionHandler<Trellis.Api.ConcurrencyExceptionHandler>();
 builder.Services.AddApiCommon();
@@ -75,6 +67,10 @@ builder.AddRedisDistributedCache("cache");
 #endif
 
 var app = builder.Build();
+
+// First in the pipeline on purpose: every log line after this carries the correlation id, including
+// the ones the exception handler writes.
+app.UseCorrelationId();
 
 app.UseExceptionHandler();
 

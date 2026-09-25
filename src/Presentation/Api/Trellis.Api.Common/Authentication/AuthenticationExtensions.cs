@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Trellis.Application.Options;
 
@@ -10,12 +11,20 @@ namespace Trellis.Api.Common.Authentication;
 
 public static class AuthenticationExtensions
 {
-    /// <summary>JWT bearer authentication + permission-based authorization (policies created on demand per permission).</summary>
-    public static IServiceCollection AddApiAuthentication(this IServiceCollection services, AuthTokenOptions options)
+    /// <summary>
+    /// JWT bearer authentication + permission-based authorization (policies created on demand per
+    /// permission). Signing configuration comes from the validated <see cref="AuthTokenOptions"/>
+    /// registered by AddInfrastructure — binding the section a second time here would mean two
+    /// sources of truth, only one of which is validated.
+    /// </summary>
+    public static IServiceCollection AddApiAuthentication(this IServiceCollection services)
     {
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(jwt =>
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<IOptions<AuthTokenOptions>>((jwt, authTokenOptions) =>
             {
+                AuthTokenOptions options = authTokenOptions.Value;
                 jwt.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,

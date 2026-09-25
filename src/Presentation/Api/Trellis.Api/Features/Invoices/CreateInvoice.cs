@@ -18,7 +18,9 @@ internal sealed class CreateInvoice : IEndpoint
         .RequirePermission(Permissions.Invoices.Write)
         .RequireIdempotency()
         .WithTags(InvoiceEndpoints.Tag)
-        .WithSummary("Create a draft invoice");
+        .WithSummary("Create a draft invoice")
+        .WithDescription(
+            "Creates an invoice in Draft state with no lines. The currency is fixed at creation and every line added later must match it. Send an Idempotency-Key header so a retried request cannot create a second invoice.");
 
     private static async Task<Results<CreatedAtRoute<CreateInvoiceResponse>, ProblemHttpResult>> Handle(
         CreateInvoiceRequest request,

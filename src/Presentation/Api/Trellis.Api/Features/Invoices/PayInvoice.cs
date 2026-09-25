@@ -19,7 +19,9 @@ internal sealed class PayInvoice : IEndpoint
         .RequirePermission(Permissions.Invoices.Write)
         .RequireIdempotency()
         .WithTags(InvoiceEndpoints.Tag)
-        .WithSummary("Record payment of an issued invoice");
+        .WithSummary("Record payment of an issued invoice")
+        .WithDescription(
+            "Records payment of an Issued invoice and moves it to Paid. Only an issued invoice can be paid.");
 
     private static async Task<Results<NoContent, ProblemHttpResult>> Handle(
         InvoiceId id,

@@ -15,7 +15,9 @@ internal sealed class Register : IEndpoint
         .AllowAnonymous()
         .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
         .WithTags(AuthEndpoints.Tag)
-        .WithSummary("Create a new account");
+        .WithSummary("Create a new account")
+        .WithDescription(
+            "Creates a new account with the default member role. The account can sign in immediately; permissions come from its roles.");
 
     private static async Task<Results<Ok<RegisterResponse>, ProblemHttpResult>> Handle(
         RegisterRequest request,

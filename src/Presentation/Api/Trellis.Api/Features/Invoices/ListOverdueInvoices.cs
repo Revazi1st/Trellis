@@ -18,7 +18,9 @@ internal sealed class ListOverdueInvoices : IEndpoint
         .MapGet("invoices/overdue", Handle)
         .RequirePermission(Permissions.Invoices.Read)
         .WithTags(InvoiceEndpoints.Tag)
-        .WithSummary("List issued invoices past their due date, oldest first (paged)");
+        .WithSummary("List issued invoices past their due date, oldest first (paged)")
+        .WithDescription(
+            "Issued invoices whose due date has passed, oldest first. Paged via the standard page/pageSize parameters; the response is the PagedResponse envelope, never a bare array.");
 
     private static async Task<Results<Ok<PagedResponse<InvoiceDto>>, ProblemHttpResult>> Handle(
         [AsParameters] PageRequest request,

@@ -15,7 +15,9 @@ internal sealed class Refresh : IEndpoint
         .AllowAnonymous()
         .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
         .WithTags(AuthEndpoints.Tag)
-        .WithSummary("Rotate a refresh token for a new token pair");
+        .WithSummary("Rotate a refresh token for a new token pair")
+        .WithDescription(
+            "Exchanges a refresh token for a new token pair. Refresh tokens are single-use: presenting a consumed one is treated as a replay and revokes every outstanding token for that user.");
 
     private static async Task<Results<Ok<TokenResponse>, ProblemHttpResult>> Handle(
         RefreshRequest request,

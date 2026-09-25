@@ -12,7 +12,9 @@ internal sealed class RevokeSessions : IEndpoint
         .MapPost("auth/revoke-all", Handle)
         .RequireAuthorization()
         .WithTags(AuthEndpoints.Tag)
-        .WithSummary("Sign out everywhere: invalidate all of the caller's refresh tokens (e.g. after a password change)");
+        .WithSummary("Sign out everywhere: invalidate all of the caller's refresh tokens (e.g. after a password change)")
+        .WithDescription(
+            "Invalidates every live refresh token belonging to the caller, signing them out on all devices. Use after a password change or a suspected token compromise.");
 
     private static async Task<Results<NoContent, ProblemHttpResult>> Handle(
         ICommandHandler<RevokeSessionsCommand> handler,
