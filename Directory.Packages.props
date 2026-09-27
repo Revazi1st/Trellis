@@ -76,7 +76,7 @@
     <PackageVersion Include="Aspire.Hosting.Redis" Version="13.4.6" />
     <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.6" />
     <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.4.6" />
-    <PackageVersion Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.4.6" />
+    <PackageVersion Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.5.4" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
