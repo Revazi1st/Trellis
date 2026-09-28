@@ -21,7 +21,7 @@ jobs:
     steps:
       # fetch-depth: 0 — scanning the full history is the point. A secret that was committed and
       # then "removed" in a later commit is still in the history, and still compromised.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # A template installed from a NuGet package loses the Unix executable bit, and the
       # chmod post-action only runs when the host allows script post-actions. Restore it
@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
@@ -165,7 +165,7 @@ jobs:
     # genuinely change no behavior.
     if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'docs-not-needed')
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Make scripts executable
