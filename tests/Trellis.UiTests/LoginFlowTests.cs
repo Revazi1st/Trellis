@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using Shouldly;
 using Xunit;
@@ -29,7 +30,13 @@ public sealed class LoginFlowTests
         await page.ClickAsync("button[type='submit']");
 
         await page.WaitForURLAsync("**/invoices", new() { Timeout = 15_000 });
-        (await page.TitleAsync()).ShouldContain("Invoices");
+        // WaitForURLAsync returns the moment the circuit navigates, but Blazor applies <PageTitle>
+        // on the NEXT render — reading the title right here can still see "Sign in". Expect() is the
+        // auto-retrying assertion; a bare TitleAsync() is a race that passes on a fast agent and
+        // fails on a loaded one.
+        await Assertions.Expect(page).ToHaveTitleAsync(
+            new Regex("Invoices", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(5)),
+            new() { Timeout = 15_000 });
     }
 
     [Fact]
