@@ -73,12 +73,12 @@
   <ItemGroup Label="Aspire / ServiceDefaults">
     <!-- Aspire.Hosting.AppHost is implicit via the Aspire.AppHost.Sdk (version pinned inline in the AppHost csproj);
          a PackageVersion entry for it here triggers NU1009. -->
-    <PackageVersion Include="Aspire.Hosting.Docker" Version="13.5.4" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.4" />
-    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.5.4" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.5.4" />
-    <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.5.4" />
-    <PackageVersion Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.5.4" />
+    <PackageVersion Include="Aspire.Hosting.Docker" Version="13.6.0" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.0" />
+    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.6.0" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.0" />
+    <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.6.0" />
+    <PackageVersion Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.6.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.10.0" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
