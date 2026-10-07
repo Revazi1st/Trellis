@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Fails if a feature slice changed on this branch without a corresponding docs/features change.
+# Fails if code changed on this branch without the doc that describes it changing too:
+#   - a feature slice (src/**/Features/**)                       -> docs/features/*.md
+#   - authentication, hardening, identity or the Auth feature    -> docs/threat-model.md
 # The hard guarantee behind the soft PostToolUse reminder. Override with the 'docs-not-needed' PR label
 # (wire that into the workflow) or by setting DOCS_DRIFT_SKIP=1.
 set -euo pipefail
@@ -13,13 +15,27 @@ base="${1:-origin/main}"
 range="$(git merge-base "$base" HEAD)...HEAD"
 
 changed="$(git diff --name-only "$range")"
-features_changed="$(printf '%s\n' "$changed" | grep -E 'src/.*/Features/' || true)"
-docs_changed="$(printf '%s\n' "$changed" | grep -E 'docs/features/' || true)"
+fail=0
 
-if [ -n "$features_changed" ] && [ -z "$docs_changed" ]; then
-  echo "::error::Feature slices changed without a docs/features update:"
-  printf '%s\n' "$features_changed"
-  echo "Update the relevant docs/features/*.md, or apply the 'docs-not-needed' label / set DOCS_DRIFT_SKIP=1."
+# require_doc <code-path regex> <doc-path regex> <what changed>
+require_doc() {
+  local code_changed doc_changed
+  code_changed="$(printf '%s\n' "$changed" | grep -E "$1" || true)"
+  doc_changed="$(printf '%s\n' "$changed" | grep -E "$2" || true)"
+
+  if [ -n "$code_changed" ] && [ -z "$doc_changed" ]; then
+    echo "::error::$3 changed without a $4 update:"
+    printf '%s\n' "$code_changed"
+    fail=1
+  fi
+}
+
+require_doc 'src/.*/Features/' '^docs/features/' "Feature slices" "docs/features/*.md"
+require_doc 'src/.*/(Authentication|Hardening|Identity|Features/Auth)/' '^docs/threat-model\.md$' \
+  "Authentication, hardening or identity code" "docs/threat-model.md"
+
+if [ "$fail" -ne 0 ]; then
+  echo "Update the docs named above, or apply the 'docs-not-needed' label / set DOCS_DRIFT_SKIP=1."
   exit 1
 fi
 
