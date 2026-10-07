@@ -7,6 +7,23 @@ All notable changes to Trellis are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **The UI shows what the API said.** `Api.Contracts` gains `ProblemResponse` and `FieldError`
+  (a tolerant mirror of the RFC 9457 body); `ApiResult<T>` carries `StatusCode`, `Problem` and the
+  field `Errors`; one `ApiResponses` describer turns problem codes, a 429's `Retry-After`,
+  validation errors and an unreachable API into user-facing sentences (previously each client had
+  a fixed sentence such as `Request failed (409).`). The seeded-admin login hint renders only in Development
+  (`UiOptions.ShowDevelopmentHints`).
+- **Generated CI**: `--use-redis` projects start Redis and pass `ConnectionStrings:cache` in the
+  `api-contract` and `ui-tests` jobs (the generated API's `/health` answered 503 before), and the
+  maintainer-only template toggle check no longer ships as a permanently skipped step (new
+  `TemplateSource` constant symbol). `scripts/check-template-toggles.sh` now fails when a
+  template.json exclude glob stops matching a tracked file and understands doubled-hash YAML
+  conditionals.
+- **Docs & AI assets**: ADR-0021 (API hardening defaults) and ADR-0022 (tenant on the principal,
+  superseding the header parts of ADR-0019); `docs/threat-model.md` rewritten with a status per
+  gap, and the docs-drift check requires it to move with auth, identity and hardening code; the
+  template and package author is "Trellis contributors"; the README states which Docker engines
+  this repository actually exercises.
 - **Result combinators** (`Bind`/`Map`/`Tap`/`Ensure` + async overloads, `Result.Combine` that
   aggregates every value-object failure into one response) and a **`Currency` value object** —
   `CreateInvoiceCommandHandler` is the refactored showcase. `Money` now rejects sub-cent scale
@@ -56,6 +73,19 @@ All notable changes to Trellis are documented here. The format follows
   GitHub Actions updates.
 
 ### Reliability & testing
+- **Blazor sessions survive transient refresh failures**: only a 401 from `POST /auth/refresh`
+  ends the session; a 429, a 5xx or an unreachable API keeps the token pair and holds off further
+  refresh attempts for 5 s (previously any failed rotation signed the circuit out).
+- **New suites**: `EndpointMetadataTests` (every `/api/` endpoint is anonymous by allowlist or
+  carries a catalogued permission policy, idempotency on writes, summary and description),
+  `ForwardedHeadersTests`, `AuthRateLimitTests` (every test client now has its own simulated
+  address, so fixtures no longer drain one shared anonymous partition), `RequestLimitTests` on a
+  real Kestrel listener, `AuthFlowTests` (15 end-to-end auth facts: lockout, replay, revoke-all,
+  expiry, timing), `TenantIsolationTests` plus four more `TenancyTests`, `ApiTests/Ui` (39 tests
+  over the real `AddSharedUi` graph with a scripted handler and a manual clock), and unit tests
+  for the auth validators and handlers. The in-process host disables Aspire's Redis health check
+  and opens registration itself, so the generated tests pass in every toggle leg, Serilog and
+  Redis included.
 - **Outbox, production-shaped**: skip-locked batch claiming (replicas never double-dispatch),
   exponential backoff (30s→4m instead of five retries in 25 seconds), explicit
   Pending/Processed/DeadLettered status with a critical log + `trellis.outbox.dead_lettered`
@@ -83,6 +113,43 @@ All notable changes to Trellis are documented here. The format follows
   the browser suite gained wrong-password and create-invoice flows.
 
 ### Security
+- **Endpoints require authorization by default** (ADR-0021). The versioned API group calls
+  `RequireAuthorization()`; the four auth endpoints are the explicit anonymous allowlist, `/health`
+  and `/alive` stay on the host, and a test fails any endpoint that is neither anonymous nor
+  carrying a permission from the catalogue. `RequirePermission` with an unknown name now throws at
+  startup instead of minting a policy nobody can satisfy. An endpoint you add is authenticated
+  unless you say otherwise.
+- **Registration is closed by default.** `POST /auth/register` answers 403 `Auth.RegistrationClosed`
+  unless `Registration:Mode` is `Open` (Development sets `Open`; production opts in explicitly).
+  Login costs one password verification whether or not the e-mail exists (timing no longer reveals
+  which addresses are registered), and failed sign-ins and lockouts are logged as events 1101-1104
+  with the e-mail masked and never a password.
+- **Forwarded headers: trust never widens.** With `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` and no
+  trusted proxy configured (what Aspire's publishers emit), the framework trusted `X-Forwarded-For`
+  from anyone, so a caller could pick its own rate-limit partition. The API restores loopback-only
+  trust, applies the middleware once, and logs a startup warning naming
+  `ForwardedHeaders__KnownNetworks__0` / `ForwardedHeaders__KnownProxies__0`.
+- **Rate limits by credential type.** Only register and login carry the strict `auth` policy;
+  refresh and logout fall under the global limiter (a web host relaying many users no longer locks
+  them all out of refresh); `/health` and `/alive` are exempt, so an orchestrator probing past
+  100/min never sees 429.
+- **The tenant comes from the token, not a header** (ADR-0022, `--use-multitenancy`). `X-Tenant-Id`
+  was trusted from any caller and is now ignored. Users carry a `TenantId`, the JWT carries a
+  `tenant` claim, a token without it is rejected (401, `invalid_token`), and every aggregate root is
+  tenant-filtered by convention (`IHasDomainEvents`) instead of per entity configuration.
+  Self-registration provisions a fresh tenant; `Seed:TenantId` (default `default`) names the seeded
+  admin's. Enabling the toggle regenerates the initial migration with `AspNetUsers.TenantId`.
+- **Hardening defaults.** HS256 is the only accepted signing algorithm; 401s carry
+  `WWW-Authenticate: Bearer` (`error="invalid_token"` on a failed token); every API response gets
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY` and
+  `Content-Security-Policy: frame-ancestors 'none'`, and `/auth/*` responses add `Cache-Control:
+  no-store`; Kestrel caps request bodies at 1 MB (413 above it) and request headers at 32 KB,
+  overridable through `Kestrel:Limits:*`. The Blazor host sends its own CSP (`script-src 'self'`,
+  `frame-ancestors 'none'`), `X-Frame-Options: DENY`, nosniff and `Referrer-Policy: same-origin`.
+- **Auth input is validated.** Login, refresh and logout answer 400 problem details for missing or
+  oversized fields instead of 500, and an oversized password costs no hash work.
+- **Every generated project gets its own Development signing key** (`dev-only-` plus 64 hex
+  characters, minted at `dotnet new` time), so no two projects share the template's placeholder.
 - **Account lockout**: five failed sign-ins lock the account for 15 minutes (403
   `Auth.AccountLockedOut`); a successful login resets the counter. Previously the Identity lockout
   columns were dead schema and per-account brute force was unthrottled.
@@ -103,6 +170,12 @@ All notable changes to Trellis are documented here. The format follows
   section (tagging without notes fails the release).
 
 ### Fixed
+- **`GET /invoices/{id}` under `--use-multitenancy` answered 404 for the caller's own tenant** right
+  after creation: HybridCache runs its factories on a detached flow where the request's tenant was
+  invisible, so the filtered query ran as the system scope. `TenantContext` now remembers the
+  tenant per scope.
+- **`--include-ui false` output shipped five empty `ApiTests/Ui/*.cs` files**; the folder is now
+  excluded together with the UI.
 - **`aspire run` (and the Aspire E2E) pointed every resource at the wrong database.** The IDE
   launch profiles pass a hardcoded dev connection string as a command-line argument (needed for
   the dev-container flow), and arguments outrank the connection string Aspire injects — so
