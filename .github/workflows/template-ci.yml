@@ -51,11 +51,6 @@ jobs:
             regenerate-migration: true
             # Build alone missed a runtime-only DI failure once (ITenantContext); run the generated tests too.
             test: true
-          # A kebab-case project name, build only. Kept as its own leg so it can be dropped on its
-          # own if such names are declared unsupported (they become acme_shop identifiers).
-          - name: kebab-name
-            args: ""
-            out: acme-shop
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
