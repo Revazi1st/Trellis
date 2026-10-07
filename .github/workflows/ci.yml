@@ -40,9 +40,9 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # A template installed from a NuGet package loses the Unix executable bit, and the
-      # chmod post-action only runs when the host allows script post-actions. Restore it
-      # explicitly so generated projects work regardless.
+      # A template installed from a NuGet package loses the Unix executable bit. The template's
+      # chmod post-action restores it, but a host that skips post-actions (or a commit made on
+      # Windows) does not, so set it explicitly and generated projects work regardless.
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
 
@@ -59,6 +59,13 @@ jobs:
 
       - name: ADR link check
         run: ./scripts/check-adr-links.sh
+
+      # Template source only: a generated project has no .template.config, so the step skips
+      # itself there. Here it keeps every template condition symbol declared and every toggle
+      # exposed, on every PR rather than only when the template config changes.
+      - name: Template toggle check
+        if: hashFiles('.template.config/template.json') != ''
+        run: ./scripts/check-template-toggles.sh
 
       - name: Build (warnings as errors)
         run: dotnet build Trellis.slnx --no-restore -c Release
@@ -90,6 +97,89 @@ jobs:
           path: TestResults
           if-no-files-found: ignore
 
+  # The committed OpenAPI document is the API's public contract artifact (ADR-0013): regenerating
+  # it against the running app catches accidental wire-contract changes. A job of its own, not a
+  # step of the optional browser-test job, so every project keeps this gate whatever options
+  # created it.
+  api-contract:
+    name: API contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Start PostgreSQL
+        run: docker compose up -d --wait postgres
+
+      - name: Build the API and the migration service
+        run: |
+          dotnet build src/Presentation/Api/Trellis.Api -c Release
+          dotnet build tools/Trellis.MigrationService -c Release
+
+      # The API's background services (outbox, data retention) query the schema from their first
+      # tick, so the database is migrated before the API starts.
+      - name: Migrate & seed
+        env:
+          DOTNET_ENVIRONMENT: Development
+        run: dotnet run --project tools/Trellis.MigrationService -c Release --no-build --no-launch-profile -- "--ConnectionStrings:trellis-db=Host=localhost;Port=5433;Database=trellis;Username=postgres;Password=postgres"
+
+      - name: Start the API
+        env:
+          # The OpenAPI document is mapped only in Development.
+          ASPNETCORE_ENVIRONMENT: Development
+        run: |
+          mkdir -p "$RUNNER_TEMP/applogs"
+          dotnet run --project src/Presentation/Api/Trellis.Api -c Release --no-build --no-launch-profile -- \
+            "--ConnectionStrings:trellis-db=Host=localhost;Port=5433;Database=trellis;Username=postgres;Password=postgres" \
+            --urls http://localhost:5171 > "$RUNNER_TEMP/applogs/api.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -fsS http://localhost:5171/alive >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "::group::api.log"; cat "$RUNNER_TEMP/applogs/api.log" || true; echo "::endgroup::"
+          echo "::error::The API did not become ready (see the api.log group above)" && exit 1
+
+      - name: OpenAPI contract diff
+        run: |
+          ./scripts/export-openapi.sh http://localhost:5171
+          git diff --exit-code docs/api/openapi.v1.json || {
+            echo "::error::The API's OpenAPI document changed. If intentional, regenerate docs/api/openapi.v1.json (scripts/export-openapi.sh) and commit it."
+            exit 1
+          }
+
+  # The no-local-SDK path (scripts/dotnet.sh, ADR-0008) on a stock Linux Docker Engine, the host
+  # where it breaks most easily: Testcontainers started from inside the SDK container reach their
+  # sibling containers through host.docker.internal, which only Docker Desktop resolves unaided.
+  sdk-container:
+    name: SDK container
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Build the SDK image
+        run: docker build -t trellis-sdk:10.0 scripts/sdk-image
+
+      - name: Build (in the SDK container)
+        run: ./scripts/dotnet.sh build Trellis.slnx
+
+      - name: Integration tests (in the SDK container)
+        run: ./scripts/dotnet.sh test tests/Trellis.IntegrationTests
+
+#if (IncludeUiTests && IncludeUI)
+  # Browser tests against the real API and Web hosts. A generated project carries this job only
+  # when it was created with --include-ui-tests (and the UI); otherwise there is no UiTests project.
   ui-tests:
     name: Playwright UI
     runs-on: ubuntu-latest
@@ -130,7 +220,7 @@ jobs:
           Services__api__http__0=http://localhost:5171 \
             dotnet run --project src/Presentation/UI/Trellis.UI.Web -c Release --no-build --no-launch-profile -- \
             --urls http://localhost:5170 > "$RUNNER_TEMP/applogs/web.log" 2>&1 &
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             curl -fsS http://localhost:5170/alive >/dev/null 2>&1 && curl -fsS http://localhost:5171/alive >/dev/null 2>&1 && exit 0
             sleep 2
           done
@@ -147,16 +237,7 @@ jobs:
           UI_TESTS_BASE_URL: http://localhost:5170
         run: dotnet test tests/Trellis.UiTests -c Release --no-build
 
-      # The committed OpenAPI document is the API's public contract artifact (ADR-0013):
-      # regenerating it against the running app catches accidental wire-contract changes.
-      - name: OpenAPI contract diff
-        run: |
-          ./scripts/export-openapi.sh http://localhost:5171
-          git diff --exit-code docs/api/openapi.v1.json || {
-            echo "::error::The API's OpenAPI document changed. If intentional, regenerate docs/api/openapi.v1.json (scripts/export-openapi.sh) and commit it."
-            exit 1
-          }
-
+#endif
   docs-drift:
     name: Docs drift
     runs-on: ubuntu-latest

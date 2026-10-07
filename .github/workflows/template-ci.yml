@@ -1,16 +1,27 @@
 name: Template CI
 
+# No paths filter on purpose: the toggle ON-branches (UseRedis, UseSerilog, UseMultitenancy,
+# IncludeUiTests) compile only in this matrix, and an ordinary change under src/, tests/ or tools/
+# breaks them as easily as a template.json edit does.
 on:
   push:
     branches: [main]
-    paths: [".template.config/**", "eng/**", "Trellis.slnx", ".github/workflows/template-ci.yml"]
   pull_request:
     branches: [main]
-    paths: [".template.config/**", "eng/**", "Trellis.slnx"]
   workflow_dispatch:
+  # release.yml runs the whole matrix as a gate before anything is published.
+  workflow_call:
 
 permissions:
   contents: read
+
+concurrency:
+  group: template-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned by digest, like the actions: a mutable tag must not change what CI runs.
+  ACTIONLINT_IMAGE: rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9
 
 jobs:
   instantiate:
@@ -24,9 +35,11 @@ jobs:
           - name: default
             args: ""
             out: Acme.Shop
+            test: true
           - name: no-ui
             args: "--include-ui false"
             out: Acme.Api
+            test: true
           - name: no-ui-with-uitests
             # UI tests without the UI must degrade gracefully (the UiTests project is dropped).
             args: "--include-ui false --include-ui-tests true"
@@ -34,8 +47,15 @@ jobs:
           - name: all-options
             args: "--use-redis true --use-serilog true --use-multitenancy true --include-ui-tests true"
             out: Acme.Full
+            # Multi-tenancy adds columns, so the shipped initial migration is regenerated first.
+            regenerate-migration: true
             # Build alone missed a runtime-only DI failure once (ITenantContext); run the generated tests too.
             test: true
+          # A kebab-case project name, build only. Kept as its own leg so it can be dropped on its
+          # own if such names are declared unsupported (they become acme_shop identifiers).
+          - name: kebab-name
+            args: ""
+            out: acme-shop
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -47,16 +67,82 @@ jobs:
       - name: Install template from source
         run: dotnet new install .
 
+      # No --allow-scripts: the template's chmod post-action is the dedicated chmod action,
+      # which never prompts (a prompt on a non-TTY would hang dotnet new).
       - name: Instantiate
-        # --allow-scripts yes: the chmod post-action otherwise prompts, and on a non-TTY
-        # dotnet new loops forever on the unanswerable prompt.
-        run: dotnet new trellis -n "${{ matrix.out }}" -o ../generated --allow-scripts yes ${{ matrix.args }}
+        run: dotnet new trellis -n "${{ matrix.out }}" -o ../generated ${{ matrix.args }}
+
+      # Nothing in a generated project may still carry the template's name, unprocessed template
+      # syntax, or files that never belong in a repository. Build output (restore already ran as a
+      # post-action) is skipped: it holds absolute runner paths, which contain the repository name.
+      - name: Content gate
+        working-directory: ../generated
+        run: |
+          fail=0
+          prune=(-path ./.git -o -path ./artifacts -o -name bin -o -name obj)
+          skip=(--exclude-dir=.git --exclude-dir=artifacts --exclude-dir=bin --exclude-dir=obj)
+
+          names=$(find . \( "${prune[@]}" \) -prune -o -iname '*trellis*' -print)
+          if [ -n "$names" ]; then
+            echo "::error::Generated files or directories still named after the template:"
+            echo "$names"
+            fail=1
+          fi
+
+          if grep -rInF "${skip[@]}" '#if (' .; then
+            echo "::error::Unprocessed template conditionals in the generated output (listed above)."
+            fail=1
+          fi
+
+          if grep -rInF "${skip[@]}" 'TRELLIS_' .; then
+            echo "::error::TRELLIS_ tokens survived instantiation (listed above)."
+            fail=1
+          fi
+
+          junk=$(find . \( "${prune[@]}" \) -prune -o \( -name .DS_Store -o -name 'appsettings.*.local.json' -o -name '*.pfx' \) -print)
+          if [ -n "$junk" ]; then
+            echo "::error::Files that must never ship are in the generated output:"
+            echo "$junk"
+            fail=1
+          fi
+
+          exit "$fail"
+
+      # The generated project's own repository checks must pass on the day it is created.
+      - name: Generated ADR link check
+        working-directory: ../generated
+        run: bash scripts/check-adr-links.sh
+
+      - name: Lint the generated workflows
+        working-directory: ../generated
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo "$ACTIONLINT_IMAGE" -color .github/workflows/*.yml
+
+      # Informational until the template's own name and the maintainer handle are cleaned out of
+      # the shipped docs; then drop continue-on-error so this gates like the step above.
+      - name: Template name leftovers (informational)
+        continue-on-error: true
+        working-directory: ../generated
+        run: |
+          hits=$(grep -rIniE --exclude-dir=.git --exclude-dir=artifacts --exclude-dir=bin --exclude-dir=obj 'trellis|Revazi1st' . || true)
+          if [ -z "$hits" ]; then
+            echo "No 'trellis' or 'Revazi1st' left in the generated output." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          count=$(printf '%s\n' "$hits" | wc -l | tr -d ' ')
+          {
+            echo "### ${{ matrix.name }}: $count line(s) still mention 'trellis' or 'Revazi1st'"
+            echo
+            echo '```text'
+            printf '%s\n' "$hits" | head -n 300
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::$count line(s) in the generated output still mention 'trellis' or 'Revazi1st' (see the job summary)."
+          exit 1
 
       - name: Regenerate the initial migration
-        if: ${{ matrix.test }}
+        if: ${{ matrix.regenerate-migration }}
         working-directory: ../generated
-        # Multi-tenancy adds columns, so the shipped migration must be regenerated after enabling —
-        # the same step docs/development.md tells consumers to run.
+        # The same step docs/development.md tells consumers to run after enabling multi-tenancy.
         run: |
           dotnet tool restore
           dotnet dotnet-ef migrations remove --force --project src/Infrastructure/*.Persistence
@@ -64,14 +150,14 @@ jobs:
 
       - name: Build generated solution
         working-directory: ../generated
-        run: dotnet build *.slnx -c Release
+        run: dotnet build ./*.slnx -c Release
 
       - name: Test generated solution
         if: ${{ matrix.test }}
         working-directory: ../generated
         # Aspire E2E and Playwright stay opt-in (not set here); everything else runs for real,
         # including the Testcontainers integration tests.
-        run: dotnet test *.slnx -c Release --no-build
+        run: dotnet test ./*.slnx -c Release --no-build
 
   pack:
     name: Pack & verify package
@@ -87,14 +173,28 @@ jobs:
           chmod +x scripts/check-template-toggles.sh
           ./scripts/check-template-toggles.sh
 
+      # The template-only workflows (this one, release.yml) never reach a generated project, so
+      # the instantiate legs do not lint them.
+      - name: Lint the workflows
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo "$ACTIONLINT_IMAGE" -color .github/workflows/*.yml
+
       - name: Pack
         run: dotnet pack eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj -o ./nupkg
+
+      # The pack csproj has its own exclude list, separate from template.json's.
+      - name: Package content gate
+        run: |
+          if unzip -Z1 ./nupkg/*.nupkg | grep -iE '(^|/)\.DS_Store$|(^|/)appsettings\.[^/]*\.local\.json$|\.pfx$'; then
+            echo "::error::The package contains files that must never ship (listed above)."
+            exit 1
+          fi
+
       # The `instantiate` job validates the SOURCE tree (template.json's exclude list); real users
       # install the .nupkg, whose content set comes from the pack csproj — verify that artifact too.
       - name: Instantiate & build from the packed template
         run: |
           dotnet new install ./nupkg/*.nupkg
-          dotnet new trellis -n Acme.Packed -o "$RUNNER_TEMP/packed" --skip-restore true --allow-scripts yes
+          dotnet new trellis -n Acme.Packed -o "$RUNNER_TEMP/packed" --skip-restore true
           dotnet build "$RUNNER_TEMP"/packed/*.slnx -c Release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
