@@ -37,6 +37,6 @@ Layer-specific conventions load automatically from `.claude/rules/` when you tou
 
 ## Boundaries
 
-- **Always**: run build + tests before finishing a change; update `docs/features/<x>.md` when a feature's behavior changes (CI enforces this).
+- **Always**: run build + tests before finishing a change; update `docs/features/<x>.md` when a feature's behavior changes, and `docs/threat-model.md` when authentication, hardening or identity code changes (CI enforces both).
 - **Ask first**: adding a NuGet package (check the LICENSE CEILINGS block in `Directory.Packages.props`); adding a project.
 - **Never**: reference Infrastructure↔Persistence; hand-edit files under `Migrations/`; throw for expected failures instead of returning a `Result`; commit secrets; add MediatR / AutoMapper / FluentAssertions / MassTransit (commercial — see `Directory.Packages.props`).

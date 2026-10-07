@@ -1,3 +1,5 @@
+extern alias apihost;
+
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
@@ -6,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -63,6 +66,21 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         // Nothing was created: the address is not an account on either host.
         (await factory.CreateClient().PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(email, Password), ct))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Theory]
+    [InlineData("Sometimes")]   // not a mode at all: the binder cannot convert it
+    [InlineData("7")]           // converts to an undefined enum value: validation rejects it
+    public void Startup_WithAnUnknownRegistrationMode_FailsAtBoot(string mode)
+    {
+        WebApplicationFactory<apihost::Program> misconfigured =
+            factory.WithWebHostBuilder(builder => builder.UseSetting("Registration:Mode", mode));
+
+        // The registration policy is validated at boot like the signing key, not at the first sign-up.
+        Exception thrown = Should.Throw<Exception>(() => misconfigured.CreateClient());
+
+        string messages = string.Join(" | ", Unwrap(thrown).Select(static exception => exception.Message));
+        messages.ShouldContain("Registration:Mode", Case.Sensitive);
     }
 
     [Fact]
@@ -249,6 +267,26 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     }
 
     private static string NewEmail() => $"flow-{Guid.NewGuid():N}@inprocess.test";
+
+    private static IEnumerable<Exception> Unwrap(Exception exception)
+    {
+        yield return exception;
+
+        if (exception is AggregateException aggregate)
+        {
+            foreach (Exception nested in aggregate.InnerExceptions.SelectMany(Unwrap))
+            {
+                yield return nested;
+            }
+        }
+        else if (exception.InnerException is { } inner)
+        {
+            foreach (Exception nested in Unwrap(inner))
+            {
+                yield return nested;
+            }
+        }
+    }
 
     private static async Task<string> RegisterAsync(HttpClient client, CancellationToken ct)
     {

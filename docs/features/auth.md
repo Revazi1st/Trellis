@@ -14,6 +14,9 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 - **Access tokens**: HMAC-SHA256 JWTs carrying `sub`, email and one `permission` claim per effective
   permission (union across roles). Short-lived (`Authentication:AccessTokenMinutes`, default 15).
   The signing key is validated at API startup — boot fails if it is missing or under 32 chars.
+  `dotnet new` writes a fresh random Development key into each generated project's
+  `appsettings.Development.json` (`dev-only-` + 64 hex characters); every other environment
+  supplies its own.
   Validation accepts HS256 only (`ValidAlgorithms`): a token naming another algorithm is rejected.
 - **Refresh tokens**: opaque 256-bit values; only their SHA-256 hash is stored (`RefreshTokens`
   table, FK → `AspNetUsers` with cascade delete). **Single-use rotation**: consuming is one atomic
@@ -23,6 +26,25 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 - **Account lockout**: 5 failed password attempts lock the account for 15 minutes
   (`Auth.AccountLockedOut` → 403). A successful login resets the counter. This is per-account
   defense; the `auth` rate-limit policy (10/min per user/IP) is the per-source layer.
+  Login answers 401 `Auth.InvalidCredentials` for an unknown e-mail and a wrong password alike,
+  spending the same password-hash work on both (`DummyPasswordHash`), so neither the answer nor
+  its timing tells them apart. A locked account answers 403 `Auth.AccountLockedOut` whatever
+  password is supplied (lockout is checked first, so a 403 never confirms a password); that it
+  confirms the account exists is an accepted risk (docs/threat-model.md).
+- **Registration** is governed by `Registration:Mode` (`RegistrationOptions`, validated at boot):
+  `Closed` — the default, and the value in `appsettings.json` — answers 403
+  `Auth.RegistrationClosed` and creates nothing; `Open` lets anyone create a Member account.
+  `appsettings.Development.json` sets `Open`; anywhere else, opt in with `Registration__Mode=Open`
+  only once anyone on the network may read what a Member can. `RegisterCommandHandler` is the one
+  place an account is created, so everything that comes with one sits behind this check.
+- **Input limits**: validators reject a missing e-mail, password or refresh token, an e-mail over
+  320 characters, a password over 128 (login and registration alike) and a refresh token over 512
+  (issued tokens are 43) with 400, before Identity, the password hasher or the token hash run.
+- **Security events** (`SecurityEventLog`, `[LoggerMessage]`, written by `IdentityService`): 1101
+  `LoginFailed` (Information, user id), 1102 `LoginFailedUnknownAccount` (Information, masked
+  e-mail such as `j***@example.com`), 1103 `AccountLockedOut` (Warning, user id — the counter just
+  tripped), 1104 `LoginRejectedLockedOut` (Information, user id). Never the password, never the
+  e-mail as typed.
 - **Logout** revokes the presented refresh token (idempotent, anonymous — possession of the token is
   the authorization; never trips replay detection). **Revoke-all** signs the caller out everywhere.
 - **Seeding**: the MigrationService seeds roles/permissions always, the admin user always, and demo
@@ -34,7 +56,7 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 
 | Method | Route | Auth |
 |---|---|---|
-| POST | `/api/v1/auth/register` | anonymous, `auth` rate limit |
+| POST | `/api/v1/auth/register` | anonymous, `auth` rate limit, `Registration:Mode` |
 | POST | `/api/v1/auth/login` | anonymous, `auth` rate limit |
 | POST | `/api/v1/auth/refresh` | anonymous, global rate limit |
 | POST | `/api/v1/auth/logout` | anonymous, global rate limit |
@@ -48,7 +70,8 @@ whole anonymous allowlist (`EndpointMetadataTests`).
 
 Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 problem details
 (`Auth.InvalidCredentials` 401, `Auth.AccountLockedOut` 403, `Auth.InvalidRefreshToken` 401,
-`Auth.EmailAlreadyInUse` 409).
+`Auth.EmailAlreadyInUse` 409, `Auth.RegistrationClosed` 403, and 400 with `errors[]` for input
+that fails a validator).
 
 ## UI
 
@@ -64,10 +87,16 @@ rejected), and every `/auth/` response is `Cache-Control: no-store`.
 
 ## Tests
 
-`Application.UnitTests/Auth` (login/refresh handler logic with faked ports) ·
+`Application.UnitTests/Auth` (login/refresh/register/logout/revoke-all handlers with faked ports,
+the validators, and the convention that every command with string input has a validator) ·
 `IntegrationTests/AuthSecurityTests` (lockout thresholds + reset, replay revocation, revoke
 idempotency — real Identity + PostgreSQL) · `ApiTests/InProcess/AuthRateLimitTests` (login 429 with
 `Retry-After`, refresh chains and twelve sessions through one host never throttled) ·
-`EndpointMetadataTests` (anonymous allowlist, permissions, challenge header, algorithm pin).
+`EndpointMetadataTests` (anonymous allowlist, permissions, challenge header, algorithm pin) ·
+`ApiTests/InProcess/AuthFlowTests` (open and closed registration, an unknown mode failing the
+boot; rotation, replay killing the family, logout twice, revoke-all; lockout 4×401 → 403 → 403
+with its security events; equal hash work for an unknown e-mail; refresh-token expiry on an
+adjustable clock; 400 for missing fields).
 
-> When you change this feature's behavior, update this file (the CI docs-drift check enforces it).
+> When you change this feature's behavior, update this file, and docs/threat-model.md when the
+> change is security-relevant (the CI docs-drift check enforces both for auth code).
