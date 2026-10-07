@@ -24,6 +24,9 @@ public sealed class DecoratorPipelineTests
 
     public DecoratorPipelineTests()
     {
+        // NSubstitute cannot invent a Result: an unconfigured CommitAsync would hand the decorator null.
+        _unitOfWork.CommitAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+
         var services = new ServiceCollection();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddSingleton(_invoices);
@@ -62,7 +65,7 @@ public sealed class DecoratorPipelineTests
 
         result.IsSuccess.ShouldBeTrue();
         _invoices.ReceivedWithAnyArgs(1).Add(default!);
-        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -80,7 +83,7 @@ public sealed class DecoratorPipelineTests
         validationError.Errors.ShouldContain(static e => e.Code == "CustomerEmail");
 
         _invoices.DidNotReceiveWithAnyArgs().Add(default!);
-        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -95,7 +98,7 @@ public sealed class DecoratorPipelineTests
 
         result.IsFailure.ShouldBeTrue();
         result.Error.Type.ShouldBe(ErrorType.NotFound);
-        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]

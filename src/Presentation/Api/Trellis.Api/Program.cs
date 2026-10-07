@@ -45,7 +45,6 @@ builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableR
 builder.Services.RequireValidTokenOptions();
 builder.Services.AddApiAuthentication();
 
-builder.Services.AddExceptionHandler<Trellis.Api.ConcurrencyExceptionHandler>();
 builder.Services.AddApiCommon();
 builder.Services.AddApiDocumentation();
 builder.Services.AddApiVersioningDefaults();

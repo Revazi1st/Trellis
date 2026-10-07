@@ -14,7 +14,7 @@ paths: ["src/Presentation/Api/**/*.cs"]
 - **Host hardening lives in `AddApiHardening`/`UseApiHardening`** — forwarded headers (trust never widens: loopback-only unless `ForwardedHeaders:KnownProxies/KnownNetworks` say otherwise), security headers, `no-store` on `/auth/`, 1 MB body / 32 KB header caps. Don't re-add any of it per endpoint; raise the body limit only on the endpoint that needs it.
 - **Write endpoints add `.RequireIdempotency()`** (keys are scoped `(user, route, key)`; failed outcomes release the reservation) and **invalidate the read cache through the injected `CacheKeys` service** — never hand-build key strings; with multi-tenancy the key carries the tenant because a cache hit bypasses the EF tenant filter.
 - **List endpoints** bind `[AsParameters] PageRequest` and return the `PagedResponse<T>` envelope (`.ToPagedResponse(...)`) — never a bare array.
-- **Concurrency**: `DbUpdateConcurrencyException` (the `xmin` token) becomes a 409 via `ConcurrencyExceptionHandler` — don't catch it in endpoints.
+- **Concurrency**: the unit of work never throws for an expected outcome — `IUnitOfWork.CommitAsync` returns a stale `xmin` as `UnitOfWorkErrors.ConcurrencyConflict`, which reaches the endpoint as a failed `Result` (409 via `CustomResults`). Nothing in Presentation catches EF exceptions.
 - OpenAPI metadata comes from `TypedResults` + `.WithTags`/`.WithSummary`/`.WithDescription` (`EndpointMetadataTests` insists on summary and description). Scalar UI is dev-only.
 
 `Api.Contracts` is a pure DTO surface — no references, no logic (ADR-0013).
