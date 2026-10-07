@@ -38,7 +38,8 @@ the wholesale overwrites first, then work through the merge column file by file.
 ## 4. Schema-affecting changes
 
 If the new version changes the persistence model — or you enable a schema-affecting toggle
-while upgrading (`--use-multitenancy` adds a `TenantId` column):
+while upgrading (`--use-multitenancy` adds `TenantId` columns to every aggregate table,
+`OutboxMessages` and `AspNetUsers`):
 
 - **No deployed database yet**: keep the pre-release convention — regenerate the initial
   migration (`./scripts/ef.sh migrations remove` + `migrations add InitialCreate`).

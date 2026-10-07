@@ -32,6 +32,7 @@ you build on top.
 | Privilege escalation between roles | Permission-based authorization, policies resolved per permission claim; endpoints declare `.RequirePermission(...)` | `PermissionPolicyProvider` |
 | An endpoint shipped without authorization | Deny-by-default on the versioned API group; permissions per endpoint (unknown names fail the boot); the anonymous set is an allowlist test | `MapVersionedApiGroup`, `EndpointMetadataTests` |
 | Token forged by algorithm confusion | Validation accepts HS256 only (`ValidAlgorithms`) | `AddApiAuthentication` |
+| Cross-tenant data access (`--use-multitenancy`) | The tenant comes only from the signed `tenant` claim, minted from the user's persisted membership (`AspNetUsers.TenantId`); request headers are ignored; every aggregate root is filtered and stamped by convention; cache keys carry the tenant; a valid token without the claim is rejected 401 (ADR-0022) | `TenantContext`, `AuthenticationExtensions`, `AppDbContext`, `CacheKeys` |
 | Client-supplied identifiers poisoning logs or response headers | The inbound correlation id is accepted only if short and restricted to an id-shaped charset; otherwise a server id is used | `CorrelationIdMiddleware` |
 | Rate-limit evasion behind a proxy | `X-Forwarded-For` honoured only from explicitly configured trusted proxies/networks; the publish-mode `ASPNETCORE_FORWARDEDHEADERS_ENABLED` switch cannot widen it (loopback-only restored, startup warning) | `ApiHardeningExtensions` |
 | Duplicate submission of a write (double charge, double invoice) | `Idempotency-Key` reserved per (user, route, key); failed requests release the key | `IdempotencyFilter` |
@@ -66,10 +67,13 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   is never confirmed and invoices are not owner-scoped: every registrant can read all business
   data. Before opening it, add e-mail confirmation or give Member no data permissions until an
   administrator grants a role.
-- **The tenant chosen by a request header (`--use-multitenancy`)** — *addressed in Batch 2*. The
+- **The tenant chosen by a request header (`--use-multitenancy`)** — *addressed* (ADR-0022). The
   `X-Tenant-Id` header used to select the tenant for authenticated callers; the tenant now comes
   only from the signed `tenant` claim minted from the user's persisted membership, and the header
-  is not read.
+  is not read. What remains is *open*: isolation is row-level in one database — no per-tenant
+  schema or database; a cross-tenant admin view must opt out with `IgnoreQueryFilters(["Tenant"])`
+  and a bare `IgnoreQueryFilters()` drops the filter silently; a leaked signing key forges any
+  tenant.
 - **A Blazor Server web host is one rate-limit source** — *open*. All of its users share 10 logins
   per minute (refreshes are unaffected). Widening it means trusting the web host as a proxy, per
   environment, or a BFF (ADR-0021, ADR-0007).

@@ -45,6 +45,9 @@ public static class AuthenticationExtensions
                 // the default challenge is an empty body clients can't distinguish or display.
                 jwt.Events = new JwtBearerEvents
                 {
+#if (UseMultitenancy)
+                    OnTokenValidated = RequireTenantClaimAsync,
+#endif
                     OnChallenge = WriteChallengeAsync,
                     OnForbidden = static async context =>
                     {
@@ -69,6 +72,25 @@ public static class AuthenticationExtensions
 
         return services;
     }
+
+#if (UseMultitenancy)
+    /// <summary>
+    /// Fail closed: a valid signature with no tenant (a token minted before the toggle was enabled,
+    /// or an external IdP that does not emit it) must be a loud 401, not a silent read of
+    /// system-scoped rows (ADR-0022). <c>Fail</c> turns the authenticate result into a failure, so
+    /// the ordinary challenge below writes the 401 problem — no new response path.
+    /// </summary>
+    private static Task RequireTenantClaimAsync(TokenValidatedContext context)
+    {
+        if (string.IsNullOrWhiteSpace(
+                context.Principal?.FindFirst(Trellis.Application.Abstractions.ITenantContext.ClaimType)?.Value))
+        {
+            context.Fail("The access token carries no tenant claim.");
+        }
+
+        return Task.CompletedTask;
+    }
+#endif
 
     private static async Task WriteChallengeAsync(JwtBearerChallengeContext context)
     {

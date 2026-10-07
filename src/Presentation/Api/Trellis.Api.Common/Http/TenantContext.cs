@@ -4,14 +4,14 @@ using Trellis.Application.Abstractions;
 namespace Trellis.Api.Common.Http;
 
 /// <summary>
-/// Resolves the tenant from the authenticated principal's <c>tenant</c> claim, falling back to the
-/// <c>X-Tenant-Id</c> header. Claim first: a header alone must never let a caller read another tenant's data.
+/// Resolves the tenant from the authenticated principal's <c>tenant</c> claim — and from nothing else.
+/// The claim is minted by the API from the user's persisted membership, so it cannot be chosen by
+/// the caller; a request header could be, which is why none is read (ADR-0022). Anonymous requests
+/// have no tenant (null = system scope); tokens without the claim never get this far
+/// (AuthenticationExtensions rejects them).
 /// </summary>
 internal sealed class TenantContext(IHttpContextAccessor httpContextAccessor) : ITenantContext
 {
-    public const string HeaderName = "X-Tenant-Id";
-    public const string ClaimType = "tenant";
-
     public string? TenantId
     {
         get
@@ -22,21 +22,8 @@ internal sealed class TenantContext(IHttpContextAccessor httpContextAccessor) : 
                 return ambient;
             }
 
-            HttpContext? context = httpContextAccessor.HttpContext;
-            if (context is null)
-            {
-                return null;
-            }
-
-            string? fromClaim = context.User.FindFirst(ClaimType)?.Value;
-            if (!string.IsNullOrWhiteSpace(fromClaim))
-            {
-                return fromClaim;
-            }
-
-            return context.Request.Headers.TryGetValue(HeaderName, out var header) && !string.IsNullOrWhiteSpace(header)
-                ? header.ToString()
-                : null;
+            string? claim = httpContextAccessor.HttpContext?.User.FindFirst(ITenantContext.ClaimType)?.Value;
+            return string.IsNullOrWhiteSpace(claim) ? null : claim;
         }
     }
 }

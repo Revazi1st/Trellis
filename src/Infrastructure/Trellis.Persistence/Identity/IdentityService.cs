@@ -20,7 +20,16 @@ internal sealed class IdentityService(
             return Result.Failure<Guid>(AuthErrors.EmailAlreadyInUse);
         }
 
-        var user = new ApplicationUser { UserName = email, Email = email };
+        var user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+#if (UseMultitenancy)
+            // Self-registration provisions a fresh tenant; the registrant is its first user. Joining
+            // an existing tenant is an invitation flow this template does not ship (ADR-0022).
+            TenantId = Guid.CreateVersion7().ToString(),
+#endif
+        };
         IdentityResult result = await userManager.CreateAsync(user, password);
 
         if (!result.Succeeded)
@@ -106,6 +115,13 @@ internal sealed class IdentityService(
             }
         }
 
-        return new AuthenticatedUser(user.Id, user.Email!, [.. permissions]);
+        return new AuthenticatedUser(
+            user.Id,
+            user.Email!,
+            [.. permissions]
+#if (UseMultitenancy)
+            , user.TenantId
+#endif
+            );
     }
 }

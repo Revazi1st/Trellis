@@ -30,6 +30,10 @@ internal sealed class JwtTokenProvider(TimeProvider timeProvider, AuthTokenOptio
             new(JwtRegisteredClaimNames.Email, user.Email),
             new(ClaimTypes.Name, user.Email),
             new(JwtRegisteredClaimNames.Jti, Guid.CreateVersion7().ToString()),
+#if (UseMultitenancy)
+            // The tenant travels ONLY here. The resolver trusts this claim and nothing else (ADR-0022).
+            new(ITenantContext.ClaimType, user.TenantId),
+#endif
             .. user.Permissions.Select(permission => new Claim(AuthClaims.Permission, permission)),
         ];
 

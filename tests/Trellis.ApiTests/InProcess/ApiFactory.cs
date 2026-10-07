@@ -42,6 +42,11 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
     // 64 bytes: long enough that a test can mint HS384/HS512 tokens with the same key, so a
     // foreign-algorithm token differs from a valid one in nothing but its algorithm.
     public const string SigningKey = "in-process-test-signing-key-long-enough-to-mint-hs384-and-hs512!";
+#if (UseMultitenancy)
+    /// <summary>The seeded admin's tenant; <see cref="TenantB"/> gets its own administrator on first use.</summary>
+    public const string TenantA = "tenant-a";
+    public const string TenantB = "tenant-b";
+#endif
 
     /// <summary>
     /// Test-only request header naming the address the request appears to come from. The startup
@@ -105,6 +110,26 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
     public async Task<HttpClient> CreateAdminClientAsync(CancellationToken cancellationToken)
         => await CreateAuthenticatedClientAsync(AdminEmail, AdminPassword, cancellationToken);
 
+#if (UseMultitenancy)
+    /// <summary>An Administrator in the given tenant (created on first use), logged in. <see cref="TenantA"/> is the seeded admin.</summary>
+    public async Task<HttpClient> CreateAdminClientAsync(string tenantId, CancellationToken cancellationToken)
+    {
+        string email = string.Equals(tenantId, TenantA, StringComparison.Ordinal) ? AdminEmail : $"admin-{tenantId}@inprocess.test";
+        using (IServiceScope scope = Services.CreateScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            if (await userManager.FindByEmailAsync(email) is null)
+            {
+                var admin = new ApplicationUser { Id = Guid.CreateVersion7(), UserName = email, Email = email, EmailConfirmed = true, TenantId = tenantId };
+                await userManager.CreateAsync(admin, AdminPassword);
+                await userManager.AddToRoleAsync(admin, Roles.Administrator);
+            }
+        }
+
+        return await CreateAuthenticatedClientAsync(email, AdminPassword, cancellationToken);
+    }
+#endif
+
     /// <summary>Registers a fresh member (read-only permissions) and returns a client for them.</summary>
     public async Task<HttpClient> CreateMemberClientAsync(CancellationToken cancellationToken)
     {
@@ -163,7 +188,16 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         if (await userManager.FindByEmailAsync(AdminEmail) is null)
         {
-            var admin = new ApplicationUser { Id = Guid.CreateVersion7(), UserName = AdminEmail, Email = AdminEmail, EmailConfirmed = true };
+            var admin = new ApplicationUser
+            {
+                Id = Guid.CreateVersion7(),
+                UserName = AdminEmail,
+                Email = AdminEmail,
+                EmailConfirmed = true,
+#if (UseMultitenancy)
+                TenantId = TenantA,
+#endif
+            };
             await userManager.CreateAsync(admin, AdminPassword);
             await userManager.AddToRoleAsync(admin, Roles.Administrator);
         }

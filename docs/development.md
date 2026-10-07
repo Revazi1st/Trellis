@@ -151,10 +151,13 @@ See the `run-app` skill — Postgres + migration worker + API (+ web) as sibling
 
 ## Multi-tenancy (optional)
 
-Generate with `--use-multitenancy` to add the tenant seam: `ITenantContext` (resolved from the
-`tenant` claim, falling back to the `X-Tenant-Id` header), a `TenantId` shadow column stamped by
-`TenantInterceptor`, and a named `"Tenant"` EF query filter (opt out with
-`IgnoreQueryFilters(["Tenant"])`). See ADR-0019.
+Generate with `--use-multitenancy` to add the tenant seam: `ITenantContext`, resolved from the
+**`tenant` claim only** — minted at login from the user's persisted membership
+(`AspNetUsers.TenantId`); there is no tenant header, and a token without the claim is rejected.
+Every aggregate root automatically gets a `TenantId` shadow column stamped by `TenantInterceptor`
+and a named `"Tenant"` EF query filter (opt out with `IgnoreQueryFilters(["Tenant"])`). The seeded
+admin and the demo data are in tenant `default` (`Seed__TenantId`); a self-registered user gets a
+fresh tenant. See ADR-0019 and ADR-0022.
 
 Because this adds a column, **regenerate the initial migration** in the generated project:
 

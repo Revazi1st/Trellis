@@ -37,13 +37,9 @@ internal sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Navigation(static i => i.Lines).UsePropertyAccessMode(PropertyAccessMode.Field).AutoInclude();
 
         // EF 10 named query filter — selectively disabled via IgnoreQueryFilters(["SoftDeleted"]).
+        // (With multi-tenancy, the TenantId column and the "Tenant" filter come from the aggregate-root
+        // convention in AppDbContext.OnModelCreating — no per-aggregate tenant code belongs here.)
         builder.HasQueryFilter("SoftDeleted", static i => i.DeletedAtUtc == null);
-
-#if (UseMultitenancy)
-        // Tenant discriminator: a shadow property keeps the domain model free of infrastructure concerns.
-        builder.Property<string>(Interceptors.TenantInterceptor.TenantIdProperty).HasMaxLength(64);
-        builder.HasIndex(Interceptors.TenantInterceptor.TenantIdProperty);
-#endif
 
         builder.HasIndex(static i => i.Status);
     }
