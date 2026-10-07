@@ -15,4 +15,7 @@ public static class AuthErrors
 
     public static readonly Error AccountLockedOut =
         Error.Forbidden("Auth.AccountLockedOut", "The account is temporarily locked after too many failed sign-in attempts. Try again later.");
+
+    public static readonly Error RegistrationClosed =
+        Error.Forbidden("Auth.RegistrationClosed", "Self-registration is closed. Ask an administrator to create your account.");
 }

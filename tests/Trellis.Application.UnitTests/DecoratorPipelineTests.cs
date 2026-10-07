@@ -29,7 +29,8 @@ public sealed class DecoratorPipelineTests
         services.AddSingleton(_invoices);
         services.AddSingleton(_unitOfWork);
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton(new AuthTokenOptions());   // the one non-interface handler dependency
+        services.AddSingleton(new AuthTokenOptions());      // the non-interface handler dependencies:
+        services.AddSingleton(new RegistrationOptions());   // options types, projected as plain singletons
         services.AddApplication();
 
         // Fake every remaining outward port any handler needs — discovered, not hand-listed, so new
