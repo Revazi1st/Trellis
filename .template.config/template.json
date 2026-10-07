@@ -224,7 +224,8 @@
             "src/Presentation/Api/Trellis.Api.Common/Http/TenantContext.cs",
             "src/Infrastructure/Trellis.Persistence/Interceptors/TenantInterceptor.cs",
             "src/Infrastructure/Trellis.Persistence/SystemTenantContext.cs",
-            "tests/Trellis.IntegrationTests/TenancyTests.cs"
+            "tests/Trellis.IntegrationTests/TenancyTests.cs",
+            "tests/Trellis.ApiTests/InProcess/TenantIsolationTests.cs"
           ]
         },
         {

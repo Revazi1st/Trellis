@@ -77,6 +77,13 @@ tenants, outbox rows carrying the tenant and handlers running under it).
   test fails if that convention ever regresses. Never add tenant columns or filters in a
   configuration (`.claude/rules/persistence.md`).
 - Moving a user between tenants takes effect at the next token refresh (≤ `AccessTokenMinutes`).
+- `IHttpContextAccessor` is an AsyncLocal and HybridCache runs `GetOrCreateAsync` factories without
+  the caller's ExecutionContext, so a handler asking for the tenant inside a cache factory sees no
+  request. `TenantContext` therefore reads the principal live whenever the request is visible and
+  remembers it for the scope; a detached flow gets what the request flow last resolved (the cache
+  key, computed before the factory). Any other request-scoped service that reads the accessor
+  inside a cache factory (`CurrentUser`) has the same blind spot; keep writes, and anything keyed
+  on the principal, out of cache factories.
 - Replacing `JwtTokenProvider` with an external identity provider requires that provider to emit
   the `tenant` claim, or every call is 401 — by design.
 - A cross-tenant administrative view must opt out per query with `IgnoreQueryFilters(["Tenant"])`;
