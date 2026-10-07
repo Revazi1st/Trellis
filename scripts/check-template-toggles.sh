@@ -9,6 +9,11 @@
 # (the engine matches the token ANYWHERE in a line, so one inside a run: script or a comment
 # silently drops the rest of the file from generated output), and the directives must balance.
 # Files the template excludes from its output (template-ci.yml, release.yml) are not checked.
+# A directive written with a doubled hash opens an actionable block: the engine strips EVERY single
+# hash in the branch it keeps and turns a doubled hash into one, which lets a branch be YAML
+# comments in this repository and live lines in generated output (ci.yml's Redis steps). In such a
+# block a line may carry only a leading hash in column 0 plus doubled hashes, the block's
+# directives must all be doubled, and no conditional may nest inside it.
 #
 # Markdown and shell files get the mid-line check too: the engine's if token is "<!--#if" in
 # .md and "#if" in .sh, matched anywhere in a line, so a token quoted in prose truncates the file.
@@ -76,7 +81,13 @@ yaml_conditionals() {
       text = $0
       sub(/^[[:space:]]+/, "", text)
       directive = ""
-      if (match(text, /^#(elseif|elif|else|endif|if)/)) {
+      hashes = 0
+      if (match(text, /^##(elseif|elif|else|endif|if)/)) {
+        hashes = 2
+        directive = substr(text, 3, RLENGTH - 2)
+        rest = substr(text, RLENGTH + 1)
+      } else if (match(text, /^#(elseif|elif|else|endif|if)/)) {
+        hashes = 1
         directive = substr(text, 2, RLENGTH - 1)
         rest = substr(text, RLENGTH + 1)
       } else {
@@ -85,7 +96,23 @@ yaml_conditionals() {
       if (rest ~ /#(if|elif|elseif|else|endif)/) {
         report("a template conditional token appears inside a line; the engine would drop the rest of the file from generated output. Keep conditionals on lines of their own and reword the text")
       }
-      if (directive == "") next
+      if (directive == "") {
+        if (depth > 0 && actionable[depth]) {
+          kept = $0
+          sub(/^#/, "", kept)
+          gsub(/##/, "", kept)
+          if (kept ~ /#/) {
+            report("inside a doubled-hash block the engine deletes every single hash, so this line would lose one. Use one leading hash in column 0 to comment the line out, and write every other hash doubled")
+          }
+        }
+        next
+      }
+      if (directive == "if" && depth > 0 && actionable[depth]) {
+        report("a conditional nested inside a doubled-hash block; the engine would strip its hashes. Close the doubled-hash block first")
+      }
+      if (directive != "if" && depth > 0 && (hashes == 2) != actionable[depth]) {
+        report("the " directive " directive and the if directive that opened its block disagree on single versus doubled hash; write them alike")
+      }
 
       if (directive == "if" || directive == "elif" || directive == "elseif") {
         if (rest !~ /^[[:space:]]*\(.*\)[[:space:]]*$/) {
@@ -97,7 +124,7 @@ yaml_conditionals() {
           cond = substr(cond, RSTART + RLENGTH)
         }
       }
-      if (directive == "if") { depth++; seen_else[depth] = 0; next }
+      if (directive == "if") { depth++; seen_else[depth] = 0; actionable[depth] = (hashes == 2); next }
       if (depth == 0) { report("the " directive " directive has no opening if directive"); next }
       if (directive == "else") {
         if (seen_else[depth]) report("a second else directive in the same block")
