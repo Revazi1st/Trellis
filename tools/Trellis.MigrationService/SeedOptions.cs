@@ -12,7 +12,7 @@ internal sealed class SeedOptions
         Justification = "Local-dev bootstrap value only; the worker refuses to seed it outside Development.")]
     public const string DefaultAdminPassword = "Admin123!";
 
-    public string AdminEmail { get; init; } = "admin@trellis.dev";
+    public string AdminEmail { get; init; } = "admin@example.com";
 
     public string AdminPassword { get; init; } = DefaultAdminPassword;
 

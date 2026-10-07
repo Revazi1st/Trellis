@@ -25,8 +25,9 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 - **Logout** revokes the presented refresh token (idempotent, anonymous — possession of the token is
   the authorization; never trips replay detection). **Revoke-all** signs the caller out everywhere.
 - **Seeding**: the MigrationService seeds roles/permissions always, the admin user always, and demo
-  invoices only in Development. Outside Development it refuses to seed the well-known default
-  admin password — set `Seed__AdminPassword`.
+  invoices only in Development. The local-dev admin is `admin@example.com` / `Admin123!`
+  (`Seed__AdminEmail` / `Seed__AdminPassword`). Outside Development it refuses to seed the
+  well-known default admin password — set `Seed__AdminPassword`.
 
 ## API (`src/Presentation/Api/Trellis.Api/Features/Auth/`)
 

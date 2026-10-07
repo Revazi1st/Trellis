@@ -86,7 +86,7 @@ environment/secret store (see [deployment.md](deployment.md)).
 
 ## Running the app
 
-Seeded admin for every option below: `admin@trellis.dev` / `Admin123!`.
+Seeded admin for every option below: `admin@example.com` / `Admin123!`.
 
 ### From the IDE, in the dev container (no local SDK)
 

@@ -73,7 +73,7 @@ docker compose up -d    # PostgreSQL on host port 5433
 then run **MigrationService** once, then **Trellis.Api** (<http://localhost:5171>) and
 **Trellis.UI.Web** (<http://localhost:5170>).
 
-Seeded admin: `admin@trellis.dev` / `Admin123!`. Full detail in [docs/development.md](docs/development.md).
+Seeded admin: `admin@example.com` / `Admin123!`. Full detail in [docs/development.md](docs/development.md).
 
 ## Architecture
 
