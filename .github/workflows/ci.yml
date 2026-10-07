@@ -60,13 +60,15 @@ jobs:
       - name: ADR link check
         run: ./scripts/check-adr-links.sh
 
-      # Template source only: a generated project has no .template.config, so the step skips
-      # itself there. Here it keeps every template condition symbol declared and every toggle
-      # exposed, on every PR rather than only when the template config changes.
+#if (TemplateSource)
+      # Template source only: TemplateSource is a constant that is false whenever dotnet new runs,
+      # so generated projects (which ship neither .template.config nor this script) never see this
+      # step. Here it keeps every template condition symbol declared and every toggle exposed, on
+      # every PR rather than only when the template config changes.
       - name: Template toggle check
-        if: hashFiles('.template.config/template.json') != ''
         run: ./scripts/check-template-toggles.sh
 
+#endif
       - name: Build (warnings as errors)
         run: dotnet build Trellis.slnx --no-restore -c Release
 
@@ -116,8 +118,23 @@ jobs:
         with:
           global-json-file: global.json
 
+#if (TemplateSource)
+      # The Redis blocks in this file are actionable conditionals: their directive lines start with
+      # a doubled hash, and dotnet new strips one leading hash from every line of the branch it
+      # keeps (a doubled hash becomes a single one). Here the Redis lines stay comments and only the
+      # PostgreSQL branch runs; a project generated with --use-redis gets the Redis branch instead.
+      # Keep every hash in those branches either the leading one or doubled: the engine strips any
+      # other single hash (check-template-toggles.sh enforces this).
+#endif
+##if (UseRedis)
+#      ## The API's HybridCache L2 (AddRedisDistributedCache in Program.cs) needs Redis, which
+#      ## docker-compose.yml starts under its redis profile on host port 6379.
+#      - name: Start PostgreSQL and Redis
+#        run: docker compose --profile redis up -d --wait postgres redis
+##else
       - name: Start PostgreSQL
         run: docker compose up -d --wait postgres
+##endif
 
       - name: Build the API and the migration service
         run: |
@@ -135,6 +152,10 @@ jobs:
         env:
           # The OpenAPI document is mapped only in Development.
           ASPNETCORE_ENVIRONMENT: Development
+##if (UseRedis)
+#          ## ConnectionStrings:cache, which AddRedisDistributedCache("cache") reads.
+#          ConnectionStrings__cache: localhost:6379
+##endif
         run: |
           mkdir -p "$RUNNER_TEMP/applogs"
           dotnet run --project src/Presentation/Api/Trellis.Api -c Release --no-build --no-launch-profile -- \
@@ -195,8 +216,13 @@ jobs:
         with:
           global-json-file: global.json
 
+##if (UseRedis)
+#      - name: Start PostgreSQL and Redis
+#        run: docker compose --profile redis up -d --wait
+##else
       - name: Start PostgreSQL
         run: docker compose up -d --wait
+##endif
 
       - name: Build
         run: dotnet build Trellis.slnx -c Release
@@ -209,6 +235,10 @@ jobs:
       - name: Start API and Web
         env:
           ASPNETCORE_ENVIRONMENT: Development
+##if (UseRedis)
+#          ## ConnectionStrings:cache for the API's Redis L2; the web host does not read it.
+#          ConnectionStrings__cache: localhost:6379
+##endif
         run: |
           mkdir -p "$RUNNER_TEMP/applogs"
           # Capture each host's output: when readiness times out, the startup exception is the only

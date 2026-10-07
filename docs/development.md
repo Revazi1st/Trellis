@@ -64,8 +64,9 @@ overrides all of the above: the script mounts it and hands it to Testcontainers 
 reaper. Every other `TESTCONTAINERS_*` variable in your shell is forwarded into the container, so
 the [Testcontainers recipes](https://dotnet.testcontainers.org/custom_configuration/) apply
 unchanged. The dev container mounts `/var/run/docker.sock`; for rootless Docker or Podman, change
-the `source=` of that mount in `.devcontainer/devcontainer.json` to your socket. Only the
-Docker Desktop path is exercised by this repository's own runs; the others follow the engines'
+the `source=` of that mount in `.devcontainer/devcontainer.json` to your socket. This
+repository's own runs exercise two of these paths: Docker Desktop, and Linux Docker Engine in the
+`sdk-container` CI job (`scripts/dotnet.sh` on `ubuntu-latest`). The others follow the engines'
 and Testcontainers' documentation.
 
 ## Secrets

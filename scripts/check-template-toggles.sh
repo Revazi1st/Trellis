@@ -9,9 +9,17 @@
 # (the engine matches the token ANYWHERE in a line, so one inside a run: script or a comment
 # silently drops the rest of the file from generated output), and the directives must balance.
 # Files the template excludes from its output (template-ci.yml, release.yml) are not checked.
+# A directive written with a doubled hash opens an actionable block: the engine strips EVERY single
+# hash in the branch it keeps and turns a doubled hash into one, which lets a branch be YAML
+# comments in this repository and live lines in generated output (ci.yml's Redis steps). In such a
+# block a line may carry only a leading hash in column 0 plus doubled hashes, the block's
+# directives must all be doubled, and no conditional may nest inside it.
 #
 # Markdown and shell files get the mid-line check too: the engine's if token is "<!--#if" in
 # .md and "#if" in .sh, matched anywhere in a line, so a token quoted in prose truncates the file.
+#
+# Every exclude glob in template.json must still match a tracked file (or, for the unconditional
+# list, a path .gitignore ignores): a renamed or deleted file otherwise ships again unnoticed.
 #
 # NOTE: template.json excludes this file from the template output (it is maintainer-only), so the
 # engine never processes it. The regexes still write the closing/alternative directive tokens as
@@ -76,7 +84,13 @@ yaml_conditionals() {
       text = $0
       sub(/^[[:space:]]+/, "", text)
       directive = ""
-      if (match(text, /^#(elseif|elif|else|endif|if)/)) {
+      hashes = 0
+      if (match(text, /^##(elseif|elif|else|endif|if)/)) {
+        hashes = 2
+        directive = substr(text, 3, RLENGTH - 2)
+        rest = substr(text, RLENGTH + 1)
+      } else if (match(text, /^#(elseif|elif|else|endif|if)/)) {
+        hashes = 1
         directive = substr(text, 2, RLENGTH - 1)
         rest = substr(text, RLENGTH + 1)
       } else {
@@ -85,7 +99,23 @@ yaml_conditionals() {
       if (rest ~ /#(if|elif|elseif|else|endif)/) {
         report("a template conditional token appears inside a line; the engine would drop the rest of the file from generated output. Keep conditionals on lines of their own and reword the text")
       }
-      if (directive == "") next
+      if (directive == "") {
+        if (depth > 0 && actionable[depth]) {
+          kept = $0
+          sub(/^#/, "", kept)
+          gsub(/##/, "", kept)
+          if (kept ~ /#/) {
+            report("inside a doubled-hash block the engine deletes every single hash, so this line would lose one. Use one leading hash in column 0 to comment the line out, and write every other hash doubled")
+          }
+        }
+        next
+      }
+      if (directive == "if" && depth > 0 && actionable[depth]) {
+        report("a conditional nested inside a doubled-hash block; the engine would strip its hashes. Close the doubled-hash block first")
+      }
+      if (directive != "if" && depth > 0 && (hashes == 2) != actionable[depth]) {
+        report("the " directive " directive and the if directive that opened its block disagree on single versus doubled hash; write them alike")
+      }
 
       if (directive == "if" || directive == "elif" || directive == "elseif") {
         if (rest !~ /^[[:space:]]*\(.*\)[[:space:]]*$/) {
@@ -97,7 +127,7 @@ yaml_conditionals() {
           cond = substr(cond, RSTART + RLENGTH)
         }
       }
-      if (directive == "if") { depth++; seen_else[depth] = 0; next }
+      if (directive == "if") { depth++; seen_else[depth] = 0; actionable[depth] = (hashes == 2); next }
       if (depth == 0) { report("the " directive " directive has no opening if directive"); next }
       if (directive == "else") {
         if (seen_else[depth]) report("a second else directive in the same block")
@@ -164,7 +194,70 @@ for f in $text_files; do
   done <<< "$(grep -nE "$token" "$f" | grep -vE "^[0-9]+:[[:space:]]*$token" || true)"
 done
 
+# --- every exclude glob in template.json still matches what it was written for ---
+# A glob that names a source file stops matching when the file is renamed or deleted, and the file
+# then ships under its new name without anyone noticing. So each glob must match at least one
+# tracked file (git ls-files). A conditional exclude (sources[].modifiers[].exclude) always names
+# source files. The unconditional list (sources[].exclude) also guards against files the repository
+# never tracks (build output, IDE and machine-local state, secrets); such a glob passes when the
+# repository's own .gitignore ignores what it describes, or when it is one of local_only below.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "::error::jq is required to read the exclude lists in .template.config/template.json"
+  exit 1
+fi
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "::error::the exclude-glob check compares against git ls-files; run this script in a git checkout"
+  exit 1
+fi
+
+# Not tracked and not in .gitignore: git's own directory, Claude Code worktrees and pack output.
+local_only=('.git' '.git/**' '.claude/worktrees/**' '**/nupkg/**')
+
+# .gitignore is evaluated in a scratch repository holding only that file, so a developer's global
+# excludes or .git/info/exclude cannot make the check pass locally and fail in CI.
+ignore_repo=$(mktemp -d)
+trap 'rm -rf "$ignore_repo"' EXIT
+git init -q --template= "$ignore_repo"
+cp .gitignore "$ignore_repo/.gitignore"
+
+# True when .gitignore ignores a sample path built from the glob (**/ dropped, wildcards -> x).
+gitignored() {
+  local sample
+  sample=$(printf '%s' "$1" | sed -e 's#^\*\*/##' -e 's#/\*\*$#/x#' -e 's#\*\*#x#g' -e 's#[*?]#x#g')
+  GIT_DIR="$ignore_repo/.git" GIT_WORK_TREE="$ignore_repo" \
+    git -c core.excludesFile=/dev/null check-ignore -q --no-index -- "$sample"
+}
+
+check_exclude() {  # $1 = glob, $2 = modifier condition ("" for the unconditional list)
+  local glob="$1" condition="$2" line entry
+  [ -n "$glob" ] || return 0
+  if git ls-files -- ":(glob)$glob" | grep -q .; then
+    return 0
+  fi
+  if [ -z "$condition" ]; then
+    for entry in "${local_only[@]}"; do
+      [ "$glob" = "$entry" ] && return 0
+    done
+    gitignored "$glob" && return 0
+  fi
+  line=$(grep -nF "\"$glob\"" .template.config/template.json | head -n 1 | cut -d: -f1)
+  if [ -n "$condition" ]; then
+    echo "::error file=.template.config/template.json,line=${line:-1}::exclude glob '$glob' (condition $condition) matches no tracked file. If the file was renamed or deleted, point the glob at the new path or remove it; otherwise the renamed file ships when that option is off"
+  else
+    echo "::error file=.template.config/template.json,line=${line:-1}::exclude glob '$glob' matches no tracked file and .gitignore does not ignore it. If the file was renamed or deleted, point the glob at the new path or remove it; if the glob keeps untracked local files out of the template, add the pattern to .gitignore as well"
+  fi
+  fail=1
+}
+
+while IFS= read -r glob; do
+  check_exclude "$glob" ""
+done <<< "$(jq -r '.sources[] | (.exclude // [])[]' .template.config/template.json)"
+
+while IFS=$'\x1f' read -r condition glob; do
+  check_exclude "$glob" "${condition:-(none)}"
+done <<< "$(jq -r '.sources[] | (.modifiers // [])[] | (.condition // "") as $c | (.exclude // [])[] | "\($c)\u001f\(.)"' .template.config/template.json)"
+
 if [ "$fail" -eq 0 ]; then
-  echo "template-toggle check passed — hosts cover all booleans, all #if symbols are declared, YAML/Markdown/shell conditionals are well-formed."
+  echo "template-toggle check passed — hosts cover all booleans, all #if symbols are declared, YAML/Markdown/shell conditionals are well-formed, every exclude glob matches a tracked or git-ignored path."
 fi
 exit "$fail"
