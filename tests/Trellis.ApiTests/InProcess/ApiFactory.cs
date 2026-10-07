@@ -77,6 +77,8 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
     {
         builder.UseSetting("ConnectionStrings:trellis-db", _postgres.GetConnectionString());
         builder.UseSetting("Authentication:SigningKey", SigningKey);
+        // Fixtures register throwaway members; do not depend on appsettings.Development.json opting in.
+        builder.UseSetting("Registration:Mode", "Open");
 
         // Inserted FIRST: startup filters wrap in registration order, so this one is outermost and the
         // simulated address is in place before any middleware reads it, including the forwarded-headers
@@ -86,6 +88,8 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
 #if (UseRedis)
         // The UseRedis toggle wires a Redis L2 into HybridCache via Aspire; there is no Redis in
         // this host, so drop the distributed cache and run L1-only — otherwise every cache touch 500s.
+        // Aspire registers a Redis health check alongside it; without this setting /health answers 503.
+        builder.UseSetting("Aspire:StackExchange:Redis:DisableHealthChecks", "true");
         builder.ConfigureServices(static services => services.RemoveAll<IDistributedCache>());
 #endif
     }
