@@ -14,7 +14,7 @@
       "name": {
         "text": "Skip restore"
       },
-      "isVisible": true
+      "isVisible": false
     },
     {
       "id": "UseRedis",
