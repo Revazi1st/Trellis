@@ -153,13 +153,15 @@ internal sealed class MigrationWorker(
         Currency usd = Currency.Create("USD").Value;
         Currency eur = Currency.Create("EUR").Value;
 
+        // Demo history: each invoice is issued "as of" a date before its due date, since Issue rejects a
+        // due date that is already past at the moment of issuing.
         Invoice overdue = Invoice.Create("Overdue Industries", email, usd).Value;
         overdue.AddLine("Consulting", Money.Create(1200m, usd).Value);
-        overdue.Issue(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
+        overdue.Issue(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero), now: new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero));
 
         Invoice paid = Invoice.Create("Prompt Payers Ltd", email, eur).Value;
         paid.AddLine("Design sprint", Money.Create(4800m, eur).Value);
-        paid.Issue(new DateTimeOffset(2026, 6, 15, 0, 0, 0, TimeSpan.Zero));
+        paid.Issue(new DateTimeOffset(2026, 6, 15, 0, 0, 0, TimeSpan.Zero), now: new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
         paid.MarkPaid(new DateTimeOffset(2026, 6, 20, 9, 30, 0, TimeSpan.Zero));
         paid.ClearDomainEvents();   // seeding is not a business payment — no receipt email
 

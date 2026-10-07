@@ -21,13 +21,16 @@ public sealed class PaginationTests(DatabaseFixture database) : IntegrationTestB
         var addLine = Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>();
         var issue = Services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>();
 
-        // Seed 5 overdue invoices (due before the fixture clock's 2026-07-20).
+        // Seed 5 invoices due a day after the fixture clock (a due date is never past when issued)...
         for (int i = 0; i < 5; i++)
         {
             InvoiceId id = (await create.Handle(new CreateInvoiceCommand($"Cust {i}", "a@b.co", "USD"), TestContext.Current.CancellationToken)).Value;
             await addLine.Handle(new AddInvoiceLineCommand(id, "Line", 10m), TestContext.Current.CancellationToken);
-            await issue.Handle(new IssueInvoiceCommand(id, new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero)), TestContext.Current.CancellationToken);
+            (await issue.Handle(new IssueInvoiceCommand(id, Now.AddDays(1)), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
         }
+
+        // ...then let the clock run past it: all five are overdue.
+        Time.Advance(TimeSpan.FromDays(2));
 
         using var scope = CreateScope();
         var list = scope.ServiceProvider.GetRequiredService<IQueryHandler<ListOverdueInvoicesQuery, PagedList<InvoiceResponse>>>();
