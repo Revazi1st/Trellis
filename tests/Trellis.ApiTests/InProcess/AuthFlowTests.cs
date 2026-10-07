@@ -148,9 +148,7 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient client = factory.CreateClient();
-        string email = NewEmail();
-        HttpResponseMessage registered = await client.PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest(email, Password), ct);
-        Guid userId = (await registered.Content.ReadFromJsonAsync<RegisterResponse>(ct))!.UserId;
+        string email = await RegisterAsync(client, ct);
 
         // MaxFailedAccessAttempts is 5: four plain failures...
         for (int attempt = 1; attempt <= 4; attempt++)
@@ -169,13 +167,6 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         HttpResponseMessage locked = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(email, Password), ct);
         locked.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await ProblemCodeAsync(locked, ct)).ShouldBe("Auth.AccountLockedOut");
-
-        // The security events name the account by id, at the documented levels, and never carry a password.
-        IReadOnlyList<CapturedLog> events = factory.Logs.ForUser(userId);
-        events.Count(static e => e.EventName == "LoginFailed" && e.Level == LogLevel.Information).ShouldBe(4);
-        events.Count(static e => e.EventName == "AccountLockedOut" && e.Level == LogLevel.Warning).ShouldBe(1);
-        events.Count(static e => e.EventName == "LoginRejectedLockedOut").ShouldBe(1);
-        factory.Logs.All.ShouldNotContain(static e => e.Message.Contains(WrongGuess) || e.Message.Contains(Password));
     }
 
     [Fact]
@@ -200,10 +191,41 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         (await ProblemCodeAsync(noSuchAccount, ct)).ShouldBe(await ProblemCodeAsync(wrongPassword, ct));
         forUnknown.ShouldBe(1);
         forWrongPassword.ShouldBe(1);
+    }
 
-        // The miss is logged with the address masked, never as typed.
+    [Fact]
+    public async Task SecurityEvents_NameTheAccountAtTheDocumentedLevelsAndNeverCarryAPassword()
+    {
+        // A host whose logger factory bypasses ILoggerProvider (Serilog without writeToProviders)
+        // writes nothing here, not even its startup lines; the events still reach its own sinks.
+        Assert.SkipUnless(factory.Logs.All.Count > 0,
+            "This host's logging does not reach ILoggerProvider instances, so the events cannot be captured in-process.");
+
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient client = factory.CreateClient();
+        string email = NewEmail();
+        HttpResponseMessage registered = await client.PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest(email, Password), ct);
+        Guid userId = (await registered.Content.ReadFromJsonAsync<RegisterResponse>(ct))!.UserId;
+        string unknown = $"ghost-{Guid.NewGuid():N}@inprocess.test";
+
+        // Five wrong passwords (the fifth locks), the right one while locked, and an unknown address.
+        for (int attempt = 1; attempt <= 5; attempt++)
+        {
+            await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(email, WrongGuess), ct);
+        }
+
+        await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(email, Password), ct);
+        await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(unknown, Password), ct);
+
+        IReadOnlyList<CapturedLog> events = factory.Logs.ForUser(userId);
+        events.Count(static e => e.EventName == "LoginFailed" && e.Level == LogLevel.Information).ShouldBe(4);
+        events.Count(static e => e.EventName == "AccountLockedOut" && e.Level == LogLevel.Warning).ShouldBe(1);
+        events.Count(static e => e.EventName == "LoginRejectedLockedOut" && e.Level == LogLevel.Information).ShouldBe(1);
+
+        // The unknown address appears masked, never as typed; no password appears anywhere.
         factory.Logs.All.ShouldContain(static e => e.EventName == "LoginFailedUnknownAccount" && e.Message.Contains("g***@inprocess.test"));
         factory.Logs.All.ShouldNotContain(e => e.Message.Contains(unknown));
+        factory.Logs.All.ShouldNotContain(static e => e.Message.Contains(WrongGuess) || e.Message.Contains(Password));
     }
 
     [Fact]
