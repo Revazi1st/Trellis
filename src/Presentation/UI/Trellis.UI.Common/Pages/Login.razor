@@ -1,5 +1,7 @@
 @page "/login"
+@using Microsoft.Extensions.Options
 @inject IAuthApiClient AuthApi
+@inject IOptions<UiOptions> UiOptions
 @inject TokenAuthenticationStateProvider AuthState
 @inject NavigationManager Navigation
 
@@ -27,7 +29,14 @@
     }
 
     <button type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
-    <p class="hint">Seeded admin: <code>admin@example.com</code> / <code>Admin123!</code> · No account? <NavLink href="register">Create one</NavLink></p>
+    <p class="hint">
+        @* Well-known local-dev credentials: advertised only where the host says it is a developer's machine. *@
+        @if (UiOptions.Value.ShowDevelopmentHints)
+        {
+            <span>Seeded admin: <code>admin@example.com</code> / <code>Admin123!</code> · </span>
+        }
+        No account? <NavLink href="register">Create one</NavLink>
+    </p>
 </EditForm>
 
 @code {
