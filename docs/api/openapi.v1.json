@@ -469,7 +469,7 @@
                     "Auth"
                 ],
                 "summary": "Create a new account",
-                "description": "Creates a new account with the default member role. The account can sign in immediately; permissions come from its roles.",
+                "description": "Creates a new account with the default member role when self-registration is open (Registration:Mode = Open). The default, Closed, answers 403 Auth.RegistrationClosed and creates nothing. A new account can sign in immediately; permissions come from its roles.",
                 "requestBody": {
                     "content": {
                         "application/json": {

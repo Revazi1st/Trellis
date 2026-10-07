@@ -17,7 +17,9 @@ internal sealed class Register : IEndpoint
         .WithTags(AuthEndpoints.Tag)
         .WithSummary("Create a new account")
         .WithDescription(
-            "Creates a new account with the default member role. The account can sign in immediately; permissions come from its roles.");
+            "Creates a new account with the default member role when self-registration is open (Registration:Mode = Open). "
+            + "The default, Closed, answers 403 Auth.RegistrationClosed and creates nothing. "
+            + "A new account can sign in immediately; permissions come from its roles.");
 
     private static async Task<Results<Ok<RegisterResponse>, ProblemHttpResult>> Handle(
         RegisterRequest request,

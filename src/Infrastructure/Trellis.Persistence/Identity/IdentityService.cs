@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using Trellis.Application.Abstractions;
 using Trellis.Application.Authorization;
 using Trellis.Application.Features.Auth;
@@ -9,7 +10,8 @@ namespace Trellis.Persistence.Identity;
 /// <summary>ASP.NET Core Identity-backed implementation of the application's identity port.</summary>
 internal sealed class IdentityService(
     UserManager<ApplicationUser> userManager,
-    RoleManager<IdentityRole<Guid>> roleManager) : IIdentityService
+    RoleManager<IdentityRole<Guid>> roleManager,
+    ILogger<IdentityService> logger) : IIdentityService
 {
     public async Task<Result<Guid>> RegisterAsync(string email, string password, CancellationToken cancellationToken)
     {
@@ -33,17 +35,26 @@ internal sealed class IdentityService(
         return user.Id;
     }
 
+    /// <summary>
+    /// An unknown e-mail and a wrong password both answer <see cref="AuthErrors.InvalidCredentials"/>
+    /// after the same password-hash work. A locked account answers <see cref="AuthErrors.AccountLockedOut"/>
+    /// whatever password is supplied: the lockout check runs before the password check, so a 403 never
+    /// confirms a password (docs/threat-model.md accepts that it confirms the account exists).
+    /// </summary>
     public async Task<Result<AuthenticatedUser>> ValidateCredentialsAsync(string email, string password, CancellationToken cancellationToken)
     {
         ApplicationUser? user = await userManager.FindByEmailAsync(email);
 
         if (user is null)
         {
+            DummyPasswordHash.Verify(userManager.PasswordHasher, password);
+            SecurityEventLog.LoginFailedUnknownAccount(logger, email);
             return Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials);
         }
 
         if (await userManager.IsLockedOutAsync(user))
         {
+            SecurityEventLog.LoginRejectedLockedOut(logger, user.Id);
             return Result.Failure<AuthenticatedUser>(AuthErrors.AccountLockedOut);
         }
 
@@ -51,9 +62,15 @@ internal sealed class IdentityService(
         {
             // Counts toward lockout; Identity locks the account at the configured threshold.
             await userManager.AccessFailedAsync(user);
-            return Result.Failure<AuthenticatedUser>(await userManager.IsLockedOutAsync(user)
-                ? AuthErrors.AccountLockedOut
-                : AuthErrors.InvalidCredentials);
+
+            if (await userManager.IsLockedOutAsync(user))
+            {
+                SecurityEventLog.AccountLockedOut(logger, user.Id);
+                return Result.Failure<AuthenticatedUser>(AuthErrors.AccountLockedOut);
+            }
+
+            SecurityEventLog.LoginFailed(logger, user.Id);
+            return Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials);
         }
 
         await userManager.ResetAccessFailedCountAsync(user);

@@ -40,14 +40,27 @@ public static class DependencyInjection
         // wired as a startup validator rather than a resolution-time one.
         services.AddSingleton(static provider => provider.GetRequiredService<IOptions<AuthTokenOptions>>().Value);
 
+        // Same shape as AuthTokenOptions: bound, annotated, projected as the plain type the register
+        // handler takes, and promoted to boot-time validation by RequireValidTokenOptions. A section
+        // that is absent means Closed (the type's default), never an accidental Open.
+        services.AddOptions<RegistrationOptions>()
+            .Bind(configuration.GetSection(RegistrationOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(
+                static options => Enum.IsDefined(options.Mode),
+                "Registration:Mode must be Closed or Open. Leave it unset (Closed) unless anyone on the "
+                + "network should be able to create an account.");
+        services.AddSingleton(static provider => provider.GetRequiredService<IOptions<RegistrationOptions>>().Value);
+
         services.AddScoped<ITokenProvider, JwtTokenProvider>();
 
         return services.AddExchangeRateProvider(configuration);
     }
 
     /// <summary>
-    /// Promotes the <see cref="AuthTokenOptions"/> rules from "checked when first read" to "checked
-    /// at boot". Call it from hosts that actually mint or validate tokens.
+    /// Promotes the <see cref="AuthTokenOptions"/> and <see cref="RegistrationOptions"/> rules from
+    /// "checked when first read" to "checked at boot". Call it from hosts that actually mint or
+    /// validate tokens — the hosts that serve the auth endpoints.
     /// <para>
     /// It is a separate call rather than part of <see cref="AddInfrastructure"/> because
     /// ValidateOnStart is host policy, not adapter wiring. The migration service shares this
@@ -58,6 +71,7 @@ public static class DependencyInjection
     public static IServiceCollection RequireValidTokenOptions(this IServiceCollection services)
     {
         services.AddOptions<AuthTokenOptions>().ValidateOnStart();
+        services.AddOptions<RegistrationOptions>().ValidateOnStart();
         return services;
     }
 
