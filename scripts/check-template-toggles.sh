@@ -210,8 +210,8 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
-# Not tracked and not in .gitignore: git's own directory, Claude Code worktrees and pack output.
-local_only=('.git' '.git/**' '.claude/worktrees/**' '**/nupkg/**')
+# Not tracked and not in .gitignore: git's own directory, which no ignore file can name.
+local_only=('.git' '.git/**')
 
 # .gitignore is evaluated in a scratch repository holding only that file, so a developer's global
 # excludes or .git/info/exclude cannot make the check pass locally and fail in CI.
