@@ -35,6 +35,18 @@ Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 Use dot-separated parts made of letters and digits, each starting with a letter (`Acme.Shop`).
 Hyphens, spaces and underscores become underscores in namespaces (`acme-shop` → `acme_shop`), and the build fails on analyzer rule CA1707.
 
+## Prerequisites
+
+- **Docker**: PostgreSQL, the integration tests (Testcontainers) and the SDK container all need it.
+  Docker Desktop, OrbStack, Colima and Linux Docker Engine work; Podman with a few settings
+  ([docs/development.md](docs/development.md#docker-engines-other-than-docker-desktop)).
+- **.NET 10 SDK** on the host, to run the orchestrated app. Build and tests also run without it,
+  through `./scripts/dotnet.sh` or the dev container.
+- **Aspire CLI 13.5 or later** for `aspire run`, a separate install from the SDK:
+  `dotnet tool install -g Aspire.Cli` (check with `aspire --version`). Optional:
+  `dotnet run --project tools/Trellis.AppHost` starts the same app without it.
+- **PowerShell** (`pwsh`), only to install the Playwright browsers for the optional UI tests.
+
 ## Develop it
 
 No .NET SDK on your machine? Open the solution and choose **Reopen in Dev Container** — the IDE
@@ -46,7 +58,8 @@ on the host. See [docs/development.md](docs/development.md).
 With a local .NET SDK, one command wires up everything:
 
 ```bash
-aspire run        # PostgreSQL + migrations + API (Scalar at /scalar/v1) + Blazor UI + dashboard
+aspire run                                   # PostgreSQL + migrations + API (Scalar at /scalar/v1) + Blazor UI + dashboard
+dotnet run --project tools/Trellis.AppHost   # the same, without the Aspire CLI
 ```
 
 From the **dev container** (no local SDK), start the dependencies and launch the projects from your

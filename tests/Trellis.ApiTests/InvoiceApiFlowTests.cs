@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Aspire.Hosting;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
 using Shouldly;
 using Trellis.Api.Contracts.Auth;
@@ -33,6 +34,7 @@ public sealed class InvoiceApiFlowTests
         CancellationToken ct = TestContext.Current.CancellationToken;
 
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Trellis_AppHost>(ct);
+        UseThrowawayDatabase(appHost);
         await using DistributedApplication app = await appHost.BuildAsync(ct);
         await app.StartAsync(ct);
 
@@ -45,7 +47,7 @@ public sealed class InvoiceApiFlowTests
 
         // Authenticate as the seeded admin (invoices:read + invoices:write).
         HttpResponseMessage loginResponse = await client.PostAsJsonAsync(
-            "/api/v1/auth/login", new LoginRequest("admin@trellis.dev", "Admin123!"), ct);
+            "/api/v1/auth/login", new LoginRequest("admin@example.com", "Admin123!"), ct);
         loginResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         TokenResponse tokens = (await loginResponse.Content.ReadFromJsonAsync<TokenResponse>(ct))!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
@@ -76,11 +78,11 @@ public sealed class InvoiceApiFlowTests
         invoice.Total.ShouldBe(500.00m);
         invoice.Lines.Count.ShouldBe(2);
 
-        // overdue listing includes it (plus the seeded sample) — the endpoint returns a paged envelope
-        PagedResponse<InvoiceDto> overdue =
-            (await client.GetFromJsonAsync<PagedResponse<InvoiceDto>>("/api/v1/invoices/overdue", ct))!;
-        overdue.Items.ShouldContain(i => i.Id == id);
-        overdue.Items.ShouldContain(i => i.CustomerName == "Overdue Industries");   // seeded by the migration worker
+        // overdue listing includes it — the endpoint returns a paged envelope. Asserted by id only:
+        // whatever else is overdue belongs to the seed data, not to this test.
+        PagedResponse<InvoiceDto> overdue = (await client.GetFromJsonAsync<PagedResponse<InvoiceDto>>(
+            "/api/v1/invoices/overdue?pageSize=100", ct))!;
+        overdue.Items.Where(i => i.Id == id).ShouldHaveSingleItem().Total.ShouldBe(500.00m);
 
         // pay
         (await client.PostAsync($"/api/v1/invoices/{id}/pay", content: null, ct))
@@ -97,5 +99,25 @@ public sealed class InvoiceApiFlowTests
 
         HttpResponseMessage conflict = await client.PostAsync($"/api/v1/invoices/{id}/pay", content: null, ct);
         conflict.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    /// <summary>
+    /// The AppHost gives postgres a named data volume so <c>aspire run</c> keeps its data between runs.
+    /// The volume name derives from the AppHost project, so without this the test would open, and write
+    /// to, the developer's <c>aspire run</c> database. Without the volume mount every run starts from an
+    /// empty database that the migration worker creates and seeds from scratch.
+    /// </summary>
+    private static void UseThrowawayDatabase(IDistributedApplicationTestingBuilder appHost)
+    {
+        IResource postgres = appHost.Resources.Single(static r => r.Name == "postgres");
+        List<ContainerMountAnnotation> volumes = [.. postgres.Annotations
+            .OfType<ContainerMountAnnotation>()
+            .Where(static m => m.Type == ContainerMountType.Volume)];
+        volumes.ShouldNotBeEmpty("the AppHost no longer mounts a data volume on postgres; drop UseThrowawayDatabase");
+
+        foreach (ContainerMountAnnotation volume in volumes)
+        {
+            postgres.Annotations.Remove(volume);
+        }
     }
 }

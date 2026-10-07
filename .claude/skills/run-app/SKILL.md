@@ -5,10 +5,13 @@ description: Run the Trellis app to see it working. Use when asked to start, run
 
 # Run the app
 
-**Full stack (`aspire run`) needs a local .NET 10 SDK** — it cannot run in the SDK container (ADR-0008). With a local SDK:
+**Full stack (`aspire run`) needs a local .NET 10 SDK** — it cannot run in the SDK container (ADR-0008).
+
+Prerequisites (docs/development.md, "Prerequisites"): the .NET 10 SDK, Docker, and the **Aspire CLI 13.5 or later**, a separate install from the SDK — `dotnet tool install -g Aspire.Cli`, check with `aspire --version`. If `aspire` is not on PATH, use the CLI-free command below rather than installing tools on the user's machine unasked. `pwsh` is needed only for the Playwright UI tests. With a local SDK:
 
 ```bash
-aspire run          # postgres + migrations + api + web, with the Aspire dashboard
+aspire run                                   # postgres + migrations + api + web, with the Aspire dashboard
+dotnet run --project tools/Trellis.AppHost   # the same app without the Aspire CLI
 ```
 
 Then open the dashboard URL it prints; the API exposes Scalar at `/scalar/v1`, the web app serves the UI. Seeded admin: `admin@trellis.dev` / `Admin123!`.

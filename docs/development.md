@@ -2,20 +2,25 @@
 
 ## Prerequisites
 
-- **Docker** (Desktop/OrbStack). All build/test runs through the SDK container — no local .NET SDK required for the inner loop.
-- A **local .NET 10 SDK** only if you want `aspire run` (the full orchestrated app; ADR-0008).
+| Tool | Needed for |
+|---|---|
+| **Docker** (Docker Desktop, OrbStack, Colima, Linux Docker Engine; Podman with caveats, see [below](#docker-engines-other-than-docker-desktop)) | everything: PostgreSQL, Testcontainers, the SDK container |
+| **.NET 10 SDK** on the host | `aspire run` and the Aspire E2E test (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container |
+| **Aspire CLI 13.5 or later**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK; the AppHost is on Aspire 13.5.4, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app |
+| **PowerShell** (`pwsh`) | installing the Playwright browsers for the optional UI tests |
 
-One-time: build the SDK image (base SDK + docker CLI, needed by Testcontainers/Aspire):
+No .NET SDK on the host? Build the SDK image once (base SDK + docker CLI, needed by
+Testcontainers/Aspire) and run every command through `./scripts/dotnet.sh`:
 
 ```bash
 docker build -t trellis-sdk:10.0 scripts/sdk-image
 ```
 
-## IDE: open in the dev container (recommended)
+## IDE: open in the dev container (no host SDK)
 
-This repo is **Docker-only** — there is no .NET SDK on the host, so an IDE cannot resolve types
-locally. `.devcontainer/devcontainer.json` fixes that by running the IDE backend *inside* the same
-SDK image the scripts use.
+Without a .NET SDK on the host an IDE cannot resolve types locally.
+`.devcontainer/devcontainer.json` fixes that by running the IDE backend *inside* the same SDK
+image the scripts use. With a host SDK you can skip this section and open the solution directly.
 
 **Rider**: open the solution → Rider detects `.devcontainer` and offers *"Reopen in Dev Container"*
 (or use **File → Remote Development → Dev Containers**). VS Code: *Dev Containers: Reopen in Container*.
@@ -36,6 +41,32 @@ orchestrator work from inside it too, and it shares the `trellis-nuget` package 
 ./scripts/dotnet.sh format Trellis.slnx           # apply formatting
 ./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence
 ```
+
+### Docker engines other than Docker Desktop
+
+The SDK container starts the Testcontainers PostgreSQL as a *sibling* container through the
+engine's socket, then reaches its published port via `host.docker.internal`. Docker Desktop
+resolves that name by itself; everywhere else `scripts/dotnet.sh`, `scripts/ef.sh` and the dev
+container map it to the host gateway (`--add-host=host.docker.internal:host-gateway`).
+`scripts/dotnet.sh` picks the socket to mount like this:
+
+| Setup | What to set |
+|---|---|
+| Docker Desktop, OrbStack, Linux Docker Engine | nothing: `/var/run/docker.sock` |
+| Colima (macOS) | nothing, with or without `DOCKER_HOST`: on macOS the engine runs in a VM and resolves mount sources there, so the script always mounts the VM's `/var/run/docker.sock` |
+| Rootless Docker (Linux) | `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock`, which the rootless setup tells you to set anyway; the script mounts that path |
+| Podman 5+ (Linux) | `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock` (after `systemctl --user enable --now podman.socket`); the docker CLI then drives Podman, or set `DOCKER_BIN=podman`. Rootless Podman also needs `TESTCONTAINERS_RYUK_DISABLED=true`, as Testcontainers recommends |
+| Podman machine (macOS) | a rootful machine (`podman machine set --rootful`), its API socket in `DOCKER_HOST` (or `DOCKER_BIN=podman`), and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/run/podman/podman.sock`, the socket's path inside the VM |
+| A TCP endpoint (`DOCKER_HOST=tcp://…`) | nothing: the script passes `DOCKER_HOST` through and mounts no socket. The address must be reachable from inside a container, so not `127.0.0.1` |
+
+`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` is the socket path *as the engine sees it*. When set it
+overrides all of the above: the script mounts it and hands it to Testcontainers for its resource
+reaper. Every other `TESTCONTAINERS_*` variable in your shell is forwarded into the container, so
+the [Testcontainers recipes](https://dotnet.testcontainers.org/custom_configuration/) apply
+unchanged. The dev container mounts `/var/run/docker.sock`; for rootless Docker or Podman, change
+the `source=` of that mount in `.devcontainer/devcontainer.json` to your socket. Only the
+Docker Desktop path is exercised by this repository's own runs; the others follow the engines'
+and Testcontainers' documentation.
 
 ## Secrets
 
@@ -103,8 +134,15 @@ it forwards what `forwardPorts` declares, which is why 8080 is listed too. Never
 
 ### With a local SDK
 
-`aspire run` — PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire
-dashboard, all wired together. This is the best loop when a host SDK is available.
+```bash
+aspire run                                   # needs the Aspire CLI (Prerequisites)
+dotnet run --project tools/Trellis.AppHost   # the same app, no CLI needed
+```
+
+PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire dashboard, all
+wired together; open the dashboard URL either command prints. This is the best loop when a host
+SDK is available. The Aspire CLI reads the AppHost path from the committed `aspire.config.json`
+(`appHost.path`), the project settings file it would otherwise create on first use.
 
 ### Containerized smoke
 
@@ -145,7 +183,7 @@ Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-f
 | Domain/Application UnitTests | nothing (in-memory) |
 | IntegrationTests | Docker (Testcontainers spins up PostgreSQL) |
 | ArchitectureTests | nothing |
-| ApiTests | `RUN_ASPIRE_E2E=1` + a local SDK or CI (Aspire orchestration) — otherwise the E2E skips; contract tests always run |
+| ApiTests | Docker (the in-process tests start PostgreSQL with Testcontainers); contract tests always run. The Aspire E2E also needs `RUN_ASPIRE_E2E=1` + a local SDK or CI, otherwise it skips. It drops the AppHost's postgres data volume, so it runs on a throwaway database and never touches your `aspire run` data |
 | UiTests (optional) | `RUN_UI_TESTS=1` + installed browsers + a running app — otherwise the browser test skips |
 
 ## Conventions
