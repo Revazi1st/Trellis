@@ -35,6 +35,25 @@ All notable changes to Trellis are documented here. The format follows
   rules; `remove-feature` and `add-toggle` skills; the `docs-not-needed` PR-label escape hatch the
   docs promised; Dependabot now watches the container images; SharedKernel primitives
   (dispatcher, entity equality, paged list, ID JSON) got direct unit tests.
+- **Generated CI covers the API contract and the no-SDK path**: a generated project's `ci.yml`
+  gains an `api-contract` job (starts postgres, migrates and seeds, exports the OpenAPI document and
+  diffs it against `docs/api/openapi.v1.json`) and an `sdk-container` job (builds `scripts/sdk-image`
+  on Linux and runs the build plus the Testcontainers integration tests through `scripts/dotnet.sh`).
+  The `ui-tests` job ships only in projects created with `--include-ui-tests` (and the UI).
+- **Template CI on every change, with a content gate**: `template-ci.yml` runs on every push and PR
+  (no path filter) and gates `release.yml`. Every matrix leg now fails on template-named paths,
+  unprocessed conditionals, template-prefixed environment variables and files that never belong in
+  a repository (`.DS_Store`, local appsettings, `.pfx`), runs the generated project's own ADR link
+  check and actionlint, and the default and no-ui legs run the generated tests against the shipped
+  migration.
+- **Prerequisites and the CLI-free start**: the README lists Docker, the .NET 10 SDK, the Aspire CLI
+  (`dotnet tool install -g Aspire.Cli`) and pwsh (Playwright), and both README and
+  `docs/development.md` show `dotnet run --project tools/<Name>.AppHost` for running without the
+  CLI. `aspire.config.json` is committed, so `aspire` commands find the AppHost from any folder.
+- **Dependabot grouping**: `Microsoft.Testing.*` and `Microsoft.Playwright` move together with
+  xunit.v3; `dotnet-ef` (from `.config/dotnet-tools.json`) and the bare `Microsoft.EntityFrameworkCore`
+  package join the Microsoft group; new `dotnet-sdk` (global.json, majors ignored) and grouped
+  GitHub Actions updates.
 
 ### Reliability & testing
 - **Outbox, production-shaped**: skip-locked batch claiming (replicas never double-dispatch),
@@ -150,6 +169,49 @@ All notable changes to Trellis are documented here. The format follows
   symbols now map the name to Aspire's `_`/`-` forms for project classes and resource names.
 - `.template.config/` no longer ships into generated projects.
 - `scripts/check-adr-links.sh` is now made executable by the post-action; CI runs it.
+- **The generated UI was unstyled in every project not named after the template**: `App.razor`
+  linked `trellis-ui.css`, which the rename turned into a 404. The stylesheet is now
+  `_content/<Name>.UI.Common/app.css`.
+- **Seeded admin is `admin@example.com`** (password `Admin123!` unchanged) everywhere: seed default,
+  login hint, UI tests, Aspire E2E and docs. An existing dev database volume still holds the old
+  user; the migration worker adds the new one on its next run.
+- **`dotnet new trellis` no longer prompts for `--allow-scripts`**: the helper scripts are made
+  executable by the engine's dedicated chmod action (the previous run-process action hung on a
+  non-TTY stdin). All next-step messages now print, not just the first, with the real project paths,
+  the Aspire CLI install line and the seeded credentials; `dotnet new trellis --help` shows a
+  description.
+- **Kebab-case and spaced names produce a consistent tree**: `-n acme-shop` wrote `acme-shop.*`
+  folders but `acme_shop.*` into the solution file, so 18 project paths were missing and restore
+  failed. Paths, the solution file and the Aspire project/resource names now agree. Such names still
+  fail analyzer rule CA1707 (underscores in namespaces), so creation prints a warning that names the
+  resulting identifier and asks for a dotted name such as `Acme.Shop`; both READMEs document the rule.
+- **`--include-ui false` projects failed their own ADR link check**: `.claude/rules/ui.md` is now
+  dropped together with the UI.
+- **Environment variables follow the project name**: the SDK-image and design-time-database
+  variables used by `scripts/dotnet.sh`, `scripts/ef.sh` and `AppDbContextFactory` are
+  `<NAME>_SDK_IMAGE` / `<NAME>_DESIGNTIME_DB` in generated projects instead of the template's prefix.
+- **Package content mirrors `.gitignore`**: `.DS_Store`, local appsettings, `.pfx`/`.key`,
+  `TestResults`, `.aspire`, `nupkg`, coverage files, agent worktrees and a worktree's `.git` file
+  never ship; template.json and the pack csproj exclude the same set. `--skip-restore` is hidden in
+  IDE dialogs (the CLI flag is unchanged).
+- **Shipped docs were truncated and maintainer-only files leaked**: prose in `.claude/rules/tools.md`,
+  ADR-0010 and ADR-0019 quoted a conditional-directive token mid-line, which the engine reads as a
+  directive, so generated copies lost their tails (half of `tools.md` with `--include-ui false`).
+  The lines are reworded and `scripts/check-template-toggles.sh` now fails on such lines in `.md`,
+  `.sh` and `.yml` files. That script and the `add-toggle` skill (both need `.template.config`) no
+  longer ship, which also removes the 13 "Balanced nesting depth" messages every `dotnet new trellis`
+  printed. `TenancyTests.cs` no longer ships as an empty file when multi-tenancy is off.
+- **`scripts/dotnet.sh` works beyond Docker Desktop**: the SDK container gets
+  `--add-host=host.docker.internal:host-gateway`, honours `DOCKER_HOST` (unix socket path or tcp
+  endpoint) and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE`, and forwards every `TESTCONTAINERS_*`
+  variable. `scripts/ef.sh` gets the same host mapping and now forwards the design-time database
+  variable it silently dropped. `docs/development.md` covers Colima, rootless Docker, Podman and TCP
+  endpoints (only Docker Desktop is exercised here); the dev container maps the host gateway too.
+- **`aspire publish` exposes the API**: the `api` resource publishes its HTTP endpoint externally
+  (compose `ports:` instead of `expose:`); postgres and migrations stay internal.
+- **The Aspire E2E no longer reuses your `aspire run` database**: it strips the postgres data volume
+  and runs against a throwaway database, and asserts on the invoice it created rather than on seed
+  data.
 
 ### Added
 - Rich-DDD Clean Architecture .NET 10 solution: SharedKernel, Domain, Application,
