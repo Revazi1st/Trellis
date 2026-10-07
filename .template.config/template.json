@@ -112,6 +112,50 @@
         "value": "false"
       },
       "description": "Always false once the engine runs, so a block conditioned on it survives only in the template's own repository, which nothing ever processes (example: the ci.yml step that runs the maintainer-only check-template-toggles.sh). No 'datatype', for the same reason as nameIsDottedAlphanumeric."
+    },
+    "devSigningKeyHead": {
+      "type": "generated",
+      "generator": "guid",
+      "parameters": {
+        "defaultFormat": "n"
+      },
+      "description": "First 32 hex characters of devSigningKey."
+    },
+    "devSigningKeyTail": {
+      "type": "generated",
+      "generator": "guid",
+      "parameters": {
+        "defaultFormat": "n"
+      },
+      "description": "Last 32 hex characters of devSigningKey."
+    },
+    "devSigningKey": {
+      "type": "generated",
+      "generator": "join",
+      "replaces": "dev-only-signing-key-change-me-please-32-bytes-minimum!!",
+      "onlyIf": [
+        {
+          "after": "\"SigningKey\": \""
+        }
+      ],
+      "parameters": {
+        "symbols": [
+          {
+            "type": "const",
+            "value": "dev-only-"
+          },
+          {
+            "type": "ref",
+            "value": "devSigningKeyHead"
+          },
+          {
+            "type": "ref",
+            "value": "devSigningKeyTail"
+          }
+        ],
+        "separator": ""
+      },
+      "description": "Every generated project gets its own Development JWT signing key in place of the repository's fixed placeholder: 'dev-only-' plus 64 hex characters (two random GUIDs, 244 random bits), so a token minted by one project's dev API is worthless against another's. The prefix says what the value is, and it is also why gitleaks' default rules (which skip values containing common words such as 'dev') pass the file with no allowlist entry; a bare hex value of this length is flagged as generic-api-key. onlyIf limits the replacement to the appsettings value, so .gitleaks.toml keeps its line for the placeholder; the placeholder keeps working in the template's own repository, where the engine never runs."
     }
   },
   "forms": {
