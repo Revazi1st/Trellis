@@ -10,9 +10,12 @@
 # silently drops the rest of the file from generated output), and the directives must balance.
 # Files the template excludes from its output (template-ci.yml, release.yml) are not checked.
 #
-# NOTE: this file ships in the template content and the engine processes .sh files the same way,
-# so it never spells out the closing/alternative directive tokens literally (the regexes write
-# them as '#(…|…)' alternations instead).
+# Markdown and shell files get the mid-line check too: the engine's if token is "<!--#if" in
+# .md and "#if" in .sh, matched anywhere in a line, so a token quoted in prose truncates the file.
+#
+# NOTE: template.json excludes this file from the template output (it is maintainer-only), so the
+# engine never processes it. The regexes still write the closing/alternative directive tokens as
+# '#(…|…)' alternations, which keeps the file safe should that exclusion ever be dropped.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -113,9 +116,20 @@ yaml_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./arti
     -o -name bin -o -name obj -o -name TestResults \) -prune -o -type f \( -name '*.yml' -o -name '*.yaml' \) -print \
   | sed 's|^\./||' | sort)
 
+# Source-only files (excluded from the template output) are never processed by the engine:
+# an exact entry in template.json's exclude list, or a parent folder listed as "dir/**".
+source_only() {
+  local p="$1"
+  grep -qF "\"$p\"" .template.config/template.json && return 0
+  while [ "$p" != "." ]; do
+    p=$(dirname "$p")
+    grep -qF "\"$p/**\"" .template.config/template.json && return 0
+  done
+  return 1
+}
+
 for f in $yaml_files; do
-  # Source-only files (excluded from the template output) are never processed by the engine.
-  if grep -qF "\"$f\"" .template.config/template.json; then
+  if source_only "$f"; then
     continue
   fi
   while IFS=$'\t' read -r kind line value; do
@@ -130,7 +144,27 @@ for f in $yaml_files; do
   done <<< "$(yaml_conditionals "$f")"
 done
 
+# --- Markdown and shell: a directive token may only open a line ---
+text_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./artifacts -o -path ./eng -o -name node_modules \
+    -o -name bin -o -name obj -o -name TestResults \) -prune -o -type f \( -name '*.md' -o -name '*.sh' \) -print \
+  | sed 's|^\./||' | sort)
+
+for f in $text_files; do
+  if source_only "$f"; then
+    continue
+  fi
+  case "$f" in
+    *.md) token='<!--#(if|elseif|else|endif)' ;;
+    *)    token='#(if|elseif|elif|else|endif)([^A-Za-z0-9_]|$)' ;;
+  esac
+  while IFS=: read -r line _; do
+    [ -n "$line" ] || continue
+    echo "::error file=$f,line=$line::a template conditional token appears inside a line; the engine would drop the rest of the generated file. Keep directives on lines of their own and describe the token in prose"
+    fail=1
+  done <<< "$(grep -nE "$token" "$f" | grep -vE "^[0-9]+:[[:space:]]*$token" || true)"
+done
+
 if [ "$fail" -eq 0 ]; then
-  echo "template-toggle check passed — hosts cover all booleans, all #if symbols are declared, YAML conditionals are well-formed."
+  echo "template-toggle check passed — hosts cover all booleans, all #if symbols are declared, YAML/Markdown/shell conditionals are well-formed."
 fi
 exit "$fail"

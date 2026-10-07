@@ -16,7 +16,7 @@ Ship multi-tenancy as the **`--use-multitenancy` template toggle (default off)**
 - **`TenantInterceptor`** (Persistence) — stamps the `TenantId` **shadow property** on newly added rows, keeping the domain model free of infrastructure concerns.
 - **Named `"Tenant"` query filter** on `Invoice` in `AppDbContext.OnModelCreating`, reusing the same named-filter pattern as `"SoftDeleted"` so callers can opt out explicitly with `IgnoreQueryFilters(["Tenant"])`.
 
-Wiring uses the proven `#if (UseMultitenancy)` / `<!--#if-->` mechanics; the three tenant-only files are additionally excluded via `sources.modifiers` when the toggle is off.
+Wiring uses the proven `#if` / XML-comment conditional mechanics on `UseMultitenancy`; the three tenant-only files are additionally excluded via `sources.modifiers` when the toggle is off.
 
 ## Consequences
 

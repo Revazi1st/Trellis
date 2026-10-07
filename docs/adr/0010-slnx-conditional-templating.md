@@ -21,7 +21,7 @@ Ship a **`.slnx`** and use **XML-comment conditionals** inside it:
 
 Verified empirically on the .NET 10 SDK template engine: `IncludeUI=false` strips the block (no UI projects, no leftover markers); `IncludeUI=true` keeps it clean. The content between the comment markers is active XML, so the `.slnx` remains a valid, buildable solution in the template repo itself.
 
-Inline C# conditionals (AppHost web wiring) use `#if (IncludeUI)`. Because the raw template source has no such preprocessor symbol, the AppHost project defines `IncludeUI` (via a `<!--#if-->`-guarded `DefineConstants`) so the repo compiles the "on" branch during development; the engine resolves the real condition at instantiation.
+Inline C# conditionals (AppHost web wiring) use an `#if` block on `IncludeUI`. Because the raw template source has no such preprocessor symbol, the AppHost project defines `IncludeUI` (via a `DefineConstants` property guarded by the same XML-comment conditional) so the repo compiles the "on" branch during development; the engine resolves the real condition at instantiation.
 
 ## Consequences
 

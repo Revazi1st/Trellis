@@ -137,6 +137,8 @@
         ".template.config/**",
         ".github/workflows/template-ci.yml",
         ".github/workflows/release.yml",
+        ".claude/skills/add-toggle/**",
+        "scripts/check-template-toggles.sh",
         ".claude/settings.local.json",
         ".claude/worktrees/**",
         "CLAUDE.local.md",
@@ -169,7 +171,8 @@
             "src/Core/Trellis.Application/Abstractions/AmbientTenant.cs",
             "src/Presentation/Api/Trellis.Api.Common/Http/TenantContext.cs",
             "src/Infrastructure/Trellis.Persistence/Interceptors/TenantInterceptor.cs",
-            "src/Infrastructure/Trellis.Persistence/SystemTenantContext.cs"
+            "src/Infrastructure/Trellis.Persistence/SystemTenantContext.cs",
+            "tests/Trellis.IntegrationTests/TenancyTests.cs"
           ]
         },
         {
@@ -223,7 +226,7 @@
       ],
       "actionId": "cb9a6cf3-4f5c-4860-b9d2-03a574959774",
       "args": {
-        "+x": ".claude/hooks/docs-drift.sh scripts/check-adr-links.sh scripts/check-docs-drift.sh scripts/check-template-toggles.sh scripts/dotnet.sh scripts/ef.sh scripts/export-openapi.sh"
+        "+x": ".claude/hooks/docs-drift.sh scripts/check-adr-links.sh scripts/check-docs-drift.sh scripts/dotnet.sh scripts/ef.sh scripts/export-openapi.sh"
       },
       "continueOnError": true
     },

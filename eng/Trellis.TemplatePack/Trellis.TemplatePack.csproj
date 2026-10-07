@@ -43,6 +43,8 @@
       ..\..\eng\**;
       ..\..\.github\workflows\template-ci.yml;
       ..\..\.github\workflows\release.yml;
+      ..\..\.claude\skills\add-toggle\**;
+      ..\..\scripts\check-template-toggles.sh;
       ..\..\.claude\settings.local.json;
       ..\..\.claude\worktrees\**;
       ..\..\CLAUDE.local.md;

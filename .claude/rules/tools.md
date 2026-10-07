@@ -8,7 +8,7 @@ paths: ["tools/**/*.{cs,csproj}"]
 ## AppHost (`tools/Trellis.AppHost`)
 
 - Aspire orchestration: postgres (image major pinned — data volumes don't survive major bumps) → migrations (`WaitFor`) → api (`WaitForCompletion(migrations)`) → web. `aspire run` needs a real host, not the SDK container (ADR-0008).
-- **Template toggles are `#if` blocks** (`UseRedis`, `IncludeUI`) processed at `dotnet new` time. The csproj defines `IncludeUI` in `DefineConstants` (inside a `<!--#if (IncludeUI) -->` comment) so the template *source* compiles too — keep both sides in sync when adding a toggle.
+- **Template toggles are `#if` blocks** (`UseRedis`, `IncludeUI`) processed at `dotnet new` time. The csproj defines `IncludeUI` in `DefineConstants` (inside an XML-comment `#if` directive on `IncludeUI`) so the template *source* compiles too — keep both sides in sync when adding a toggle. In shipped `.md`, `.sh` and `.yml` files a directive token may appear only on a line of its own: the engine matches it anywhere in a line and drops the rest of the generated file (`scripts/check-template-toggles.sh` fails on such lines).
 - `AddDockerComposeEnvironment("compose")` backs `aspire publish`; images come from `dotnet publish /t:PublishContainer` — no Dockerfiles.
 
 ## MigrationService (`tools/Trellis.MigrationService`)
