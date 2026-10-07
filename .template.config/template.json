@@ -213,6 +213,7 @@
           "condition": "(!IncludeUI)",
           "exclude": [
             "src/Presentation/UI/**",
+            "tests/Trellis.ApiTests/Ui/**",
             ".claude/rules/ui.md"
           ]
         },
