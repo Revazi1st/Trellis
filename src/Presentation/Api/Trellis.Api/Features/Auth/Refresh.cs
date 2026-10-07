@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Trellis.Api.Common.Endpoints;
-using Trellis.Api.Common.Hardening;
 using Trellis.Api.Common.Results;
 using Trellis.Api.Contracts.Auth;
 using Trellis.Application.Features.Auth.RefreshToken;
@@ -10,10 +9,12 @@ namespace Trellis.Api.Features.Auth;
 
 internal sealed class Refresh : IEndpoint
 {
+    // Unguessable token: the global limiter bounds load; the strict auth policy is for guessable
+    // credentials (login/register). Keeping refresh off it means a shared source (a Blazor Server
+    // host refreshing for many users) never turns a silent refresh into a 429 (ADR-0021).
     public static void Map(IEndpointRouteBuilder app) => app
         .MapPost("auth/refresh", Handle)
         .AllowAnonymous()
-        .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
         .WithTags(AuthEndpoints.Tag)
         .WithSummary("Rotate a refresh token for a new token pair")
         .WithDescription(

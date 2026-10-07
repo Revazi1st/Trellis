@@ -34,6 +34,10 @@ public static class AuthenticationExtensions
                     ValidIssuer = options.Issuer,
                     ValidAudience = options.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.SigningKey)),
+                    // Pin the one algorithm this host mints (JwtTokenProvider): a token whose header
+                    // names any other algorithm is rejected before its signature is even considered,
+                    // instead of being verified with whatever the attacker-controlled header asks for.
+                    ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                     ClockSkew = TimeSpan.FromSeconds(30),
                 };
 
@@ -41,21 +45,7 @@ public static class AuthenticationExtensions
                 // the default challenge is an empty body clients can't distinguish or display.
                 jwt.Events = new JwtBearerEvents
                 {
-                    OnChallenge = static async context =>
-                    {
-                        context.HandleResponse();
-                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                        await context.Response.WriteAsJsonAsync(
-                            new Microsoft.AspNetCore.Mvc.ProblemDetails
-                            {
-                                Title = "Unauthorized",
-                                Detail = "A valid access token is required. Obtain one from POST /auth/login.",
-                                Status = StatusCodes.Status401Unauthorized,
-                            },
-                            options: null,
-                            contentType: "application/problem+json",
-                            context.HttpContext.RequestAborted);
-                    },
+                    OnChallenge = WriteChallengeAsync,
                     OnForbidden = static async context =>
                     {
                         context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -78,5 +68,29 @@ public static class AuthenticationExtensions
         services.AddAuthorization();
 
         return services;
+    }
+
+    private static async Task WriteChallengeAsync(JwtBearerChallengeContext context)
+    {
+        context.HandleResponse();
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+
+        // RFC 6750 §3: a 401 from a bearer-protected resource names the scheme, and a
+        // presented-but-rejected token says so, so a client knows to refresh rather than to prompt
+        // for credentials. HandleResponse() suppressed the handler's default header.
+        context.Response.Headers.WWWAuthenticate = context.AuthenticateFailure is null
+            ? JwtBearerDefaults.AuthenticationScheme
+            : $"{JwtBearerDefaults.AuthenticationScheme} error=\"invalid_token\"";
+
+        await context.Response.WriteAsJsonAsync(
+            new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Unauthorized",
+                Detail = "A valid access token is required. Obtain one from POST /auth/login.",
+                Status = StatusCodes.Status401Unauthorized,
+            },
+            options: null,
+            contentType: "application/problem+json",
+            context.HttpContext.RequestAborted);
     }
 }

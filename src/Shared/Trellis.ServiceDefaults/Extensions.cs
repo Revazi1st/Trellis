@@ -80,15 +80,24 @@ public static class Extensions
     /// AppHost's WithHttpHealthCheck, compose/k8s probes) must reach them without credentials.
     /// Keep them internal — do not route /health or /alive through the public ingress; the
     /// response writer leaks only the overall status text either way.
+    /// <para>
+    /// Both are exempt from rate limiting (ADR-0021): probes arrive from one orchestrator address,
+    /// and a 429 on a probe is read as "unhealthy", so an API under load would be pulled out of
+    /// rotation or restarted by its own limiter. They are deliberately not <c>ShortCircuit()</c>ed:
+    /// routing runs implicitly at the front of the pipeline, so short-circuiting would also skip
+    /// the correlation-id and exception-handling middleware the hosts add after it.
+    /// </para>
     /// </summary>
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
         // Readiness: all checks (incl. the database). Liveness: only checks tagged "live".
-        app.MapHealthChecks(HealthEndpointPath);
+        app.MapHealthChecks(HealthEndpointPath)
+            .DisableRateLimiting();
         app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
         {
             Predicate = static registration => registration.Tags.Contains("live"),
-        });
+        })
+            .DisableRateLimiting();
 
         return app;
     }
