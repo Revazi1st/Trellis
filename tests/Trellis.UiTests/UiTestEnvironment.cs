@@ -11,6 +11,6 @@ internal static class UiTestEnvironment
     public static string WebBaseUrl =>
         Environment.GetEnvironmentVariable("UI_TESTS_BASE_URL") ?? "https://localhost:7170";
 
-    public const string SeededAdminEmail = "admin@trellis.dev";
+    public const string SeededAdminEmail = "admin@example.com";
     public const string SeededAdminPassword = "Admin123!";
 }

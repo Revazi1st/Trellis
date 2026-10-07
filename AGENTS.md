@@ -14,7 +14,7 @@ docker build -t trellis-sdk:10.0 scripts/sdk-image   # one-time
 ./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence
 ```
 
-**Aspire orchestration needs a real host, not the container** (ADR-0008): `aspire run` and the `Aspire.Hosting.Testing` E2E test need a local .NET 10 SDK or CI. `aspire run` brings up postgres + migrations + api + web. Seeded admin: `admin@trellis.dev` / `Admin123!`.
+**Aspire orchestration needs a real host, not the container** (ADR-0008): `aspire run` and the `Aspire.Hosting.Testing` E2E test need a local .NET 10 SDK or CI. `aspire run` brings up postgres + migrations + api + web. Seeded admin: `admin@example.com` / `Admin123!`.
 
 ## Dependency flow (architecture-test enforced)
 
