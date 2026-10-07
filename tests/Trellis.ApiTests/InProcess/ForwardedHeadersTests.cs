@@ -41,6 +41,15 @@ public sealed class ForwardedHeadersTests(ForwardedHeadersTests.ForwardingEnable
         // proves the WebHost's "forwarders enabled" setup ran and cleared it.
         options.KnownIPNetworks.ShouldBeEmpty();
         options.KnownProxies.ShouldBe([IPAddress.IPv6Loopback, IPAddress.Loopback], ignoreOrder: true);
+    }
+
+    [Fact]
+    public void Restoring_loopback_trust_logs_a_warning_naming_the_configuration_keys()
+    {
+        // A host whose logger factory bypasses ILoggerProvider (Serilog without writeToProviders) writes
+        // nothing here, not even its startup lines; the warning still reaches its own sinks.
+        Assert.SkipUnless(factory.Logs.Count > 0,
+            "This host's logging does not reach ILoggerProvider instances, so the warning cannot be captured in-process.");
 
         factory.Logs.ShouldContain(static line =>
             line.Contains("ASPNETCORE_FORWARDEDHEADERS_ENABLED", StringComparison.Ordinal)
@@ -144,7 +153,8 @@ public sealed class ForwardedHeadersTests(ForwardedHeadersTests.ForwardingEnable
             public IDisposable? BeginScope<TState>(TState state)
                 where TState : notnull => null;
 
-            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+            // Every level: the startup lines are what tells a host that routes to ILoggerProvider from one that does not.
+            public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {
