@@ -16,6 +16,11 @@ internal sealed class SeedOptions
 
     public string AdminPassword { get; init; } = DefaultAdminPassword;
 
+#if (UseMultitenancy)
+    /// <summary>The tenant the bootstrap admin — and, in Development, the demo invoices — belong to (ADR-0022).</summary>
+    public string TenantId { get; init; } = "default";
+#endif
+
     /// <summary>The well-known local-dev password must never reach a real environment (guarded in the worker).</summary>
     public bool UsesDefaultAdminPassword => string.Equals(AdminPassword, DefaultAdminPassword, StringComparison.Ordinal);
 }

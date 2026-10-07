@@ -1,6 +1,6 @@
 # ADR-0019: Multi-tenancy as an opt-in template toggle
 
-- **Status**: accepted
+- **Status**: accepted — tenant resolution and per-aggregate wiring superseded by ADR-0022
 - **Date**: 2026-07-16
 
 ## Context
@@ -12,9 +12,9 @@ Some solutions built from this template are multi-tenant, most are not. Baking a
 Ship multi-tenancy as the **`--use-multitenancy` template toggle (default off)**, structured so enabling it is a scaffold-time choice rather than a refactor:
 
 - **`ITenantContext`** (Application port) — the current tenant, or null.
-- **`TenantContext`** (Api.Common) — resolves the tenant from the principal's `tenant` **claim first**, falling back to the `X-Tenant-Id` header. Claim-first is deliberate: a header alone must never let a caller read another tenant's data.
+- **`TenantContext`** (Api.Common) — resolves the tenant from the principal's `tenant` **claim first**, falling back to the `X-Tenant-Id` header. Claim-first is deliberate: a header alone must never let a caller read another tenant's data. *(Superseded by ADR-0022: claim-only, the header is not read, and the claim is minted from the user's persisted membership.)*
 - **`TenantInterceptor`** (Persistence) — stamps the `TenantId` **shadow property** on newly added rows, keeping the domain model free of infrastructure concerns.
-- **Named `"Tenant"` query filter** on `Invoice` in `AppDbContext.OnModelCreating`, reusing the same named-filter pattern as `"SoftDeleted"` so callers can opt out explicitly with `IgnoreQueryFilters(["Tenant"])`.
+- **Named `"Tenant"` query filter** on `Invoice` in `AppDbContext.OnModelCreating`, reusing the same named-filter pattern as `"SoftDeleted"` so callers can opt out explicitly with `IgnoreQueryFilters(["Tenant"])`. *(Superseded by ADR-0022: the column, index and filter are a convention over every aggregate root, not per-aggregate wiring.)*
 
 Wiring uses the proven `#if` / XML-comment conditional mechanics on `UseMultitenancy`; the three tenant-only files are additionally excluded via `sources.modifiers` when the toggle is off.
 

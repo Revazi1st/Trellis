@@ -23,7 +23,7 @@ Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events,
 
 ## 3. Persistence
 - Delete `Configurations/InvoiceConfiguration.cs`, `Configurations/InvoiceLineConfiguration.cs`, `Repositories/InvoiceRepository.cs`.
-- `AppDbContext.cs`: the `Invoices` DbSet, the `"Tenant"` query filter on `Invoice` (multi-tenancy — re-target it to your aggregate), and the two `InvoiceId`/`InvoiceLineId` lines in `ConfigureConventions`.
+- `AppDbContext.cs`: the `Invoices` DbSet and the two `InvoiceId`/`InvoiceLineId` lines in `ConfigureConventions` (with multi-tenancy, the `"Tenant"` filter is a convention over every aggregate root — nothing per-aggregate to re-target).
 - `DependencyInjection.cs`: the `IInvoiceRepository` registration.
 - `Outbox/DomainEventSerialization.cs` anchors the Domain assembly via `typeof(Invoice)` — re-anchor to any surviving Domain type.
 

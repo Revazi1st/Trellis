@@ -2,6 +2,9 @@ using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+#if (UseMultitenancy)
+using Trellis.Application.Abstractions;
+#endif
 using Trellis.Application.Authorization;
 using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
@@ -104,18 +107,47 @@ internal sealed class MigrationWorker(
             UserName = seedOptions.AdminEmail,
             Email = seedOptions.AdminEmail,
             EmailConfirmed = true,
+#if (UseMultitenancy)
+            TenantId = seedOptions.TenantId,
+#endif
         };
 
         await userManager.CreateAsync(admin, seedOptions.AdminPassword);
         await userManager.AddToRoleAsync(admin, Roles.Administrator);
     }
 
+#if (!UseMultitenancy)
     private static async Task SeedSampleDataAsync(AppDbContext context, CancellationToken cancellationToken)
     {
         if (await context.Invoices.AnyAsync(cancellationToken))
         {
             return;
         }
+#else
+    private async Task SeedSampleDataAsync(AppDbContext context, CancellationToken cancellationToken)
+    {
+        // The worker has no request, so SystemTenantContext yields no tenant; the demo rows must
+        // belong to the seeded admin's tenant or the admin would never see them. AmbientTenant is
+        // what the "Tenant" filter (for the AnyAsync probe below), the TenantInterceptor and the
+        // outbox row for InvoiceIssued all read.
+        AmbientTenant.CurrentTenantId = seedOptions.TenantId;
+        try
+        {
+            await SeedSampleDataCoreAsync(context, cancellationToken);
+        }
+        finally
+        {
+            AmbientTenant.CurrentTenantId = null;
+        }
+    }
+
+    private static async Task SeedSampleDataCoreAsync(AppDbContext context, CancellationToken cancellationToken)
+    {
+        if (await context.Invoices.AnyAsync(cancellationToken))
+        {
+            return;
+        }
+#endif
 
         EmailAddress email = EmailAddress.Create("billing@sample.dev").Value;
         Currency usd = Currency.Create("USD").Value;

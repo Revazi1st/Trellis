@@ -59,7 +59,7 @@
       "datatype": "bool",
       "defaultValue": "false",
       "displayName": "Use multi-tenancy",
-      "description": "Add a tenant seam: ITenantContext (claim/header), a TenantId shadow column and a \"Tenant\" EF query filter. Regenerate the initial migration after enabling."
+      "description": "Add a tenant seam: a tenant claim on the principal (ITenantContext), a TenantId shadow column and a \"Tenant\" EF query filter on every aggregate root. Regenerate the initial migration after enabling."
     },
     "IncludeUiTests": {
       "type": "parameter",
@@ -224,7 +224,8 @@
             "src/Presentation/Api/Trellis.Api.Common/Http/TenantContext.cs",
             "src/Infrastructure/Trellis.Persistence/Interceptors/TenantInterceptor.cs",
             "src/Infrastructure/Trellis.Persistence/SystemTenantContext.cs",
-            "tests/Trellis.IntegrationTests/TenancyTests.cs"
+            "tests/Trellis.IntegrationTests/TenancyTests.cs",
+            "tests/Trellis.ApiTests/InProcess/TenantIsolationTests.cs"
           ]
         },
         {

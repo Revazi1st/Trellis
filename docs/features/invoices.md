@@ -19,7 +19,7 @@ Use-case slices, each = command/query + `internal sealed` handler + validator: `
 
 ## Persistence (`src/Infrastructure/Trellis.Persistence/`)
 
-`InvoiceConfiguration` / `InvoiceLineConfiguration` (complex-type mapping, `AutoInclude`, `"SoftDeleted"` filter), `InvoiceRepository`, ID conventions in `AppDbContext`.
+`InvoiceConfiguration` / `InvoiceLineConfiguration` (complex-type mapping, `AutoInclude`, `"SoftDeleted"` filter), `InvoiceRepository`, ID conventions in `AppDbContext`. With `UseMultitenancy`, the `TenantId` shadow column, its index and the `"Tenant"` filter come from the aggregate-root convention in `AppDbContext.OnModelCreating` (ADR-0022) — `InvoiceConfiguration` contains no tenant code, and neither should yours.
 
 ## API (`src/Presentation/Api/Trellis.Api/Features/Invoices/`)
 
@@ -53,7 +53,7 @@ on drift (`scripts/export-openapi.sh`).
 
 ## Tests
 
-`Domain.UnitTests/Invoices` (invariants, events, spec) · `Application.UnitTests/Invoices` (handlers + pipeline) · `IntegrationTests` (roundtrip, spec→SQL, interceptors, soft-delete, event→email) · `ApiTests` (E2E lifecycle + error contracts).
+`Domain.UnitTests/Invoices` (invariants, events, spec) · `Application.UnitTests/Invoices` (handlers + pipeline) · `IntegrationTests` (roundtrip, spec→SQL, interceptors, soft-delete, event→email; with multi-tenancy, `TenancyTests`: stamping, filtering, the aggregate-root convention, outbox tenant restore) · `ApiTests` (E2E lifecycle + error contracts; with multi-tenancy, `TenantIsolationTests`: cross-tenant read/write 404, scoped overdue list, header ignored, cache scoped — all-options leg).
 
 ## Endpoints
 

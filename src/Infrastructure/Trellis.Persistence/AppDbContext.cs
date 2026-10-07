@@ -1,6 +1,12 @@
+#if (UseMultitenancy)
+using System.Linq.Expressions;
+#endif
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+#if (UseMultitenancy)
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+#endif
 using Trellis.Domain.Invoices;
 using Trellis.Persistence.Identity;
 using Trellis.SharedKernel.Domain;
@@ -17,17 +23,51 @@ public sealed class AppDbContext(
 {
     public DbSet<Invoice> Invoices => Set<Invoice>();
 
+#if (UseMultitenancy)
+    /// <summary>Read by the "Tenant" query filters; a member on the context so EF parameterises it per query.</summary>
+    internal string? CurrentTenantId => tenantContext.TenantId;
+#endif
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
 #if (UseMultitenancy)
-        // Named filter so callers can opt out explicitly: IgnoreQueryFilters(["Tenant"]).
-        // The lambda captures this DbContext, so EF re-evaluates the tenant per query.
-        builder.Entity<Invoice>().HasQueryFilter(
-            "Tenant",
-            invoice => EF.Property<string>(invoice, Interceptors.TenantInterceptor.TenantIdProperty) == tenantContext.TenantId);
+        // Tenant membership is a required attribute of the user (ADR-0022). Identity tables are
+        // deliberately NOT tenant-filtered: login, lockout and refresh run before a tenant is known.
+        builder.Entity<ApplicationUser>(static user =>
+        {
+            user.Property(static u => u.TenantId).IsRequired().HasMaxLength(64);
+            user.HasIndex(static u => u.TenantId);
+        });
+
+        // Convention, not configuration: EVERY aggregate root gets the TenantId shadow column, its
+        // index and the named "Tenant" filter. A new aggregate is isolated without anyone remembering
+        // to wire it; a deliberately shared aggregate is a design decision that must be made here, on
+        // purpose. IHasDomainEvents is what AggregateRoot<> implements (and what OutboxWriteInterceptor
+        // already uses to recognise aggregates). Named so callers can opt out explicitly:
+        // IgnoreQueryFilters(["Tenant"]) — never the bare IgnoreQueryFilters(), which drops it silently.
+        foreach (Type aggregateType in builder.Model.GetEntityTypes()
+                     .Select(static entityType => entityType.ClrType)
+                     .Where(static clrType => typeof(IHasDomainEvents).IsAssignableFrom(clrType))
+                     .ToList())
+        {
+            EntityTypeBuilder aggregate = builder.Entity(aggregateType);
+            aggregate.Property<string>(Interceptors.TenantInterceptor.TenantIdProperty).HasMaxLength(64);
+            aggregate.HasIndex(Interceptors.TenantInterceptor.TenantIdProperty);
+
+            // e => EF.Property<string>(e, "TenantId") == this.CurrentTenantId
+            // The constant is this DbContext: EF swaps it for the live context at query time, so the
+            // tenant is evaluated per query, not frozen into the cached model.
+            ParameterExpression entity = Expression.Parameter(aggregateType, "e");
+            Expression tenantColumn = Expression.Call(
+                typeof(EF), nameof(EF.Property), [typeof(string)],
+                entity, Expression.Constant(Interceptors.TenantInterceptor.TenantIdProperty));
+            Expression currentTenant = Expression.Property(
+                Expression.Constant(this, typeof(AppDbContext)), nameof(CurrentTenantId));
+            aggregate.HasQueryFilter("Tenant", Expression.Lambda(Expression.Equal(tenantColumn, currentTenant), entity));
+        }
 #endif
     }
 

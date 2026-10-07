@@ -47,10 +47,17 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   e-mail as typed.
 - **Logout** revokes the presented refresh token (idempotent, anonymous — possession of the token is
   the authorization; never trips replay detection). **Revoke-all** signs the caller out everywhere.
+- **Tenant (multi-tenancy toggle)**: every user has exactly one `TenantId` (`AspNetUsers`, required,
+  indexed), minted into the access token as the `tenant` claim (`ITenantContext.ClaimType`); the API
+  trusts only that claim — no header — and rejects a token without it (401, `invalid_token`).
+  Self-registration provisions a fresh tenant (a GUID) for the registrant, where `Registration:Mode`
+  allows registration at all; the seeded admin and the Development demo data belong to
+  `Seed:TenantId` (`default`). ADR-0022.
 - **Seeding**: the MigrationService seeds roles/permissions always, the admin user always, and demo
   invoices only in Development. The local-dev admin is `admin@example.com` / `Admin123!`
-  (`Seed__AdminEmail` / `Seed__AdminPassword`). Outside Development it refuses to seed the
-  well-known default admin password — set `Seed__AdminPassword`.
+  (`Seed__AdminEmail` / `Seed__AdminPassword`; with multi-tenancy, `Seed__TenantId` names the
+  admin's — and the demo data's — tenant, default `default`). Outside Development it refuses to
+  seed the well-known default admin password — set `Seed__AdminPassword`.
 
 ## API (`src/Presentation/Api/Trellis.Api/Features/Auth/`)
 
@@ -105,7 +112,9 @@ boot; rotation, replay killing the family, logout twice, revoke-all; lockout 4×
 with its security events; equal hash work for an unknown e-mail; refresh-token expiry on an
 adjustable clock; 400 for missing fields) ·
 `ApiTests/Ui` (client-side: failure sentences, refresh tolerance and hold-off, bearer attachment,
-the development-only sign-in hint; fake handlers, no browser).
+the development-only sign-in hint; fake handlers, no browser) ·
+`ApiTests/InProcess/TenantIsolationTests` (multi-tenancy toggle, all-options leg: the token carries
+the tenant claim, a token without it is 401, `X-Tenant-Id` never overrides the claim).
 
 > When you change this feature's behavior, update this file, and docs/threat-model.md when the
 > change is security-relevant (the CI docs-drift check enforces both for auth code).

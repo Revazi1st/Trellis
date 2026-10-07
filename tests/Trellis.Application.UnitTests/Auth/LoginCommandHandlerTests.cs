@@ -13,7 +13,12 @@ namespace Trellis.Application.UnitTests.Auth;
 public sealed class LoginCommandHandlerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
-    private static readonly AuthenticatedUser User = new(Guid.CreateVersion7(), "member@acme.com", ["invoices:read"]);
+    private static readonly AuthenticatedUser User = new(
+        Guid.CreateVersion7(), "member@acme.com", ["invoices:read"]
+#if (UseMultitenancy)
+        , "tenant-a"
+#endif
+        );
 
     private readonly IIdentityService _identity = Substitute.For<IIdentityService>();
     private readonly ITokenProvider _tokens = Substitute.For<ITokenProvider>();

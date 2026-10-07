@@ -19,7 +19,7 @@ The `Invoice` slice is the canonical pattern. To add a feature, mirror it across
 4. **Tests** — Application.UnitTests for the handler; extend ApiTests if it's a notable flow.
 
 ## For a new aggregate
-Also add: the aggregate + value objects + strongly-typed ID(s) + events + `{Aggregate}Errors` + `{Aggregate}Specs` in `Domain/{Feature}/`; an `IEntityTypeConfiguration<T>` + repository + `ConfigureConventions` ID line in Persistence; then `./scripts/ef.sh migrations add Add{Feature}` (see the `add-migration` skill); Domain.UnitTests + IntegrationTests.
+Also add: the aggregate + value objects + strongly-typed ID(s) + events + `{Aggregate}Errors` + `{Aggregate}Specs` in `Domain/{Feature}/`; an `IEntityTypeConfiguration<T>` + repository + `ConfigureConventions` ID line in Persistence (with multi-tenancy, tenant scoping is automatic for any `AggregateRoot<>` — do not add it to the configuration); then `./scripts/ef.sh migrations add Add{Feature}` (see the `add-migration` skill); Domain.UnitTests + IntegrationTests.
 
 ## Finish
 - `./scripts/dotnet.sh build Trellis.slnx && ./scripts/dotnet.sh test Trellis.slnx`

@@ -277,6 +277,10 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
                 new Claim(JwtRegisteredClaimNames.Sub, subject),
                 new Claim(ClaimTypes.NameIdentifier, subject),
                 new Claim(AuthClaims.Permission, Permissions.Invoices.Read),
+#if (UseMultitenancy)
+                // A valid token must carry the tenant (ADR-0022); this test is about the algorithm pin only.
+                new Claim(Trellis.Application.Abstractions.ITenantContext.ClaimType, ApiFactory.TenantA),
+#endif
             ]),
             Issuer = options.Issuer,
             Audience = options.Audience,
