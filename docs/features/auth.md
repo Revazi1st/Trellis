@@ -77,8 +77,15 @@ that fails a validator).
 
 `Login.razor` signs in and `Register.razor` creates a Member account via `IAuthApiClient`;
 `TokenAuthenticationStateProvider` (UI.Common) checks `exp` and transparently rotates through
-`/auth/refresh` (single-flight) so the session outlives the access token; a failed rotation signs
-the circuit out.
+`/auth/refresh` (single-flight, 30 s before expiry) so the session outlives the access token. Only a
+401 from refresh signs the circuit out; a 429, a 5xx or an unreachable API keeps the stored pair,
+holds off the next attempt for 5 s and keeps the user signed in (ADR-0021).
+
+The clients show what the API said rather than a guess: the lockout 403, a password-policy 400 and
+the register 409 display the problem's `detail`, a 429 says how long to wait (`Retry-After`), a 5xx
+or an unreachable API reads "The service is unavailable right now", and a wrong password reads as
+the server's invalid-credentials sentence. The seeded-admin hint on the sign-in page renders only
+when the host enables `UiOptions.ShowDevelopmentHints` (UI.Web: in Development).
 
 Auth rejections are RFC 9457 everywhere: JwtBearer challenges (401) and forbidden (403) responses
 carry problem-details bodies, and rate-limited requests get a 429 problem with `Retry-After`.
@@ -96,7 +103,9 @@ idempotency — real Identity + PostgreSQL) · `ApiTests/InProcess/AuthRateLimit
 `ApiTests/InProcess/AuthFlowTests` (open and closed registration, an unknown mode failing the
 boot; rotation, replay killing the family, logout twice, revoke-all; lockout 4×401 → 403 → 403
 with its security events; equal hash work for an unknown e-mail; refresh-token expiry on an
-adjustable clock; 400 for missing fields).
+adjustable clock; 400 for missing fields) ·
+`ApiTests/Ui` (client-side: failure sentences, refresh tolerance and hold-off, bearer attachment,
+the development-only sign-in hint; fake handlers, no browser).
 
 > When you change this feature's behavior, update this file, and docs/threat-model.md when the
 > change is security-relevant (the CI docs-drift check enforces both for auth code).

@@ -41,6 +41,7 @@ you build on top.
 | Slow-loris / hung requests | Default 30s request timeout returning 504 | `ApiHardeningExtensions` |
 | Oversized requests | 1 MB body (413) and 32 KB header caps on Kestrel, configurable | `ApiHardeningExtensions` |
 | MIME sniffing, framing, token responses cached | `nosniff`, `Referrer-Policy`, `X-Frame-Options`/`frame-ancestors 'none'` on every response; `Cache-Control: no-store` on `/auth/` | `SecurityHeadersMiddleware` |
+| Clickjacking or injected script in the web UI | CSP `script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin` on every UI.Web response | UI.Web `Program.cs` |
 | Vulnerable dependency pulled in | `NuGetAudit` over the full graph at `low`, warnings are errors on CI | `Directory.Build.props` |
 | Secrets committed to the repository | gitleaks scan over full history on every push and PR | `.github/workflows/ci.yml` |
 | Information disclosure through errors | All expected failures are RFC 9457 problem documents; the exception handler never returns stack traces | ADR-0004 |

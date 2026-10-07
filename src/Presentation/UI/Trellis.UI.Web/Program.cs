@@ -30,7 +30,38 @@ builder.Services.AddSharedUi(static (_, client) =>
     client.BaseAddress = new Uri("https+http://api"));
 #pragma warning restore S1075
 
+// Only the host knows its environment; the shared UI reads the answer (e.g. the seeded-admin hint on /login).
+bool isDevelopment = builder.Environment.IsDevelopment();
+builder.Services.Configure<UiOptions>(options => options.ShowDevelopmentHints = isDevelopment);
+
 var app = builder.Build();
+
+// Security response headers, the browser-facing counterpart of the API's set (ADR-0021). Set when the
+// response starts, so every response carries them: pages, static assets, the Blazor endpoints, and the
+// error page (the exception handler clears headers before re-executing; OnStarting runs after that).
+// - frame-ancestors 'none' (+ X-Frame-Options for old browsers): no page can be framed (clickjacking).
+// - script-src 'self': only the app's own script files run, never an injected inline script. blazor.web.js
+//   and the dev-time browser-refresh script are same-origin files, so nothing legitimate is blocked.
+// - object-src 'none', base-uri 'self', form-action 'self': no plugins, no <base> hijack, no form posting
+//   off-site. style-src stays open on purpose: Blazor's reconnect overlay injects an inline <style>.
+// - Referrer-Policy same-origin: page URLs (which carry ids) never reach another origin. Unlike the API's
+//   no-referrer, it keeps the real Origin on the app's own POSTs (no-referrer would send "Origin: null").
+const string contentSecurityPolicy =
+    "script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+app.Use(static (context, next) =>
+{
+    context.Response.OnStarting(static state =>
+    {
+        IHeaderDictionary headers = ((HttpContext)state).Response.Headers;
+        headers.ContentSecurityPolicy = contentSecurityPolicy;
+        headers.XFrameOptions = "DENY";
+        headers.XContentTypeOptions = "nosniff";
+        headers["Referrer-Policy"] = "same-origin";
+        return Task.CompletedTask;
+    }, context);
+
+    return next(context);
+});
 
 app.MapDefaultEndpoints();
 
