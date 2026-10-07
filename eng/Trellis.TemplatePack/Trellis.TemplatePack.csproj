@@ -4,7 +4,7 @@
     <PackageType>Template</PackageType>
     <PackageId>Trellis.Templates</PackageId>
     <Title>Trellis Clean Architecture Solution Template</Title>
-    <Authors>Trellis</Authors>
+    <Authors>Trellis contributors</Authors>
     <Description>A rich-DDD, Clean Architecture .NET 10 solution template: feature-based minimal APIs, separate Infrastructure and Persistence, Aspire orchestration, Blazor UI, and an AI-friendly repository.</Description>
     <PackageTags>dotnet-new;templates;clean-architecture;ddd;aspire;blazor</PackageTags>
     <Version>0.1.0</Version>

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "Trellis",
+  "author": "Trellis contributors",
   "classifications": [
     "Web",
     "Clean Architecture",
