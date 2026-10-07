@@ -2,20 +2,25 @@
 
 ## Prerequisites
 
-- **Docker** (Desktop/OrbStack). All build/test runs through the SDK container — no local .NET SDK required for the inner loop.
-- A **local .NET 10 SDK** only if you want `aspire run` (the full orchestrated app; ADR-0008).
+| Tool | Needed for |
+|---|---|
+| **Docker** (Docker Desktop, OrbStack, Colima, Linux Docker Engine; Podman with caveats, see [below](#docker-engines-other-than-docker-desktop)) | everything: PostgreSQL, Testcontainers, the SDK container |
+| **.NET 10 SDK** on the host | `aspire run` and the Aspire E2E test (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container |
+| **Aspire CLI 13.5 or later**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK; the AppHost is on Aspire 13.5.4, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app |
+| **PowerShell** (`pwsh`) | installing the Playwright browsers for the optional UI tests |
 
-One-time: build the SDK image (base SDK + docker CLI, needed by Testcontainers/Aspire):
+No .NET SDK on the host? Build the SDK image once (base SDK + docker CLI, needed by
+Testcontainers/Aspire) and run every command through `./scripts/dotnet.sh`:
 
 ```bash
 docker build -t trellis-sdk:10.0 scripts/sdk-image
 ```
 
-## IDE: open in the dev container (recommended)
+## IDE: open in the dev container (no host SDK)
 
-This repo is **Docker-only** — there is no .NET SDK on the host, so an IDE cannot resolve types
-locally. `.devcontainer/devcontainer.json` fixes that by running the IDE backend *inside* the same
-SDK image the scripts use.
+Without a .NET SDK on the host an IDE cannot resolve types locally.
+`.devcontainer/devcontainer.json` fixes that by running the IDE backend *inside* the same SDK
+image the scripts use. With a host SDK you can skip this section and open the solution directly.
 
 **Rider**: open the solution → Rider detects `.devcontainer` and offers *"Reopen in Dev Container"*
 (or use **File → Remote Development → Dev Containers**). VS Code: *Dev Containers: Reopen in Container*.
@@ -129,8 +134,15 @@ it forwards what `forwardPorts` declares, which is why 8080 is listed too. Never
 
 ### With a local SDK
 
-`aspire run` — PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire
-dashboard, all wired together. This is the best loop when a host SDK is available.
+```bash
+aspire run                                   # needs the Aspire CLI (Prerequisites)
+dotnet run --project tools/Trellis.AppHost   # the same app, no CLI needed
+```
+
+PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire dashboard, all
+wired together; open the dashboard URL either command prints. This is the best loop when a host
+SDK is available. The Aspire CLI reads the AppHost path from the committed `aspire.config.json`
+(`appHost.path`), the project settings file it would otherwise create on first use.
 
 ### Containerized smoke
 
