@@ -25,12 +25,49 @@
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- What never ships. KEEP IN SYNC with "sources[0].exclude" in .template.config/template.json
+         (that list guards folder installs, this one guards the package) and with .gitignore: build
+         output, packaging infra, machine-local and IDE state, OS litter, test/coverage output, and
+         every pattern .gitignore treats as a secret. ".git" is listed as a file as well as a folder:
+         a git worktree or submodule has a .git FILE, which "\.git\**" does not match. -->
+    <TemplateContentExclude>
+      ..\..\**\bin\**;
+      ..\..\**\obj\**;
+      ..\..\artifacts\**;
+      ..\..\.git;
+      ..\..\.git\**;
+      ..\..\.idea\**;
+      ..\..\.vs\**;
+      ..\..\.vscode\**;
+      ..\..\eng\**;
+      ..\..\.github\workflows\template-ci.yml;
+      ..\..\.github\workflows\release.yml;
+      ..\..\.claude\settings.local.json;
+      ..\..\.claude\worktrees\**;
+      ..\..\CLAUDE.local.md;
+      ..\..\**\*.user;
+      ..\..\**\*.suo;
+      ..\..\**\.DS_Store;
+      ..\..\**\.aspire\**;
+      ..\..\**\TestResults\**;
+      ..\..\**\nupkg\**;
+      ..\..\**\*.trx;
+      ..\..\**\coverage*.json;
+      ..\..\**\coverage*.xml;
+      ..\..\**\*.coverage;
+      ..\..\**\appsettings.*.local.json;
+      ..\..\**\*.pfx;
+      ..\..\**\*.key
+    </TemplateContentExclude>
+  </PropertyGroup>
+
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Pack the whole repo (from two levels up) as template content, minus build output and packaging infra.
+    <!-- Pack the whole repo (from two levels up) as template content, minus $(TemplateContentExclude).
          An explicit PackagePath is REQUIRED: these items live outside the project cone, so
          ContentTargetFolders cannot derive a relative path and would flatten all files into
          content/ — dropping colliding names (Program.cs, appsettings.json, ...) and losing
@@ -41,7 +78,7 @@
          files — LICENSE, CODEOWNERS, Dockerfile — whose "file path" is itself extension-less and
          therefore treated as a folder, nesting them one level deep (content/LICENSE/LICENSE). -->
     <Content Include="..\..\**\*"
-             Exclude="..\..\**\bin\**;..\..\**\obj\**;..\..\artifacts\**;..\..\.git\**;..\..\.idea\**;..\..\.vs\**;..\..\eng\**;..\..\**\.template-test\**;..\..\.claude\settings.local.json;..\..\.github\workflows\template-ci.yml;..\..\.github\workflows\release.yml"
+             Exclude="$(TemplateContentExclude)"
              PackagePath="content" />
     <Compile Remove="**\*" />
   </ItemGroup>

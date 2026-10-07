@@ -19,10 +19,6 @@ dotnet new install Trellis.Templates
 dotnet new trellis -n Your.Project
 ```
 
-Use a .NET-style project name — letters, digits and dots (`Acme.Shop`). Names with spaces are not
-supported: the templating engine renames files and namespaces differently and the solution will
-not build.
-
 Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 
 | Flag | Default | What it adds |
@@ -33,6 +29,11 @@ Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 | `--use-multitenancy` | off | Tenant seam: `ITenantContext`, `TenantId` column + `"Tenant"` query filter |
 | `--include-ui-tests` | off | Playwright browser tests for the Blazor UI (opt-in at run time) |
 | `--skip-restore` | off | Skip the automatic `dotnet restore` |
+
+### Naming your project
+
+Use dot-separated parts made of letters and digits, each starting with a letter (`Acme.Shop`).
+Hyphens, spaces and underscores become underscores in namespaces (`acme-shop` → `acme_shop`), and the build fails on analyzer rule CA1707.
 
 ## Develop it
 
