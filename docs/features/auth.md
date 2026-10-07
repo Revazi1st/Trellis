@@ -14,6 +14,7 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 - **Access tokens**: HMAC-SHA256 JWTs carrying `sub`, email and one `permission` claim per effective
   permission (union across roles). Short-lived (`Authentication:AccessTokenMinutes`, default 15).
   The signing key is validated at API startup — boot fails if it is missing or under 32 chars.
+  Validation accepts HS256 only (`ValidAlgorithms`): a token naming another algorithm is rejected.
 - **Refresh tokens**: opaque 256-bit values; only their SHA-256 hash is stored (`RefreshTokens`
   table, FK → `AspNetUsers` with cascade delete). **Single-use rotation**: consuming is one atomic
   conditional `UPDATE`, so a concurrent double-spend loses. **Replay detection**: presenting an
@@ -35,9 +36,15 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 |---|---|---|
 | POST | `/api/v1/auth/register` | anonymous, `auth` rate limit |
 | POST | `/api/v1/auth/login` | anonymous, `auth` rate limit |
-| POST | `/api/v1/auth/refresh` | anonymous, `auth` rate limit |
-| POST | `/api/v1/auth/logout` | anonymous, `auth` rate limit |
+| POST | `/api/v1/auth/refresh` | anonymous, global rate limit |
+| POST | `/api/v1/auth/logout` | anonymous, global rate limit |
 | POST | `/api/v1/auth/revoke-all` | authenticated |
+
+The strict `auth` policy guards the endpoints that take a guessable credential (register, login);
+refresh and logout take an unguessable token and sit under the global per-client limiter only, so a
+shared source such as the Blazor Server host never turns silent refreshes into 429s (ADR-0021).
+Every other endpoint on the versioned group requires authentication by default; these four are the
+whole anonymous allowlist (`EndpointMetadataTests`).
 
 Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 problem details
 (`Auth.InvalidCredentials` 401, `Auth.AccountLockedOut` 403, `Auth.InvalidRefreshToken` 401,
@@ -52,11 +59,15 @@ the circuit out.
 
 Auth rejections are RFC 9457 everywhere: JwtBearer challenges (401) and forbidden (403) responses
 carry problem-details bodies, and rate-limited requests get a 429 problem with `Retry-After`.
+A 401 also carries `WWW-Authenticate: Bearer` (`error="invalid_token"` when a presented token was
+rejected), and every `/auth/` response is `Cache-Control: no-store`.
 
 ## Tests
 
 `Application.UnitTests/Auth` (login/refresh handler logic with faked ports) ·
 `IntegrationTests/AuthSecurityTests` (lockout thresholds + reset, replay revocation, revoke
-idempotency — real Identity + PostgreSQL).
+idempotency — real Identity + PostgreSQL) · `ApiTests/InProcess/AuthRateLimitTests` (login 429 with
+`Retry-After`, refresh chains and twelve sessions through one host never throttled) ·
+`EndpointMetadataTests` (anonymous allowlist, permissions, challenge header, algorithm pin).
 
 > When you change this feature's behavior, update this file (the CI docs-drift check enforces it).

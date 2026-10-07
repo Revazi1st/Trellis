@@ -33,3 +33,4 @@ Agent entry point — read only what the task needs.
 - [0018](adr/0018-transactional-outbox-and-idempotency.md) — transactional outbox for domain events + command idempotency
 - [0019](adr/0019-multitenancy-toggle.md) — multi-tenancy as an opt-in template toggle
 - [0020](adr/0020-outbound-http-integrations.md) — outbound HTTP integrations: typed client, per-client resilience, validated options
+- [0021](adr/0021-api-hardening-defaults.md) — API hardening defaults: deny-by-default group + allowlist test, forwarded-header trust never widens, rate limits by credential type, headers, limits
