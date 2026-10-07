@@ -54,7 +54,8 @@ fails the rollout, not the first request.
 | `ConnectionStrings__trellis-db` | yes (API + migration job) | PostgreSQL connection string. The name contains a dash — settable in compose/k8s env maps, but not via POSIX `export`; use a `.env` file or manifest. |
 | `Authentication__SigningKey` | yes | JWT HMAC-SHA256 key, **≥ 32 characters or the API refuses to boot**. Store in a secret store; rotate by redeploying (outstanding access tokens die within `AccessTokenMinutes`). |
 | `Seed__AdminPassword` | yes (migration job, fresh DB) | Bootstrap admin credential; seeding refuses the default outside Development. |
-| `ForwardedHeaders__KnownProxies__0…` / `ForwardedHeaders__KnownNetworks__0…` | behind ingress | IPs / CIDR ranges of trusted proxies. Without them `X-Forwarded-For` is ignored (loopback-only default — spoof-safe) and every caller shares the ingress IP's rate-limit bucket. |
+| `ForwardedHeaders__KnownProxies__0…` / `ForwardedHeaders__KnownNetworks__0…` | behind ingress | IPs / CIDR ranges of trusted proxies. Without them `X-Forwarded-For` is ignored (loopback-only default — spoof-safe) and every caller shares the ingress IP's rate-limit bucket. `aspire publish` output sets `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`; that switch cannot widen trust — with no list configured the API keeps the loopback-only default and logs a startup warning naming these settings (ADR-0021). A Blazor Server web host signs everyone in from one address: 10 logins/min per web host, by design. |
+| `Kestrel__Limits__MaxRequestBodySize` / `Kestrel__Limits__MaxRequestHeadersTotalSize` | no | Request caps in bytes: 1 MB body (larger → 413) and 32 KB of headers by default. Raise per endpoint for a real upload, not globally. |
 | `Cors__AllowedOrigins__0…` | if browsers call cross-origin | Allowed origins; **none by default** (same-origin only). |
 | `Retention__*` | no | Janitor windows for the bookkeeping tables: `SweepInterval` (1h), `ProcessedOutboxAge` (3d), `DeadLetteredOutboxAge` (30d), `IdempotencyKeyAge` (2d), `DeadRefreshTokenAge` (30d). TimeSpan format, e.g. `7.00:00:00`. |
 
@@ -65,7 +66,8 @@ fails the rollout, not the first request.
   DB outage, so the orchestrator doesn't restart-loop a healthy process.
 
 Both are **anonymous by design**: orchestrator probes (the AppHost's `WithHttpHealthCheck`,
-compose/k8s probes) must reach them without credentials. **Keep them off the public ingress** —
+compose/k8s probes) must reach them without credentials, and both are **exempt from rate limiting** —
+a probe answered 429 would read as an unhealthy instance. **Keep them off the public ingress** —
 route probes over the internal network only. The response is just the status text, but an
 open readiness endpoint is still a free DB-status oracle.
 

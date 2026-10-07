@@ -24,13 +24,17 @@ you build on top.
 | Tokens forged with a weak or absent key | Signing key must be ≥ 32 chars; the API refuses to boot otherwise | `RequireValidTokenOptions`, `AuthTokenOptions` |
 | Refresh tokens readable from a database dump | Only SHA-256 hashes are persisted | `JwtTokenProvider.HashRefreshToken` |
 | Privilege escalation between roles | Permission-based authorization, policies resolved per permission claim; endpoints declare `.RequirePermission(...)` | `PermissionPolicyProvider` |
+| An endpoint shipped without authorization | Deny-by-default on the versioned API group; permissions per endpoint (unknown names fail the boot); the anonymous set is an allowlist test | `MapVersionedApiGroup`, `EndpointMetadataTests` |
+| Token forged by algorithm confusion | Validation accepts HS256 only (`ValidAlgorithms`) | `AddApiAuthentication` |
 | Client-supplied identifiers poisoning logs or response headers | The inbound correlation id is accepted only if short and restricted to an id-shaped charset; otherwise a server id is used | `CorrelationIdMiddleware` |
-| Rate-limit evasion behind a proxy | `X-Forwarded-For` honoured only from explicitly configured trusted proxies/networks | `ApiHardeningExtensions` |
+| Rate-limit evasion behind a proxy | `X-Forwarded-For` honoured only from explicitly configured trusted proxies/networks; the publish-mode `ASPNETCORE_FORWARDEDHEADERS_ENABLED` switch cannot widen it (loopback-only restored, startup warning) | `ApiHardeningExtensions` |
 | Duplicate submission of a write (double charge, double invoice) | `Idempotency-Key` reserved per (user, route, key); failed requests release the key | `IdempotencyFilter` |
 | Lost update on concurrent edits | `xmin` concurrency token; conflicts become 409 | `ConcurrencyExceptionHandler` |
 | A third party being down taking us down | Per-client resilience pipeline; health check reports Degraded, not Unhealthy | ADR-0020 |
 | `/health` used as a load lever against a dependency | The external check caches its verdict and probes with a bare TCP connect | `ExchangeRateHealthCheck` |
 | Slow-loris / hung requests | Default 30s request timeout returning 504 | `ApiHardeningExtensions` |
+| Oversized requests | 1 MB body (413) and 32 KB header caps on Kestrel, configurable | `ApiHardeningExtensions` |
+| MIME sniffing, framing, token responses cached | `nosniff`, `Referrer-Policy`, `X-Frame-Options`/`frame-ancestors 'none'` on every response; `Cache-Control: no-store` on `/auth/` | `SecurityHeadersMiddleware` |
 | Vulnerable dependency pulled in | `NuGetAudit` over the full graph at `low`, warnings are errors on CI | `Directory.Build.props` |
 | Secrets committed to the repository | gitleaks scan over full history on every push and PR | `.github/workflows/ci.yml` |
 | Information disclosure through errors | All expected failures are RFC 9457 problem documents; the exception handler never returns stack traces | ADR-0004 |
@@ -43,6 +47,9 @@ you build on top.
   token stays valid for its (short) lifetime. Shorten `AccessTokenMinutes` if that window matters.
 - **Rate limiting is per-instance, in-memory.** Behind N replicas the effective limit is N×. Move to a
   shared store if the limit is a security control rather than a politeness control.
+- **A Blazor Server web host is one rate-limit source.** All of its users share 10 logins per minute
+  (refreshes are unaffected). Widening it means trusting the web host as a proxy, per environment, or
+  a BFF (ADR-0021, ADR-0007).
 - **`/health` and `/alive` are anonymous** so orchestrators can reach them. Readiness reveals
   dependency names and status — keep both off the public ingress.
 - **No audit log of security-relevant events** (login, permission change, revocation) beyond ordinary

@@ -32,13 +32,19 @@ internal sealed class SecuritySchemeTransformer : IOpenApiDocumentTransformer
     }
 }
 
-/// <summary>Marks every non-anonymous operation as bearer-secured, with the 401/403 outcomes documented.</summary>
+/// <summary>
+/// Marks every operation that actually requires authorization as bearer-secured, with the 401/403
+/// outcomes documented. It reasons from what the endpoint declares (authorization data and no
+/// anonymous opt-out) rather than from the mere absence of <see cref="IAllowAnonymous"/>, so an
+/// endpoint that requires nothing is never advertised as secured.
+/// </summary>
 internal sealed class SecurityRequirementOperationTransformer : IOpenApiOperationTransformer
 {
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
     {
-        bool anonymous = context.Description.ActionDescriptor.EndpointMetadata.OfType<IAllowAnonymous>().Any();
-        if (anonymous)
+        IList<object> metadata = context.Description.ActionDescriptor.EndpointMetadata;
+        bool secured = metadata.OfType<IAuthorizeData>().Any() && !metadata.OfType<IAllowAnonymous>().Any();
+        if (!secured)
         {
             return Task.CompletedTask;
         }
