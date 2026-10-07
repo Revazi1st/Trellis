@@ -38,8 +38,10 @@ Hyphens, spaces and underscores become underscores in namespaces (`acme-shop` â†
 ## Prerequisites
 
 - **Docker**: PostgreSQL, the integration tests (Testcontainers) and the SDK container all need it.
-  Docker Desktop, OrbStack, Colima and Linux Docker Engine work; Podman with a few settings
-  ([docs/development.md](docs/development.md#docker-engines-other-than-docker-desktop)).
+  This repository's own runs exercise Docker Desktop, and the `sdk-container` CI job covers Linux
+  Docker Engine. OrbStack, Colima and Podman should work with the settings in
+  [docs/development.md](docs/development.md#docker-engines-other-than-docker-desktop), but nothing
+  here tests them.
 - **.NET 10 SDK** on the host, to run the orchestrated app. Build and tests also run without it,
   through `./scripts/dotnet.sh` or the dev container.
 - **Aspire CLI 13.5 or later** for `aspire run`, a separate install from the SDK:
