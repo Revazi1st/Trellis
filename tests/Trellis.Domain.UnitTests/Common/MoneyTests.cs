@@ -59,6 +59,39 @@ public sealed class MoneyTests
             () => Money.Create(1m, "USD").Value - Money.Create(5m, "USD").Value);
 
     [Fact]
+    public void Subtraction_to_exactly_zero_is_allowed()
+        => (Money.Create(5m, "USD").Value - Money.Create(5m, "USD").Value).ShouldBe(Money.Zero("USD"));
+
+    [Fact]
+    public void Subtraction_across_currencies_throws()
+        => Should.Throw<InvalidOperationException>(
+            () => Money.Create(5m, "EUR").Value - Money.Create(1m, "USD").Value);
+
+    [Fact]
+    public void Addition_of_zero_is_the_identity()
+    {
+        Money amount = Money.Create(12.34m, "USD").Value;
+
+        (amount + Money.Zero("USD")).ShouldBe(amount);
+        (Money.Zero("USD") + amount).ShouldBe(amount);
+    }
+
+    [Fact]
+    public void Operators_return_new_values_and_leave_operands_untouched()
+    {
+        Money left = Money.Create(10m, "USD").Value;
+        Money right = Money.Create(4m, "USD").Value;
+
+        Money sum = left + right;
+        Money difference = left - right;
+
+        sum.Amount.ShouldBe(14m);
+        difference.Amount.ShouldBe(6m);
+        left.Amount.ShouldBe(10m);
+        right.Amount.ShouldBe(4m);
+    }
+
+    [Fact]
     public void Zero_rejects_an_invalid_currency_code()
         => Should.Throw<ArgumentException>(() => Money.Zero("zz1"));
 
