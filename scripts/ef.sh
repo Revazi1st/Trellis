@@ -17,10 +17,17 @@ fi
 
 # Same image as dotnet.sh (a second multi-GB image buys nothing); quoted "$@" so arguments
 # containing spaces (e.g. migration names) survive the inner shell.
+# No engine socket: dotnet-ef starts no containers. Commands that connect to a database
+# (database update, migrations list) use TRELLIS_DESIGNTIME_DB, forwarded from this shell, e.g.
+#   TRELLIS_DESIGNTIME_DB="Host=host.docker.internal;Port=5433;Database=trellis;Username=postgres;Password=postgres"
+# Inside the container localhost is the container itself; the --add-host line makes
+# host.docker.internal resolve on Linux Docker Engine as well as Docker Desktop.
 exec "$DOCKER_BIN" run --rm \
   -v "$REPO_ROOT":/workspace \
   -w /workspace \
   -v trellis-nuget:/root/.nuget/packages \
+  --add-host=host.docker.internal:host-gateway \
+  -e TRELLIS_DESIGNTIME_DB \
   -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
   -e DOTNET_NOLOGO=1 \
   "${TRELLIS_SDK_IMAGE:-trellis-sdk:10.0}" \

@@ -37,6 +37,32 @@ orchestrator work from inside it too, and it shares the `trellis-nuget` package 
 ./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence
 ```
 
+### Docker engines other than Docker Desktop
+
+The SDK container starts the Testcontainers PostgreSQL as a *sibling* container through the
+engine's socket, then reaches its published port via `host.docker.internal`. Docker Desktop
+resolves that name by itself; everywhere else `scripts/dotnet.sh`, `scripts/ef.sh` and the dev
+container map it to the host gateway (`--add-host=host.docker.internal:host-gateway`).
+`scripts/dotnet.sh` picks the socket to mount like this:
+
+| Setup | What to set |
+|---|---|
+| Docker Desktop, OrbStack, Linux Docker Engine | nothing: `/var/run/docker.sock` |
+| Colima (macOS) | nothing, with or without `DOCKER_HOST`: on macOS the engine runs in a VM and resolves mount sources there, so the script always mounts the VM's `/var/run/docker.sock` |
+| Rootless Docker (Linux) | `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock`, which the rootless setup tells you to set anyway; the script mounts that path |
+| Podman 5+ (Linux) | `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock` (after `systemctl --user enable --now podman.socket`); the docker CLI then drives Podman, or set `DOCKER_BIN=podman`. Rootless Podman also needs `TESTCONTAINERS_RYUK_DISABLED=true`, as Testcontainers recommends |
+| Podman machine (macOS) | a rootful machine (`podman machine set --rootful`), its API socket in `DOCKER_HOST` (or `DOCKER_BIN=podman`), and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/run/podman/podman.sock`, the socket's path inside the VM |
+| A TCP endpoint (`DOCKER_HOST=tcp://…`) | nothing: the script passes `DOCKER_HOST` through and mounts no socket. The address must be reachable from inside a container, so not `127.0.0.1` |
+
+`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` is the socket path *as the engine sees it*. When set it
+overrides all of the above: the script mounts it and hands it to Testcontainers for its resource
+reaper. Every other `TESTCONTAINERS_*` variable in your shell is forwarded into the container, so
+the [Testcontainers recipes](https://dotnet.testcontainers.org/custom_configuration/) apply
+unchanged. The dev container mounts `/var/run/docker.sock`; for rootless Docker or Podman, change
+the `source=` of that mount in `.devcontainer/devcontainer.json` to your socket. Only the
+Docker Desktop path is exercised by this repository's own runs; the others follow the engines'
+and Testcontainers' documentation.
+
 ## Secrets
 
 `Authentication:SigningKey` gates API startup — missing or under 32 characters and the API
