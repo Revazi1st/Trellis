@@ -26,9 +26,15 @@ jobs:
           RUN_ASPIRE_E2E: "1"
         run: dotnet test Trellis.slnx --no-build -c Release
 
+  # The whole template matrix (every toggle leg instantiated, built and, where flagged, tested),
+  # not just the default smoke test below: a broken toggle combination must never be published.
+  template:
+    name: Gate — template matrix
+    uses: ./.github/workflows/template-ci.yml
+
   publish:
     name: Pack, verify & publish
-    needs: test
+    needs: [test, template]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -50,13 +56,13 @@ jobs:
           }
 
       - name: Pack template
-        run: dotnet pack eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj -c Release -o ./nupkg -p:Version=${GITHUB_REF_NAME#v}
+        run: dotnet pack eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj -c Release -o ./nupkg "-p:Version=${GITHUB_REF_NAME#v}"
 
       # Publish exactly what a user will install: instantiate from the .nupkg and build it.
       - name: Smoke-test the packed template
         run: |
           dotnet new install ./nupkg/*.nupkg
-          dotnet new trellis -n Acme.Smoke -o "$RUNNER_TEMP/smoke" --skip-restore true --allow-scripts yes
+          dotnet new trellis -n Acme.Smoke -o "$RUNNER_TEMP/smoke" --skip-restore true
           dotnet build "$RUNNER_TEMP"/smoke/*.slnx -c Release
 
       # Trusted publishing (OIDC): no long-lived API key. Configure the trusted publisher on
