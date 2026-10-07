@@ -171,7 +171,7 @@ Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-f
 | Domain/Application UnitTests | nothing (in-memory) |
 | IntegrationTests | Docker (Testcontainers spins up PostgreSQL) |
 | ArchitectureTests | nothing |
-| ApiTests | `RUN_ASPIRE_E2E=1` + a local SDK or CI (Aspire orchestration) — otherwise the E2E skips; contract tests always run |
+| ApiTests | Docker (the in-process tests start PostgreSQL with Testcontainers); contract tests always run. The Aspire E2E also needs `RUN_ASPIRE_E2E=1` + a local SDK or CI, otherwise it skips. It drops the AppHost's postgres data volume, so it runs on a throwaway database and never touches your `aspire run` data |
 | UiTests (optional) | `RUN_UI_TESTS=1` + installed browsers + a running app — otherwise the browser test skips |
 
 ## Conventions
