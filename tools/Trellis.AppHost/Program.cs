@@ -23,6 +23,9 @@ var cache = builder.AddRedis("cache");
 var api = builder.AddProject<Projects.Trellis_Api>("api", static options => options.ExcludeLaunchProfile = true)
     // With no launch profile, endpoints must be declared here; Aspire assigns the port.
     .WithHttpEndpoint()
+    // The API is a public surface with or without the UI, so 'aspire publish' must expose it: without
+    // this the compose output only 'expose:'s it on the internal network (docs/deployment.md).
+    .WithExternalHttpEndpoints()
     .WithReference(database)
 #if (UseRedis)
     .WithReference(cache)

@@ -22,6 +22,12 @@ For Docker Compose targets, the AppHost declares `AddDockerComposeEnvironment("c
 orchestration model that `aspire run` uses, building the images via `PublishContainer` along
 the way. The generated compose file already encodes the ordering below.
 
+What the compose output publishes: the AppHost marks the public surfaces external
+(`WithExternalHttpEndpoints()`), so `api` and, when the UI is included, `web` get a `ports:`
+entry. `postgres` and `migrations` stay on the internal `aspire` network. The publisher also
+adds the Aspire dashboard (`compose-dashboard`) with its UI port published; decide whether it
+belongs in your production environment before you deploy.
+
 ## Migrations: a one-shot pre-deploy job
 
 `Trellis.MigrationService` applies EF migrations, seeds roles/permissions and the admin user,
