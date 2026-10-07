@@ -18,6 +18,9 @@
 # Markdown and shell files get the mid-line check too: the engine's if token is "<!--#if" in
 # .md and "#if" in .sh, matched anywhere in a line, so a token quoted in prose truncates the file.
 #
+# Every exclude glob in template.json must still match a tracked file (or, for the unconditional
+# list, a path .gitignore ignores): a renamed or deleted file otherwise ships again unnoticed.
+#
 # NOTE: template.json excludes this file from the template output (it is maintainer-only), so the
 # engine never processes it. The regexes still write the closing/alternative directive tokens as
 # '#(…|…)' alternations, which keeps the file safe should that exclusion ever be dropped.
@@ -191,7 +194,70 @@ for f in $text_files; do
   done <<< "$(grep -nE "$token" "$f" | grep -vE "^[0-9]+:[[:space:]]*$token" || true)"
 done
 
+# --- every exclude glob in template.json still matches what it was written for ---
+# A glob that names a source file stops matching when the file is renamed or deleted, and the file
+# then ships under its new name without anyone noticing. So each glob must match at least one
+# tracked file (git ls-files). A conditional exclude (sources[].modifiers[].exclude) always names
+# source files. The unconditional list (sources[].exclude) also guards against files the repository
+# never tracks (build output, IDE and machine-local state, secrets); such a glob passes when the
+# repository's own .gitignore ignores what it describes, or when it is one of local_only below.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "::error::jq is required to read the exclude lists in .template.config/template.json"
+  exit 1
+fi
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "::error::the exclude-glob check compares against git ls-files; run this script in a git checkout"
+  exit 1
+fi
+
+# Not tracked and not in .gitignore: git's own directory, Claude Code worktrees and pack output.
+local_only=('.git' '.git/**' '.claude/worktrees/**' '**/nupkg/**')
+
+# .gitignore is evaluated in a scratch repository holding only that file, so a developer's global
+# excludes or .git/info/exclude cannot make the check pass locally and fail in CI.
+ignore_repo=$(mktemp -d)
+trap 'rm -rf "$ignore_repo"' EXIT
+git init -q --template= "$ignore_repo"
+cp .gitignore "$ignore_repo/.gitignore"
+
+# True when .gitignore ignores a sample path built from the glob (**/ dropped, wildcards -> x).
+gitignored() {
+  local sample
+  sample=$(printf '%s' "$1" | sed -e 's#^\*\*/##' -e 's#/\*\*$#/x#' -e 's#\*\*#x#g' -e 's#[*?]#x#g')
+  GIT_DIR="$ignore_repo/.git" GIT_WORK_TREE="$ignore_repo" \
+    git -c core.excludesFile=/dev/null check-ignore -q --no-index -- "$sample"
+}
+
+check_exclude() {  # $1 = glob, $2 = modifier condition ("" for the unconditional list)
+  local glob="$1" condition="$2" line entry
+  [ -n "$glob" ] || return 0
+  if git ls-files -- ":(glob)$glob" | grep -q .; then
+    return 0
+  fi
+  if [ -z "$condition" ]; then
+    for entry in "${local_only[@]}"; do
+      [ "$glob" = "$entry" ] && return 0
+    done
+    gitignored "$glob" && return 0
+  fi
+  line=$(grep -nF "\"$glob\"" .template.config/template.json | head -n 1 | cut -d: -f1)
+  if [ -n "$condition" ]; then
+    echo "::error file=.template.config/template.json,line=${line:-1}::exclude glob '$glob' (condition $condition) matches no tracked file. If the file was renamed or deleted, point the glob at the new path or remove it; otherwise the renamed file ships when that option is off"
+  else
+    echo "::error file=.template.config/template.json,line=${line:-1}::exclude glob '$glob' matches no tracked file and .gitignore does not ignore it. If the file was renamed or deleted, point the glob at the new path or remove it; if the glob keeps untracked local files out of the template, add the pattern to .gitignore as well"
+  fi
+  fail=1
+}
+
+while IFS= read -r glob; do
+  check_exclude "$glob" ""
+done <<< "$(jq -r '.sources[] | (.exclude // [])[]' .template.config/template.json)"
+
+while IFS=$'\x1f' read -r condition glob; do
+  check_exclude "$glob" "${condition:-(none)}"
+done <<< "$(jq -r '.sources[] | (.modifiers // [])[] | (.condition // "") as $c | (.exclude // [])[] | "\($c)\u001f\(.)"' .template.config/template.json)"
+
 if [ "$fail" -eq 0 ]; then
-  echo "template-toggle check passed — hosts cover all booleans, all #if symbols are declared, YAML/Markdown/shell conditionals are well-formed."
+  echo "template-toggle check passed — hosts cover all booleans, all #if symbols are declared, YAML/Markdown/shell conditionals are well-formed, every exclude glob matches a tracked or git-ignored path."
 fi
 exit "$fail"
