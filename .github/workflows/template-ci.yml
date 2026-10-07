@@ -94,6 +94,13 @@ jobs:
             fail=1
           fi
 
+          # The template does not ship its maintainer-only checks; a workflow step that runs one
+          # belongs in a block conditioned on the TemplateSource symbol (see ci.yml).
+          if grep -rInF 'check-template-toggles' .github; then
+            echo "::error::Generated workflows reference scripts/check-template-toggles.sh, which the template does not ship (listed above)."
+            fail=1
+          fi
+
           junk=$(find . \( "${prune[@]}" \) -prune -o \( -name .DS_Store -o -name 'appsettings.*.local.json' -o -name '*.pfx' \) -print)
           if [ -n "$junk" ]; then
             echo "::error::Files that must never ship are in the generated output:"

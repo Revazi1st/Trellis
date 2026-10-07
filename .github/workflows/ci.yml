@@ -60,13 +60,15 @@ jobs:
       - name: ADR link check
         run: ./scripts/check-adr-links.sh
 
-      # Template source only: a generated project has no .template.config, so the step skips
-      # itself there. Here it keeps every template condition symbol declared and every toggle
-      # exposed, on every PR rather than only when the template config changes.
+#if (TemplateSource)
+      # Template source only: TemplateSource is a constant that is false whenever dotnet new runs,
+      # so generated projects (which ship neither .template.config nor this script) never see this
+      # step. Here it keeps every template condition symbol declared and every toggle exposed, on
+      # every PR rather than only when the template config changes.
       - name: Template toggle check
-        if: hashFiles('.template.config/template.json') != ''
         run: ./scripts/check-template-toggles.sh
 
+#endif
       - name: Build (warnings as errors)
         run: dotnet build Trellis.slnx --no-restore -c Release
 

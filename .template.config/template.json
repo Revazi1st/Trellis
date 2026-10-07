@@ -104,6 +104,14 @@
         "pattern": "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$"
       },
       "description": "False for names such as acme-shop, Acme_Shop or '1Shop': the engine writes them as underscored identifiers (acme_shop), which the solution's analyzers reject (CA1707, an error in every configuration). Drives the warning post-action. No 'datatype' on purpose: check-template-toggles.sh treats every \"datatype\": \"bool\" symbol as a user-facing toggle."
+    },
+    "TemplateSource": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "false"
+      },
+      "description": "Always false once the engine runs, so a block conditioned on it survives only in the template's own repository, which nothing ever processes (example: the ci.yml step that runs the maintainer-only check-template-toggles.sh). No 'datatype', for the same reason as nameIsDottedAlphanumeric."
     }
   },
   "forms": {
