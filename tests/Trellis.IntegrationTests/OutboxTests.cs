@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
 using Trellis.Application.Features.Invoices.AddInvoiceLine;
@@ -53,10 +52,7 @@ public sealed class OutboxTests(DatabaseFixture database) : IntegrationTestBase(
                 .Handle(new PayInvoiceCommand(id), TestContext.Current.CancellationToken);
         }
 
-        var processor = new OutboxProcessor(
-            Services.GetRequiredService<IServiceScopeFactory>(), Time,
-            new OutboxMetrics(new TestMeterFactory()), NullLogger<OutboxProcessor>.Instance);
-        await processor.ProcessBatchAsync(TestContext.Current.CancellationToken);
+        (await CreateOutboxProcessor().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(2);
 
         await EmailSender.Received(1).SendAsync(
             "billing@acme.com", Arg.Any<string>(),
@@ -77,15 +73,5 @@ public sealed class OutboxTests(DatabaseFixture database) : IntegrationTestBase(
         await Services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
             .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), TestContext.Current.CancellationToken);
         return id;
-    }
-
-    internal sealed class TestMeterFactory : System.Diagnostics.Metrics.IMeterFactory
-    {
-        public System.Diagnostics.Metrics.Meter Create(System.Diagnostics.Metrics.MeterOptions options) => new(options);
-
-        public void Dispose()
-        {
-            // Meters are owned by their consumers in tests.
-        }
     }
 }

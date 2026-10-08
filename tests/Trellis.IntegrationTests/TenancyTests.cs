@@ -16,6 +16,8 @@ using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Application.Features.Invoices.IssueInvoice;
 using Trellis.Application.Features.Invoices.PayInvoice;
 using Trellis.Domain.Invoices;
+using Trellis.Domain.Invoices.Events;
+using Trellis.IntegrationTests.Telemetry;
 using Trellis.Persistence;
 using Trellis.Persistence.Identity;
 using Trellis.Persistence.Interceptors;
@@ -243,17 +245,74 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         }
 
         // …and the processor (a system flow with no request) restores it around the handlers.
-        var processor = new OutboxProcessor(
-            _system!.GetRequiredService<IServiceScopeFactory>(),
-            _system!.GetRequiredService<TimeProvider>(),
-            new OutboxMetrics(new OutboxTests.TestMeterFactory()),
-            NullLogger<OutboxProcessor>.Instance);
-        await processor.ProcessBatchAsync(ct);
+        await NewProcessor(_system!).ProcessBatchAsync(ct);
 
         await _emailSender.Received(1).SendAsync("a@a.dev", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         tenantSeenByHandler.ShouldBe(TenantA);
         AmbientTenant.CurrentTenantId.ShouldBeNull();
     }
+
+    /// <summary>
+    /// The audit's NULL-tenant case: a handler that writes (an invoice here) runs under the originating
+    /// tenant, and the outbox commits that write inside the same ambient scope — at the handler's checkpoint
+    /// (ADR-0023) — so the TenantInterceptor stamps it with tenant A, never with "no tenant".
+    /// </summary>
+    [Fact]
+    public async Task Handler_writes_are_stamped_with_the_originating_tenant()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        InvoiceId id = await CreateInvoiceAsAsync(_tenantA!, ct);
+        using (IServiceScope scope = _tenantA!.CreateScope())
+        {
+            IServiceProvider services = scope.ServiceProvider;
+            (await services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>()
+                .Handle(new AddInvoiceLineCommand(id, "Line", 10m), ct)).IsSuccess.ShouldBeTrue();
+            (await services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
+                .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), ct)).IsSuccess.ShouldBeTrue();
+            (await services.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
+                .Handle(new PayInvoiceCommand(id), ct)).IsSuccess.ShouldBeTrue();
+        }
+
+        // A system host (no request, no tenant of its own) with a writing handler for the paid event.
+        await using ServiceProvider system = BuildProvider(new SystemTenantContext(), static services =>
+        {
+            services.AddSingleton(new OutboxRetryTests.WritingSwitch { Enabled = true });
+            services.AddScoped<IDomainEventHandler<InvoicePaidDomainEvent>, OutboxRetryTests.WritingPaidHandler>();
+        });
+        (await NewProcessor(system).ProcessBatchAsync(ct)).ShouldBe(2);
+
+        // The handler's invoice belongs to tenant A: visible to A, invisible to B, stamped in the column.
+        using (IServiceScope asTenantA = _tenantA!.CreateScope())
+        {
+            (await HandlerInvoices(asTenantA).AnyAsync(ct)).ShouldBeTrue();
+        }
+
+        using (IServiceScope asTenantB = _tenantB!.CreateScope())
+        {
+            (await HandlerInvoices(asTenantB).AnyAsync(ct)).ShouldBeFalse();
+        }
+
+        using (IServiceScope asSystem = _system!.CreateScope())
+        {
+            (await HandlerInvoices(asSystem)
+                    .IgnoreQueryFilters(["Tenant"])
+                    .Select(static invoice => EF.Property<string>(invoice, TenantInterceptor.TenantIdProperty))
+                    .SingleAsync(ct))
+                .ShouldBe(TenantA);
+        }
+
+        static IQueryable<Invoice> HandlerInvoices(IServiceScope scope)
+            => scope.ServiceProvider.GetRequiredService<AppDbContext>().Set<Invoice>()
+                .Where(static invoice => invoice.CustomerName == OutboxRetryTests.WritingPaidHandler.CustomerName);
+    }
+
+    private static OutboxProcessor NewProcessor(ServiceProvider host)
+        => new(
+            host.GetRequiredService<IServiceScopeFactory>(),
+            host.GetRequiredService<TimeProvider>(),
+            new OutboxOptions(),
+            new OutboxMetrics(new TestMeterFactory()),
+            NullLogger<OutboxProcessor>.Instance);
 
     private static async Task<InvoiceId> CreateInvoiceAsAsync(ServiceProvider provider, CancellationToken ct)
     {
@@ -264,7 +323,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         return result.Value;
     }
 
-    private ServiceProvider BuildProvider(ITenantContext tenantContext)
+    private ServiceProvider BuildProvider(ITenantContext tenantContext, Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
@@ -274,6 +333,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         services.AddSingleton(tenantContext);
         services.AddApplication();
         services.AddPersistence(database.ConnectionString);
+        configure?.Invoke(services);   // after the scanned handlers: a handler added here runs after them
         return services.BuildServiceProvider();
     }
 

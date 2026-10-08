@@ -46,9 +46,6 @@ public sealed partial class TelemetryNamingTests
         ["usecase.outcome"] = "use-case span attribute (SharedKernel TracingDecorators): becomes trellis.usecase.outcome",
         ["usecase.error_code"] = "use-case span attribute (SharedKernel TracingDecorators): becomes trellis.usecase.error_code",
         ["usecase.error_type"] = "use-case span attribute (SharedKernel TracingDecorators): becomes error.type or trellis.usecase.error_type",
-        ["event.type"] = "outbox metric attribute (Persistence OutboxMetrics): becomes trellis.outbox.event_type",
-        ["trellis.outbox.dispatched"] = "outbox counter without a unit (Persistence OutboxMetrics): gains unit {message}",
-        ["trellis.outbox.dead_lettered"] = "outbox counter without a unit (Persistence OutboxMetrics): gains unit {message}",
     };
 
     private static readonly string Prefix = ServiceDefaults.Extensions.TelemetryPrefix;
