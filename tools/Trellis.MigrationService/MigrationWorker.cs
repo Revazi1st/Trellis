@@ -1,11 +1,9 @@
 using System.Diagnostics;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 #if (UseMultitenancy)
 using Trellis.Application.Abstractions;
 #endif
-using Trellis.Application.Authorization;
 using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.Persistence;
@@ -37,7 +35,7 @@ internal sealed class MigrationWorker(
             AppDbContext context = services.GetRequiredService<AppDbContext>();
             await ApplyMigrationsAsync(context, stoppingToken);
 
-            await SeedRolesAndPermissionsAsync(services.GetRequiredService<RoleManager<IdentityRole<Guid>>>());
+            await IdentitySeed.EnsureRolesAndPermissionsAsync(services.GetRequiredService<RoleManager<IdentityRole<Guid>>>());
             await SeedAdminUserAsync(services.GetRequiredService<UserManager<ApplicationUser>>());
 
             // Demo invoices are a local-dev convenience only.
@@ -50,7 +48,8 @@ internal sealed class MigrationWorker(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Database migration failed");
+            logger.LogError(exception, "Database migration or seeding failed");
+            activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
             activity?.AddException(exception);
             Environment.ExitCode = 1;
         }
@@ -64,56 +63,29 @@ internal sealed class MigrationWorker(
         await strategy.ExecuteAsync(() => context.Database.MigrateAsync(cancellationToken));
     }
 
-    private static async Task SeedRolesAndPermissionsAsync(RoleManager<IdentityRole<Guid>> roleManager)
-    {
-        foreach ((string roleName, IReadOnlyList<string> permissions) in Roles.Permissions)
-        {
-            IdentityRole<Guid>? role = await roleManager.FindByNameAsync(roleName);
-            if (role is null)
-            {
-                role = new IdentityRole<Guid>(roleName) { Id = Guid.CreateVersion7() };
-                await roleManager.CreateAsync(role);
-            }
-
-            var existing = (await roleManager.GetClaimsAsync(role))
-                .Where(c => c.Type == AuthClaims.Permission)
-                .Select(c => c.Value)
-                .ToHashSet(StringComparer.Ordinal);
-
-            foreach (string permission in permissions.Where(p => !existing.Contains(p)))
-            {
-                await roleManager.AddClaimAsync(role, new Claim(AuthClaims.Permission, permission));
-            }
-        }
-    }
-
     private async Task SeedAdminUserAsync(UserManager<ApplicationUser> userManager)
     {
-        if (await userManager.FindByEmailAsync(seedOptions.AdminEmail) is not null)
-        {
-            return;
-        }
-
-        if (!environment.IsDevelopment() && seedOptions.UsesDefaultAdminPassword)
+        // The default-password guard applies only when the account is about to be created: an existing
+        // admin's password is never touched, so a rerun with the default left in place is harmless.
+        if (!environment.IsDevelopment()
+            && seedOptions.UsesDefaultAdminPassword
+            && await userManager.FindByEmailAsync(seedOptions.AdminEmail) is null)
         {
             throw new InvalidOperationException(
                 "Refusing to seed the well-known default admin password outside Development. "
                 + $"Set {SeedOptions.SectionName}__AdminPassword (and consider {SeedOptions.SectionName}__AdminEmail) for this environment.");
         }
 
-        var admin = new ApplicationUser
-        {
-            Id = Guid.CreateVersion7(),
-            UserName = seedOptions.AdminEmail,
-            Email = seedOptions.AdminEmail,
-            EmailConfirmed = true,
+        // Throws, naming every Identity error, when Identity rejects the account (a password that fails
+        // its rules, a duplicate user name) — ExecuteAsync turns that into exit code 1, never "completed".
+        await IdentitySeed.EnsureAdministratorAsync(
+            userManager,
+            seedOptions.AdminEmail,
+            seedOptions.AdminPassword
 #if (UseMultitenancy)
-            TenantId = seedOptions.TenantId,
+            , seedOptions.TenantId
 #endif
-        };
-
-        await userManager.CreateAsync(admin, seedOptions.AdminPassword);
-        await userManager.AddToRoleAsync(admin, Roles.Administrator);
+            );
     }
 
 #if (!UseMultitenancy)

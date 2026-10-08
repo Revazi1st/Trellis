@@ -80,12 +80,24 @@ public static class DependencyInjection
     /// <summary>
     /// Registers the retention janitor that prunes processed outbox rows, stale idempotency keys and
     /// dead refresh tokens (windows from the "Retention" section). Long-running hosts only.
+    /// <para>
+    /// The windows are bound here and validated by the host that calls this: <see cref="Maintenance.RetentionOptions"/>
+    /// carries the DataAnnotations, and the host promotes them to a boot-time check with
+    /// <c>services.AddOptions&lt;RetentionOptions&gt;().ValidateDataAnnotations().ValidateOnStart()</c>
+    /// (the API does, next to <c>RequireValidTokenOptions</c>). Persistence does not reference the
+    /// DataAnnotations options extension, so it cannot run them itself; <c>OptionsConventionTests</c>
+    /// fails if the API host stops validating them.
+    /// </para>
     /// </summary>
     public static IServiceCollection AddDataRetention(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddSingleton(
-            configuration.GetSection(Maintenance.RetentionOptions.SectionName).Get<Maintenance.RetentionOptions>()
-            ?? new Maintenance.RetentionOptions());
+        services.AddOptions<Maintenance.RetentionOptions>()
+            .Bind(configuration.GetSection(Maintenance.RetentionOptions.SectionName));
+
+        // The janitor takes the plain POCO, like the handlers take AuthTokenOptions; resolving .Value
+        // runs every registered validator, and ValidateOnStart (host policy) runs them at boot.
+        services.AddSingleton(static provider =>
+            provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Maintenance.RetentionOptions>>().Value);
         services.AddHostedService<Maintenance.DataRetentionJanitor>();
         return services;
     }

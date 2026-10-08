@@ -97,7 +97,12 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   role or permission changes are ordinary application logs, and nothing ships them to a
   tamper-evident store.
 - **The seeded Development admin password is the same in every project** — *closed by default*.
-  The seeder refuses the well-known default outside Development; set `Seed__AdminPassword`.
+  The seeder refuses the well-known default outside Development; set `Seed__AdminPassword`. A
+  replacement Identity rejects fails the migration job (exit 1, errors named) instead of leaving the
+  deployment without an administrator, and `Seed` values are validated at boot.
+- **A half-created account** — *addressed*. Registration creates the user and assigns its role in
+  one transaction, so a failed role assignment cannot leave an account that authenticates with no
+  permissions and blocks its e-mail; the seed repairs an administrator left without its role.
 - **CORS is deny-by-default** — *open*, which means it is only as good as the origins you add.
 
 ## Out of scope
