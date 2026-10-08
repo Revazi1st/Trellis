@@ -26,7 +26,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton(TimeProvider.System);
-        services.AddScoped<IEmailSender, LoggingEmailSender>();
+        services.AddEmailSender(configuration);
 
         // Every options type in the solution is bound this way — annotations declared next to the
         // property they constrain, instead of a Get<T>() with a `?? new T()` fallback that turns a
@@ -86,9 +86,10 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// The outbound HTTP integrations (ADR-0020) — typed clients, their resilience pipelines and
-    /// health checks — with their options checked at boot. Register them only in hosts that call
-    /// out: the API.
+    /// What a host that calls out of the process needs, checked at boot: the outbound HTTP
+    /// integrations (ADR-0020) — typed clients, their resilience pipelines and health checks — and the
+    /// e-mail sender's configuration, with a startup notice when e-mail goes nowhere. Register it only
+    /// in hosts that call out: the API (it also drains the outbox, so it is the host that sends e-mail).
     /// <para>
     /// A separate call from <see cref="AddInfrastructure"/> for the reason <see cref="RequireValidTokenOptions"/>
     /// is: the migration service shares that registration but never calls a third party, so nothing
@@ -100,7 +101,42 @@ public static class DependencyInjection
     /// </para>
     /// </summary>
     public static IServiceCollection AddOutboundIntegrations(this IServiceCollection services, IConfiguration configuration)
-        => services.AddExchangeRateProvider(configuration);
+    {
+        // The sender itself is registered by AddInfrastructure in every host — Application's event
+        // handlers must be constructible anywhere — but only this host sends, so only it checks the
+        // section at boot and says so when the configured provider sends nothing.
+        services.AddOptions<EmailOptions>().ValidateOnStart();
+        services.AddHostedService<EmailProviderStartupNotice>();
+
+        return services.AddExchangeRateProvider(configuration);
+    }
+
+    /// <summary>
+    /// The <see cref="IEmailSender"/> adapter named by <c>Email:Provider</c>, resolved per scope. The
+    /// options are validated when the sender is first built; a host that sends promotes that to boot
+    /// (<see cref="AddOutboundIntegrations"/>).
+    /// </summary>
+    private static void AddEmailSender(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(
+                static options => Enum.IsDefined(options.Provider),
+                "Email:Provider must be Logging (development stand-in: logs a masked line, sends nothing) or None "
+                + "(discard). A real provider is a new adapter in Infrastructure/Email.");
+
+        services.AddScoped<LoggingEmailSender>();
+        services.AddScoped<DiscardingEmailSender>();
+        services.AddScoped<IEmailSender>(static provider =>
+            provider.GetRequiredService<IOptions<EmailOptions>>().Value.Provider switch
+            {
+                EmailProvider.Logging => provider.GetRequiredService<LoggingEmailSender>(),
+                EmailProvider.None => provider.GetRequiredService<DiscardingEmailSender>(),
+                // Unreachable: the validation above rejects any other value before this runs.
+                var other => throw new InvalidOperationException($"Email:Provider '{other}' has no adapter."),
+            });
+    }
 
     /// <summary>
     /// The template's reference outbound HTTP integration (ADR-0020). Read the comments before
