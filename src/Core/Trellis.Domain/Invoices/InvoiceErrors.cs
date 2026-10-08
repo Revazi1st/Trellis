@@ -13,6 +13,9 @@ public static class InvoiceErrors
     public static readonly Error NoLines =
         Error.Validation("Invoice.NoLines", "An invoice needs at least one line before it can be issued.");
 
+    public static readonly Error DueDateInPast =
+        Error.Validation("Invoice.DueDateInPast", "The due date is required and cannot be in the past.");
+
     public static readonly Error NotIssued =
         Error.Conflict("Invoice.NotIssued", "Only an issued invoice can be paid.");
 

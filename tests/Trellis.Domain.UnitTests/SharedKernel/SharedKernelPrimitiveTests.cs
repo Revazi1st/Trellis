@@ -36,6 +36,10 @@ public sealed class EntityEqualityTests
     }
 
     [Fact]
+    public void Strongly_typed_ids_are_equatable_so_entity_equality_never_boxes()
+        => typeof(IEquatable<InvoiceId>).IsAssignableFrom(typeof(IStronglyTypedId<InvoiceId>)).ShouldBeTrue();
+
+    [Fact]
     public void Null_comparisons_behave()
     {
         TestEntity? nothing = null;
@@ -113,6 +117,26 @@ public sealed class StronglyTypedIdJsonTests
         string json = JsonSerializer.Serialize(payload, Options);
         JsonSerializer.Deserialize<IdCarrier>(json, Options).ShouldBe(payload);
     }
+
+    [Fact]
+    public void Ids_work_as_dictionary_keys()
+    {
+        InvoiceId first = InvoiceId.New();
+        InvoiceId second = InvoiceId.New();
+        var totals = new Dictionary<InvoiceId, decimal> { [first] = 10.5m, [second] = 20m };
+
+        string json = JsonSerializer.Serialize(totals, Options);
+        json.ShouldBe($$"""{"{{first.Value}}":10.5,"{{second.Value}}":20}""");
+
+        JsonSerializer.Deserialize<Dictionary<InvoiceId, decimal>>(json, Options).ShouldBe(totals);
+    }
+
+    [Theory]
+    [InlineData("""{"not-a-guid":1}""")]
+    [InlineData("""{"":1}""")]
+    [InlineData("""{"{0b6b2bb2-0d5e-4a43-9a2b-6a8d7f1f2c3e}":1}""")] // braces: not the "D" format the value path accepts
+    public void A_dictionary_key_that_is_not_a_guid_is_rejected(string json)
+        => Should.Throw<JsonException>(() => JsonSerializer.Deserialize<Dictionary<InvoiceId, int>>(json, Options));
 
     private sealed record IdCarrier(InvoiceId Id, string Name);
 }
