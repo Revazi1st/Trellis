@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Shouldly;
@@ -41,6 +42,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     private readonly WritingSwitch _writing = new();
     private readonly FlakyPaidHandler _flaky = new();
     private readonly BlockingPaidHandler _blocking = new();
+    private readonly BookkeepingFault _bookkeepingFault = new();
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -52,6 +54,9 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         services.AddScoped<IDomainEventHandler<InvoicePaidDomainEvent>, WritingPaidHandler>();
         services.AddSingleton<IDomainEventHandler<InvoicePaidDomainEvent>>(_flaky);
         services.AddSingleton<IDomainEventHandler<InvoicePaidDomainEvent>>(_blocking);
+
+        // Appended after the app's own interceptors; inert until a test names the row whose saves fail.
+        services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(_bookkeepingFault));
     }
 
     [Fact]
@@ -391,6 +396,40 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     }
 
     [Fact]
+    public async Task A_failed_bookkeeping_save_costs_its_own_message_and_the_rest_of_the_batch_goes_on()
+    {
+        // Oldest first, so the faulted row is near the head of the batch and the second invoice's rows follow it.
+        await PayNewInvoiceAsync();
+        Time.Advance(TimeSpan.FromSeconds(1));
+        InvoiceId second = await PayNewInvoiceAsync();
+        OutboxMessage faulted = (await RowsAsync()).First(static r => r.Type == PaidType);
+        _bookkeepingFault.MessageId = faulted.Id;   // the database refuses every save of this row from here on
+        var options = new OutboxOptions();
+
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(4);
+
+        // Its first checkpoint failed, then the save of that failure: nothing about the attempt is durable,
+        // so the row holds exactly what the claim gave it — the lease — and comes back when that expires.
+        _bookkeepingFault.Failures.ShouldBe(2);
+        OutboxMessage stranded = await RowAsync(faulted.Id);
+        stranded.Status.ShouldBe(OutboxMessageStatus.Pending);
+        stranded.Attempts.ShouldBe(0);
+        stranded.CompletedHandlers.ShouldBeNull();
+        stranded.NextAttemptAtUtc.ShouldBe(Time.GetUtcNow() + options.LeaseDuration);
+
+        // Everything after it in the same batch was dispatched and booked as if nothing had happened.
+        (await RowsAsync()).Where(r => r.Id != faulted.Id).ShouldAllBe(static r => r.Status == OutboxMessageStatus.Processed);
+        await EmailSender.Received(1).SendAsync("billing@acme.com", Arg.Any<string>(), Arg.Is<string>(body => body.Contains(second.ToString())), Arg.Any<CancellationToken>());
+
+        // Not due before the lease runs out; claimed and finished once it has.
+        _bookkeepingFault.MessageId = null;
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(0);
+        Time.Advance(options.LeaseDuration);
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(1);
+        (await RowAsync(faulted.Id)).Status.ShouldBe(OutboxMessageStatus.Processed);
+    }
+
+    [Fact]
     public async Task The_backlog_gauges_report_the_pending_count_and_the_oldest_age()
     {
         using var recorder = new MetricRecorder(MeterFactory);
@@ -562,6 +601,34 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         {
             Interlocked.Increment(ref _calls);
             return Throw ? Task.FromException(Exception()) : Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Fails every save of one outbox row that runs outside a transaction — its checkpoints, its failure, its
+    /// dead letter, its Processed mark — the way a database that went away mid-batch would. The claim stamps
+    /// its lease inside the claim transaction, so it is left alone.
+    /// </summary>
+    private sealed class BookkeepingFault : SaveChangesInterceptor
+    {
+        private int _failures;
+
+        public Guid? MessageId { get; set; }
+
+        public int Failures => Volatile.Read(ref _failures);
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (MessageId is { } id
+                && eventData.Context is { Database.CurrentTransaction: null } context
+                && context.ChangeTracker.Entries<OutboxMessage>().Any(entry => entry.Entity.Id == id))
+            {
+                Interlocked.Increment(ref _failures);
+                throw new DbUpdateException("Simulated: the database is unavailable.");
+            }
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
         }
     }
 
