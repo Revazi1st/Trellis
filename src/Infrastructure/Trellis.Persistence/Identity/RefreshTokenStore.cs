@@ -10,8 +10,10 @@ internal sealed class RefreshTokenStore(
     TimeProvider timeProvider,
     ILogger<RefreshTokenStore> logger) : IRefreshTokenStore
 {
-    public async Task StoreAsync(Guid userId, string tokenHash, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken)
+    public Task StoreAsync(Guid userId, string tokenHash, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken)
     {
+        // Tracked only: ports never commit. The command's UnitOfWork decorator saves it together with
+        // everything else the command did, and a command that fails afterwards leaves no orphan token.
         context.Set<RefreshToken>().Add(new RefreshToken
         {
             Id = Guid.CreateVersion7(),
@@ -20,7 +22,7 @@ internal sealed class RefreshTokenStore(
             ExpiresAtUtc = expiresAtUtc,
         });
 
-        await context.SaveChangesAsync(cancellationToken);
+        return Task.CompletedTask;
     }
 
     public async Task<Result<Guid>> ConsumeAsync(string tokenHash, CancellationToken cancellationToken)
