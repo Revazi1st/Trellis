@@ -46,11 +46,8 @@ public sealed class ForwardedHeadersTests(ForwardedHeadersTests.ForwardingEnable
     [Fact]
     public void Restoring_loopback_trust_logs_a_warning_naming_the_configuration_keys()
     {
-        // A host whose logger factory bypasses ILoggerProvider (Serilog without writeToProviders) writes
-        // nothing here, not even its startup lines; the warning still reaches its own sinks.
-        Assert.SkipUnless(factory.Logs.Count > 0,
-            "This host's logging does not reach ILoggerProvider instances, so the warning cannot be captured in-process.");
-
+        // Runs under --use-serilog too: Serilog hands every event on to the registered ILoggerProviders
+        // (writeToProviders), this capturing one included.
         factory.Logs.ShouldContain(static line =>
             line.Contains("ASPNETCORE_FORWARDEDHEADERS_ENABLED", StringComparison.Ordinal)
             && line.Contains("ForwardedHeaders__KnownNetworks__0", StringComparison.Ordinal));

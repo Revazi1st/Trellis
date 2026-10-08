@@ -229,11 +229,8 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     [Fact]
     public async Task SecurityEvents_NameTheAccountAtTheDocumentedLevelsAndNeverCarryAPassword()
     {
-        // A host whose logger factory bypasses ILoggerProvider (Serilog without writeToProviders)
-        // writes nothing here, not even its startup lines; the events still reach its own sinks.
-        Assert.SkipUnless(factory.Logs.All.Count > 0,
-            "This host's logging does not reach ILoggerProvider instances, so the events cannot be captured in-process.");
-
+        // Runs under --use-serilog too: Serilog hands every event on to the registered ILoggerProviders
+        // (writeToProviders), this capturing one included.
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient client = factory.CreateClient();
         string email = NewEmail();
