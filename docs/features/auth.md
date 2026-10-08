@@ -84,10 +84,12 @@ shared source such as the Blazor Server host never turns silent refreshes into 4
 Every other endpoint on the versioned group requires authentication by default; these four are the
 whole anonymous allowlist (`EndpointMetadataTests`).
 
-Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 problem details
-(`Auth.InvalidCredentials` 401, `Auth.AccountLockedOut` 403, `Auth.InvalidRefreshToken` 401,
-`Auth.EmailAlreadyInUse` 409, `Auth.RegistrationClosed` 403, and 400 with `errors[]` for input
-that fails a validator).
+Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 problem details whose
+`code` is the identifier below (ADR-0024): `Auth.InvalidCredentials` 401, `Auth.AccountLockedOut` 403,
+`Auth.InvalidRefreshToken` 401, `Auth.EmailAlreadyInUse` 409, `Auth.RegistrationClosed` 403, and 400
+`Validation.General` with `errors[]` (`{field, code, description}`, e.g. `email` / `Validation.NotEmpty`)
+for input that fails a validator. The host's own rejections use the same vocabulary:
+`Auth.Unauthenticated` (the bearer challenge, 401), `Auth.Forbidden` (403), `RateLimit.Exceeded` (429).
 
 ## UI
 
@@ -104,7 +106,9 @@ the server's invalid-credentials sentence. The seeded-admin hint on the sign-in 
 when the host enables `UiOptions.ShowDevelopmentHints` (UI.Web: in Development).
 
 Auth rejections are RFC 9457 everywhere: JwtBearer challenges (401) and forbidden (403) responses
-carry problem-details bodies, and rate-limited requests get a 429 problem with `Retry-After`.
+carry problem-details bodies, and rate-limited requests get a 429 problem with `Retry-After` — all
+written by `IProblemDetailsService` (`ProblemCatalog` + `WriteProblemAsync`), so they carry `code`,
+`type`, `traceId` and `correlationId` like every other problem (ADR-0024).
 A 401 also carries `WWW-Authenticate: Bearer` (`error="invalid_token"` when a presented token was
 rejected), and every `/auth/` response is `Cache-Control: no-store`.
 
