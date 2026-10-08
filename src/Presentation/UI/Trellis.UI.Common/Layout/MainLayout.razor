@@ -46,6 +46,8 @@
 
     private void Recover() => _errorBoundary?.Recover();
 
+    // The local sign-out is immediate (a protected page reacts by redirecting itself) and the API revoke
+    // follows, best-effort. Then sign-in without a return address: signing out is not a detour.
     private async Task SignOutAsync()
     {
         await AuthState.SignOutAsync();
