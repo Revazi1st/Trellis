@@ -130,7 +130,7 @@ public static class LoggingDecorators
 
         IEnumerable<string> failures = validation.Errors
             .Take(MaxLoggedValidationFailures)
-            .Select(static e => e is FieldValidationFailure field ? field.Field + ":" + field.RuleCode : e.Code);
+            .Select(static e => e is FieldError field ? field.Field + ":" + field.Code : e.Code);
 
         string detail = string.Join(", ", failures);
         return validation.Errors.Count > MaxLoggedValidationFailures ? detail + ", …" : detail;

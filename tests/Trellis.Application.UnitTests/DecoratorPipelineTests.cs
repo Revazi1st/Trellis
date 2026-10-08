@@ -1,3 +1,4 @@
+using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -48,12 +49,41 @@ public sealed class DecoratorPipelineTests : IDisposable
             new CreateInvoiceCommand(CustomerName: "", CustomerEmail: "", Currency: "USD"),
             TestContext.Current.CancellationToken);
 
+        // Every validator failure is a FieldError: the member FluentValidation named plus the failed
+        // rule as a stable code — the two things the problem document's errors[] carries (ADR-0024).
         var validationError = result.Error.ShouldBeOfType<ValidationError>();
+        validationError.Code.ShouldBe("Validation.General");
         validationError.Errors.Count.ShouldBe(2);
-        validationError.Errors.ShouldContain(static e => e.Code == "CustomerName");
-        validationError.Errors.ShouldContain(static e => e.Code == "CustomerEmail");
+        validationError.Errors.ShouldAllBe(static e => e.Type == ErrorType.Validation);
+        List<FieldError> fieldErrors = [.. validationError.Errors.OfType<FieldError>()];
+        fieldErrors.Count.ShouldBe(2);
+        fieldErrors.ShouldContain(static e => e.Field == "CustomerName" && e.Code == "Validation.NotEmpty");
+        fieldErrors.ShouldContain(static e => e.Field == "CustomerEmail" && e.Code == "Validation.NotEmpty");
 
         _pipeline.Invoices.DidNotReceiveWithAnyArgs().Add(default!);
+        await _pipeline.UnitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Validator_codes_are_normalised_and_custom_codes_pass_through()
+    {
+        // A local command + validator through the real pipeline registration: the built-in validator
+        // names lose their suffix, an explicit .WithErrorCode(...) is kept verbatim.
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddSingleton(_pipeline.UnitOfWork);
+        services.AddScoped<ICommandHandler<EchoCommand>, EchoCommandHandler>();
+        services.AddScoped<IValidator<EchoCommand>, EchoCommandValidator>();
+        services.AddUseCasePipeline();
+        await using ServiceProvider provider = services.BuildServiceProvider();
+
+        var handler = provider.GetRequiredService<ICommandHandler<EchoCommand>>();
+        Result result = await handler.Handle(new EchoCommand(Name: "", Tag: "too-long", Amount: -1m), TestContext.Current.CancellationToken);
+
+        var validationError = result.Error.ShouldBeOfType<ValidationError>();
+        validationError.Errors.OfType<FieldError>().Select(static e => (e.Field, e.Code)).ShouldBe(
+            [("Name", "Validation.NotEmpty"), ("Tag", "Validation.MaximumLength"), ("Amount", "Echo.NegativeAmount")],
+            ignoreOrder: true);
         await _pipeline.UnitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
@@ -159,5 +189,22 @@ public sealed class DecoratorPipelineTests : IDisposable
     private sealed class PingCommandHandler : ICommandHandler<PingCommand>
     {
         public Task<Result> Handle(PingCommand command, CancellationToken cancellationToken) => Task.FromResult(Result.Success());
+    }
+
+    private sealed record EchoCommand(string Name, string Tag, decimal Amount) : ICommand;
+
+    private sealed class EchoCommandHandler : ICommandHandler<EchoCommand>
+    {
+        public Task<Result> Handle(EchoCommand command, CancellationToken cancellationToken) => Task.FromResult(Result.Success());
+    }
+
+    private sealed class EchoCommandValidator : AbstractValidator<EchoCommand>
+    {
+        public EchoCommandValidator()
+        {
+            RuleFor(static c => c.Name).NotEmpty();
+            RuleFor(static c => c.Tag).MaximumLength(3);
+            RuleFor(static c => c.Amount).Must(static amount => amount >= 0).WithErrorCode("Echo.NegativeAmount");
+        }
     }
 }
