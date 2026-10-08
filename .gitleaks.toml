@@ -1,25 +1,14 @@
-# Config for the CI secret scan (.github/workflows/ci.yml -> gitleaks). Extends the default rule set
-# and allowlists ONLY files and values that are committed on purpose: example placeholders, generated
-# output and local-only credentials. Real secrets belong in user-secrets locally and in the platform's
-# secret store in every other environment — see docs/threat-model.md.
+# Config for the CI secret scan (.github/workflows/ci.yml -> gitleaks): the default rule set and,
+# deliberately, no allowlist. Nothing committed on purpose trips a default rule (checked against
+# v8.30.1 over the tree, the full history and generated output): the development signing-key
+# placeholder, the dev-only-<64 hex> key every generated project gets in its place, the in-process
+# test host's fixed key, the local-only Postgres credentials of the compose stack and Testcontainers,
+# and the generated OpenAPI document. A bare random value of the generated key's length is flagged,
+# which is the point.
+#
+# If a rule starts flagging a value committed on purpose, allowlist that exact value or file here
+# with its reason, never a pattern that would also cover a real secret. Real secrets belong in
+# user-secrets locally and in the platform's secret store in every other environment — see
+# docs/threat-model.md.
 [extend]
 useDefault = true
-
-[allowlist]
-description = "Known-benign committed placeholders and test fixtures"
-paths = [
-    # Example/templated config carries <fill-me> placeholders, never real values.
-    '''.*\.example$''',
-    # The committed OpenAPI contract is generated output; any "key"-shaped string in it is a schema
-    # property name, not a credential.
-    '''docs/api/openapi\.v1\.json$''',
-]
-# No entry for signing keys: the repository's development placeholder, the dev-only-<64 hex> key every
-# generated project gets in its place, and the in-process test host's fixed key all pass the default
-# rules as they are (checked against v8.30.1, tree and history). A bare random value of that length is
-# flagged, which is the point. If a future rule starts flagging one of these, allowlist that exact
-# value here with its reason, never a pattern that would also cover a real key.
-regexes = [
-    # Local-only Postgres credentials for the dev compose stack and Testcontainers.
-    '''Username=postgres;Password=postgres''',
-]
