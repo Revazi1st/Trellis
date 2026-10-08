@@ -228,17 +228,19 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     }
 
     [Fact]
-    public async Task Duplicate_idempotency_key_is_a_409_problem()
+    public async Task Reused_idempotency_key_with_a_different_body_is_a_422_problem()
     {
+        // A retry with the SAME body replays the stored 201 and is no problem at all; the idempotency 409s —
+        // in flight, not replayable — need a race or a derived host, so IdempotencyReplayTests asserts their shape.
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
         string key = Guid.NewGuid().ToString();
         (await PostCreateAsync(admin, key, ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        HttpResponseMessage response = await PostCreateAsync(admin, key, ct);
+        HttpResponseMessage response = await PostCreateAsync(admin, key, ct, customerName: "Reused Key Co");
 
-        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.Conflict, "Idempotency.Duplicate", "/api/v1/invoices", ct);
-        problem.Title.ShouldBe("Conflict");
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.UnprocessableEntity, "Idempotency.FingerprintMismatch", "/api/v1/invoices", ct);
+        problem.Title.ShouldBe("Unprocessable request");
         problem.Errors.ShouldBeNull();
     }
 
@@ -345,11 +347,11 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
     }
 
-    private static async Task<HttpResponseMessage> PostCreateAsync(HttpClient client, string idempotencyKey, CancellationToken ct)
+    private static async Task<HttpResponseMessage> PostCreateAsync(HttpClient client, string idempotencyKey, CancellationToken ct, string customerName = "Idempotent Co")
     {
         using var message = new HttpRequestMessage(HttpMethod.Post, "/api/v1/invoices")
         {
-            Content = JsonContent.Create(new CreateInvoiceRequest("Idempotent Co", "i@i.co", "USD")),
+            Content = JsonContent.Create(new CreateInvoiceRequest(customerName, "i@i.co", "USD")),
         };
         message.Headers.Add(ApiHeaders.IdempotencyKey, idempotencyKey);
         return await client.SendAsync(message, ct);
