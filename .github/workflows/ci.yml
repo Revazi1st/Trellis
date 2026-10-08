@@ -28,9 +28,15 @@ jobs:
       # The official image rather than gitleaks-action: the action is free for personal repos but
       # requires a paid GITLEAKS_LICENSE for organisation-owned ones, which would turn this gate red
       # the day the repository moves. --redact keeps any finding out of the public log.
+      # Pinned like the actions: the digest of the v8.30.1 multi-arch index, so a re-pushed tag
+      # cannot change what CI runs. Dependabot does not read images named in a run script; to
+      # bump, take the new digest from "docker buildx imagetools inspect ghcr.io/gitleaks/gitleaks:<tag>"
+      # and re-run the scan over the tree and the full history before merging.
       - name: gitleaks
+        env:
+          GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
         run: |
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 \
+          docker run --rm -v "$PWD:/repo" "$GITLEAKS_IMAGE" \
             detect --source /repo --config /repo/.gitleaks.toml --redact --no-banner --verbose
 
   build-test:
