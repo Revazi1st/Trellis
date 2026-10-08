@@ -14,7 +14,8 @@ The `Invoice` slice is the canonical pattern. To add a feature, mirror it across
    - `{UseCase}CommandHandler.cs` — `internal sealed`, returns `Result`/`Result<T>`, orchestrates the aggregate + ports.
    - `{UseCase}CommandValidator.cs` — `internal sealed : AbstractValidator<...>` (shape checks only).
    Registration is automatic (Scrutor).
-2. **Api** — `Features/{Feature}/{UseCase}.cs` implementing `IEndpoint`; bind an `Api.Contracts` record, map `Result` via `CustomResults.Problem`, add `.RequirePermission(...)`.
+2. **Api** — `Features/{Feature}/{UseCase}.cs` implementing `IEndpoint`; bind an `Api.Contracts` record, map `Result` via `CustomResults.Problem`.
+   - **Secure by default** (ADR-0021): the versioned group already authenticates every endpoint, and `EndpointMetadataTests` fails the build unless every non-anonymous endpoint has `.RequirePermission(...)` (only an endpoint on the caller's own sessions may be signed-in-only, listed in `AuthenticatedOnly`), every non-GET endpoint outside `auth/` has `.RequireIdempotency()`, every operation has `.WithSummary(...)` and `.WithDescription(...)`, and every `.AllowAnonymous()` has a matching `AnonymousAllowlist` entry. Under `--use-multitenancy` the tenant comes from the signed `tenant` claim only (ADR-0022): never put a tenant on a contract, route, query or header.
 3. **Contracts** — add request/response records to `Api.Contracts/{Feature}/`.
 4. **Tests** — Application.UnitTests for the handler; extend ApiTests if it's a notable flow.
 
@@ -23,5 +24,5 @@ Also add: the aggregate + value objects + strongly-typed ID(s) + events + `{Aggr
 
 ## Finish
 - `./scripts/dotnet.sh build Trellis.slnx && ./scripts/dotnet.sh test Trellis.slnx`
-- Add a permission constant to `Permissions` if the feature is protected, and grant it to a role in the MigrationService seed.
+- Add a permission constant to `Permissions` (and to `Permissions.All`) for the endpoint's `.RequirePermission(...)`, and grant it to a role in `Roles.Permissions`; the MigrationService and the test hosts seed from that map, never by hand.
 - **Update `docs/features/{feature}.md`** (copy the invoices doc's shape).
