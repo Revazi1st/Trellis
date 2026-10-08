@@ -76,11 +76,43 @@ open readiness endpoint is still a free DB-status oracle.
 ## Observability
 
 Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every host exports logs, metrics and traces via OTLP
-(the exporter is registered only when the variable is present). Worth alerting on:
+(the exporter is registered only when the variable is present).
+
+- **What is exported**: every meter and trace source named `Trellis.*` — ServiceDefaults subscribes
+  by prefix, so a new meter needs no host registration (`TelemetryNamingTests` keeps every name on
+  the prefix) — plus ASP.NET Core, HttpClient and runtime instrumentation, the `Polly` meter
+  (retries, timeouts and open circuits of every HttpClient pipeline) and the
+  `Microsoft.EntityFrameworkCore` meter (SaveChanges, optimistic-concurrency failures,
+  execution-strategy retries).
+- **Who emits it**: `service.name` is `OTEL_SERVICE_NAME` (Aspire sets it), else the host's
+  application name; `service.version` is the host's informational version;
+  `deployment.environment.name` is the ASP.NET Core environment. A key you set in
+  `OTEL_RESOURCE_ATTRIBUTES` wins over the computed one.
+- **Correlation**: every API response carries `X-Correlation-ID` — the caller's own value when it
+  is short and safe, else the request's W3C trace id, the same trace a problem body's `traceId`
+  names. The request span carries it as `trellis.correlation_id`.
+<!--#if (UseSerilog) -->
+- **Serilog** (the `UseSerilog` toggle): Serilog writes the console and hands every event on to the
+  OpenTelemetry log provider, so OTLP log export is unchanged. Its levels come from the `Serilog`
+  section (`MinimumLevel:Default` and `MinimumLevel:Override:<category>`), which mirrors
+  `Logging:LogLevel` but is not read from it: change both, e.g.
+  `Serilog__MinimumLevel__Override__Microsoft.AspNetCore=Information`.
+<!--#endif -->
+
+Worth alerting on:
 
 - `trellis.outbox.dead_lettered` — a domain event exhausted its retries or lost its handler;
   dead-lettered rows are the alert queue and are kept 30 days by default.
+- `resilience.polly.strategy.events` with `event.name=OnCircuitOpened` — an outbound dependency's
+  circuit opened; calls fail fast until it closes.
+- `microsoft.entityframeworkcore.optimistic_concurrency_failures` — a rising rate means clients
+  keep writing stale versions (each one is a 409).
 - Outbox dispatch spans rejoin the originating request's trace (`traceparent` is persisted with
   the message), so a failed handler is visible under the request that caused it.
 
 Health-probe requests are filtered out of tracing — probes don't pollute the trace stream.
+
+The invoice read cache keeps an entry 30 seconds in each API instance's memory (L1) and, with the
+`UseRedis` toggle, five minutes in Redis (L2). A write evicts the entry from its own instance and
+from Redis only, so with several replicas another replica can serve the previous state, ETag
+included, for up to 30 seconds; without Redis every replica caches on its own for the same 30 seconds.
