@@ -35,8 +35,10 @@ public static class DependencyInjection
         {
             configureProvider(options);
 
-            // Order matters: events first (handlers may change entities), then soft-delete flips,
-            // then auditing stamps everything — including what the first two produced.
+            // Order matters: the outbox write first (it turns the events the aggregates raised into rows the
+            // same save persists), then soft-delete flips, then auditing stamps everything — including what
+            // the first two produced. Anything registered after auditing (the tenant stamp, when multi-tenancy
+            // is on) sees the lot.
             options.AddInterceptors(
                 serviceProvider.GetRequiredService<OutboxWriteInterceptor>(),
                 serviceProvider.GetRequiredService<SoftDeleteInterceptor>(),

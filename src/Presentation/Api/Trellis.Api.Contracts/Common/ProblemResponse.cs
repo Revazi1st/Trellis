@@ -3,12 +3,12 @@ namespace Trellis.Api.Contracts.Common;
 /// <summary>
 /// The RFC 9457 problem document the API answers a failed request with: the client-side mirror of the
 /// wire shape. Clients branch on <see cref="Code"/> and <see cref="Status"/>, display
-/// <see cref="Detail"/> and <see cref="Errors"/>, and never parse <see cref="Title"/> (ADR-0004).
+/// <see cref="Detail"/> and <see cref="Errors"/>, and never parse <see cref="Title"/> (ADR-0024).
 /// <para>
-/// A tolerant reader: every member is optional, because not every writer emits every member yet
-/// (<c>code</c>, <c>type</c> and <c>correlationId</c> are still missing from some or all of them) and a
-/// problem can come from an intermediary rather than from this API. <see cref="Errors"/> is present on
-/// 400 validation problems and absent otherwise.
+/// A tolerant reader: every member is optional. This API emits every member on every problem it writes
+/// (ADR-0024), but a problem can come from an intermediary rather than from this API, and a server
+/// older than the client may predate a member. <see cref="Errors"/> is present on 400 validation
+/// problems and absent otherwise.
 /// </para>
 /// </summary>
 /// <param name="Type">URI identifying the problem type.</param>

@@ -18,6 +18,9 @@ builder.Services.AddSingleton<Trellis.Application.Abstractions.ITenantContext, S
 #endif
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trellis-db")
     ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
+// AddPersistence already turned on Npgsql's retrying execution strategy, which rides out a database that is
+// still starting. The Aspire enrichment adds health checks, tracing and metrics only, never a second retry
+// policy on top.
 builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
 
 // Validated at boot, like every options type: an e-mail typo, a short password or an over-long tenant id

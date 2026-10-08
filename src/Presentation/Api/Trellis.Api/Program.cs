@@ -45,6 +45,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOutboundIntegrations(builder.Configuration);
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trellis-db")
     ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
+// AddPersistence already turned on Npgsql's retrying execution strategy, and the outbox claim and the identity
+// transactions run inside it, see ADR-0023. The Aspire enrichment therefore adds health checks, tracing and
+// metrics only, never a second retry policy on top.
 builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
 
 // The data-retention windows and the outbox knobs are checked at boot too: a zero Retention:SweepInterval
