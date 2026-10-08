@@ -28,39 +28,11 @@ internal static class ApiResponses
     public const string ServiceUnavailable = "The service is unavailable right now. Try again shortly.";
 
     /// <summary>
-    /// Sends a request and returns its response, or null when no HTTP response arrived (connection refused
-    /// or reset, DNS failure, <see cref="HttpClient.Timeout"/>). A cancellation the caller asked for still
-    /// propagates: that is the caller's decision, not a failure to report.
+    /// The failure for a call the API answered with an error status: its problem body (when readable)
+    /// is parsed and kept. A call with no usable answer at all never gets here (<see cref="ApiCall"/>).
     /// </summary>
-    public static async Task<HttpResponseMessage?> TrySendAsync(
-        Func<CancellationToken, Task<HttpResponseMessage>> send, CancellationToken cancellationToken)
+    public static async Task<ApiResult<T>> FailureFromAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        try
-        {
-            return await send(cancellationToken);
-        }
-        catch (HttpRequestException)
-        {
-            return null;
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            // HttpClient.Timeout surfaces as a TaskCanceledException that nobody asked for.
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// The failure for a call that did not succeed: <paramref name="response"/> is null when no response
-    /// arrived, otherwise an error status whose problem body (when readable) is parsed and kept.
-    /// </summary>
-    public static async Task<ApiResult<T>> FailureFromAsync<T>(HttpResponseMessage? response, CancellationToken cancellationToken)
-    {
-        if (response is null)
-        {
-            return ApiResult.Failure<T>(Describe(status: null, problem: null, retryAfter: null));
-        }
-
         ProblemResponse? problem = await ReadProblemAsync(response, cancellationToken);
         return ApiResult.Failure<T>(
             Describe(response.StatusCode, problem, RetryAfter(response)),

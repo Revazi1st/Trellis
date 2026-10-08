@@ -13,17 +13,17 @@
 }
 else if (_page is null)
 {
-    <p>Loading…</p>
+    <p role="status" aria-live="polite">Loading…</p>
 }
 else if (_page.TotalCount == 0)
 {
-    <p>No overdue invoices. 🎉</p>
+    <p>No overdue invoices. <span aria-hidden="true">🎉</span></p>
 }
 else
 {
     <table class="grid">
         <thead>
-            <tr><th>Customer</th><th>Status</th><th class="num">Total</th><th>Due</th><th></th></tr>
+            <tr><th>Customer</th><th>Status</th><th class="num">Total</th><th>Due</th><th><span class="visually-hidden">Actions</span></th></tr>
         </thead>
         <tbody>
             @foreach (InvoiceDto invoice in _page.Items)
@@ -33,7 +33,7 @@ else
                     <td>@invoice.Status</td>
                     <td class="num">@invoice.Total.ToString("N2") @invoice.Currency</td>
                     <td>@invoice.DueDate?.ToString("yyyy-MM-dd")</td>
-                    <td><NavLink href="@($"invoices/{invoice.Id}")">View</NavLink></td>
+                    <td><NavLink href="@($"invoices/{invoice.Id}")" aria-label="@($"View the invoice for {invoice.CustomerName}")">View</NavLink></td>
                 </tr>
             }
         </tbody>
@@ -41,7 +41,7 @@ else
 
     <nav class="pager" aria-label="Pagination">
         <button @onclick="() => LoadAsync(_page!.Page - 1)" disabled="@(!_page.HasPreviousPage)">Previous</button>
-        <span>Page @_page.Page of @_page.TotalPages (@_page.TotalCount overdue)</span>
+        <span aria-live="polite">Page @_page.Page of @_page.TotalPages (@_page.TotalCount overdue)</span>
         <button @onclick="() => LoadAsync(_page!.Page + 1)" disabled="@(!_page.HasNextPage)">Next</button>
     </nav>
 }
