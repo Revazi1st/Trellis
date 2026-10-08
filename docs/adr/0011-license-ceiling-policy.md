@@ -17,8 +17,9 @@ Maintain a **LICENSE CEILINGS** block at the top of `Directory.Packages.props` n
 | AutoMapper | ≥ 15.0.0 | Lucky Penny, RPL-1.5/commercial | manual mapping |
 | FluentAssertions | ≥ 8.0.0 | Xceed, proprietary | Shouldly |
 | MassTransit | ≥ 9.0.0 | Massient, commercial | Wolverine/Rebus if messaging needed |
+| Moq | any version | MIT, but 4.20.0 shipped SponsorLink, which read the developer's git e-mail at build time and sent a hash of it off the machine — a trust break, not a license one | NSubstitute |
 
-The whole shipped stack is free-for-commercial. `AGENTS.md` and the `Ask first: adding a NuGet package` boundary route package additions through this file. The ceiling is enforced, not advisory: the `EnforceLicenseCeilings` target in `Directory.Build.props` fails the build on any forbidden `PackageReference`, and Dependabot's ignore list blocks the bot-upgrade path.
+The whole shipped stack is free-for-commercial. `AGENTS.md` and the `Ask first: adding a NuGet package` boundary route package additions through this file. The ceiling is enforced, not advisory: `Directory.Build.props` fails the build on a forbidden direct `PackageReference` (`EnforceLicenseCeilings`, before restore) and on a forbidden id anywhere in a project's resolved package graph, transitive dependencies included (`EnforceLicenseCeilingsOnResolvedGraph`, after `ResolvePackageAssets`); both read one list, `LicenseCeilingPackageIds`. Dependabot's ignore list blocks the bot-upgrade path.
 
 ## Consequences
 
