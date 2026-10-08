@@ -87,5 +87,6 @@ exec "$DOCKER_BIN" run --rm ${TTY_ARGS:+$TTY_ARGS} \
   "${ENGINE_ARGS[@]}" \
   -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
   -e DOTNET_NOLOGO=1 \
+  ${UPDATE_OPENAPI_SNAPSHOT:+-e UPDATE_OPENAPI_SNAPSHOT=1} \
   "${TRELLIS_SDK_IMAGE:-trellis-sdk:10.0}" \
   dotnet "$@"

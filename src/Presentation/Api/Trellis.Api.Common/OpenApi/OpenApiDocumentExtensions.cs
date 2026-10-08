@@ -22,6 +22,7 @@ public static class OpenApiDocumentExtensions
 
             options.AddDocumentTransformer(new VersionedDocumentTransformer(version));
             options.AddDocumentTransformer<SecuritySchemeTransformer>();
+            options.AddDocumentTransformer<ProblemComponentsDocumentTransformer>();
             options.AddSchemaTransformer<StronglyTypedIdSchemaTransformer>();
             options.AddSchemaTransformer<DecimalSchemaTransformer>();
             options.AddOperationTransformer<SecurityRequirementOperationTransformer>();

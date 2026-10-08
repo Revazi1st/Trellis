@@ -40,7 +40,7 @@ else
     </table>
 
     <AuthorizeView Roles="invoices:write">
-        @if (_invoice.Status == "Draft")
+        @if (_invoice.Status == InvoiceStatus.Draft)
         {
             <h2>Add line</h2>
             <div class="form">
@@ -61,11 +61,11 @@ else
         }
 
         <div class="actions">
-            @if (_invoice.Status == "Issued")
+            @if (_invoice.Status == InvoiceStatus.Issued)
             {
                 <button @onclick="PayAsync" disabled="@_busy">Mark paid</button>
             }
-            @if (_invoice.Status is "Draft" or "Issued")
+            @if (_invoice.Status is InvoiceStatus.Draft or InvoiceStatus.Issued)
             {
                 <button class="danger" @onclick="VoidAsync" disabled="@_busy">Void</button>
             }

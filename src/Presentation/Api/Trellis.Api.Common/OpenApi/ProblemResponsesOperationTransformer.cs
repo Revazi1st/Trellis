@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 using Trellis.Api.Common.Endpoints;
-using Trellis.Api.Contracts.Common;
 
 namespace Trellis.Api.Common.OpenApi;
 
@@ -13,8 +12,8 @@ namespace Trellis.Api.Common.OpenApi;
 /// cannot forget it (ADR-0025): a 400 wherever there is input to reject, a 404 wherever a route id can
 /// miss, a 409 on a write to an addressed resource (state rule or concurrency), 429 and 500 everywhere.
 /// Every 4xx/5xx — including the 401/403 and the idempotency 409 earlier transformers add — carries the
-/// <c>application/problem+json</c> body generated from the Contracts' <see cref="ProblemResponse"/>, the
-/// same record the clients deserialise into. A 201 declares its <c>Location</c>; an endpoint marked
+/// <c>application/problem+json</c> body: a reference to the <c>ProblemResponse</c> component generated
+/// from the Contracts record the clients deserialise into. A 201 declares its <c>Location</c>; an endpoint marked
 /// <c>SupportsConditionalGet()</c> declares <c>If-None-Match</c>, the <c>ETag</c> on its 200 and the 304.
 /// Runs last, after the security and idempotency transformers, because it completes their entries.
 /// </summary>
@@ -22,9 +21,10 @@ internal sealed class ProblemResponsesOperationTransformer : IOpenApiOperationTr
 {
     private const string ProblemMediaType = "application/problem+json";
 
-    public async Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
+    public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
     {
-        IOpenApiSchema problem = await context.GetOrCreateSchemaAsync(typeof(ProblemResponse), null, cancellationToken);
+        // A reference, resolved when the document is written: ProblemComponentsDocumentTransformer publishes the schema.
+        IOpenApiSchema problem = new OpenApiSchemaReference(ProblemComponentsDocumentTransformer.ProblemResponseSchemaId, context.Document);
         OpenApiResponses responses = operation.Responses ??= [];
 
         AddByShape(operation, context.Description, problem);
@@ -49,6 +49,7 @@ internal sealed class ProblemResponsesOperationTransformer : IOpenApiOperationTr
         }
 
         operation.Responses = Sorted(responses);
+        return Task.CompletedTask;
     }
 
     private static void AddByShape(OpenApiOperation operation, ApiDescription description, IOpenApiSchema problem)

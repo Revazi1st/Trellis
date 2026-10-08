@@ -81,7 +81,10 @@ public sealed class OpenApiDocumentTests
             .Select(static path => (path.Name, path.Value.Clone()))];
     }
 
-    private static JsonDocument ReadDocument()
+    private static JsonDocument ReadDocument() => JsonDocument.Parse(File.ReadAllText(CommittedDocumentPath()));
+
+    /// <summary>The committed contract, located by walking up from the test output directory (also used by the snapshot test's update mode).</summary>
+    internal static string CommittedDocumentPath()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
 
@@ -90,7 +93,7 @@ public sealed class OpenApiDocumentTests
             string candidate = Path.Combine(directory.FullName, "docs", "api", "openapi.v1.json");
             if (File.Exists(candidate))
             {
-                return JsonDocument.Parse(File.ReadAllText(candidate));
+                return candidate;
             }
 
             directory = directory.Parent;
