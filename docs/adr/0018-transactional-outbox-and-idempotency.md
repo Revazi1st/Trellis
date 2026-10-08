@@ -1,6 +1,6 @@
 # ADR-0018: Transactional outbox for domain events + command idempotency
 
-- **Status**: accepted
+- **Status**: accepted — processor semantics (lease claim, per-handler checkpoints, back-off, dead-letter window) refined by ADR-0023
 - **Date**: 2026-07-16
 
 ## Context
