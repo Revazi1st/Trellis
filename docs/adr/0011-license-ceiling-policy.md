@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-07-14
+- **Amended**: 2026-10-08 — scope: what ships, and what build-time analyzers and the template's own notice are (see *Amendment* below)
 
 ## Context
 
@@ -26,3 +27,18 @@ The whole shipped stack is free-for-commercial. `AGENTS.md` and the `Ask first: 
 - Consumers inherit no commercial license obligation.
 - The ceiling comment is the single source of truth agents consult before adding packages.
 - Re-verify ceilings periodically; licensing terms and thresholds change.
+
+## Amendment (2026-10-08): what the policy covers
+
+The ceilings govern what reaches a consumer: a package that ships in a generated product's output, or
+one that forces a license flow on everyone who builds it. Two things sit outside them and are stated
+here so nobody has to guess:
+
+- **Build-time analyzers** (`GlobalPackageReference` in `Directory.Packages.props`: SonarAnalyzer.CSharp,
+  Meziantou.Analyzer) run inside the compiler and ship in no output; their terms bind the build only.
+  A new one is still an ask-first package addition (`AGENTS.md`), and its license is read before it is
+  added like any other's.
+- **The template's own notice.** A generated project keeps the template's MIT `LICENSE` (copied
+  verbatim, never renamed with the project), because the MIT terms require it to travel with
+  substantial portions of the template. It does not license the product: the generated README asks
+  the project to add its own terms.
