@@ -223,8 +223,9 @@ internal sealed class OutboxProcessor(
         IDomainEventDispatcher dispatcher = services.GetRequiredService<IDomainEventDispatcher>();
 #if (UseMultitenancy)
         // Handlers read AND write as the tenant that raised the event, not as "no tenant": the per-handler
-        // saves below run inside this scope, so the TenantInterceptor stamps their rows with it.
-        AmbientTenant.CurrentTenantId = message.TenantId;
+        // saves below run inside this scope, so the TenantInterceptor stamps their rows with it. Disposed
+        // on every exit, a stopping host's cancellation included.
+        using var tenant = new AmbientTenantScope(message.TenantId);
 #endif
         try
         {
@@ -266,12 +267,6 @@ internal sealed class OutboxProcessor(
             string outcome = RecordFailure(message, activity, exception, completed);
             await context.SaveChangesAsync(CancellationToken.None);
             return outcome;
-        }
-        finally
-        {
-#if (UseMultitenancy)
-            AmbientTenant.CurrentTenantId = null;
-#endif
         }
     }
 
@@ -388,4 +383,14 @@ internal sealed class OutboxProcessor(
     }
 
     private readonly record struct Materialized(IDomainEvent DomainEvent, HashSet<string> CompletedHandlers);
+
+#if (UseMultitenancy)
+    /// <summary>The originating tenant, ambient for exactly one message's dispatch and its bookkeeping saves.</summary>
+    private readonly struct AmbientTenantScope : IDisposable
+    {
+        public AmbientTenantScope(string? tenantId) => AmbientTenant.CurrentTenantId = tenantId;
+
+        public void Dispose() => AmbientTenant.CurrentTenantId = null;
+    }
+#endif
 }
