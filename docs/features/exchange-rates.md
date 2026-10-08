@@ -50,8 +50,10 @@ options at boot, and this client's are computed from `ExchangeRateOptions`.
   other `ExecutionRejectedException` (the concurrency limiter) → `Unavailable`; `JsonException` →
   `MalformedResponse`; an `OperationCanceledException` the caller did not cause → `Unavailable`. The
   caller's own cancellation is not caught.
-- **A 200 can still be a failure.** A body with `"success": false` (providers that wrap their errors in
-  a 200) → `Unavailable`; a body without the field (Frankfurter) is read normally.
+- **A 200 can still be a failure.** An object body with `"success": false` (providers that wrap their
+  errors in a 200) → `Unavailable`; Frankfurter's array is read normally; any other shape — v1's object
+  among them, or a quote without a rate — → `MalformedResponse`. A quote the answer does not contain
+  (an empty array included) → `UnknownCurrency`.
 - **Configuration fails at boot, not on first call.** A malformed `BaseUrl` stops the API with a
   precise message instead of surfacing later as a timeout or a `NullReferenceException`.
 - **The health check cannot be used as a load lever.** It opens a bare TCP connection (no application
@@ -66,19 +68,22 @@ options at boot, and this client's are computed from `ExchangeRateOptions`.
 ```json
 "ExternalApis": {
   "ExchangeRates": {
-    "BaseUrl": "https://api.frankfurter.dev/v1/",
+    "BaseUrl": "https://api.frankfurter.dev/v2/",
     "TimeoutSeconds": 10,
     "MaxRetries": 2
   }
 }
 ```
 
-The default provider is [Frankfurter](https://frankfurter.dev) (ECB reference rates, no access key),
-read through `latest?base=EUR&symbols=USD` → `{"amount":1.0,"base":"EUR","date":"…","rates":{"USD":…}}`.
-The previous default, `api.exchangerate.host`, now requires an access key and answers every keyless
-call with `success:false` at HTTP 200. Frankfurter marks `/v1` deprecated (a `Deprecation` header and a
-`successor-version` link to `/v2/rates`) while still serving it; the live smoke test below is what
-notices when that changes.
+The default provider is [Frankfurter](https://frankfurter.dev)'s v2 API (ECB reference rates, no access
+key), read through `rates?base=EUR&quotes=USD` → `[{"date":"…","base":"EUR","quote":"USD","rate":…}]`:
+one element per quote, no date meaning the latest rates. Frankfurter's `/v1` (`latest?base=&symbols=` →
+an object of `rates`) is deprecated — it answers with a `Deprecation` header dated 2026-05-18 and a
+`successor-version` link to `/v2/rates` — so the adapter moved to v2, which serves the same use case. The
+previous default before that, `api.exchangerate.host`, now requires an access key and answers every
+keyless call with `success:false` at HTTP 200. How v2 answers a code it does not publish was not probed:
+an error status maps to `Unavailable`, an answer without the quote to `UnknownCurrency`. The live smoke
+test below is what notices when the provider changes again.
 
 The check appears in `/health` as `exchange-rates`, tagged `external`. It is not tagged `live`, so
 `/alive` is unaffected by a provider outage.
@@ -87,7 +92,8 @@ The check appears in `/health` as `exchange-rates`, tagged `external`. It is not
 
 - `tests/Trellis.ApiTests/ExchangeRateProviderTests.cs` drives the real registration — options binding,
   typed client and resilience pipeline included — with only the socket replaced, and asserts that each
-  third-party outcome comes back as a `Result`: error status, unreadable body, unknown currency,
+  third-party outcome comes back as a `Result` — the v2 request shape (`rates?base=&quotes=`) is pinned
+  on the way: error status, unreadable body, a body of the wrong shape, unknown currency,
   transport failure, `success:false`, a provider slower than the attempt timeout, an open circuit (a
   burst of failures opens the real breaker; the next call sends nothing), 429/503 retried to success.
   The caller's cancellation propagates as `OperationCanceledException`, unretried. The probe is pinned
