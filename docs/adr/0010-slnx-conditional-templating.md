@@ -27,4 +27,4 @@ Inline C# conditionals (AppHost web wiring) use an `#if` block on `IncludeUI`. B
 
 - No `.sln` fallback needed — one modern `.slnx`, and the repo stays a runnable solution.
 - The exclusion pattern is uniform: `sources.modifiers` removes the folder, the `.slnx` conditional removes the references, and `#if` removes inline wiring.
-- Re-verify on major SDK bumps (the behavior is empirical, not documented); the `template-ci.yml` instantiate-and-build matrix guards it.
+- Re-verify on major SDK bumps (the behavior is empirical, not documented); the template repository's instantiate-and-build CI matrix guards it.

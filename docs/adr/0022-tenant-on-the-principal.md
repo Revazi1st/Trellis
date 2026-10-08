@@ -60,8 +60,8 @@ behaviour; the shipped `InitialCreate` migration is generated for the toggle-off
    them and the idempotent "already seeded" probe sees them too. Roles and permissions stay global.
 8. **The migration story is unchanged.** The repository ships `InitialCreate` for the toggle-off
    model, which this decision does not touch; a project generated with `--use-multitenancy`
-   regenerates it (`migrations remove --force` + `add InitialCreate`), as `template-ci.yml`'s
-   all-options leg and `docs/development.md` already do. The regenerated migration additionally
+   regenerates it (`migrations remove --force` + `add InitialCreate`), as the template
+   repository's all-options CI leg and `docs/development.md` already do. The regenerated migration additionally
    carries `AspNetUsers.TenantId` + index next to the aggregate and outbox columns.
 
 Proof lives in `TenantIsolationTests` (ApiTests, all-options leg: cross-tenant read and write 404,
