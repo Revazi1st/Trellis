@@ -37,7 +37,7 @@ internal sealed class OutboxProcessor(
             {
                 await ProcessBatchAsync(stoppingToken);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(exception, "Outbox processing batch failed");
             }
@@ -124,7 +124,7 @@ internal sealed class OutboxProcessor(
             message.Error = null;
             metrics.MessageDispatched(message.Type);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             message.Attempts++;
             if (message.Attempts >= MaxAttempts)
