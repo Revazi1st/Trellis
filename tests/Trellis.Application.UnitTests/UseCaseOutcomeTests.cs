@@ -99,6 +99,24 @@ public sealed class UseCaseOutcomeTests : IDisposable
         line.Message.ShouldContain("Nobody classified this yet.");
     }
 
+    [Theory]
+    [InlineData(ErrorType.Validation, LogLevel.Information)]
+    [InlineData(ErrorType.NotFound, LogLevel.Information)]
+    [InlineData(ErrorType.Conflict, LogLevel.Information)]
+    [InlineData(ErrorType.Unauthorized, LogLevel.Information)]
+    [InlineData(ErrorType.Forbidden, LogLevel.Information)]
+    [InlineData(ErrorType.Failure, LogLevel.Warning)]
+    public async Task Every_error_type_logs_one_line_at_its_level(ErrorType type, LogLevel expected)
+    {
+        var error = new Error("Test." + type, "Scripted.", type);
+
+        await Handle(new ScriptedCommand(_ => Task.FromResult(Result.Failure(error))));
+
+        LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+        line.Level.ShouldBe(expected);
+        line.Message.ShouldContain("Test." + type);
+    }
+
     [Fact]
     public async Task Throwing_handler_is_logged_at_Error_and_rethrown()
     {

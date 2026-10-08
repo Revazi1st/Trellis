@@ -104,13 +104,21 @@ public static class LoggingDecorators
             return;
         }
 
-        LogLevel level = result.Error.Type == ErrorType.Failure ? LogLevel.Warning : LogLevel.Information;
+        LogLevel level = IsClassifiedExpectedFailure(result.Error.Type) ? LogLevel.Information : LogLevel.Warning;
         if (logger.IsEnabled(level))
         {
             logger.Log(level, "Use case {UseCase} failed in {ElapsedMilliseconds}ms with {ErrorCode}: {ErrorDetail}",
                 useCase, elapsed.TotalMilliseconds, result.Error.Code, DetailOf(result.Error));
         }
     }
+
+    /// <summary>
+    /// The failures a caller causes and the API answers with a 4xx: outcomes, not alarms. Everything else —
+    /// <see cref="ErrorType.Failure"/>, and any type added later (a transient "unavailable", say) — logs at
+    /// Warning until someone classifies it here.
+    /// </summary>
+    private static bool IsClassifiedExpectedFailure(ErrorType type)
+        => type is ErrorType.Validation or ErrorType.NotFound or ErrorType.Conflict or ErrorType.Unauthorized or ErrorType.Forbidden;
 
     /// <summary>A validation failure names what failed (<c>CustomerName:Validation.NotEmpty, …</c>); anything else its description.</summary>
     private static string DetailOf(Error error)
