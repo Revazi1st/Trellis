@@ -81,7 +81,7 @@ Every response with status ≥ 400 is `application/problem+json` with this shape
 Rejected alternative: ASP.NET's `HttpValidationProblemDetails` (`errors: { "customerName": ["…"] }`).
 It is what `TypedResults.ValidationProblem` emits, but it drops the per-entry `code` a localising client
 needs and cannot express whole-request errors; the array keeps the shipped member name and is stated
-explicitly in the OpenAPI document (the OpenAPI-truth decision that follows this one), so generators do not guess.
+explicitly in the OpenAPI document (ADR-0025), so generators do not guess.
 
 ### In SharedKernel
 
@@ -98,8 +98,11 @@ The outcome log line's `field:code` pairs read the same record.
   (400), `Request.TooLarge` (413), `Request.UnsupportedMediaType` (415), `Server.Failure` (500). The
   catalogue does **not** carry `Concurrency.Conflict`: the unit of work returns it as a Result
   (`UnitOfWorkErrors.ConcurrencyConflict`) and the Result path maps it. The idempotency filter's
-  outcomes are `IdempotencyErrors` (`Idempotency.InvalidKey` 400, `Idempotency.Duplicate` 409) written
-  through `CustomResults`, like any endpoint's.
+  outcomes are `IdempotencyErrors` (`Idempotency.InvalidKey` 400, `Idempotency.InFlight` and
+  `Idempotency.Duplicate` 409 — the type lives in `Trellis.Application.Abstractions` since the ADR-0018
+  amendment, because Persistence produces `Duplicate`) written through `CustomResults`, like any
+  endpoint's; the 422 `Idempotency.FingerprintMismatch` has no `ErrorType`, so it is a `ProblemDescriptor`
+  written through `WriteProblemAsync`.
 - `HttpContext.WriteProblemAsync(ProblemDescriptor)` is how a non-Result path writes: through
   `IProblemDetailsService`. The JWT challenge (keeping `WWW-Authenticate`), the forbidden callback, the
   rate limiter's rejection (keeping `Retry-After`) and both exception handlers use it. Nothing writes a
@@ -120,7 +123,7 @@ The outcome log line's `field:code` pairs read the same record.
 
 `Api.Contracts.Common.ProblemResponse` and `FieldError` are the wire shape as records: tolerant readers
 (every member nullable) that the UI deserialises and the OpenAPI document generates its problem schema
-from (the OpenAPI-truth decision that follows). `Trellis.Api.Common` therefore references `Trellis.Api.Contracts` — a BCL-only leaf, so
+from (ADR-0025). `Trellis.Api.Common` therefore references `Trellis.Api.Contracts` — a BCL-only leaf, so
 the dependency still points inward: `Api → Api.Common → Api.Contracts ← UI.Common`.
 `LayerDependencyTests` pins the direction (Contracts never references Common).
 
