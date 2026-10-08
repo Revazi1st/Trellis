@@ -36,7 +36,9 @@ internal sealed class IssueInvoice : IEndpoint
 
         if (result.IsSuccess)
         {
-            await cache.RemoveAsync(cacheKeys.Invoice(id.Value), cancellationToken);
+            // Post-commit: an aborted request must not be able to throw here, or the idempotency filter
+            // would release a key whose command already committed and a retry would apply it twice.
+            await cache.RemoveAsync(cacheKeys.Invoice(id.Value), CancellationToken.None);
             return TypedResults.NoContent();
         }
 

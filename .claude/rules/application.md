@@ -12,7 +12,8 @@ Depends on Domain + SharedKernel only — never Infrastructure, Persistence, EF,
 - **Handlers** are `internal sealed`, implement `ICommandHandler<>` / `IQueryHandler<>`, and return `Result`/`Result<T>`. They orchestrate the domain + ports; they contain no business rules (those live in the aggregate).
 - **Validators** are `internal sealed : AbstractValidator<T>` — shape checks only (required, length, range). Semantic rules belong in domain value objects. Run automatically via the validation decorator; never call them by hand.
 - **Ports** (interfaces the outside world implements) live in `Abstractions/`: `ICurrentUser`, `IEmailSender`, `IIdentityService`, `ITokenProvider`, etc.
-- **Domain-event handlers** implement `IDomainEventHandler<TEvent>` in `Features/{Feature}/EventHandlers/`.
+- **Ports never commit.** A port adds to the scoped unit of work and the UnitOfWork decorator commits once per command; the only exceptions are declared single-statement atomic writes (`ExecuteUpdate`/`ExecuteDelete`, e.g. refresh-token consume) and Identity's `UserManager`, which saves itself.
+- **Domain-event handlers** implement `IDomainEventHandler<TEvent>` in `Features/{Feature}/EventHandlers/` and carry a unique `[DomainEventHandlerName("feature.event.reaction")]` — the key the outbox credits them under; never change it while messages are in flight. They run at-least-once: honour the `CancellationToken`, do unit-of-work writes **before** external side effects, and never call `SaveChanges` yourself — the outbox commits your writes.
 - Registration is automatic (Scrutor scan + decorator pipeline in `DependencyInjection.cs`) — no manual DI lines per handler.
 
-Decorator pipeline order: Validation → Logging → UnitOfWork → handler.
+Decorator pipeline: Logging → Tracing → Validation → UnitOfWork → handler (queries skip UnitOfWork). Every invocation writes one outcome line in the `UseCase` scope: Information for success and for classified expected failures, Warning for `ErrorType.Failure`, Error only when the use case throws. Handlers do not log their own outcomes.

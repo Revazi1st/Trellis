@@ -5,7 +5,11 @@ using Trellis.SharedKernel.Results;
 
 namespace Trellis.SharedKernel.Decorators;
 
-/// <summary>Runs every registered FluentValidation validator for the message; short-circuits to a <see cref="ValidationError"/> without invoking the handler.</summary>
+/// <summary>
+/// Runs every registered FluentValidation validator for the message; short-circuits to a
+/// <see cref="ValidationError"/> without invoking the handler (or, for a command, the unit of work).
+/// Sits inside Logging and Tracing, so a rejected request still gets its outcome line and its span.
+/// </summary>
 public static class ValidationDecorators
 {
     public sealed class CommandHandler<TCommand>(
@@ -72,6 +76,7 @@ public static class ValidationDecorators
 
         return failures.Length == 0
             ? null
-            : new ValidationError([.. failures.Select(static f => Error.Validation(f.PropertyName, f.ErrorMessage))]);
+            : new ValidationError([.. failures.Select(static f => new FieldValidationFailure(
+                f.PropertyName, FieldValidationFailure.NormalizeRuleCode(f.ErrorCode), f.ErrorMessage))]);
     }
 }

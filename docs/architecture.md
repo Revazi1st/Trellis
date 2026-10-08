@@ -31,7 +31,7 @@ Rule of thumb: **dependencies point inward.** The Domain knows nothing about EF,
 
 ## Key patterns
 
-- **CQRS without a mediator** — hand-rolled `ICommandHandler`/`IQueryHandler` + a decorator pipeline (validation → logging → unit-of-work). Endpoints inject handlers directly. (ADR-0003)
+- **CQRS without a mediator** — hand-rolled `ICommandHandler`/`IQueryHandler` + a decorator pipeline (logging → tracing → validation → unit-of-work). Endpoints inject handlers directly. (ADR-0003)
 - **Result over exceptions** — operations return `Result`/`Result<T>`; the API maps errors to RFC 9457 problem details at one seam. (ADR-0004)
 - **Rich domain** — aggregates with factories + private EF constructors, value objects as EF complex types, hand-rolled strongly-typed IDs, domain events dispatched by an EF SaveChanges interceptor. (ADR-0005, ADR-0006)
 - **Auth** — ASP.NET Core Identity + JWT with permission claims; permission-based authorization; single-use refresh tokens. (ADR-0007)

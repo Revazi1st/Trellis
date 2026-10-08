@@ -2,9 +2,18 @@ using Trellis.SharedKernel.Results;
 
 namespace Trellis.Application.Abstractions;
 
-/// <summary>Persists rotating refresh tokens (hashed). Implemented in the Persistence layer.</summary>
+/// <summary>
+/// Persists rotating refresh tokens (hashed). Implemented in the Persistence layer. Like every port it
+/// never commits on its own: <see cref="StoreAsync"/> joins the caller's unit of work. The consume and
+/// revoke members are the declared exception — each is one atomic conditional UPDATE, which is what
+/// makes concurrent replays race-safe.
+/// </summary>
 public interface IRefreshTokenStore
 {
+    /// <summary>
+    /// Adds a new token's hash to the current unit of work; it is saved when the command commits (the
+    /// UnitOfWork decorator), together with the rest of the command's writes.
+    /// </summary>
     Task StoreAsync(Guid userId, string tokenHash, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken);
 
     /// <summary>

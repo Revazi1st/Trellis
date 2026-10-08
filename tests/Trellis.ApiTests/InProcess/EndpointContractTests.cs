@@ -92,6 +92,26 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
+    public async Task Blank_idempotency_key_is_a_400_not_a_silent_opt_out()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/v1/invoices")
+        {
+            Content = JsonContent.Create(new CreateInvoiceRequest("Blank Key Co", "b@k.co", "USD")),
+        };
+        // Whitespace, not "": HttpClient drops an empty header value before it reaches the server.
+        message.Headers.TryAddWithoutValidation(ApiHeaders.IdempotencyKey, "   ").ShouldBeTrue();
+        HttpResponseMessage response = await admin.SendAsync(message, ct);
+
+        // The caller asked for the guarantee; running the command without it would be the silent failure.
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        (await response.Content.ReadAsStringAsync(ct)).ShouldContain("Invalid Idempotency-Key");
+    }
+
+    [Fact]
     public async Task Different_callers_may_reuse_the_same_idempotency_key()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;

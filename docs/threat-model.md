@@ -36,7 +36,7 @@ you build on top.
 | Client-supplied identifiers poisoning logs or response headers | The inbound correlation id is accepted only if short and restricted to an id-shaped charset; otherwise a server id is used | `CorrelationIdMiddleware` |
 | Rate-limit evasion behind a proxy | `X-Forwarded-For` honoured only from explicitly configured trusted proxies/networks; the publish-mode `ASPNETCORE_FORWARDEDHEADERS_ENABLED` switch cannot widen it (loopback-only restored, startup warning) | `ApiHardeningExtensions` |
 | Duplicate submission of a write (double charge, double invoice) | `Idempotency-Key` reserved per (user, route, key); failed requests release the key | `IdempotencyFilter` |
-| Lost update on concurrent edits | `xmin` concurrency token; conflicts become 409 | `ConcurrencyExceptionHandler` |
+| Lost update on concurrent edits | `xmin` concurrency token; a stale write is returned as `Concurrency.Conflict` and becomes 409 | `IUnitOfWork.CommitAsync`, `CustomResults` |
 | A third party being down taking us down | Per-client resilience pipeline; health check reports Degraded, not Unhealthy | ADR-0020 |
 | `/health` used as a load lever against a dependency | The external check caches its verdict and probes with a bare TCP connect | `ExchangeRateHealthCheck` |
 | Slow-loris / hung requests | Default 30s request timeout returning 504 | `ApiHardeningExtensions` |

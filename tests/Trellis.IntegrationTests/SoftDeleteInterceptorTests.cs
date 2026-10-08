@@ -29,8 +29,8 @@ public sealed class SoftDeleteInterceptorTests(DatabaseFixture database) : Integ
             var repository = deleteScope.ServiceProvider.GetRequiredService<IInvoiceRepository>();
             Invoice invoice = (await repository.GetByIdAsync(id, TestContext.Current.CancellationToken))!;
             repository.Remove(invoice);
-            await deleteScope.ServiceProvider.GetRequiredService<IUnitOfWork>()
-                .SaveChangesAsync(TestContext.Current.CancellationToken);
+            (await deleteScope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+                .CommitAsync(TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
         }
 
         using var readScope = CreateScope();

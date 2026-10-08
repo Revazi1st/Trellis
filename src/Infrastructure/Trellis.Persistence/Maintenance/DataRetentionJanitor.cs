@@ -27,7 +27,7 @@ internal sealed class DataRetentionJanitor(
             {
                 await SweepAsync(stoppingToken);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(exception, "Data-retention sweep failed");
             }

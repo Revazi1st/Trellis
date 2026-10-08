@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Trellis.Domain.Invoices;
 using Trellis.Persistence.Identity;
 using Trellis.SharedKernel.Domain;
+using Trellis.SharedKernel.Results;
 
 namespace Trellis.Persistence;
 
@@ -27,6 +28,24 @@ public sealed class AppDbContext(
     /// <summary>Read by the "Tenant" query filters; a member on the context so EF parameterises it per query.</summary>
     internal string? CurrentTenantId => tenantContext.TenantId;
 #endif
+
+    /// <inheritdoc />
+    public async Task<Result> CommitAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await SaveChangesAsync(cancellationToken);
+            return Result.Success();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A stale xmin is an expected outcome (ADR-0004), not a fault: it travels as a Result to the
+            // 409 seam instead of an Error log, an errored span and an exception handler. The rejected
+            // entries are dropped so nothing stale leaks into later work on this scoped context.
+            ChangeTracker.Clear();
+            return Result.Failure(UnitOfWorkErrors.ConcurrencyConflict);
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

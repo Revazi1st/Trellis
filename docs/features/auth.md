@@ -22,7 +22,8 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   table, FK → `AspNetUsers` with cascade delete). **Single-use rotation**: consuming is one atomic
   conditional `UPDATE`, so a concurrent double-spend loses. **Replay detection**: presenting an
   already-consumed token revokes *all* of that user's outstanding tokens (OAuth security BCP) and
-  logs a warning.
+  logs a warning. A newly minted token is saved by the login/refresh command's unit of work — the
+  store never commits on its own — so a command that fails after minting leaves no orphan row.
 - **Account lockout**: 5 failed password attempts lock the account for 15 minutes
   (`Auth.AccountLockedOut` → 403). A successful login resets the counter. This is per-account
   defense; the `auth` rate-limit policy (10/min per user/IP) is the per-source layer.

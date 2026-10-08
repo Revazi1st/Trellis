@@ -27,22 +27,36 @@ public static class DependencyInjection
         services.AddSingleton<InvoiceMetrics>();
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
 
-        // Decoration order: first Decorate call is the innermost wrapper.
-        // Effective pipeline: Validation → Logging → Tracing → UnitOfWork → handler.
-        services.Decorate(typeof(ICommandHandler<>), typeof(UnitOfWorkDecorators.CommandHandler<>));
-        services.Decorate(typeof(ICommandHandler<,>), typeof(UnitOfWorkDecorators.CommandHandler<,>));
+        return services.AddUseCasePipeline();
+    }
 
-        services.Decorate(typeof(ICommandHandler<>), typeof(TracingDecorators.CommandHandler<>));
-        services.Decorate(typeof(ICommandHandler<,>), typeof(TracingDecorators.CommandHandler<,>));
-        services.Decorate(typeof(IQueryHandler<,>), typeof(TracingDecorators.QueryHandler<,>));
+    /// <summary>
+    /// Wraps every registered command and query handler in the use-case pipeline:
+    /// <b>Logging → Tracing → Validation → UnitOfWork → handler</b> (queries skip UnitOfWork — they never
+    /// commit). Logging and Tracing are outermost so a rejected request and a failing commit both still
+    /// produce their outcome line and span.
+    /// <para>
+    /// <c>TryDecorate</c>, not <c>Decorate</c>: Scrutor's <c>Decorate</c> throws when it finds nothing to
+    /// wrap, so a project with no query (the remove-feature path) or no command would not boot.
+    /// </para>
+    /// </summary>
+    internal static IServiceCollection AddUseCasePipeline(this IServiceCollection services)
+    {
+        // The FIRST call is the INNERMOST wrapper: read this block bottom-up to follow a request in.
+        services.TryDecorate(typeof(ICommandHandler<>), typeof(UnitOfWorkDecorators.CommandHandler<>));
+        services.TryDecorate(typeof(ICommandHandler<,>), typeof(UnitOfWorkDecorators.CommandHandler<,>));
 
-        services.Decorate(typeof(ICommandHandler<>), typeof(LoggingDecorators.CommandHandler<>));
-        services.Decorate(typeof(ICommandHandler<,>), typeof(LoggingDecorators.CommandHandler<,>));
-        services.Decorate(typeof(IQueryHandler<,>), typeof(LoggingDecorators.QueryHandler<,>));
+        services.TryDecorate(typeof(ICommandHandler<>), typeof(ValidationDecorators.CommandHandler<>));
+        services.TryDecorate(typeof(ICommandHandler<,>), typeof(ValidationDecorators.CommandHandler<,>));
+        services.TryDecorate(typeof(IQueryHandler<,>), typeof(ValidationDecorators.QueryHandler<,>));
 
-        services.Decorate(typeof(ICommandHandler<>), typeof(ValidationDecorators.CommandHandler<>));
-        services.Decorate(typeof(ICommandHandler<,>), typeof(ValidationDecorators.CommandHandler<,>));
-        services.Decorate(typeof(IQueryHandler<,>), typeof(ValidationDecorators.QueryHandler<,>));
+        services.TryDecorate(typeof(ICommandHandler<>), typeof(TracingDecorators.CommandHandler<>));
+        services.TryDecorate(typeof(ICommandHandler<,>), typeof(TracingDecorators.CommandHandler<,>));
+        services.TryDecorate(typeof(IQueryHandler<,>), typeof(TracingDecorators.QueryHandler<,>));
+
+        services.TryDecorate(typeof(ICommandHandler<>), typeof(LoggingDecorators.CommandHandler<>));
+        services.TryDecorate(typeof(ICommandHandler<,>), typeof(LoggingDecorators.CommandHandler<,>));
+        services.TryDecorate(typeof(IQueryHandler<,>), typeof(LoggingDecorators.QueryHandler<,>));
 
         return services;
     }

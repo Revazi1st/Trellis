@@ -5,8 +5,10 @@ using Trellis.SharedKernel.Results;
 namespace Trellis.SharedKernel.Decorators;
 
 /// <summary>
-/// Commits the unit of work after a successful command (one SaveChanges = one transaction).
-/// Applies to commands only — queries never mutate state.
+/// Commits the unit of work after a successful command (one commit = one transaction) and returns the
+/// commit's own failure: a concurrency conflict is a Result like any other expected failure, so it
+/// reaches the client as a 409 through the single Result→HTTP seam and is logged as an outcome, not a
+/// fault. Applies to commands only — queries never mutate state.
 /// </summary>
 public static class UnitOfWorkDecorators
 {
@@ -19,12 +21,9 @@ public static class UnitOfWorkDecorators
         {
             Result result = await inner.Handle(command, cancellationToken);
 
-            if (result.IsSuccess)
-            {
-                await unitOfWork.SaveChangesAsync(cancellationToken);
-            }
-
-            return result;
+            return result.IsSuccess
+                ? await unitOfWork.CommitAsync(cancellationToken)
+                : result;
         }
     }
 
@@ -36,13 +35,13 @@ public static class UnitOfWorkDecorators
         public async Task<Result<TResponse>> Handle(TCommand command, CancellationToken cancellationToken)
         {
             Result<TResponse> result = await inner.Handle(command, cancellationToken);
-
-            if (result.IsSuccess)
+            if (result.IsFailure)
             {
-                await unitOfWork.SaveChangesAsync(cancellationToken);
+                return result;
             }
 
-            return result;
+            Result commit = await unitOfWork.CommitAsync(cancellationToken);
+            return commit.IsSuccess ? result : Result.Failure<TResponse>(commit.Error);
         }
     }
 }

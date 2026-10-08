@@ -5,6 +5,7 @@ using Trellis.SharedKernel.Domain;
 namespace Trellis.Application.Features.Invoices.EventHandlers;
 
 /// <summary>Counts issued invoices once the issuing transaction has committed (dispatched via the outbox).</summary>
+[DomainEventHandlerName("invoices.issued.record-metrics")]
 internal sealed class RecordMetricsOnInvoiceIssued(InvoiceMetrics metrics)
     : IDomainEventHandler<InvoiceIssuedDomainEvent>
 {
@@ -16,6 +17,7 @@ internal sealed class RecordMetricsOnInvoiceIssued(InvoiceMetrics metrics)
 }
 
 /// <summary>Counts paid invoices once the payment transaction has committed (dispatched via the outbox).</summary>
+[DomainEventHandlerName("invoices.paid.record-metrics")]
 internal sealed class RecordMetricsOnInvoicePaid(InvoiceMetrics metrics)
     : IDomainEventHandler<InvoicePaidDomainEvent>
 {

@@ -27,7 +27,7 @@ Dependencies point inward. **Infrastructure and Persistence are peers — never 
 
 ## How we build things
 
-- **CQRS, no mediator**: hand-rolled `ICommand(Handler)`/`IQuery(Handler)` + decorator pipeline (validation→logging→unit-of-work). Endpoints inject handlers directly.
+- **CQRS, no mediator**: hand-rolled `ICommand(Handler)`/`IQuery(Handler)` + decorator pipeline (logging→tracing→validation→unit-of-work). Endpoints inject handlers directly.
 - **Result, not exceptions**: return `Result`/`Result<T>`; the API maps errors to RFC 9457 problem details. Exceptions are for the truly unexpected only.
 - **Rich domain**: aggregates via `static Create(...) → Result<T>` + private EF ctor; value objects = sealed records mapped as EF complex types; hand-rolled strongly-typed IDs; domain events dispatched by a SaveChanges interceptor.
 - **Reference feature**: `src/Core/Trellis.Application/Features/Invoices` + `docs/features/invoices.md`. Copy it (use the `add-feature` skill).

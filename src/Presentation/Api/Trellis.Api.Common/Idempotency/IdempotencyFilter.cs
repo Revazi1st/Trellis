@@ -9,11 +9,14 @@ namespace Trellis.Api.Common.Idempotency;
 
 /// <summary>
 /// Opt-in command idempotency. When a request carries an <c>Idempotency-Key</c> header, the key is
-/// reserved before the handler runs; a duplicate key short-circuits with 409. The reservation is
+/// reserved before the handler runs; a duplicate key short-circuits with 409. A missing header means
+/// "no idempotency"; a present but blank one is a 400, never a silent opt-out. The reservation is
 /// scoped to the caller and the route — different users (or different endpoints) reusing the same
 /// header value never collide. A failed outcome — an exception or a 4xx/5xx result (this codebase
 /// reports expected failures as Results, ADR-0004) — releases the key so the request can be retried.
-/// (Response replay is the evolution.)
+/// The filter cannot tell an exception before the commit from one after it, so everything an endpoint
+/// does after its command succeeded is post-commit work that must not throw for an aborted request: it
+/// takes <see cref="CancellationToken.None"/>. (Response replay is the evolution.)
 /// </summary>
 public sealed class IdempotencyFilter : IEndpointFilter
 {
@@ -24,12 +27,22 @@ public sealed class IdempotencyFilter : IEndpointFilter
     {
         HttpContext http = context.HttpContext;
 
-        if (!http.Request.Headers.TryGetValue(HeaderName, out var header) || string.IsNullOrWhiteSpace(header))
+        if (!http.Request.Headers.TryGetValue(HeaderName, out var header))
         {
             return await next(context);
         }
 
         string clientKey = header.ToString();
+        if (string.IsNullOrWhiteSpace(clientKey))
+        {
+            // The caller asked for the guarantee and sent nothing usable: running without it would turn
+            // the caller's retry into a second apply.
+            return TypedResults.Problem(
+                title: "Invalid Idempotency-Key",
+                detail: $"The {HeaderName} header must not be blank. Omit it to send the request without idempotency.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
         if (clientKey.Length > MaxKeyLength)
         {
             return TypedResults.Problem(
