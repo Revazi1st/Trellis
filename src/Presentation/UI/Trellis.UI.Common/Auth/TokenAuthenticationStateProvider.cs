@@ -20,11 +20,11 @@ namespace Trellis.UI.Common.Auth;
 /// </summary>
 /// <param name="tokenStore">Host-provided token storage.</param>
 /// <param name="authApi">Client for the refresh endpoint.</param>
-/// <param name="timeProvider">Clock for expiry and the hold-off; the system clock unless the host registers one.</param>
+/// <param name="time">Clock for expiry and the hold-off; the system clock unless the host registers one.</param>
 public sealed class TokenAuthenticationStateProvider(
     ITokenStore tokenStore,
     IAuthApiClient authApi,
-    TimeProvider? timeProvider = null)
+    TimeProvider time)
     : AuthenticationStateProvider, IAccessTokenSource, IDisposable
 {
     private const string AuthenticationType = "jwt";
@@ -38,7 +38,6 @@ public sealed class TokenAuthenticationStateProvider(
     /// </summary>
     private static readonly TimeSpan RefreshHoldOff = TimeSpan.FromSeconds(5);
 
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     /// <summary>UTC ticks before which no refresh is attempted; 0 when no hold-off is active.</summary>
@@ -147,11 +146,11 @@ public sealed class TokenAuthenticationStateProvider(
 
     private bool IsExpired(string accessToken)
         => JwtClaims.GetExpiration(accessToken) is not { } expiresAt
-           || expiresAt <= _time.GetUtcNow() + ExpirySkew;
+           || expiresAt <= time.GetUtcNow() + ExpirySkew;
 
-    private bool IsHoldingOff() => _time.GetUtcNow().UtcTicks < Volatile.Read(ref _refreshHoldOffUntilTicks);
+    private bool IsHoldingOff() => time.GetUtcNow().UtcTicks < Volatile.Read(ref _refreshHoldOffUntilTicks);
 
-    private void HoldOffRefresh() => Volatile.Write(ref _refreshHoldOffUntilTicks, (_time.GetUtcNow() + RefreshHoldOff).UtcTicks);
+    private void HoldOffRefresh() => Volatile.Write(ref _refreshHoldOffUntilTicks, (time.GetUtcNow() + RefreshHoldOff).UtcTicks);
 
     private void ClearHoldOff() => Volatile.Write(ref _refreshHoldOffUntilTicks, 0);
 

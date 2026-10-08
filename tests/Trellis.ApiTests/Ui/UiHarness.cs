@@ -23,12 +23,15 @@ internal sealed class UiHarness : IAsyncDisposable
     private readonly ServiceProvider _root;
     private readonly AsyncServiceScope _circuit;
 
-    public UiHarness(TimeSpan? clientTimeout = null)
+    /// <param name="clientTimeout">Overrides the typed clients' <see cref="HttpClient.Timeout"/>, as a host may.</param>
+    /// <param name="configureServices">Host registrations made before <c>AddSharedUi</c>, such as a resilience handler.</param>
+    public UiHarness(TimeSpan? clientTimeout = null, Action<IServiceCollection>? configureServices = null)
     {
         var services = new ServiceCollection();
         // Every named client's primary handler, so the test needs no knowledge of the client's name.
         services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => Api));
         services.AddSingleton<TimeProvider>(Clock);
+        configureServices?.Invoke(services);
         services.AddScoped<ITokenStore, InMemoryTokenStore>();
         services.AddSharedUi((_, client) =>
         {
