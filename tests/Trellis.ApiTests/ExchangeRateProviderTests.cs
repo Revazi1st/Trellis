@@ -26,18 +26,25 @@ public sealed class ExchangeRateProviderTests
     private const int BreakerMinimumThroughput = 100;
 
     [Theory]
-    // Frankfurter's actual /v1/latest body (captured from the live API): no "success" field at all.
-    [InlineData("""{"amount":1.0,"base":"EUR","date":"2026-10-07","rates":{"USD":1.0825}}""")]
-    // Providers that wrap every answer say so explicitly.
-    [InlineData("""{"success":true,"base":"EUR","rates":{"USD":1.0825}}""")]
+    // Frankfurter's actual /v2/rates body for base=EUR&quotes=USD, captured from the live API (rate edited).
+    [InlineData("""[{"date":"2026-10-08","base":"EUR","quote":"USD","rate":1.0825}]""")]
+    // More quotes than asked for: the one asked for is picked by name, not by position.
+    [InlineData("""[{"date":"2026-10-08","base":"EUR","quote":"GBP","rate":0.8412},{"date":"2026-10-08","base":"EUR","quote":"USD","rate":1.0825}]""")]
     public async Task Provider_returns_the_quoted_rate(string body)
     {
-        IExchangeRateProvider provider = BuildProvider(new StubHandler(_ => Json(body)));
+        Uri? requested = null;
+        IExchangeRateProvider provider = BuildProvider(new StubHandler(request =>
+        {
+            requested = request.RequestUri;
+            return Json(body);
+        }));
 
         Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue();
         result.Value.ShouldBe(1.0825m);
+        // The v2 request shape, resolved beneath the configured BaseUrl.
+        requested.ShouldBe(new Uri("https://rates.test/rates?base=EUR&quotes=USD"));
     }
 
     [Fact]
@@ -65,16 +72,32 @@ public sealed class ExchangeRateProviderTests
         result.Error.ShouldBe(ExchangeRateErrors.MalformedResponse);
     }
 
-    [Fact]
-    public async Task Provider_reports_a_currency_the_feed_does_not_publish()
+    [Theory]
+    [InlineData("""[]""")]
+    [InlineData("""[{"date":"2026-10-08","base":"EUR","quote":"USD","rate":1.08}]""")]
+    public async Task Provider_reports_a_currency_the_feed_does_not_publish(string body)
     {
-        IExchangeRateProvider provider = BuildProvider(
-            new StubHandler(_ => Json("""{"base":"EUR","rates":{"USD":1.08}}""")));
+        IExchangeRateProvider provider = BuildProvider(new StubHandler(_ => Json(body)));
 
         Result<decimal> result = await provider.GetRateAsync("EUR", "XYZ", TestContext.Current.CancellationToken);
 
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("ExchangeRate.UnknownCurrency");
+    }
+
+    [Theory]
+    // The v1 shape: an object where v2 answers an array.
+    [InlineData("""{"amount":1.0,"base":"EUR","date":"2026-10-07","rates":{"USD":1.0825}}""")]
+    // The quote is there but its rate is not.
+    [InlineData("""[{"date":"2026-10-08","base":"EUR","quote":"USD"}]""")]
+    public async Task Provider_maps_a_body_of_the_wrong_shape_to_MalformedResponse(string body)
+    {
+        IExchangeRateProvider provider = BuildProvider(new StubHandler(_ => Json(body)));
+
+        Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.ShouldBe(ExchangeRateErrors.MalformedResponse);
     }
 
     [Fact]
@@ -171,7 +194,7 @@ public sealed class ExchangeRateProviderTests
     {
         var handler = new StubHandler((_, call) => call == 1
             ? new HttpResponseMessage(transient)
-            : Json("""{"base":"EUR","rates":{"USD":1.0825}}"""));
+            : Json("""[{"date":"2026-10-08","base":"EUR","quote":"USD","rate":1.0825}]"""));
         IExchangeRateProvider provider = BuildProvider(handler, maxRetries: 1);
 
         Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);

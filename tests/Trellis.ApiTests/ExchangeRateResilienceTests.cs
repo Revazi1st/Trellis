@@ -26,7 +26,7 @@ namespace Trellis.ApiTests;
 /// </summary>
 public sealed class ExchangeRateResilienceTests
 {
-    private const string OkBody = """{"amount":1.0,"base":"EUR","date":"2026-10-07","rates":{"USD":1.0825}}""";
+    private const string OkBody = """[{"date":"2026-10-08","base":"EUR","quote":"USD","rate":1.0825}]""";
 
     [Fact]
     public void HandlerChain_UnderServiceDefaults_HasExactlyOneResilienceHandler()

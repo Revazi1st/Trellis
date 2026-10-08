@@ -64,22 +64,31 @@ public sealed partial class OptionsConventionTests
         Should.NotThrow(() => host.Services.GetRequiredService<IStartupValidator>().Validate());
     }
 
+    /// <summary>
+    /// One out-of-range key on the API's command line stops the boot, and the message names it. The
+    /// per-property limits are DataAnnotations; a cross-field rule (registered next to the binding) states
+    /// its own message, passed as <paramref name="expected"/> when it is more than the key.
+    /// </summary>
     [Theory]
-    [InlineData("SweepInterval", "00:00:00")]
-    [InlineData("SweepInterval", "-00:00:01")]
-    [InlineData("InitialDelay", "-00:00:01")]
-    [InlineData("ProcessedOutboxAge", "00:00:00")]
-    [InlineData("DeadLetteredOutboxAge", "-1.00:00:00")]
-    [InlineData("IdempotencyKeyAge", "00:00:00")]
-    [InlineData("DeadRefreshTokenAge", "00:00:01")]
-    public async Task An_out_of_range_retention_window_stops_the_api_at_boot_naming_the_key(string window, string value)
+    [InlineData("Retention", "SweepInterval", "00:00:00")]
+    [InlineData("Retention", "SweepInterval", "-00:00:01")]
+    [InlineData("Retention", "InitialDelay", "-00:00:01")]
+    [InlineData("Retention", "ProcessedOutboxAge", "00:00:00")]
+    [InlineData("Retention", "DeadLetteredOutboxAge", "-1.00:00:00")]
+    [InlineData("Retention", "IdempotencyKeyAge", "00:00:00")]
+    [InlineData("Retention", "DeadRefreshTokenAge", "00:00:01")]
+    [InlineData("Outbox", "BatchSize", "0")]
+    [InlineData("Outbox", "PollInterval", "00:00:00")]
+    // In range on its own (1 s .. 1 day) but below the default BaseRetryDelay of 30 s: only the cross-field rule rejects it.
+    [InlineData("Outbox", "MaxRetryDelay", "00:00:10", "Outbox:MaxRetryDelay must be >= Outbox:BaseRetryDelay")]
+    public async Task An_out_of_range_setting_stops_the_api_at_boot_naming_the_key(string section, string key, string value, string? expected = null)
     {
-        await using BuiltHost host = BuiltHost.Of(typeof(Program).Assembly, [.. ValidArguments(), $"--Retention:{window}={value}"]);
+        await using BuiltHost host = BuiltHost.Of(typeof(Program).Assembly, [.. ValidArguments(), $"--{section}:{key}={value}"]);
 
         OptionsValidationException exception = Should.Throw<OptionsValidationException>(
             () => host.Services.GetRequiredService<IStartupValidator>().Validate());
 
-        exception.Message.ShouldContain($"Retention:{window}");
+        exception.Message.ShouldContain(expected ?? $"{section}:{key}");
     }
 
     /// <summary>
