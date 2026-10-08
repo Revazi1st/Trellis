@@ -165,3 +165,12 @@ DELETE FROM "OutboxMessages" WHERE "Status" = 2 AND "Id" = '<id>';
 - Re-driving a `poison` row without a code fix dead-letters it again on the next poll.
 - `unknown_type` rows mean an event type was removed or renamed while rows were in flight: redeploy a
   type carrying that `[DomainEventName]` and re-drive them.
+
+### Idempotency keys
+
+| Idempotency | What to know |
+|---|---|
+| Table | `IdempotencyKeys` (ADR-0018): one row per `(user, method, route, Idempotency-Key)` hash. A row with a `StatusCode` is a completed request whose status, content type, `Body` and `Location` are replayed to a retry; a row without one is in flight. Rows are inserted by the command's own commit, so a failed command never leaves one. |
+| Replay cap | Response bodies are stored up to 64 KB (per endpoint in code, `RequireIdempotency(maxReplayBodyBytes:)`; not a configuration setting). A larger response completes normally; its retry is a 409 `Idempotency.Duplicate` telling the client to read the resource. |
+| Stuck in flight | A crash between a command's commit and the completion write leaves its row in flight: retries answer 409 `Idempotency.InFlight` with `Retry-After` until `Retention__IdempotencyKeyAge` (2 days) sweeps it. The command *did* apply; the client reads the resource. To free the key sooner: `DELETE FROM "IdempotencyKeys" WHERE "StatusCode" IS NULL AND "CreatedAtUtc" < now() - interval '1 hour';` — only after confirming no request that old can still be running (`Outbox__DispatchTimeout` bounds nothing here; the API's 30 s request timeout does). |
+| Size | Bounded by `Retention__IdempotencyKeyAge` × write rate × (≤ 64 KB + a few hundred bytes) per keyed request; the janitor sweeps by creation time whatever the state. |

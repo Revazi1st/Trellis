@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
-using Trellis.Api.Common.Idempotency;
 
 namespace Trellis.Api.Common.OpenApi;
 
@@ -58,38 +57,6 @@ internal sealed class SecurityRequirementOperationTransformer : IOpenApiOperatio
         operation.Responses ??= new OpenApiResponses();
         operation.Responses.TryAdd("401", new OpenApiResponse { Description = "Missing or invalid access token." });
         operation.Responses.TryAdd("403", new OpenApiResponse { Description = "Authenticated, but lacking the required permission." });
-
-        return Task.CompletedTask;
-    }
-}
-
-/// <summary>
-/// Documents the Idempotency-Key header and the 409 duplicate outcome on endpoints marked by
-/// <c>RequireIdempotency()</c> — otherwise consumers cannot discover the header from the spec.
-/// </summary>
-internal sealed class IdempotencyOperationTransformer : IOpenApiOperationTransformer
-{
-    public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
-    {
-        bool idempotent = context.Description.ActionDescriptor.EndpointMetadata.OfType<IdempotencyMetadata>().Any();
-        if (!idempotent)
-        {
-            return Task.CompletedTask;
-        }
-
-        operation.Parameters ??= [];
-        operation.Parameters.Add(new OpenApiParameter
-        {
-            Name = IdempotencyFilter.HeaderName,
-            In = ParameterLocation.Header,
-            Required = false,
-            Description = "Unique value per logical request; retry attempts reuse it (scoped to caller + route). "
-                          + "Replaying an already-completed request returns 409; a failed request releases the key.",
-            Schema = new OpenApiSchema { Type = JsonSchemaType.String, MaxLength = IdempotencyFilter.MaxKeyLength },
-        });
-
-        operation.Responses ??= new OpenApiResponses();
-        operation.Responses.TryAdd("409", new OpenApiResponse { Description = "Duplicate request — this Idempotency-Key was already processed." });
 
         return Task.CompletedTask;
     }

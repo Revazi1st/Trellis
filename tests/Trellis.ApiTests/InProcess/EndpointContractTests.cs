@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Shouldly;
+using Trellis.Api.Common.Idempotency;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
 using Xunit;
@@ -54,24 +55,23 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
-    public async Task Idempotency_key_deduplicates_and_a_failed_request_releases_its_key()
+    public async Task Idempotency_key_deduplicates_and_a_failed_request_leaves_no_reservation()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
 
         // Reserve + succeed.
         string key = Guid.NewGuid().ToString();
-        (await PostCreateAsync(admin, key, new CreateInvoiceRequest("Idempotent Inc", "i@i.co", "USD"), ct))
-            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        HttpResponseMessage created = await PostCreateAsync(admin, key, new CreateInvoiceRequest("Idempotent Inc", "i@i.co", "USD"), ct);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        // Same caller + route + key → duplicate, reported through the same problem seam as any endpoint error.
+        // Same caller + route + key + body → the stored response again, never a second command (ADR-0018).
         HttpResponseMessage duplicate = await PostCreateAsync(admin, key, new CreateInvoiceRequest("Idempotent Inc", "i@i.co", "USD"), ct);
-        duplicate.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        ProblemResponse problem = (await duplicate.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();
-        problem.Status.ShouldBe((int)HttpStatusCode.Conflict);
-        problem.Code.ShouldBe("Idempotency.Duplicate");
+        duplicate.StatusCode.ShouldBe(HttpStatusCode.Created);
+        duplicate.Headers.GetValues(IdempotencyFilter.ReplayedHeaderName).ShouldHaveSingleItem().ShouldBe("true");
+        (await duplicate.Content.ReadAsStringAsync(ct)).ShouldBe(await created.Content.ReadAsStringAsync(ct));
 
-        // A failed command must release the key (this codebase returns Results, it doesn't throw)…
+        // A failed command leaves no reservation (this codebase returns Results, it doesn't throw)…
         string retriedKey = Guid.NewGuid().ToString();
         (await PostCreateAsync(admin, retriedKey, new CreateInvoiceRequest("", "", "USD"), ct))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
