@@ -80,5 +80,24 @@ public sealed class CorrelationIdTests(ApiFactory factory) : IClassFixture<ApiFa
         // flags, dash-separated). The correlation id is its trace-id field, the part every hop shares.
         ActivityContext.TryParse(traceId, traceState: null, out ActivityContext trace).ShouldBeTrue(traceId);
         header.ShouldBe(trace.TraceId.ToHexString());
+
+        // And the body says the same thing as the header, so a caller holding either can find the other (ADR-0024).
+        problem.RootElement.GetProperty(ProblemExtensions.CorrelationId).GetString().ShouldBe(header);
+    }
+
+    [Fact]
+    public async Task An_inbound_correlation_id_reaches_the_problem_body_as_well_as_the_header()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/invoices/{Guid.NewGuid()}");
+        request.Headers.Add(CorrelationIdMiddleware.HeaderName, "01JB8Z5M9K-trace.id:42");
+
+        using HttpResponseMessage response = await admin.SendAsync(request, ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Headers.GetValues(CorrelationIdMiddleware.HeaderName).ShouldHaveSingleItem().ShouldBe("01JB8Z5M9K-trace.id:42");
+        using JsonDocument problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        problem.RootElement.GetProperty(ProblemExtensions.CorrelationId).GetString().ShouldBe("01JB8Z5M9K-trace.id:42");
     }
 }
