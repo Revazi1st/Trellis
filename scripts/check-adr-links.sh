@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Fails if any "ADR-NNNN" reference in the repo has no matching docs/adr/NNNN-*.md file,
-# if any docs/adr/*.md is not listed in docs/INDEX.md, or if a 'paths:' glob in
+# if any docs/adr/*.md is not listed in docs/INDEX.md (template ADRs 0001-0099 above the
+# '## Project decisions' heading, project ADRs 0100 and up below it), if two ADRs share a number,
+# if the template's own repository holds an ADR numbered 0100 or more, or if a 'paths:' glob in
 # .claude/rules/*.md matches zero files (a renamed directory silently unloads a rule).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -20,13 +22,46 @@ for n in $refs; do
   fi
 done
 
-# --- every ADR file is listed in docs/INDEX.md ---
+# --- every ADR file is listed in docs/INDEX.md, in the section its number belongs to ---
+# Numbers 0001-0099 are the template's ADRs; a generated project numbers its own from 0100, so a
+# template upgrade that brings new ADRs never collides with the project's (new-adr skill).
+project_heading=$(grep -n '^## Project decisions' docs/INDEX.md | head -n 1 | cut -d: -f1) || true
+if [ -z "$project_heading" ]; then
+  echo "::error::docs/INDEX.md has no '## Project decisions' section (ADRs numbered 0100 and up are listed there)"
+  fail=1
+fi
 for f in docs/adr/*.md; do
-  if ! grep -qF "adr/$(basename "$f")" docs/INDEX.md; then
+  listed=$(grep -nF "adr/$(basename "$f")" docs/INDEX.md | head -n 1 | cut -d: -f1) || true
+  if [ -z "$listed" ]; then
     echo "::error::$f is not listed in docs/INDEX.md"
+    fail=1
+    continue
+  fi
+  n=$(basename "$f" | grep -oE '^[0-9]{4}') || continue
+  [ -n "$project_heading" ] || continue
+  if [ $((10#$n)) -ge 100 ] && [ "$listed" -lt "$project_heading" ]; then
+    echo "::error::$f is a project ADR (0100 and up): list it under '## Project decisions' in docs/INDEX.md"
+    fail=1
+  elif [ $((10#$n)) -lt 100 ] && [ "$listed" -gt "$project_heading" ]; then
+    echo "::error::$f is a template ADR (0001-0099): list it above '## Project decisions' in docs/INDEX.md"
     fail=1
   fi
 done
+
+# --- no two ADRs share a number; the template's own repository stays below 0100 ---
+for n in $(find docs/adr -name '[0-9][0-9][0-9][0-9]-*.md' -exec basename {} \; | cut -c1-4 | sort | uniq -d); do
+  echo "::error::more than one docs/adr/$n-*.md: number your own ADRs from 0100 (0001-0099 are the template's)"
+  fail=1
+done
+if [ -f .template.config/template.json ]; then
+  for f in docs/adr/[0-9][0-9][0-9][0-9]-*.md; do
+    n=$(basename "$f" | cut -c1-4)
+    if [ $((10#$n)) -ge 100 ]; then
+      echo "::error::$f: the template's ADRs are numbered 0001-0099; 0100 and up belong to generated projects"
+      fail=1
+    fi
+  done
+fi
 
 # --- every .claude/rules 'paths:' glob points at an existing, non-empty base directory ---
 # (The failure mode this guards against is a renamed directory silently unloading a rule, so a

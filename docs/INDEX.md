@@ -15,7 +15,10 @@ Agent entry point — read only what the task needs.
 - [releasing.md](releasing.md) — releasing the template package: CHANGELOG section, dry run, tag, nuget.org trusted publishing, recovery
 <!--#endif -->
 
-## Decisions (docs/adr/)
+## Template decisions (docs/adr/, 0001–0099)
+
+Numbered by the template and updated by template upgrades; record your own from 0100 (the `new-adr` skill).
+
 - [0001](adr/0001-record-architecture-decisions.md) — record ADRs
 - [0002](adr/0002-infrastructure-persistence-split.md) — Infrastructure ∥ Persistence peer projects
 - [0003](adr/0003-hand-rolled-cqrs.md) — hand-rolled CQRS handlers + decorator pipeline (no mediator)
@@ -41,3 +44,7 @@ Agent entry point — read only what the task needs.
 - [0023](adr/0023-outbox-lease-and-checkpoints.md) — outbox processor semantics: lease-based claim with dispatch outside the transaction, per-handler checkpoints, token-keyed cancellation, validated `Outbox` options, backlog gauges, SQL re-drive runbook
 - [0024](adr/0024-problem-details-v2.md) — problem details v2: `code`/`type`/`correlationId`/`instance` on every problem, human titles, `errors[]` of `{field, code, description}`, one writer (`CustomResults` + `ProblemCatalog`/`WriteProblemAsync`), status-code pages, malformed requests as 400 problems
 - [0025](adr/0025-openapi-truth.md) — OpenAPI truth: one generated document per API version (transformers, no versioning-OpenAPI package), `operationId` = endpoint class, problem responses by shape from the Contracts schema, conditional GET and paging declared as served, typed status/money/version, snapshot-gated committed document
+
+## Project decisions (docs/adr/, 0100 and up)
+
+None yet: the first decision this project records takes number 0100.
