@@ -15,4 +15,4 @@ Depends on Domain + SharedKernel only — never Infrastructure, Persistence, EF,
 - **Domain-event handlers** implement `IDomainEventHandler<TEvent>` in `Features/{Feature}/EventHandlers/`.
 - Registration is automatic (Scrutor scan + decorator pipeline in `DependencyInjection.cs`) — no manual DI lines per handler.
 
-Decorator pipeline order: Validation → Logging → UnitOfWork → handler.
+Decorator pipeline: Logging → Tracing → Validation → UnitOfWork → handler (queries skip UnitOfWork). Every invocation writes one outcome line in the `UseCase` scope: Information for success and for classified expected failures, Warning for `ErrorType.Failure`, Error only when the use case throws. Handlers do not log their own outcomes.
