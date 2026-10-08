@@ -152,7 +152,9 @@ public sealed partial class ConventionTests
         // A downstream HttpClient timeout is an OperationCanceledException too. A filter keyed on the
         // TYPE alone lets that fault escape the outbox (no attempt counted, the host stops) and the
         // decorators (no use-case log line). The rule: "e is not OperationCanceledException ||
-        // !ourToken.IsCancellationRequested", keyed on the host/request token, never a linked one.
+        // !ourToken.IsCancellationRequested", keyed on the host/request token, never a linked one — so the
+        // token must be one of the sanctioned names, which only ever hold the token handed in by the host
+        // or the request.
         List<(SourceFile File, Match Filter)> typeFilters = [.. RepositorySource.CSharpFiles("src", "tools")
             .SelectMany(static file => CatchFilter().Matches(file.Code)
                 .Where(static m => m.Value.Contains("is not OperationCanceledException", StringComparison.Ordinal))
@@ -162,7 +164,11 @@ public sealed partial class ConventionTests
         typeFilters
             .Where(static f => !TokenKeyedCancellationFilter().IsMatch(f.Filter.Value))
             .Select(static f => $"{f.File.RelativePath}:{f.File.LineOf(f.Filter.Index)}: {f.Filter.Value}")
-            .ShouldBeEmpty("write the filter as `when (e is not OperationCanceledException || !token.IsCancellationRequested)`");
+            .ShouldBeEmpty(
+                "write the filter as `when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)` " +
+                "(stoppingToken in a background service), keyed on the token the host or the request handed in. " +
+                "A linked token such as dispatch.Token is refused: it also fires on a budget or timeout, so the filter " +
+                "would let a retryable failure escape as if the host were stopping");
     }
 
     [Fact]
@@ -199,7 +205,8 @@ public sealed partial class ConventionTests
     [GeneratedRegex(@"\bwhen\s*\((?>[^()]+|\((?<depth>)|\)(?<-depth>))*(?(depth)(?!))\)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex CatchFilter();
 
-    [GeneratedRegex(@"is not OperationCanceledException\s*\|\|\s*!\s*[\w.]+\.IsCancellationRequested\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    /// <summary>The type check widened by the host/request token — by name: <c>cancellationToken</c> or <c>stoppingToken</c>, nothing linked.</summary>
+    [GeneratedRegex(@"is not OperationCanceledException\s*\|\|\s*!\s*(?:cancellationToken|stoppingToken)\.IsCancellationRequested\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex TokenKeyedCancellationFilter();
 
     [GeneratedRegex(@"\.IgnoreQueryFilters\(\s*\)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
