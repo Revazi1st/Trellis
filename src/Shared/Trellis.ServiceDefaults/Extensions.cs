@@ -116,8 +116,8 @@ public static class Extensions
 
         KeyValuePair<string, object>[] attributes =
         [
-            new("service.version", ServiceVersion()),
-            new("deployment.environment.name", builder.Environment.EnvironmentName),
+            KeyValuePair.Create<string, object>("service.version", ServiceVersion()),
+            KeyValuePair.Create<string, object>("deployment.environment.name", builder.Environment.EnvironmentName),
         ];
         resource.AddAttributes(attributes.Where(attribute => !setByDeployer.Contains(attribute.Key)));
     }
