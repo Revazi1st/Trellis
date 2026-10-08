@@ -7,6 +7,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Core\Trellis.Application\Trellis.Application.csproj" />
     <ProjectReference Include="..\..\..\Core\Trellis.SharedKernel\Trellis.SharedKernel.csproj" />
+    <!-- The wire records the host plumbing writes (ProblemResponse/FieldError, ApiHeaders) live in the public
+         contracts, so server, document and clients share one type (ADR-0024). Contracts is a BCL-only leaf;
+         the dependency still points inward: Api → Api.Common → Api.Contracts ← UI.Common. -->
+    <ProjectReference Include="..\Trellis.Api.Contracts\Trellis.Api.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

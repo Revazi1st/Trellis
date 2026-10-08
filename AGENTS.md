@@ -19,7 +19,7 @@ docker build -t trellis-sdk:10.0 scripts/sdk-image   # one-time
 ## Dependency flow (architecture-test enforced)
 
 ```
-SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Api → Api.Common
+SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Api → Api.Common → Api.Contracts
 Api → Api.Contracts ← UI.Common ;  UI.Web → UI.Common
 ```
 

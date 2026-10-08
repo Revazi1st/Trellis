@@ -3,7 +3,10 @@ using Xunit;
 
 namespace Trellis.ArchitectureTests;
 
-/// <summary>Enforces the dependency flow: SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Presentation.</summary>
+/// <summary>
+/// Enforces the dependency flow: SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Presentation,
+/// and inside Presentation Api → Api.Common → Api.Contracts ← UI.Common (Contracts is the BCL-only leaf both halves share).
+/// </summary>
 public sealed class LayerDependencyTests
 {
     [Fact]
@@ -98,6 +101,8 @@ public sealed class LayerDependencyTests
                 Architecture.Application,
                 Architecture.Infrastructure,
                 Architecture.Persistence,
+                Architecture.Presentation + ".Common",   // Api.Common references Contracts, never the reverse (ADR-0024)
+                Architecture.Ui,
                 Architecture.EntityFramework,
                 Architecture.AspNetCore)
             .GetResult()
