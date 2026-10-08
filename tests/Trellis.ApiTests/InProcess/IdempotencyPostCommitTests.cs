@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using Trellis.Api.Common.Idempotency;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
 using Xunit;
@@ -10,15 +11,16 @@ using Xunit;
 namespace Trellis.ApiTests.InProcess;
 
 /// <summary>
-/// The idempotency filter releases a key on ANY exception — right before the commit, wrong after it. So
-/// nothing an endpoint does after its command committed may throw for an aborted request: the read-cache
-/// invalidation takes <see cref="CancellationToken.None"/>. Proven on a derived host whose cache cancels
-/// whenever it is handed a cancellable token, exactly what a client disconnect after the commit does.
+/// Nothing an endpoint does after its command committed may throw for an aborted request: the read-cache
+/// invalidation takes <see cref="CancellationToken.None"/>. A throw there would end the request with a 500
+/// after the reservation committed, and the client's retry would get a 409 instead of the stored 204
+/// (ADR-0018). Proven on a derived host whose cache cancels whenever it is handed a cancellable token,
+/// exactly what a client disconnect after the commit does.
 /// </summary>
 public sealed class IdempotencyPostCommitTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     [Fact]
-    public async Task A_request_aborted_after_its_commit_keeps_the_key_and_the_retry_is_a_duplicate()
+    public async Task A_request_aborted_after_its_commit_keeps_the_key_and_the_retry_replays_the_204()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient healthy = await factory.CreateAdminClientAsync(ct);
@@ -31,10 +33,10 @@ public sealed class IdempotencyPostCommitTests(ApiFactory factory) : IClassFixtu
         // The command commits; the post-commit invalidation must not be cancellable by the request.
         (await AddLineAsync(aborting, invoiceId, key, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // The client never saw that 204 and retries with the same key: a duplicate, not a second line.
+        // The client never saw that 204 and retries with the same key: the stored 204 again, not a second line.
         HttpResponseMessage retry = await AddLineAsync(aborting, invoiceId, key, ct);
-        retry.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        (await retry.Content.ReadAsStringAsync(ct)).ShouldContain("Duplicate request");
+        retry.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        retry.Headers.GetValues(IdempotencyFilter.ReplayedHeaderName).ShouldHaveSingleItem().ShouldBe("true");
 
         InvoiceDto invoice = (await healthy.GetFromJsonAsync<InvoiceDto>($"/api/v1/invoices/{invoiceId}", ct)).ShouldNotBeNull();
         invoice.Lines.ShouldHaveSingleItem().Description.ShouldBe("Post-commit");
