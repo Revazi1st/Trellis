@@ -20,9 +20,6 @@ builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trell
     ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
 builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
 
-builder.Services.AddOpenTelemetry()
-    .WithTracing(static tracing => tracing.AddSource(MigrationWorker.ActivitySourceName));
-
 // Validated at boot, like every options type: an e-mail typo, a short password or an over-long tenant id
 // stops the worker here, naming the key, instead of seeding an admin nobody can sign in as. The worker
 // takes the plain POCO.
