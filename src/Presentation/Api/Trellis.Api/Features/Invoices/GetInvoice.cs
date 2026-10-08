@@ -15,9 +15,8 @@ namespace Trellis.Api.Features.Invoices;
 
 internal sealed class GetInvoice : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapGet("invoices/{id}", Handle)
-        .WithName(InvoiceEndpoints.GetInvoiceRouteName)
         .RequirePermission(Permissions.Invoices.Read)
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Get one invoice with its lines")

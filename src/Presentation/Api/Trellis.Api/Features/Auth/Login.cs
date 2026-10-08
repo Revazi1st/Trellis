@@ -10,7 +10,7 @@ namespace Trellis.Api.Features.Auth;
 
 internal sealed class Login : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapPost("auth/login", Handle)
         .AllowAnonymous()
         .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)

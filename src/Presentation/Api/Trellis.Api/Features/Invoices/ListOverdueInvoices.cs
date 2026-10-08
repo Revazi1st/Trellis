@@ -14,7 +14,7 @@ namespace Trellis.Api.Features.Invoices;
 
 internal sealed class ListOverdueInvoices : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapGet("invoices/overdue", Handle)
         .RequirePermission(Permissions.Invoices.Read)
         .WithTags(InvoiceEndpoints.Tag)

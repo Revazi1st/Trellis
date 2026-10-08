@@ -15,7 +15,7 @@ namespace Trellis.Api.Features.Invoices;
 
 internal sealed class IssueInvoice : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapPost("invoices/{id}/issue", Handle)
         .RequirePermission(Permissions.Invoices.Write)
         .RequireIdempotency()
