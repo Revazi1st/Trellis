@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
@@ -37,8 +36,9 @@ internal sealed class ExchangeRateClient(HttpClient httpClient, ILogger<Exchange
         string quoteCurrency,
         CancellationToken cancellationToken)
     {
+        // Frankfurter v2: no date means the latest published rates.
         string requestUri =
-            $"latest?base={Uri.EscapeDataString(baseCurrency)}&symbols={Uri.EscapeDataString(quoteCurrency)}";
+            $"rates?base={Uri.EscapeDataString(baseCurrency)}&quotes={Uri.EscapeDataString(quoteCurrency)}";
 
         try
         {
@@ -101,10 +101,16 @@ internal sealed class ExchangeRateClient(HttpClient httpClient, ILogger<Exchange
             return Result.Failure<decimal>(ExchangeRateErrors.Unavailable);
         }
 
-        ExchangeRateResponse? payload = await response.Content
-            .ReadFromJsonAsync<ExchangeRateResponse>(SerializerOptions, cancellationToken);
+        // The root's kind decides how the body is read: Frankfurter answers an array, while a provider that
+        // wraps its failures in a 200 answers an object. Anything unparsable throws JsonException, which the
+        // caller maps to MalformedResponse.
+        await using Stream content = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using JsonDocument body = await JsonDocument.ParseAsync(content, cancellationToken: cancellationToken);
+        JsonElement root = body.RootElement;
 
-        if (payload is { Success: false })
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("success", out JsonElement success)
+            && success.ValueKind == JsonValueKind.False)
         {
             // Some providers report their own failures (missing access key, exhausted quota) as a 200
             // whose body says success:false. That is the provider declining to answer, not a shape we
@@ -114,28 +120,34 @@ internal sealed class ExchangeRateClient(HttpClient httpClient, ILogger<Exchange
             return Result.Failure<decimal>(ExchangeRateErrors.Unavailable);
         }
 
-        if (payload?.Rates is null)
+        if (root.ValueKind != JsonValueKind.Array)
         {
             return Result.Failure<decimal>(ExchangeRateErrors.MalformedResponse);
         }
 
-        return payload.Rates.TryGetValue(quoteCurrency, out decimal rate)
-            ? Result.Success(rate)
-            : Result.Failure<decimal>(ExchangeRateErrors.UnknownCurrency(quoteCurrency));
+        RateQuote? quote = root.Deserialize<RateQuote[]>(SerializerOptions)?
+            .FirstOrDefault(entry => string.Equals(entry.Quote, quoteCurrency, StringComparison.Ordinal));
+
+        return quote switch
+        {
+            // Asked for, not answered: the feed does not publish that currency.
+            null => Result.Failure<decimal>(ExchangeRateErrors.UnknownCurrency(quoteCurrency)),
+            { Rate: { } rate } => Result.Success(rate),
+            _ => Result.Failure<decimal>(ExchangeRateErrors.MalformedResponse),
+        };
     }
 
-    /// <summary>Wire shape of the provider's /latest response; kept private so the third party's schema never leaks inward.</summary>
-    private sealed record ExchangeRateResponse
+    /// <summary>
+    /// One element of the provider's <c>/v2/rates</c> answer
+    /// (<c>[{"date":"…","base":"EUR","quote":"USD","rate":1.08}]</c>); kept private so the third party's
+    /// schema never leaks inward. Only the fields the port needs are read.
+    /// </summary>
+    private sealed record RateQuote
     {
-        /// <summary>
-        /// Absent on providers that signal failure with a status code (Frankfurter); present on those
-        /// that wrap failures in a 200 (<c>{"success":false,"error":{...}}</c>). Only an explicit
-        /// <c>false</c> is a failure — a missing field is not.
-        /// </summary>
-        [JsonPropertyName("success")]
-        public bool? Success { get; init; }
+        [JsonPropertyName("quote")]
+        public string? Quote { get; init; }
 
-        [JsonPropertyName("rates")]
-        public Dictionary<string, decimal>? Rates { get; init; }
+        [JsonPropertyName("rate")]
+        public decimal? Rate { get; init; }
     }
 }

@@ -14,12 +14,13 @@ public sealed class ExchangeRateOptions
 
     /// <summary>
     /// Provider root; a trailing slash is added if missing, so relative paths resolve beneath it. The
-    /// default is Frankfurter (ECB reference rates, no access key); its <c>latest?base=&amp;symbols=</c>
-    /// answer is what <see cref="ExchangeRateClient"/> reads.
+    /// default is Frankfurter's v2 API (ECB reference rates, no access key); its
+    /// <c>rates?base=&amp;quotes=</c> answer is what <see cref="ExchangeRateClient"/> reads. (v1 is
+    /// deprecated: it answers with a <c>Deprecation</c> header and a successor link to <c>/v2/rates</c>.)
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [Url]
-    public string BaseUrl { get; init; } = "https://api.frankfurter.dev/v1/";
+    public string BaseUrl { get; init; } = "https://api.frankfurter.dev/v2/";
 
     /// <summary>
     /// Per-attempt timeout. This drives the resilience handler's attempt timeout rather than
