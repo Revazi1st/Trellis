@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,9 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next, ILogger<Correl
 {
     public const string HeaderName = "X-Correlation-ID";
 
+    /// <summary>The <see cref="HttpContext.Items"/> key under which the id is kept for the rest of the request (problem documents read it back).</summary>
+    public const string ItemKey = "CorrelationId";
+
     /// <summary>The span attribute carrying the id, so logs and the trace join without a timestamp search.</summary>
     public const string SpanAttribute = "trellis.correlation_id";
 
@@ -37,16 +41,40 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next, ILogger<Correl
                 ? inbound.ToString()
                 : ServerSideId(context);
 
+        context.Items[ItemKey] = correlationId;
         context.Response.Headers[HeaderName] = correlationId;
+
+        // Re-assert the header when the response starts: the exception-handler middleware clears the
+        // response (headers included) before it writes its problem document, and that document carries
+        // the correlationId — the header must still say the same thing.
+        context.Response.OnStarting(static state =>
+        {
+            (HttpResponse response, string id) = ((HttpResponse, string))state;
+            response.Headers[HeaderName] = id;
+            return Task.CompletedTask;
+        }, (context.Response, correlationId));
 
         // Tag the span too: without this the id exists in logs but not in the trace, and the two
         // can only be joined by timestamp.
         Activity.Current?.SetTag(SpanAttribute, correlationId);
 
-        using (logger.BeginScope(new Dictionary<string, object>(StringComparer.Ordinal) { ["CorrelationId"] = correlationId }))
+        using (logger.BeginScope(new Dictionary<string, object>(StringComparer.Ordinal) { [ItemKey] = correlationId }))
         {
             await next(context);
         }
+    }
+
+    /// <summary>The request's correlation id, once the middleware has run.</summary>
+    public static bool TryGet(HttpContext context, [NotNullWhen(true)] out string? correlationId)
+    {
+        if (context.Items.TryGetValue(ItemKey, out object? value) && value is string id)
+        {
+            correlationId = id;
+            return true;
+        }
+
+        correlationId = null;
+        return false;
     }
 
     /// <summary>The request's W3C trace id; Kestrel's request identifier only when there is no W3C activity.</summary>

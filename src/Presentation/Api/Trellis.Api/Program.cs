@@ -96,6 +96,11 @@ app.UseCorrelationId();
 
 app.UseExceptionHandler();
 
+// A response that would leave with a status and no body (an unknown route's 404, a 405, the request-timeout
+// 504, Kestrel's 413) gets the same problem document as everything else; responses that already wrote a
+// body — the challenge 401, the 403, the 429, every Result-produced problem — are untouched (ADR-0024).
+app.UseStatusCodePages();
+
 app.UseApiHardening();
 
 app.MapDefaultEndpoints();

@@ -12,7 +12,7 @@ Trellis is a rich-DDD, Clean Architecture .NET 10 solution. Projects are grouped
         │  Infrastructure   Persistence ─────┘    peers, never reference each other — ADR-0002)
         │
         └──────── Presentation ────────────────
-             Api ──► Api.Common
+             Api ──► Api.Common ──► Api.Contracts
              Api ──► Api.Contracts ◄── UI.Common ◄── UI.Web
              Shared: ServiceDefaults (Aspire) — referenced by hosts
 ```

@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using Shouldly;
+using Trellis.Api.Common.Http;
 using Trellis.Api.Contracts.Auth;
+using Trellis.Api.Contracts.Common;
 using Xunit;
 
 namespace Trellis.ApiTests.InProcess;
@@ -36,7 +38,14 @@ public sealed class AuthRateLimitTests(ApiFactory factory) : IClassFixture<ApiFa
         throttled.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
         throttled.Headers.RetryAfter.ShouldNotBeNull().Delta.ShouldNotBeNull().ShouldBeGreaterThan(TimeSpan.Zero);
         throttled.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
-        (await throttled.Content.ReadAsStringAsync(ct)).ShouldContain("\"status\":429");
+
+        // The limiter's rejection is written through IProblemDetailsService like every other problem (ADR-0024).
+        ProblemResponse problem = (await throttled.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();
+        problem.Status.ShouldBe(429);
+        problem.Code.ShouldBe("RateLimit.Exceeded");
+        problem.Type.ShouldBe(ProblemTypes.For("RateLimit.Exceeded"));
+        problem.TraceId.ShouldNotBeNullOrWhiteSpace();
+        problem.CorrelationId.ShouldBe(throttled.Headers.GetValues(CorrelationIdMiddleware.HeaderName).Single());
     }
 
     [Fact]

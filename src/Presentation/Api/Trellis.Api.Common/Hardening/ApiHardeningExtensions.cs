@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Trellis.Api.Common.Http;
 using IPNetwork = System.Net.IPNetwork;
 
 namespace Trellis.Api.Common.Hardening;
@@ -176,25 +177,19 @@ public static class ApiHardeningExtensions
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
         // A bodyless 429 leaves clients guessing; RFC 9457 + Retry-After lets them back off correctly.
-        options.OnRejected = static async (context, cancellationToken) =>
+        // Written through IProblemDetailsService like every other problem (ADR-0024), so it carries
+        // code, type, correlationId and traceId.
+        options.OnRejected = static async (context, _) =>
         {
-            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
+            TimeSpan? retryAfter = null;
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan wait))
             {
+                retryAfter = wait;
                 context.HttpContext.Response.Headers.RetryAfter =
-                    ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    ((int)Math.Ceiling(wait.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
 
-            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            await context.HttpContext.Response.WriteAsJsonAsync(
-                new Microsoft.AspNetCore.Mvc.ProblemDetails
-                {
-                    Title = "Too many requests",
-                    Detail = "Rate limit exceeded. Retry after the interval in the Retry-After header.",
-                    Status = StatusCodes.Status429TooManyRequests,
-                },
-                options: null,
-                contentType: "application/problem+json",
-                cancellationToken);
+            await context.HttpContext.WriteProblemAsync(ProblemCatalog.RateLimited(retryAfter));
         };
 
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>

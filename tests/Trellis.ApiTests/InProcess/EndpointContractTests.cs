@@ -64,10 +64,12 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
         (await PostCreateAsync(admin, key, new CreateInvoiceRequest("Idempotent Inc", "i@i.co", "USD"), ct))
             .StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        // Same caller + route + key → duplicate.
+        // Same caller + route + key → duplicate, reported through the same problem seam as any endpoint error.
         HttpResponseMessage duplicate = await PostCreateAsync(admin, key, new CreateInvoiceRequest("Idempotent Inc", "i@i.co", "USD"), ct);
         duplicate.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        (await duplicate.Content.ReadAsStringAsync(ct)).ShouldContain("Duplicate request");
+        ProblemResponse problem = (await duplicate.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();
+        problem.Status.ShouldBe((int)HttpStatusCode.Conflict);
+        problem.Code.ShouldBe("Idempotency.Duplicate");
 
         // A failed command must release the key (this codebase returns Results, it doesn't throw)…
         string retriedKey = Guid.NewGuid().ToString();
@@ -108,7 +110,9 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
         // The caller asked for the guarantee; running the command without it would be the silent failure.
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
-        (await response.Content.ReadAsStringAsync(ct)).ShouldContain("Invalid Idempotency-Key");
+        ProblemResponse problem = (await response.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();
+        problem.Code.ShouldBe("Idempotency.InvalidKey");
+        problem.Detail.ShouldNotBeNull().ShouldContain("blank");
     }
 
     [Fact]

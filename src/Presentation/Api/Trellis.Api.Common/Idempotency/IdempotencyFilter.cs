@@ -3,6 +3,8 @@ using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Trellis.Api.Common.Results;
+using Trellis.Api.Contracts.Common;
 using Trellis.Application.Abstractions;
 
 namespace Trellis.Api.Common.Idempotency;
@@ -16,11 +18,12 @@ namespace Trellis.Api.Common.Idempotency;
 /// reports expected failures as Results, ADR-0004) — releases the key so the request can be retried.
 /// The filter cannot tell an exception before the commit from one after it, so everything an endpoint
 /// does after its command succeeded is post-commit work that must not throw for an aborted request: it
-/// takes <see cref="CancellationToken.None"/>. (Response replay is the evolution.)
+/// takes <see cref="CancellationToken.None"/>. (Response replay is the evolution.) Its own outcomes are
+/// <see cref="IdempotencyErrors"/> written through <see cref="CustomResults"/>, like any endpoint's.
 /// </summary>
 public sealed class IdempotencyFilter : IEndpointFilter
 {
-    public const string HeaderName = "Idempotency-Key";
+    public const string HeaderName = ApiHeaders.IdempotencyKey;
     public const int MaxKeyLength = 128;
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
@@ -37,18 +40,12 @@ public sealed class IdempotencyFilter : IEndpointFilter
         {
             // The caller asked for the guarantee and sent nothing usable: running without it would turn
             // the caller's retry into a second apply.
-            return TypedResults.Problem(
-                title: "Invalid Idempotency-Key",
-                detail: $"The {HeaderName} header must not be blank. Omit it to send the request without idempotency.",
-                statusCode: StatusCodes.Status400BadRequest);
+            return CustomResults.Problem(IdempotencyErrors.BlankKey);
         }
 
         if (clientKey.Length > MaxKeyLength)
         {
-            return TypedResults.Problem(
-                title: "Invalid Idempotency-Key",
-                detail: $"The {HeaderName} header must be at most {MaxKeyLength} characters long.",
-                statusCode: StatusCodes.Status400BadRequest);
+            return CustomResults.Problem(IdempotencyErrors.KeyTooLong(MaxKeyLength));
         }
 
         // Hashing the (user, route, key) composite gives the stored key a fixed length and keeps the
@@ -61,10 +58,7 @@ public sealed class IdempotencyFilter : IEndpointFilter
 
         if (!await store.TryReserveAsync(key, http.RequestAborted))
         {
-            return TypedResults.Problem(
-                title: "Duplicate request",
-                detail: "A request with this Idempotency-Key has already been processed.",
-                statusCode: StatusCodes.Status409Conflict);
+            return CustomResults.Problem(IdempotencyErrors.Duplicate);
         }
 
         try
