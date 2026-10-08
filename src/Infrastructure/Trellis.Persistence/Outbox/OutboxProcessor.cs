@@ -212,7 +212,7 @@ internal sealed class OutboxProcessor(
         // or CompletedHandlers column that does not parse. No retry can fix either, so the row is
         // dead-lettered at once with Attempts untouched, and the rest of the batch goes on.
         Result<Materialized> materialized = Materialize(message);
-        string? outcome;
+        string outcome;
         if (materialized.IsFailure)
         {
             string reason = string.Equals(materialized.Error.Code, OutboxErrors.UnknownEventTypeCode, StringComparison.Ordinal)
@@ -227,16 +227,16 @@ internal sealed class OutboxProcessor(
             outcome = await DispatchAsync(scope.ServiceProvider, context, message, materialized.Value, activity, stoppingToken);
         }
 
-        // No outcome means the host stopped mid-dispatch: the caller hands the lease back, and an
-        // interrupted dispatch is not a duration to measure.
-        if (outcome is not null)
-        {
-            metrics.DispatchDuration(message.Type, timeProvider.GetElapsedTime(started), outcome);
-        }
+        // Only booked outcomes get here: a stopping host's cancellation propagates out of DispatchAsync
+        // (the caller hands the lease back), and an interrupted dispatch is not a duration to measure.
+        metrics.DispatchDuration(message.Type, timeProvider.GetElapsedTime(started), outcome);
     }
 
-    /// <summary>Runs the handlers under the budget and the originating tenant and books the outcome; null when the host stopped mid-dispatch.</summary>
-    private async Task<string?> DispatchAsync(
+    /// <summary>
+    /// Runs the handlers under the budget and the originating tenant and books the outcome, which it
+    /// returns. A stopping host's cancellation is not an outcome: it propagates instead.
+    /// </summary>
+    private async Task<string> DispatchAsync(
         IServiceProvider services, AppDbContext context, OutboxMessage message, Materialized materialized, Activity? activity, CancellationToken stoppingToken)
     {
         (IDomainEvent domainEvent, HashSet<string> completed) = materialized;
