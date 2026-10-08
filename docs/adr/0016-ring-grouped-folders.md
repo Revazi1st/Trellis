@@ -21,5 +21,5 @@ Group projects under `src/` by architectural ring, and mirror the layout with so
 ## Consequences
 
 - A path names its ring: `src/Core/...` is inside the onion, `src/Presentation/...` is an adapter.
-- Matches the user's mental model and keeps the `.slnx` solution tree tidy.
+- Matches how the template authors (and most readers) think about the rings, and keeps the `.slnx` solution tree tidy.
 - Folder depth is one level deeper than a flat layout — csproj relative paths account for it.

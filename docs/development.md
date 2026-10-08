@@ -169,12 +169,16 @@ Because this adds a column, **regenerate the initial migration** in the generate
 ## UI tests (optional)
 
 Generate with `--include-ui-tests` to add `tests/Trellis.UiTests` (Playwright). The project always
-builds, but the browser tests are **opt-in at run time** — they need real browsers and a running app:
+builds, but the browser tests are **opt-in at run time** — they need real browsers and a running app
+at a known address. `UI_TESTS_BASE_URL` names it (default `https://localhost:7170`, the web host's
+`https` launch profile). `aspire run` gives the web host a port of its own choosing, so either copy the
+`web` URL from the dashboard into `UI_TESTS_BASE_URL`, or run the projects from their launch profiles
+(migration job, then the API's and the web host's `https` profiles) so the default fits:
 
 ```bash
-aspire run                                    # in another terminal
-pwsh artifacts/bin/Trellis.UiTests/debug/playwright.ps1 install chromium
-RUN_UI_TESTS=1 dotnet test tests/Trellis.UiTests
+dotnet build tests/Trellis.UiTests                                        # creates playwright.ps1
+pwsh artifacts/bin/Trellis.UiTests/debug/playwright.ps1 install chromium  # once
+RUN_UI_TESTS=1 UI_TESTS_BASE_URL=http://localhost:5170 dotnet test tests/Trellis.UiTests   # the http profile
 ```
 
 Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-free

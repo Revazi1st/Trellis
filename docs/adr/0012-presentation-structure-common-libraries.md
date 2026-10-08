@@ -5,7 +5,7 @@
 
 ## Context
 
-The user wants a Presentation layer with `Api/` and `UI/` folders, each with a `Common` class library, so that if a second API (or UI) is added, shared plumbing has a home rather than being duplicated or dumped into one host.
+The template authors wanted a Presentation layer with `Api/` and `UI/` folders, each with a `Common` class library, so that if a second API (or UI) is added, shared plumbing has a home rather than being duplicated or dumped into one host.
 
 ## Decision
 

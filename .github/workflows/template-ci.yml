@@ -77,7 +77,8 @@ jobs:
           prune=(-path ./.git -o -path ./artifacts -o -name bin -o -name obj)
           skip=(--exclude-dir=.git --exclude-dir=artifacts --exclude-dir=bin --exclude-dir=obj)
 
-          names=$(find . \( "${prune[@]}" \) -prune -o -iname '*trellis*' -print)
+          # The provenance marker is named after the template on purpose (checked in the leftovers step).
+          names=$(find . \( "${prune[@]}" \) -prune -o -iname '*trellis*' ! -path ./.trellis-template.json -print)
           if [ -n "$names" ]; then
             echo "::error::Generated files or directories still named after the template:"
             echo "$names"
@@ -119,27 +120,69 @@ jobs:
         working-directory: ../generated
         run: docker run --rm -v "$PWD:/repo" --workdir /repo "$ACTIONLINT_IMAGE" -color .github/workflows/*.yml
 
-      # Informational until the template's own name and the maintainer handle are cleaned out of
-      # the shipped docs; then drop continue-on-error so this gates like the step above.
-      - name: Template name leftovers (informational)
-        continue-on-error: true
+      # A generated project is the consumer's, not a copy of the template's repository: no line may
+      # name the template or its maintainer except the two that must. LICENSE is the template's MIT
+      # notice, copied verbatim (its copyright line), and the provenance marker records the template
+      # package and repository (the marker file, and prose naming it). The project gets its own
+      # README and an empty CHANGELOG instead of the maintainer's, and none of the template's
+      # governance files; the marker records exactly the options this leg passed.
+      - name: Template name leftovers and consumer files
         working-directory: ../generated
+        env:
+          LEG: ${{ matrix.name }}
+          ARGS: ${{ matrix.args }}
         run: |
-          hits=$(grep -rIniE --exclude-dir=.git --exclude-dir=artifacts --exclude-dir=bin --exclude-dir=obj 'trellis|Revazi1st' . || true)
-          if [ -z "$hits" ]; then
-            echo "No 'trellis' or 'Revazi1st' left in the generated output." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+          fail=0
+          marker=.trellis-template.json
+
+          hits=$(grep -rIniE --exclude-dir=.git --exclude-dir=artifacts --exclude-dir=bin --exclude-dir=obj \
+                   --exclude="$marker" 'trellis|Revazi1st' . \
+                 | grep -vE '^\./LICENSE:[0-9]+:Copyright \(c\) [0-9]{4} Trellis contributors$' \
+                 | sed 's/\.trellis-template\.json//g' \
+                 | grep -iE 'trellis|Revazi1st' || true)
+          if [ -n "$hits" ]; then
+            count=$(printf '%s\n' "$hits" | wc -l | tr -d ' ')
+            {
+              echo "### $LEG: $count line(s) still mention 'trellis' or 'Revazi1st'"
+              echo
+              echo '```text'
+              printf '%s\n' "$hits" | head -n 300
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$count line(s) in the generated output still name the template or its maintainer (see the job summary)."
+            fail=1
           fi
-          count=$(printf '%s\n' "$hits" | wc -l | tr -d ' ')
-          {
-            echo "### ${{ matrix.name }}: $count line(s) still mention 'trellis' or 'Revazi1st'"
-            echo
-            echo '```text'
-            printf '%s\n' "$hits" | head -n 300
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "::warning::$count line(s) in the generated output still mention 'trellis' or 'Revazi1st' (see the job summary)."
-          exit 1
+
+          if ! jq -e '.template.package != "" and .template.version != "" and (.options | type == "object")' "$marker" > /dev/null; then
+            echo "::error::$marker is missing or does not record the template and its options."
+            fail=1
+          fi
+          read -r -a passed <<< "$ARGS"
+          for ((i = 0; i + 1 < ${#passed[@]}; i += 2)); do
+            flag="${passed[i]}"
+            value="${passed[i + 1]}"
+            if ! jq -e --arg k "${flag#--}" --argjson v "$value" '.options[$k] == $v' "$marker" > /dev/null; then
+              echo "::error::$marker does not record '$flag $value', which this leg passed."
+              fail=1
+            fi
+          done
+
+          if [ "$(grep -c '^## \[' CHANGELOG.md)" != 1 ] || ! grep -qx '## \[Unreleased\]' CHANGELOG.md; then
+            echo "::error::The generated CHANGELOG.md must start empty: one '## [Unreleased]' heading and nothing released."
+            fail=1
+          fi
+          if ! grep -qF "$marker" README.md; then
+            echo "::error::The generated README.md is not the consumer stub (it does not name $marker)."
+            fail=1
+          fi
+          for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md; do
+            if [ -e "$f" ]; then
+              echo "::error::$f is the template's own governance material and must not ship."
+              fail=1
+            fi
+          done
+
+          exit "$fail"
 
       - name: Regenerate the initial migration
         if: ${{ matrix.regenerate-migration }}

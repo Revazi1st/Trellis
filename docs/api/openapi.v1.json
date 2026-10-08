@@ -25,7 +25,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -44,7 +44,15 @@
         },
         "responses": {
           "204": {
-            "description": "No Content"
+            "description": "No Content",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "`true` when this response is the stored outcome of an earlier request with the same Idempotency-Key, not a new execution. Absent otherwise.",
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation failed or the request could not be read; `errors[]` names each offending field (`field` is null for a whole-request error).",
@@ -87,7 +95,17 @@
             }
           },
           "409": {
-            "description": "Duplicate request — this Idempotency-Key was already processed. The resource is not in a state that allows this operation, or it changed concurrently.",
+            "description": "Idempotency-Key conflict: the first request with this key is still running (`Idempotency.InFlight`, retry after `Retry-After`), or it completed but its response cannot be replayed (`Idempotency.Duplicate`: read the resource). The resource is not in a state that allows this operation, or it changed concurrently.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "This Idempotency-Key was already used for a different request — another method, path or body (`Idempotency.FingerprintMismatch`).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -136,7 +154,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -157,6 +175,12 @@
           "201": {
             "description": "Created",
             "headers": {
+              "Idempotency-Replayed": {
+                "description": "`true` when this response is the stored outcome of an earlier request with the same Idempotency-Key, not a new execution. Absent otherwise.",
+                "schema": {
+                  "type": "boolean"
+                }
+              },
               "Location": {
                 "description": "URL of the created resource.",
                 "schema": {
@@ -204,7 +228,17 @@
             }
           },
           "409": {
-            "description": "Duplicate request — this Idempotency-Key was already processed.",
+            "description": "Idempotency-Key conflict: the first request with this key is still running (`Idempotency.InFlight`, retry after `Retry-After`), or it completed but its response cannot be replayed (`Idempotency.Duplicate`: read the resource).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "This Idempotency-Key was already used for a different request — another method, path or body (`Idempotency.FingerprintMismatch`).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -377,7 +411,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -396,7 +430,15 @@
         },
         "responses": {
           "204": {
-            "description": "No Content"
+            "description": "No Content",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "`true` when this response is the stored outcome of an earlier request with the same Idempotency-Key, not a new execution. Absent otherwise.",
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation failed or the request could not be read; `errors[]` names each offending field (`field` is null for a whole-request error).",
@@ -439,7 +481,17 @@
             }
           },
           "409": {
-            "description": "Duplicate request — this Idempotency-Key was already processed. The resource is not in a state that allows this operation, or it changed concurrently.",
+            "description": "Idempotency-Key conflict: the first request with this key is still running (`Idempotency.InFlight`, retry after `Retry-After`), or it completed but its response cannot be replayed (`Idempotency.Duplicate`: read the resource). The resource is not in a state that allows this operation, or it changed concurrently.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "This Idempotency-Key was already used for a different request — another method, path or body (`Idempotency.FingerprintMismatch`).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -605,7 +657,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -614,7 +666,15 @@
         ],
         "responses": {
           "204": {
-            "description": "No Content"
+            "description": "No Content",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "`true` when this response is the stored outcome of an earlier request with the same Idempotency-Key, not a new execution. Absent otherwise.",
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation failed or the request could not be read; `errors[]` names each offending field (`field` is null for a whole-request error).",
@@ -657,7 +717,17 @@
             }
           },
           "409": {
-            "description": "Duplicate request — this Idempotency-Key was already processed. The resource is not in a state that allows this operation, or it changed concurrently.",
+            "description": "Idempotency-Key conflict: the first request with this key is still running (`Idempotency.InFlight`, retry after `Retry-After`), or it completed but its response cannot be replayed (`Idempotency.Duplicate`: read the resource). The resource is not in a state that allows this operation, or it changed concurrently.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "This Idempotency-Key was already used for a different request — another method, path or body (`Idempotency.FingerprintMismatch`).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -714,7 +784,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; retry attempts reuse it (scoped to caller + route). Replaying an already-completed request returns 409; a failed request releases the key.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -723,7 +793,15 @@
         ],
         "responses": {
           "204": {
-            "description": "No Content"
+            "description": "No Content",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "`true` when this response is the stored outcome of an earlier request with the same Idempotency-Key, not a new execution. Absent otherwise.",
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation failed or the request could not be read; `errors[]` names each offending field (`field` is null for a whole-request error).",
@@ -766,7 +844,17 @@
             }
           },
           "409": {
-            "description": "Duplicate request — this Idempotency-Key was already processed. The resource is not in a state that allows this operation, or it changed concurrently.",
+            "description": "Idempotency-Key conflict: the first request with this key is still running (`Idempotency.InFlight`, retry after `Retry-After`), or it completed but its response cannot be replayed (`Idempotency.Duplicate`: read the resource). The resource is not in a state that allows this operation, or it changed concurrently.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "This Idempotency-Key was already used for a different request — another method, path or body (`Idempotency.FingerprintMismatch`).",
             "content": {
               "application/problem+json": {
                 "schema": {

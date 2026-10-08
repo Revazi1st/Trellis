@@ -11,9 +11,9 @@ Mainstream Clean Architecture templates (Jason Taylor, Ardalis, SSW as of 2026) 
 
 `Trellis.Infrastructure` and `Trellis.Persistence` are **separate projects under `src/Infrastructure/`, and strict peers**: neither references the other. Both reference `Trellis.Application` and implement its ports.
 
-- Persistence owns: `AppDbContext` (+ ASP.NET Core Identity stores), entity configurations, interceptors (auditing, soft-delete, domain-event dispatch), query filters, repositories/specification evaluator, migrations, seeding, `IIdentityService`.
+- Persistence owns: `AppDbContext` (+ ASP.NET Core Identity stores), entity configurations, interceptors (auditing, soft-delete, and the domain-event outbox write that replaced in-transaction dispatch, ADR-0018), query filters, repositories/specification evaluator, migrations, seeding, `IIdentityService`.
 - Infrastructure owns: non-persistence adapters — JWT `ITokenProvider`, `IEmailSender`, `TimeProvider` registration.
-- The peer rule is enforced by an architecture test (M9).
+- The peer rule is enforced by an architecture test (`LayerDependencyTests`).
 
 ## Consequences
 

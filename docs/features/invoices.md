@@ -80,7 +80,33 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
 
 ## Tests
 
-`Domain.UnitTests/Invoices` (invariants, events, spec) · `Application.UnitTests/Invoices` (handlers + pipeline) · `IntegrationTests` (roundtrip, spec→SQL, interceptors, soft-delete, event→email; with multi-tenancy, `TenancyTests`: stamping, filtering, the aggregate-root convention, outbox tenant restore) · `ApiTests` (E2E lifecycle + error contracts; `CommitFailureTests`: a commit conflict is a 409 and a throwing commit an opaque 500, neither leaving a reservation; `IdempotencyReplayTests`: a retry replays the stored 201/204 with `Idempotency-Replayed`, a different body is a 422, two firsts held at a commit barrier yield one 201 and one 409 `Duplicate`, a request gated after its commit makes the retry a 409 `InFlight` until it completes, a failed command leaves no reservation, a response over the replay cap completes but its retry is a 409; `IdempotencyPostCommitTests`: a disconnect after the commit keeps the key and the retry replays the 204; `IdempotencyStoreTests` (IntegrationTests): the three lookup states, the PK race and retention against Postgres; `InvoiceReadCacheTests`: every write evicts the cached invoice and retires its ETag, a 404 is never cached; `InvoiceContractTests`: 304 for every matching `If-None-Match` form, paging bounds answer 400 naming the field, `Location` resolves; `OpenApiSnapshotTests` + `OpenApiDocumentTests`: the committed document is the served one and says all of this; with multi-tenancy, `TenantIsolationTests`: cross-tenant read/write 404, scoped overdue list, header ignored, cache scoped — all-options leg) · `ApiTests/Ui` (the forms' validator mirrors and due-date floor, `errors[]` placed under their inputs, success notifications).
+- `Domain.UnitTests/Invoices`: invariants, events, the overdue specification, ID parsing.
+- `Application.UnitTests/Invoices`: the handlers, and every use case through the real pipeline.
+- `IntegrationTests` against PostgreSQL: roundtrip, spec→SQL, interceptors, soft-delete, concurrency.
+  The outbox suites: `OutboxTests` (paying writes the event in the same transaction and the processor
+  sends the receipt after commit), `OutboxRetryTests` (back-off and the per-handler checkpoint, dead
+  letter on exhaustion, unknown types and poison payloads, two processors dispatching once, leases,
+  the dispatch timeout, a downstream cancellation as a retryable failure, a failed bookkeeping save
+  contained to its own message, the backlog gauges, leases released on stop), `OutboxBackoffTests`
+  (the 30 s → 15 min schedule and the derived lease) and `OutboxOptionsTests` (the `Outbox` section's
+  defaults and limits). `IdempotencyStoreTests`: the three lookup states, the primary-key race and
+  retention. With multi-tenancy, `TenancyTests`: stamping, filtering, the aggregate-root convention,
+  outbox tenant restore.
+- `ApiTests` (in-process, the real HTTP pipeline): the lifecycle and error contracts;
+  `CommitFailureTests` (a commit conflict is a 409 and a throwing commit an opaque 500, neither leaving
+  a reservation); `IdempotencyReplayTests` (a retry replays the stored 201/204 with
+  `Idempotency-Replayed`, a different body is a 422, two firsts held at a commit barrier yield one 201
+  and one 409 `Duplicate`, a request gated after its commit makes the retry a 409 `InFlight` until it
+  completes, a failed command leaves no reservation, a response over the replay cap completes but its
+  retry is a 409); `IdempotencyPostCommitTests` (a disconnect after the commit keeps the key and the
+  retry replays the 204); `InvoiceReadCacheTests` (every write evicts the cached invoice and retires its
+  ETag, a 404 is never cached); `InvoiceContractTests` (304 for every matching `If-None-Match` form,
+  paging bounds answer 400 naming the field, `Location` resolves); `OpenApiSnapshotTests` +
+  `OpenApiDocumentTests` (the committed document is the served one and says all of this); with
+  multi-tenancy, `TenantIsolationTests` (cross-tenant read/write 404, scoped overdue list, header
+  ignored, cache scoped; the all-options leg runs it). `InvoiceApiFlowTests` is the opt-in Aspire E2E.
+- `ApiTests/Ui`: the forms' validator mirrors and due-date floor, `errors[]` placed under their
+  inputs, success notifications.
 
 ## Endpoints
 

@@ -4,7 +4,8 @@
 
 Please **do not** open a public issue for security vulnerabilities. Instead, use
 [GitHub's private vulnerability reporting](https://github.com/Revazi1st/trellis/security/advisories/new)
-(Security → Report a vulnerability), or email the maintainers.
+(Security → Report a vulnerability). That is the only channel: it keeps the report private between
+you and the maintainers until a fix ships.
 
 We aim to acknowledge reports within a few business days and to ship a fix or
 mitigation promptly, crediting reporters who wish to be named.
@@ -24,3 +25,8 @@ review these before production:
   the endpoints.
 - **Dependency hygiene** — NuGet audit runs on the full graph; the license-ceiling
   policy (ADR-0011) blocks known-encumbered packages.
+- **Threat model** — `docs/threat-model.md` lists what the template defends against, the
+  defaults that keep a gap closed, and the decisions left to each project.
+
+Projects generated from the template do not inherit this policy: their security contact is
+their own to define.
