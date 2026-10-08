@@ -47,9 +47,11 @@ builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trell
     ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
 builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
 
-// The data-retention windows are checked at boot too: a zero Retention:SweepInterval would hot-loop the
-// janitor. Persistence binds them but cannot run DataAnnotations itself, so the host that runs it does.
+// The data-retention windows and the outbox knobs are checked at boot too: a zero Retention:SweepInterval
+// or Outbox:PollInterval would hot-loop its service. Persistence binds them but cannot run DataAnnotations
+// itself, so the host that runs them does.
 builder.Services.AddOptions<Trellis.Persistence.Maintenance.RetentionOptions>().ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddOptions<Trellis.Persistence.Outbox.OutboxOptions>().ValidateDataAnnotations().ValidateOnStart();
 
 // This host mints and validates tokens, so a missing or too-short signing key must stop it at boot
 // with an actionable message rather than fail the first login. AddApiAuthentication then reads those
@@ -65,9 +67,9 @@ builder.Services.AddApiHardening(builder.Configuration);
 // Database readiness check (untagged → part of /health readiness, excluded from /alive liveness).
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 
-// Drain the transactional outbox in the long-running API host (ADR-0018), and prune the
+// Drain the transactional outbox in the long-running API host (ADR-0018, ADR-0023), and prune the
 // bookkeeping tables (outbox / idempotency keys / refresh tokens) on a timer.
-builder.Services.AddOutboxProcessing();
+builder.Services.AddOutboxProcessing(builder.Configuration);
 builder.Services.AddDataRetention(builder.Configuration);
 
 // HybridCache: in-memory L1 always; a Redis L2 is added below when the UseRedis feature is enabled.

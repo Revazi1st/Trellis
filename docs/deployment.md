@@ -67,6 +67,7 @@ fails the rollout, not the first request.
 | `Kestrel__Limits__MaxRequestBodySize` / `Kestrel__Limits__MaxRequestHeadersTotalSize` | no | Request caps in bytes: 1 MB body (larger → 413) and 32 KB of headers by default. Raise per endpoint for a real upload, not globally. |
 | `Cors__AllowedOrigins__0…` | if browsers call cross-origin | Allowed origins; **none by default** (same-origin only). |
 | `Retention__*` | no | Janitor windows for the bookkeeping tables: `SweepInterval` (1h; 1 s – 1 day), `InitialDelay` before the first sweep (1m; 0 – 1h), `ProcessedOutboxAge` (3d; ≥ 1h), `DeadLetteredOutboxAge` (30d; ≥ 1 day), `IdempotencyKeyAge` (2d; ≥ 1h), `DeadRefreshTokenAge` (30d; ≥ 1 day — keep it ≥ `Authentication__RefreshTokenDays`, a consumed token is what makes a replay detectable). Every window is capped at 365 days. TimeSpan format, e.g. `7.00:00:00`. A value out of range stops the API at boot, naming the key. |
+| `Outbox__*` | no | The outbox processor (ADR-0023): `PollInterval` (5 s; 100 ms – 10 min) between polls once a batch came back short, `BatchSize` (20; 1 – 1000) rows per claim, `MaxAttempts` (8; 1 – 50) failures before a message is dead-lettered, `BaseRetryDelay` (30 s; 1 s – 1 h) doubling per failure up to `MaxRetryDelay` (15 min; 1 s – 1 day, and ≥ `BaseRetryDelay`), `DispatchTimeout` (30 s; 1 s – 10 min) per message's handlers. Defaults retry after 30 s, 1 m, 2 m, 4 m, 8 m, 15 m, 15 m and dead-letter about 45 minutes after the first failure. A claimed row is leased for `DispatchTimeout × (BatchSize + 1)` (10.5 min): after a **crash** its in-flight rows reappear within that long (a graceful stop releases them at once) — shorten `BatchSize` or `DispatchTimeout` to shorten it. TimeSpan format. A value out of range stops the API at boot, naming the key. |
 
 ## Health probes
 
@@ -108,8 +109,18 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every host exports logs, metrics and trace
 
 Worth alerting on:
 
-- `trellis.outbox.dead_lettered` — a domain event exhausted its retries or lost its handler;
-  dead-lettered rows are the alert queue and are kept 30 days by default.
+- `trellis.outbox.dead_lettered` — a domain event exhausted its retries (`trellis.outbox.reason` =
+  `exhausted`), its type is unknown to this deploy (`unknown_type`) or its payload does not parse
+  (`poison`); dead-lettered rows are the alert queue and are kept 30 days by default. Re-drive them with
+  the runbook below.
+- `trellis.outbox.oldest_pending_age` above `2 × Outbox__PollInterval + Outbox__DispatchTimeout` for
+  five minutes, or `trellis.outbox.pending` growing steadily — the drain is stalled or cannot keep up
+  (a handler's dependency is slow, the database claim fails, no API replica runs the processor). Both
+  gauges are sampled by the processor on each poll and are the same global number from every replica:
+  take `max`, not `sum`.
+- `trellis.outbox.retries` rate (`error.type` names the exception) — a handler's dependency is
+  struggling; the per-attempt line is logged at Warning. `trellis.outbox.dispatch.duration` (by
+  `trellis.outbox.outcome`) shows whether handlers approach `Outbox__DispatchTimeout`.
 - `resilience.polly.strategy.events` with `event.name=OnCircuitOpened` — an outbound dependency's
   circuit opened; calls fail fast until it closes.
 - `microsoft.entityframeworkcore.optimistic_concurrency_failures` — a rising rate means clients
@@ -123,3 +134,34 @@ The invoice read cache keeps an entry 30 seconds in each API instance's memory (
 `UseRedis` toggle, five minutes in Redis (L2). A write evicts the entry from its own instance and
 from Redis only, so with several replicas another replica can serve the previous state, ETag
 included, for up to 30 seconds; without Redis every replica caches on its own for the same 30 seconds.
+
+### Outbox operations
+
+The outbox's console is its table; there is no admin endpoint (ADR-0023). `Status` is 0 pending,
+1 processed, 2 dead-lettered; `Error` holds the last failure; `CompletedHandlers` the handlers already
+credited for the row.
+
+```sql
+-- Inspect the alert queue.
+SELECT "Id", "Type", "Attempts", "Error", "OccurredAtUtc"
+FROM "OutboxMessages" WHERE "Status" = 2 ORDER BY "OccurredAtUtc";
+
+-- Re-drive one dead letter with a fresh retry budget. CompletedHandlers is kept on purpose:
+-- handlers that already succeeded (the receipt e-mail, say) must not run again.
+UPDATE "OutboxMessages" SET "Status" = 0, "Attempts" = 0, "Error" = NULL, "NextAttemptAtUtc" = now()
+WHERE "Status" = 2 AND "Id" = '<id>';
+
+-- Re-drive every dead letter of one event type after fixing its handler.
+UPDATE "OutboxMessages" SET "Status" = 0, "Attempts" = 0, "Error" = NULL, "NextAttemptAtUtc" = now()
+WHERE "Status" = 2 AND "Type" = 'invoices.paid.v1';
+
+-- Give up on one for good (the janitor would otherwise keep it for Retention__DeadLetteredOutboxAge).
+DELETE FROM "OutboxMessages" WHERE "Status" = 2 AND "Id" = '<id>';
+```
+
+- A pending row whose `NextAttemptAtUtc` lies minutes ahead is either in back-off (`Attempts` > 0, see
+  `Error`) or leased by a processor that is working on it or died holding it. Leases are never released
+  by hand: they expire by themselves within `Outbox__DispatchTimeout × (Outbox__BatchSize + 1)`.
+- Re-driving a `poison` row without a code fix dead-letters it again on the next poll.
+- `unknown_type` rows mean an event type was removed or renamed while rows were in flight: redeploy a
+  type carrying that `[DomainEventName]` and re-drive them.
