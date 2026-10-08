@@ -1,6 +1,10 @@
 # Trellis — Agent Instructions
 
-Trellis is a rich-DDD, Clean Architecture **.NET 10** solution and a `dotnet new` template (packed from `eng/Trellis.TemplatePack`). Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
+Trellis is a rich-DDD, Clean Architecture **.NET 10** solution. Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
+<!--#if (TemplateSource) -->
+
+This repository is also the `dotnet new` template that generates such solutions (`.template.config/`, packed from `eng/Trellis.TemplatePack`). Template work has its own tools: the `add-toggle` skill, the source-only section of `.claude/rules/tools.md`, `scripts/check-template-toggles.sh` and `docs/releasing.md`. Files a generated project must not inherit as they are (README, CHANGELOG, the governance files) are excluded in `template.json`; the project gets the stubs in `.template.config/consumer/` instead.
+<!--#endif -->
 
 ## Commands
 

@@ -113,6 +113,58 @@
       },
       "description": "Always false once the engine runs, so a block conditioned on it survives only in the template's own repository, which nothing ever processes (example: the ci.yml step that runs the maintainer-only check-template-toggles.sh). No 'datatype', for the same reason as nameIsDottedAlphanumeric."
     },
+    "templatePackageId": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "Trellis.Templates"
+      },
+      "replaces": "TEMPLATE-MARKER-PACKAGE",
+      "description": "The NuGet package id, written into the .trellis-template.json marker. A constant, so the engine writes it as is: spelled out in the marker it would be renamed with the project like every other occurrence of the template's name."
+    },
+    "templateShortName": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "trellis"
+      },
+      "replaces": "TEMPLATE-MARKER-SHORT-NAME",
+      "description": "The 'dotnet new' short name, written into the marker (docs/upgrading.md regenerates with it)."
+    },
+    "templateVersion": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "0.0.0-source"
+      },
+      "replaces": "TEMPLATE-MARKER-VERSION",
+      "description": "The template version written into the marker. '0.0.0-source' means installed from a source checkout; packing stamps the package's own version over it (eng/Trellis.TemplatePack, StampTemplateVersion), so a project generated from Trellis.Templates X.Y.Z records X.Y.Z."
+    },
+    "templateRepository": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "https://github.com/Revazi1st/trellis"
+      },
+      "replaces": "TEMPLATE-MARKER-REPOSITORY",
+      "description": "Where the template's CHANGELOG and releases live, written into the marker for docs/upgrading.md."
+    },
+    "templateMarkerFile": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "`.trellis-template.json`"
+      },
+      "replaces": ".trellis\\-template.json",
+      "description": "Shipped prose (the README stub, docs/upgrading.md) names the marker as .trellis\\-template.json, a Markdown-escaped hyphen that renders as the plain name in this repository; the engine writes the name back as code. Spelled plainly, the name would be renamed with the project like any other occurrence of the template's name, and the engine skips a replacement whose value equals its token."
+    },
+    "projectName": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "identity",
+      "replaces": "TEMPLATE-MARKER-NAME",
+      "description": "The name exactly as given to 'dotnet new -n', written into the marker."
+    },
     "devSigningKeyHead": {
       "type": "generated",
       "generator": "guid",
@@ -159,6 +211,7 @@
     }
   },
   "forms": {
+    "identity": { "identifier": "identity" },
     "safeNamespace": { "identifier": "safe_namespace" },
     "dotsToUnderscores": { "identifier": "replace", "pattern": "\\.", "replacement": "_" },
     "appendUnderscore": { "identifier": "replace", "pattern": "$", "replacement": "_" },
@@ -185,12 +238,22 @@
         ".idea/**",
         ".vs/**",
         ".vscode/**",
-        "eng/**",
+        "eng/Trellis.TemplatePack/**",
+        "eng/Directory.Build.props",
+        "eng/Directory.Build.targets",
         ".template.config/**",
         ".github/workflows/template-ci.yml",
         ".github/workflows/release.yml",
         ".claude/skills/add-toggle/**",
         "scripts/check-template-toggles.sh",
+        "docs/releasing.md",
+        "README.md",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "CODE_OF_CONDUCT.md",
+        "SECURITY.md",
+        ".github/CODEOWNERS",
+        ".github/ISSUE_TEMPLATE/**",
         ".claude/settings.local.json",
         ".claude/worktrees/**",
         "CLAUDE.local.md",
@@ -207,6 +270,9 @@
         "**/appsettings.*.local.json",
         "**/*.pfx",
         "**/*.key"
+      ],
+      "copyOnly": [
+        "LICENSE"
       ],
       "modifiers": [
         {
@@ -242,6 +308,13 @@
           ]
         }
       ]
+    },
+    {
+      "source": "./.template.config/consumer/",
+      "target": "./",
+      "rename": {
+        "template-marker.json": ".trellis-template.json"
+      }
     }
   ],
   "primaryOutputs": [

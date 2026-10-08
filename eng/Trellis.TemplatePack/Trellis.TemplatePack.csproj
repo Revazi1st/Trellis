@@ -30,7 +30,11 @@
          (that list guards folder installs, this one guards the package) and with .gitignore: build
          output, packaging infra, machine-local and IDE state, OS litter, test/coverage output, and
          every pattern .gitignore treats as a secret. ".git" is listed as a file as well as a folder:
-         a git worktree or submodule has a .git FILE, which "\.git\**" does not match. -->
+         a git worktree or submodule has a .git FILE, which "\.git\**" does not match.
+         The template's own governance files (README, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT,
+         SECURITY, CODEOWNERS, issue forms, the release runbook) are maintainer material: generated
+         projects get the stubs in .template.config/consumer/ instead. template.json itself is listed
+         because the package carries the stamped copy (StampTemplateVersion below). -->
     <TemplateContentExclude>
       ..\..\**\bin\**;
       ..\..\**\obj\**;
@@ -40,11 +44,22 @@
       ..\..\.idea\**;
       ..\..\.vs\**;
       ..\..\.vscode\**;
-      ..\..\eng\**;
+      ..\..\eng\Trellis.TemplatePack\**;
+      ..\..\eng\Directory.Build.props;
+      ..\..\eng\Directory.Build.targets;
+      ..\..\.template.config\template.json;
       ..\..\.github\workflows\template-ci.yml;
       ..\..\.github\workflows\release.yml;
       ..\..\.claude\skills\add-toggle\**;
       ..\..\scripts\check-template-toggles.sh;
+      ..\..\docs\releasing.md;
+      ..\..\README.md;
+      ..\..\CHANGELOG.md;
+      ..\..\CONTRIBUTING.md;
+      ..\..\CODE_OF_CONDUCT.md;
+      ..\..\SECURITY.md;
+      ..\..\.github\CODEOWNERS;
+      ..\..\.github\ISSUE_TEMPLATE\**;
       ..\..\.claude\settings.local.json;
       ..\..\.claude\worktrees\**;
       ..\..\CLAUDE.local.md;
@@ -84,5 +99,57 @@
              PackagePath="content" />
     <Compile Remove="**\*" />
   </ItemGroup>
+
+  <!-- The generated .trellis-template.json marker records the template version through the
+       templateVersion symbol. The repository's template.json says 0.0.0-source (what a folder install
+       from a checkout records); the packed copy says $(Version), so the version is stated once: in
+       <Version> above, or by release.yml's -p:Version. Fails the pack if the placeholder is gone. -->
+  <PropertyGroup>
+    <TemplateConfigSource>$(MSBuildThisFileDirectory)..\..\.template.config\template.json</TemplateConfigSource>
+    <TemplateConfigStamped>$(BaseIntermediateOutputPath)stamped\template.json</TemplateConfigStamped>
+    <TemplateVersionPlaceholder>"value": "0.0.0-source"</TemplateVersionPlaceholder>
+  </PropertyGroup>
+
+  <!-- A code task, not WriteLinesToFile: an item list would split template.json at ';' and turn
+       its backslash escapes into path separators. -->
+  <UsingTask TaskName="StampTemplateVersionText"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <SourceFile ParameterType="System.String" Required="true" />
+      <DestinationFile ParameterType="System.String" Required="true" />
+      <Placeholder ParameterType="System.String" Required="true" />
+      <Replacement ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        string text = File.ReadAllText(SourceFile);
+        if (!text.Contains(Placeholder))
+        {
+            Log.LogError("{0} no longer contains {1} (the templateVersion symbol), so the package cannot record its version in the generated marker.", SourceFile, Placeholder);
+        }
+        else
+        {
+            string stamped = text.Replace(Placeholder, Replacement);
+            Directory.CreateDirectory(Path.GetDirectoryName(DestinationFile));
+            if (!File.Exists(DestinationFile) || File.ReadAllText(DestinationFile) != stamped)
+            {
+                File.WriteAllText(DestinationFile, stamped);
+            }
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="StampTemplateVersion" BeforeTargets="_GetPackageFiles">
+    <StampTemplateVersionText SourceFile="$(TemplateConfigSource)"
+                              DestinationFile="$(TemplateConfigStamped)"
+                              Placeholder="$(TemplateVersionPlaceholder)"
+                              Replacement="&quot;value&quot;: &quot;$(Version)&quot;" />
+    <ItemGroup>
+      <Content Include="$(TemplateConfigStamped)" PackagePath="content\.template.config\template.json" />
+    </ItemGroup>
+  </Target>
 
 </Project>
