@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Trellis.Application;
 using Trellis.Infrastructure;
 using Trellis.MigrationService;
@@ -22,8 +23,14 @@ builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableR
 builder.Services.AddOpenTelemetry()
     .WithTracing(static tracing => tracing.AddSource(MigrationWorker.ActivitySourceName));
 
-builder.Services.AddSingleton(
-    builder.Configuration.GetSection(SeedOptions.SectionName).Get<SeedOptions>() ?? new SeedOptions());
+// Validated at boot, like every options type: an e-mail typo, a short password or an over-long tenant id
+// stops the worker here, naming the key, instead of seeding an admin nobody can sign in as. The worker
+// takes the plain POCO.
+builder.Services.AddOptions<SeedOptions>()
+    .Bind(builder.Configuration.GetSection(SeedOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddSingleton(static provider => provider.GetRequiredService<IOptions<SeedOptions>>().Value);
 builder.Services.AddHostedService<MigrationWorker>();
 
 await builder.Build().RunAsync();
