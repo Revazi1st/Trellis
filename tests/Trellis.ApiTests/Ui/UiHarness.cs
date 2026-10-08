@@ -96,12 +96,14 @@ internal sealed class ScriptedApi : HttpMessageHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        string? body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
         lock (_requests)
         {
             _requests.Add(new RecordedRequest(
                 request.Method.Method,
                 request.RequestUri!.AbsolutePath,
-                request.Headers.Authorization?.ToString()));
+                request.Headers.Authorization?.ToString(),
+                body));
         }
 
         HttpResponseMessage response = await Respond(request, cancellationToken);
@@ -111,7 +113,7 @@ internal sealed class ScriptedApi : HttpMessageHandler
 }
 
 /// <summary>What a request looked like when it left the client (the client disposes the message itself).</summary>
-internal sealed record RecordedRequest(string Method, string Path, string? Authorization);
+internal sealed record RecordedRequest(string Method, string Path, string? Authorization, string? Body);
 
 /// <summary>Canned API answers in the shapes the API writes.</summary>
 internal static class Responses

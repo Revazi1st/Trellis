@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Components.Server.Circuits;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 #if (UseSerilog)
 using Serilog;
 #endif
@@ -41,6 +43,9 @@ builder.Services.AddSharedUi(static (_, client) =>
 #pragma warning disable S1075
     client.BaseAddress = new Uri("https+http://api"));
 #pragma warning restore S1075
+
+// A closed circuit takes its tokens with it; this revokes its refresh token at the API as well.
+builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, RevokeSessionOnCircuitClose>());
 
 // Only the host knows its environment; the shared UI reads the answer (e.g. the seeded-admin hint on /login).
 bool isDevelopment = builder.Environment.IsDevelopment();

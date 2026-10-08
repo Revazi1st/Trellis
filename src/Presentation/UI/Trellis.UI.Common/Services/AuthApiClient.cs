@@ -24,4 +24,7 @@ internal sealed class AuthApiClient(HttpClient httpClient) : IAuthApiClient
             ct => httpClient.PostAsJsonAsync("api/v1/auth/register", request, ct),
             static registered => registered.UserId,
             cancellationToken);
+
+    public Task<ApiResult<bool>> LogoutAsync(LogoutRequest request, CancellationToken cancellationToken = default)
+        => ApiCall.SendAsync(ct => httpClient.PostAsJsonAsync("api/v1/auth/logout", request, ct), cancellationToken);
 }
