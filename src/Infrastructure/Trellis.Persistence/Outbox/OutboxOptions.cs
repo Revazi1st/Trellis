@@ -53,11 +53,14 @@ public sealed class OutboxOptions
     public TimeSpan DispatchTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// How long a claimed message stays invisible to every other processor: the longest a batch can
-    /// legitimately take (every message spending its whole <see cref="DispatchTimeout"/>) plus one slot for
-    /// bookkeeping — 10.5 minutes with the defaults. A lease therefore only ever expires on a process that
-    /// crashed or hung; a graceful stop releases its leases itself. After a crash, the rows it held reappear
-    /// within this long: shorten <see cref="BatchSize"/> or <see cref="DispatchTimeout"/> to shorten it.
+    /// How long a claimed message stays invisible to every other processor: the longest a batch's handlers
+    /// can legitimately take (every message spending its whole <see cref="DispatchTimeout"/>) plus one slot
+    /// for bookkeeping — 10.5 minutes with the defaults. The budget bounds the handlers, not the database:
+    /// a lease expires under a process that crashed or hung, and also under one whose bookkeeping saves are
+    /// slow (a struggling database, each save retried by the execution strategy) — another processor may
+    /// then claim a row this one has not finished, which is why delivery stays at-least-once. A graceful
+    /// stop releases its leases itself. After a crash, the rows it held reappear within this long: shorten
+    /// <see cref="BatchSize"/> or <see cref="DispatchTimeout"/> to shorten it.
     /// </summary>
     public TimeSpan LeaseDuration => DispatchTimeout * (BatchSize + 1);
 }

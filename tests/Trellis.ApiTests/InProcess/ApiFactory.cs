@@ -59,6 +59,13 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
     // Shared by every factory in the test run, so no two clients anywhere reuse an address.
     private static int LastClientNumber;
 
+    /// <summary>
+    /// The host's <see cref="TimeProvider"/>: system time plus an offset a test may move forward instead
+    /// of sleeping (an invoice that has to become overdue), and must <see cref="SettableClock.Reset"/>
+    /// afterwards — the fixture is shared by its test class. A derived factory may register its own over it.
+    /// </summary>
+    public SettableClock Time { get; } = new();
+
     // One container per fixture, no reuse: reuse is experimental and the Ryuk reaper kills
     // "reusable" containers when a parallel test assembly's session ends mid-run.
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18-alpine")
@@ -86,6 +93,7 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
         // pass the WebHost inserts when ASPNETCORE_FORWARDEDHEADERS_ENABLED is set.
         builder.ConfigureServices(static services =>
             services.Insert(0, ServiceDescriptor.Transient<IStartupFilter, ClientAddressStartupFilter>()));
+        builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(Time));
 #if (UseRedis)
         // The UseRedis toggle wires a Redis L2 into HybridCache via Aspire; there is no Redis in
         // this host, so drop the distributed cache and run L1-only — otherwise every cache touch 500s.
@@ -234,6 +242,18 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
         await base.DisposeAsync();
         await _postgres.DisposeAsync();
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>System time plus an offset a test can move forward and reset.</summary>
+    public sealed class SettableClock : TimeProvider
+    {
+        private long _offsetTicks;
+
+        public void Advance(TimeSpan by) => Interlocked.Add(ref _offsetTicks, by.Ticks);
+
+        public void Reset() => Interlocked.Exchange(ref _offsetTicks, 0);
+
+        public override DateTimeOffset GetUtcNow() => base.GetUtcNow().AddTicks(Interlocked.Read(ref _offsetTicks));
     }
 
     /// <summary>Applies <see cref="ClientAddressHeader"/> as the connection's remote address, then removes the header.</summary>
