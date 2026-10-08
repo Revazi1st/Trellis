@@ -119,9 +119,10 @@ full response.
 The committed file is the server's own serialisation (`/openapi/v1.json` as served, plus the final
 newline every text file in the repository has) — no reformatting tool in between.
 `OpenApiSnapshotTests` fetches the document from the in-process host on every `dotnet test` run,
-inside the SDK container too, and fails with the first differing JSON pointer when it does not match the
-committed file; `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` (forwarded by
-`scripts/dotnet.sh`) or `scripts/export-openapi.sh` against a running API regenerates it. The CI step
+inside the SDK container too, and fails when its bytes (plus the final newline) differ from the committed
+file, naming the first differing JSON pointer or saying the drift is formatting only;
+`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` (forwarded by `scripts/dotnet.sh`) or
+`scripts/export-openapi.sh` against a running API regenerates it. The CI step
 that boots the app and diffs stays as the independent check of the same bytes. `OpenApiDocumentTests`
 gate the content (prose on every operation, probes out, unique `operationId`s, no `{version}`/`servers`,
 the problem schema on every error, 400/404 by shape, the anonymous auth statuses, `Location`,

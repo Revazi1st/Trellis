@@ -9,7 +9,8 @@ namespace Trellis.ApiTests.InProcess;
 /// The committed contract (<c>docs/api/openapi.v1.json</c>) is what consumers generate clients from, so
 /// it must be the document the API actually serves — not last month's (ADR-0025). This test fetches
 /// <c>/openapi/v1.json</c> from the in-process host (Development, so the document is mapped) and compares
-/// it structurally with the committed file; it runs on every <c>dotnet test</c>, inside the SDK container
+/// it byte for byte with the committed file (the gate CI's diff applies too; the JSON walk only names where
+/// they part); it runs on every <c>dotnet test</c>, inside the SDK container
 /// too, where the CI step that boots the app and curls it cannot. Set <c>UPDATE_OPENAPI_SNAPSHOT=1</c>
 /// to overwrite the committed file with the live document instead (then review the diff and commit it);
 /// <c>scripts/export-openapi.sh</c> does the same against a running API.
@@ -34,11 +35,18 @@ public sealed class OpenApiSnapshotTests(ApiFactory factory) : IClassFixture<Api
             return;
         }
 
-        JsonNode liveDocument = JsonNode.Parse(live).ShouldNotBeNull();
-        JsonNode committed = JsonNode.Parse(await File.ReadAllTextAsync(path, ct)).ShouldNotBeNull();
+        string committedText = await File.ReadAllTextAsync(path, ct);
+        if (string.Equals(committedText, live + "\n", StringComparison.Ordinal))
+        {
+            return;
+        }
 
-        string? difference = FirstDifference(committed, liveDocument, "$");
-        difference.ShouldBeNull(
+        JsonNode liveDocument = JsonNode.Parse(live).ShouldNotBeNull();
+        JsonNode committed = JsonNode.Parse(committedText).ShouldNotBeNull();
+        string difference = FirstDifference(committed, liveDocument, "$")
+            ?? "formatting only: the same JSON in different bytes (indentation, line endings or the final newline)";
+
+        Assert.Fail(
             $"docs/api/openapi.v1.json no longer matches the document the API serves (first difference at {difference}). "
             + $"If the change is intended, regenerate it: {UpdateVariable}=1 dotnet test tests/Trellis.ApiTests "
             + "(or scripts/export-openapi.sh against a running API), review the diff and commit.");
