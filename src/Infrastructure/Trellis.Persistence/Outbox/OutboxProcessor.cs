@@ -91,19 +91,39 @@ internal sealed class OutboxProcessor(
             batch = await ClaimAsync(context, now, leaseUntil, stoppingToken);
         }
 
+        int finished = 0;
         try
         {
             foreach (OutboxMessage message in batch)
             {
-                await ProcessMessageAsync(message, stoppingToken);
+                try
+                {
+                    await ProcessMessageAsync(message, stoppingToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                {
+                    // A bookkeeping save failed where nothing else catches it: the save of a failure (after a
+                    // handler, a checkpoint or the Processed save failed) or of a dead letter — typically the
+                    // database going away. That costs this message alone: its row still holds the lease and
+                    // is claimed again when it expires, with whatever credits its checkpoints made durable.
+                    // Letting it escape would strand the leases of every row after it as well.
+                    logger.LogWarning(exception,
+                        "Bookkeeping for outbox message {MessageId} ({Type}) failed; it stays leased until {LeaseUntil} and is dispatched again then",
+                        message.Id, message.Type, leaseUntil);
+                }
+
+                finished++;
             }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        finally
         {
-            // A graceful stop hands back what it did not finish, so a rolling deploy does not delay the
-            // rest of the batch by a whole lease.
-            await ReleaseLeasesAsync(batch, leaseUntil);
-            throw;
+            // Whatever ends the batch early — a stopping host, or anything the per-message catch does not
+            // absorb — hands back the leases of the rows not reached first, best effort, so a rolling deploy
+            // does not delay them by a whole lease. The exception then goes on to the caller.
+            if (finished < batch.Count)
+            {
+                await ReleaseLeasesAsync(batch, leaseUntil);
+            }
         }
 
         return batch.Count;
@@ -192,7 +212,7 @@ internal sealed class OutboxProcessor(
         // or CompletedHandlers column that does not parse. No retry can fix either, so the row is
         // dead-lettered at once with Attempts untouched, and the rest of the batch goes on.
         Result<Materialized> materialized = Materialize(message);
-        string? outcome;
+        string outcome;
         if (materialized.IsFailure)
         {
             string reason = string.Equals(materialized.Error.Code, OutboxErrors.UnknownEventTypeCode, StringComparison.Ordinal)
@@ -207,16 +227,16 @@ internal sealed class OutboxProcessor(
             outcome = await DispatchAsync(scope.ServiceProvider, context, message, materialized.Value, activity, stoppingToken);
         }
 
-        // No outcome means the host stopped mid-dispatch: the caller hands the lease back, and an
-        // interrupted dispatch is not a duration to measure.
-        if (outcome is not null)
-        {
-            metrics.DispatchDuration(message.Type, timeProvider.GetElapsedTime(started), outcome);
-        }
+        // Only booked outcomes get here: a stopping host's cancellation propagates out of DispatchAsync
+        // (the caller hands the lease back), and an interrupted dispatch is not a duration to measure.
+        metrics.DispatchDuration(message.Type, timeProvider.GetElapsedTime(started), outcome);
     }
 
-    /// <summary>Runs the handlers under the budget and the originating tenant and books the outcome; null when the host stopped mid-dispatch.</summary>
-    private async Task<string?> DispatchAsync(
+    /// <summary>
+    /// Runs the handlers under the budget and the originating tenant and books the outcome, which it
+    /// returns. A stopping host's cancellation is not an outcome: it propagates instead.
+    /// </summary>
+    private async Task<string> DispatchAsync(
         IServiceProvider services, AppDbContext context, OutboxMessage message, Materialized materialized, Activity? activity, CancellationToken stoppingToken)
     {
         (IDomainEvent domainEvent, HashSet<string> completed) = materialized;
@@ -320,9 +340,11 @@ internal sealed class OutboxProcessor(
     }
 
     /// <summary>
-    /// Hands back the leases of the batch rows a stopping host did not finish: the ones it never reached
-    /// and the one in flight (its checkpointed credits are durable, so re-running it is safe). Best effort:
-    /// a lease that cannot be released expires by itself.
+    /// Hands back the leases of the rows a batch that ended early did not finish — on a stopping host, the
+    /// ones it never reached and the one in flight (its checkpointed credits are durable, so re-running it
+    /// is safe). A row whose own bookkeeping failed is not among them: its in-memory state no longer
+    /// carries the lease stamp, and it keeps the lease the database still holds. Best effort: a lease
+    /// that cannot be released expires by itself.
     /// </summary>
     private async Task ReleaseLeasesAsync(List<OutboxMessage> batch, DateTimeOffset leaseUntil)
     {
@@ -342,14 +364,14 @@ internal sealed class OutboxProcessor(
             DateTimeOffset now = timeProvider.GetUtcNow();
 
             // The same predicate again in SQL: only rows that still hold THIS lease are touched. Not the
-            // stopping token — this is the bookkeeping of a stop already under way.
+            // stopping token — this is the bookkeeping of a batch already ending.
             int released = await context.Set<OutboxMessage>()
                 .Where(m => unfinished.Contains(m.Id) && m.Status == OutboxMessageStatus.Pending && m.NextAttemptAtUtc == leaseUntil)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.NextAttemptAtUtc, now), CancellationToken.None);
 
             if (logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("Released the leases of {Released} outbox message(s) this host stopped before finishing", released);
+                logger.LogInformation("Released the leases of {Released} outbox message(s) this batch ended before finishing", released);
             }
         }
         catch (Exception exception) when (exception is DbException or DbUpdateException or RetryLimitExceededException)

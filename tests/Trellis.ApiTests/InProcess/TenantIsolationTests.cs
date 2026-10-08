@@ -63,23 +63,26 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
 
         (await tenantA.PostAsJsonAsync($"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Consulting", 100m), ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        // A due date is never past when issued, and this host runs on the system clock: issue it due a
-        // moment from now, then wait that moment out so it is genuinely overdue when listed.
-        DateTimeOffset dueDate = DateTimeOffset.UtcNow.AddSeconds(3);
+        // A due date is never past when issued: issue it due a minute from now on the host's clock, then
+        // move that clock past it instead of sleeping until the invoice is genuinely overdue.
+        DateTimeOffset dueDate = factory.Time.GetUtcNow().AddMinutes(1);
         (await tenantA.PostAsJsonAsync($"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(dueDate), ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        TimeSpan untilOverdue = dueDate - DateTimeOffset.UtcNow;
-        if (untilOverdue > TimeSpan.Zero)
+        factory.Time.Advance(TimeSpan.FromMinutes(2));
+
+        try
         {
-            await Task.Delay(untilOverdue + TimeSpan.FromMilliseconds(50), ct);
+            PagedResponse<InvoiceDto> seenByB = await ListOverdueAsync(tenantB, ct);
+            seenByB.TotalCount.ShouldBe(0);
+            seenByB.Items.ShouldNotContain(invoice => invoice.Id == id);
+
+            PagedResponse<InvoiceDto> seenByA = await ListOverdueAsync(tenantA, ct);
+            seenByA.Items.ShouldContain(invoice => invoice.Id == id);
         }
-
-        PagedResponse<InvoiceDto> seenByB = await ListOverdueAsync(tenantB, ct);
-        seenByB.TotalCount.ShouldBe(0);
-        seenByB.Items.ShouldNotContain(invoice => invoice.Id == id);
-
-        PagedResponse<InvoiceDto> seenByA = await ListOverdueAsync(tenantA, ct);
-        seenByA.Items.ShouldContain(invoice => invoice.Id == id);
+        finally
+        {
+            factory.Time.Reset();   // the fixture is shared by the class
+        }
     }
 
     [Fact]
