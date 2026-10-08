@@ -4,18 +4,22 @@ namespace Trellis.Infrastructure.ExternalApis.ExchangeRates;
 
 /// <summary>
 /// Settings for the exchange-rate provider, bound from the "ExternalApis:ExchangeRates" section and
-/// validated at startup (see <c>AddInfrastructure</c>). Every field carries a DataAnnotation so a
-/// typo in configuration fails the host at boot with a precise message, instead of surfacing as a
+/// validated at startup (see <c>AddOutboundIntegrations</c>). Every field carries a DataAnnotation so
+/// a typo in configuration fails the host at boot with a precise message, instead of surfacing as a
 /// <see cref="NullReferenceException"/> or a mystifying timeout on the first real call.
 /// </summary>
 public sealed class ExchangeRateOptions
 {
     public const string SectionName = "ExternalApis:ExchangeRates";
 
-    /// <summary>Provider root, e.g. https://api.exchangerate.host/ — a trailing slash is added if missing.</summary>
+    /// <summary>
+    /// Provider root; a trailing slash is added if missing, so relative paths resolve beneath it. The
+    /// default is Frankfurter (ECB reference rates, no access key); its <c>latest?base=&amp;symbols=</c>
+    /// answer is what <see cref="ExchangeRateClient"/> reads.
+    /// </summary>
     [Required(AllowEmptyStrings = false)]
     [Url]
-    public string BaseUrl { get; init; } = "https://api.exchangerate.host/";
+    public string BaseUrl { get; init; } = "https://api.frankfurter.dev/v1/";
 
     /// <summary>
     /// Per-attempt timeout. This drives the resilience handler's attempt timeout rather than
