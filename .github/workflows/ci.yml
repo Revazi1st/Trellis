@@ -82,12 +82,20 @@ jobs:
       # integration tests and the Aspire orchestration E2E both run here (ADR-0008).
       # Coverage is collected OUT of process (dotnet-coverage wraps the run): the in-process MTP
       # coverage extension aborts the xunit.v3 host, which is why coverage was absent for a while.
+      # eng/coverage.runsettings limits it to the solution's own production code: no test
+      # assemblies, no third-party packages that ship symbols, no migrations, no generated code.
       - name: Test (with coverage)
         env:
           RUN_ASPIRE_E2E: "1"
         run: |
           dotnet tool restore
-          dotnet dotnet-coverage collect -f cobertura -o coverage.cobertura.xml \
+          settings=()
+          if [ -f eng/coverage.runsettings ]; then
+            settings=(--settings eng/coverage.runsettings)
+          else
+            echo "::warning::eng/coverage.runsettings is missing: coverage also measures test assemblies, third-party packages and migrations (the Core gate below is unaffected)."
+          fi
+          dotnet dotnet-coverage collect "${settings[@]}" -f cobertura -o coverage.cobertura.xml \
             "dotnet test Trellis.slnx --no-build -c Release -- --report-trx --results-directory TestResults"
 
       - name: Upload coverage
@@ -95,6 +103,14 @@ jobs:
         with:
           name: coverage
           path: coverage.cobertura.xml
+          retention-days: 14
+
+      # A per-assembly table in the job summary, and a floor under the Core ring (src/Core:
+      # SharedKernel, Domain, Application), where the business rules live and tests are cheapest.
+      # Core measured 97.4% of 704 lines when the gate was introduced; 90 is the conservative floor
+      # below that. Raise it as coverage grows; never lower it to get a change through.
+      - name: Coverage summary and Core gate
+        run: python3 .github/scripts/coverage-summary.py coverage.cobertura.xml --min-core-line-rate 90
 
       # A flaky Testcontainers/Aspire run must not have to be reproduced blind.
       - name: Upload test results on failure
