@@ -19,12 +19,12 @@ namespace Trellis.UI.Common.Auth;
 /// </para>
 /// </summary>
 /// <param name="tokenStore">Host-provided token storage.</param>
-/// <param name="authApi">Client for the refresh endpoint.</param>
-/// <param name="timeProvider">Clock for expiry and the hold-off; the system clock unless the host registers one.</param>
+/// <param name="authApi">Client for the refresh and logout endpoints.</param>
+/// <param name="time">Clock for expiry and the hold-off; the system clock unless the host registers one.</param>
 public sealed class TokenAuthenticationStateProvider(
     ITokenStore tokenStore,
     IAuthApiClient authApi,
-    TimeProvider? timeProvider = null)
+    TimeProvider time)
     : AuthenticationStateProvider, IAccessTokenSource, IDisposable
 {
     private const string AuthenticationType = "jwt";
@@ -38,7 +38,6 @@ public sealed class TokenAuthenticationStateProvider(
     /// </summary>
     private static readonly TimeSpan RefreshHoldOff = TimeSpan.FromSeconds(5);
 
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     /// <summary>UTC ticks before which no refresh is attempted; 0 when no hold-off is active.</summary>
@@ -96,11 +95,61 @@ public sealed class TokenAuthenticationStateProvider(
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
     }
 
-    public async Task SignOutAsync()
+    /// <summary>
+    /// Signs the circuit out. The stored pair is forgotten and the change announced at once (a protected
+    /// page sends the user to sign-in); then the refresh token is revoked at the API
+    /// (<c>POST /auth/logout</c>), so a copy of it is worthless. The revoke is best-effort: when the API
+    /// cannot be reached the token simply runs out (<c>RefreshTokenDays</c>), and the user is signed out
+    /// locally either way.
+    /// </summary>
+    public async Task SignOutAsync(CancellationToken cancellationToken = default)
     {
-        ClearHoldOff();
-        await tokenStore.ClearAsync();
+        string? refreshToken = await ForgetTokensAsync(cancellationToken);
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+        await RevokeAsync(refreshToken, cancellationToken);
+    }
+
+    /// <summary>
+    /// Revokes and forgets the session without announcing a change: for a host whose UI goes away
+    /// together with its tokens (UI.Web: the circuit closed). Best-effort, like <see cref="SignOutAsync"/>.
+    /// </summary>
+    public async Task CloseSessionAsync(CancellationToken cancellationToken = default)
+    {
+        string? refreshToken = await ForgetTokensAsync(cancellationToken);
+        await RevokeAsync(refreshToken, cancellationToken);
+    }
+
+    /// <summary>
+    /// Clears the stored pair and returns the refresh token it held. Under the refresh lock: a rotation in
+    /// flight finishes first, so the token revoked is the current one (the consumed one is already dead)
+    /// and the rotation cannot store a fresh pair after the sign-out.
+    /// </summary>
+    private async Task<string?> ForgetTokensAsync(CancellationToken cancellationToken)
+    {
+        await _refreshLock.WaitAsync(cancellationToken);
+        try
+        {
+            ClearHoldOff();
+            string? refreshToken = await tokenStore.GetRefreshTokenAsync();
+            await tokenStore.ClearAsync();
+            return refreshToken;
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
+    }
+
+    private async Task RevokeAsync(string? refreshToken, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(refreshToken))
+        {
+            return;
+        }
+
+        // The outcome is not needed: a failure means the token outlives the session until it expires,
+        // and the API client has already turned an unreachable API into a result.
+        _ = await authApi.LogoutAsync(new LogoutRequest(refreshToken), cancellationToken);
     }
 
     /// <summary>The body of a refresh; the caller holds <see cref="_refreshLock"/>.</summary>
@@ -147,11 +196,11 @@ public sealed class TokenAuthenticationStateProvider(
 
     private bool IsExpired(string accessToken)
         => JwtClaims.GetExpiration(accessToken) is not { } expiresAt
-           || expiresAt <= _time.GetUtcNow() + ExpirySkew;
+           || expiresAt <= time.GetUtcNow() + ExpirySkew;
 
-    private bool IsHoldingOff() => _time.GetUtcNow().UtcTicks < Volatile.Read(ref _refreshHoldOffUntilTicks);
+    private bool IsHoldingOff() => time.GetUtcNow().UtcTicks < Volatile.Read(ref _refreshHoldOffUntilTicks);
 
-    private void HoldOffRefresh() => Volatile.Write(ref _refreshHoldOffUntilTicks, (_time.GetUtcNow() + RefreshHoldOff).UtcTicks);
+    private void HoldOffRefresh() => Volatile.Write(ref _refreshHoldOffUntilTicks, (time.GetUtcNow() + RefreshHoldOff).UtcTicks);
 
     private void ClearHoldOff() => Volatile.Write(ref _refreshHoldOffUntilTicks, 0);
 

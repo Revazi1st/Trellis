@@ -1,6 +1,8 @@
 @page "/invoices/{Id:guid}"
 @inherits ProtectedPage
 @inject IInvoiceApiClient InvoiceApi
+@inject TimeProvider Time
+@inject INotificationService Notifier
 
 <PageTitle>Invoice — Trellis</PageTitle>
 
@@ -10,7 +12,7 @@
 }
 else if (_invoice is null)
 {
-    <p>Loading…</p>
+    <p role="status" aria-live="polite">Loading…</p>
 }
 else
 {
@@ -43,21 +45,34 @@ else
         @if (_invoice.Status == InvoiceStatus.Draft)
         {
             <h2>Add line</h2>
-            <div class="form">
-                <label>Description<input @bind="_newLineDescription" /></label>
-                <label>Amount<input type="number" step="0.01" min="0" @bind="_newLineAmount" /></label>
-                <button @onclick="AddLineAsync" disabled="@_busy">Add line</button>
-            </div>
+            @* novalidate: min/step shape the inputs, the DataAnnotations messages (not browser bubbles) explain. *@
+            <EditForm Model="_line" OnValidSubmit="AddLineAsync" Context="lineForm" class="form" novalidate>
+                <DataAnnotationsValidator />
+                <ServerValidation @ref="_lineServer" />
+                <label>Description<InputText @bind-Value="_line.Description" maxlength="500" /><ValidationMessage For="() => _line.Description" /></label>
+                <label>Amount<InputNumber @bind-Value="_line.Amount" step="0.01" min="0" /><ValidationMessage For="() => _line.Amount" /></label>
+                @if (_lineError is not null)
+                {
+                    <p class="error" role="alert">@_lineError</p>
+                }
+                <button type="submit" disabled="@_busy">Add line</button>
+            </EditForm>
 
             <h2>Issue</h2>
-            <div class="form">
-                <label>Due date<input type="date" @bind="_dueDate" @bind:format="yyyy-MM-dd" /></label>
-                <button @onclick="IssueAsync" disabled="@(_busy || _invoice.Lines.Count == 0)">Issue invoice</button>
+            <EditForm Model="_issue" OnValidSubmit="IssueAsync" Context="issueForm" class="form" novalidate>
+                <DataAnnotationsValidator />
+                <ServerValidation @ref="_issueServer" />
+                <label>Due date<InputDate @bind-Value="_issue.DueDate" min="@_issue.EarliestValue" /><ValidationMessage For="() => _issue.DueDate" /></label>
+                @if (_issueError is not null)
+                {
+                    <p class="error" role="alert">@_issueError</p>
+                }
+                <button type="submit" disabled="@(_busy || _invoice.Lines.Count == 0)">Issue invoice</button>
                 @if (_invoice.Lines.Count == 0)
                 {
                     <p class="hint">Add at least one line before issuing.</p>
                 }
-            </div>
+            </EditForm>
         }
 
         <div class="actions">
@@ -79,12 +94,19 @@ else
     private InvoiceDto? _invoice;
     private string? _error;
     private string? _actionError;
+    private string? _lineError;
+    private string? _issueError;
     private bool _busy;
-    private string _newLineDescription = string.Empty;
-    private decimal _newLineAmount;
-    private DateTime _dueDate = DateTime.UtcNow.Date.AddDays(14);
+    private InvoiceLineForm _line = new();
+    private IssueInvoiceForm _issue = default!;
+    private ServerValidation _lineServer = default!;
+    private ServerValidation _issueServer = default!;
 
-    protected override Task OnAuthorizedAsync() => LoadAsync();
+    protected override Task OnAuthorizedAsync()
+    {
+        _issue = IssueInvoiceForm.At(Time.GetUtcNow());
+        return LoadAsync();
+    }
 
     // Load errors and action errors are separate fields: LoadAsync resets only its own, so a failed
     // action's message survives the reload that follows it.
@@ -106,7 +128,7 @@ else
     {
         _busy = true;
         ApiResult<bool> result = await InvoiceApi.PayAsync(Id);
-        _actionError = result.IsSuccess ? null : result.Error;
+        _actionError = Outcome(result, "Invoice marked as paid.");
         _busy = false;
         await LoadAsync();
     }
@@ -115,7 +137,7 @@ else
     {
         _busy = true;
         ApiResult<bool> result = await InvoiceApi.VoidAsync(Id);
-        _actionError = result.IsSuccess ? null : result.Error;
+        _actionError = Outcome(result, "Invoice voided.");
         _busy = false;
         await LoadAsync();
     }
@@ -123,12 +145,15 @@ else
     private async Task AddLineAsync()
     {
         _busy = true;
-        ApiResult<bool> result = await InvoiceApi.AddLineAsync(Id, new AddInvoiceLineRequest(_newLineDescription, _newLineAmount));
-        _actionError = result.IsSuccess ? null : result.Error;
+        ApiResult<bool> result = await InvoiceApi.AddLineAsync(Id, _line.ToRequest());
         if (result.IsSuccess)
         {
-            _newLineDescription = string.Empty;
-            _newLineAmount = 0;
+            _lineError = null;
+            _line = new InvoiceLineForm();
+        }
+        else
+        {
+            _lineError = _lineServer.Show(result);
         }
 
         _busy = false;
@@ -138,11 +163,26 @@ else
     private async Task IssueAsync()
     {
         _busy = true;
-        // The bound DateTime comes back Unspecified from the date input; the API expects a UTC instant.
-        var dueDate = new DateTimeOffset(DateTime.SpecifyKind(_dueDate.Date, DateTimeKind.Utc));
-        ApiResult<bool> result = await InvoiceApi.IssueAsync(Id, new IssueInvoiceRequest(dueDate));
-        _actionError = result.IsSuccess ? null : result.Error;
+        ApiResult<bool> result = await InvoiceApi.IssueAsync(Id, _issue.ToRequest());
+        _issueError = result.IsSuccess ? null : _issueServer.Show(result);
+        if (result.IsSuccess)
+        {
+            Notifier.Success("Invoice issued.");
+        }
+
         _busy = false;
         await LoadAsync();
+    }
+
+    /// <summary>The action's error to show, or null after announcing its success.</summary>
+    private string? Outcome(ApiResult<bool> result, string success)
+    {
+        if (!result.IsSuccess)
+        {
+            return result.Error;
+        }
+
+        Notifier.Success(success);
+        return null;
     }
 }

@@ -1,17 +1,19 @@
 @page "/invoices/new"
 @inherits ProtectedPage
 @inject IInvoiceApiClient InvoiceApi
+@inject INotificationService Notifier
 
 <PageTitle>New invoice — Trellis</PageTitle>
 
 <h1>New invoice</h1>
 
+@* No ValidationSummary: each message sits under its input, and the alert below announces the failure once. *@
 <EditForm Model="_model" OnValidSubmit="SubmitAsync" class="form">
     <DataAnnotationsValidator />
-    <ValidationSummary />
+    <ServerValidation @ref="_server" />
 
-    <label>Customer name<InputText @bind-Value="_model.CustomerName" /><ValidationMessage For="() => _model.CustomerName" /></label>
-    <label>Customer email<InputText @bind-Value="_model.CustomerEmail" /><ValidationMessage For="() => _model.CustomerEmail" /></label>
+    <label>Customer name<InputText @bind-Value="_model.CustomerName" maxlength="200" /><ValidationMessage For="() => _model.CustomerName" /></label>
+    <label>Customer email<InputText @bind-Value="_model.CustomerEmail" inputmode="email" maxlength="320" /><ValidationMessage For="() => _model.CustomerEmail" /></label>
     <label>Currency<InputText @bind-Value="_model.Currency" maxlength="3" /><ValidationMessage For="() => _model.Currency" /></label>
 
     @if (_error is not null)
@@ -25,7 +27,8 @@
 @code {
     protected override string RequiredPermission => "invoices:write";
 
-    private readonly Model _model = new();
+    private readonly CreateInvoiceForm _model = new();
+    private ServerValidation _server = default!;
     private string? _error;
     private bool _busy;
 
@@ -34,31 +37,17 @@
         _busy = true;
         _error = null;
 
-        ApiResult<Guid> result = await InvoiceApi.CreateAsync(
-            new CreateInvoiceRequest(_model.CustomerName, _model.CustomerEmail, _model.Currency.ToUpperInvariant()));
+        ApiResult<Guid> result = await InvoiceApi.CreateAsync(_model.ToRequest());
 
         if (result.IsSuccess)
         {
+            Notifier.Success("Draft invoice created.");
             Navigation.NavigateTo($"invoices/{result.Value}");
         }
         else
         {
-            _error = result.Error;
+            _error = _server.Show(result);
             _busy = false;
         }
-    }
-
-    private sealed class Model
-    {
-        [System.ComponentModel.DataAnnotations.Required]
-        public string CustomerName { get; set; } = string.Empty;
-
-        [System.ComponentModel.DataAnnotations.Required]
-        [System.ComponentModel.DataAnnotations.EmailAddress]
-        public string CustomerEmail { get; set; } = string.Empty;
-
-        [System.ComponentModel.DataAnnotations.Required]
-        [System.ComponentModel.DataAnnotations.StringLength(3, MinimumLength = 3)]
-        public string Currency { get; set; } = "USD";
     }
 }

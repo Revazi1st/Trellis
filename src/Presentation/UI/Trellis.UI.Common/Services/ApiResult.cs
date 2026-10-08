@@ -27,8 +27,9 @@ public sealed class ApiResult<T>
     public string? Error { get; }
 
     /// <summary>
-    /// The HTTP status of a failed call. Null on success, and on a failure where no HTTP response
-    /// arrived at all (connection refused or reset, DNS failure, timeout).
+    /// The error status the API answered a failed call with. Null on success, and on a failure where no
+    /// usable answer arrived: no response (connection refused or reset, DNS failure), a timeout, an open
+    /// circuit, or a 2xx whose body was missing or unreadable.
     /// </summary>
     public int? StatusCode { get; }
 

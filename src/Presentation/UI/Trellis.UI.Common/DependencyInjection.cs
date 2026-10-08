@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Trellis.UI.Common.Auth;
 using Trellis.UI.Common.Services;
 
@@ -11,7 +12,15 @@ public static class DependencyInjection
     private const string ApiClientName = "trellis-api";
 
     /// <summary>
-    /// Registers the shared UI service layer (typed API clients, bearer handler, auth state).
+    /// How long a page waits for the API before it shows the service-unavailable sentence. Shorter than
+    /// the host's standard resilience handler (30 s total request timeout, 30 s circuit-breaker sampling
+    /// window), which would otherwise hold a user for 30 s on a dead API; the handler's own 10 s attempt
+    /// timeout and circuit still act inside it. The host's <c>configureApiClient</c> may set another value.
+    /// </summary>
+    public static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// Registers the shared UI service layer (typed API clients, bearer handler, auth state, notifications).
     /// The host supplies <paramref name="configureApiClient"/> (base address — e.g. service discovery)
     /// and must register its own <see cref="ITokenStore"/> for the platform.
     /// </summary>
@@ -23,6 +32,10 @@ public static class DependencyInjection
     {
         services.AddHttpClient(ApiClientName);
 
+        // The clock for token expiry, the refresh hold-off and notifications. A host (or a test) that
+        // registers its own TimeProvider first keeps it.
+        services.TryAddSingleton(TimeProvider.System);
+
         // Deliberately NOT AddHttpClient<T>(...).AddHttpMessageHandler<BearerTokenHandler>():
         // IHttpClientFactory builds and caches handler chains in its own DI scope, so a handler
         // that depends on the *scoped* token state would get a different instance than the Blazor
@@ -32,6 +45,8 @@ public static class DependencyInjection
         // token source needs IAuthApiClient to refresh — attaching it here would be a DI cycle.
         services.AddScoped<IInvoiceApiClient>(sp => new InvoiceApiClient(CreateApiClient(sp, configureApiClient, withBearer: true)));
         services.AddScoped<IAuthApiClient>(sp => new AuthApiClient(CreateApiClient(sp, configureApiClient, withBearer: false)));
+
+        services.AddScoped<INotificationService, NotificationService>();
 
         services.AddAuthorizationCore();
         services.AddScoped<TokenAuthenticationStateProvider>();
@@ -53,7 +68,7 @@ public static class DependencyInjection
             ? new BearerTokenHandler(sp.GetRequiredService<IAccessTokenSource>()) { InnerHandler = primary }
             : primary;
 
-        HttpClient client = new(top, disposeHandler: false);
+        HttpClient client = new(top, disposeHandler: false) { Timeout = ApiTimeout };
         configure(sp, client);
         return client;
     }

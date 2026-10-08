@@ -10,9 +10,10 @@ namespace Trellis.ApiTests.Ui;
 
 /// <summary>
 /// What a user reads when a call fails (<c>ApiResponses.Describe</c>), driven end to end through the
-/// typed client: a canned response in, <see cref="ApiResult{T}.Error"/> out. The bodies are the shapes
-/// the API writes today (no <c>code</c> member: the status and <c>detail</c> decide) and the shapes it
-/// writes once every problem carries <c>code</c> (the code decides).
+/// typed client: a canned response in, <see cref="ApiResult{T}.Error"/> out. The coded bodies are the
+/// shapes the API writes (ADR-0024: <c>code</c>, <c>type</c>, <c>errors[]</c> of <c>{field, code,
+/// description}</c>) and the code decides; the uncoded ones are what an intermediary or an older API
+/// writes, where the status and <c>detail</c> decide. Transport failures: <see cref="ApiCallTests"/>.
 /// </summary>
 public sealed class ApiResponsesTests
 {
@@ -22,14 +23,14 @@ public sealed class ApiResponsesTests
     private const string LockedOutDetail =
         "The account is temporarily locked after too many failed sign-in attempts. Try again later.";
 
-    // Today's Result-path problems: title is the error code, no code member.
-    private const string LockedOutToday =
+    // Problems without a code member: title is whatever the writer chose.
+    private const string LockedOutUncoded =
         """{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.4","title":"Auth.AccountLockedOut","status":403,"detail":"The account is temporarily locked after too many failed sign-in attempts. Try again later.","traceId":"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"}""";
 
-    private const string WrongPasswordToday =
+    private const string WrongPasswordUncoded =
         """{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.2","title":"Auth.InvalidCredentials","status":401,"detail":"The email or password is incorrect.","traceId":"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"}""";
 
-    private const string TwoFieldErrorsToday =
+    private const string TwoFieldErrorsUncoded =
         """{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Validation.General","status":400,"detail":"One or more validation errors occurred.","errors":[{"code":"Email","description":"'Email' must not be empty."},{"code":"Password","description":"'Password' must not be empty."}]}""";
 
     private const string MalformedBody =
@@ -51,23 +52,35 @@ public sealed class ApiResponsesTests
     private const string TwoFieldErrorsCoded =
         """{"type":"urn:problem-type:Validation.General","title":"Validation failed","status":400,"detail":"One or more validation errors occurred.","instance":"/api/v1/auth/login","code":"Validation.General","correlationId":"c-42","errors":[{"field":"email","code":"Validation.NotEmpty","description":"'Email' must not be empty."},{"field":"password","code":"Validation.NotEmpty","description":"'Password' must not be empty."}]}""";
 
+    // A single domain error: top-level code is the error's own, errors[] holds it with a null field.
+    private const string WholeRequestErrorCoded =
+        """{"type":"urn:problem-type:Invoice.DueDateInPast","title":"Validation failed","status":400,"detail":"The due date is required and cannot be in the past.","instance":"/api/v1/invoices/0199b0a0-0000-7000-8000-000000000001/issue","code":"Invoice.DueDateInPast","correlationId":"c-42","errors":[{"field":null,"code":"Invoice.DueDateInPast","description":"The due date is required and cannot be in the past."}]}""";
+
+    // Field errors and a whole-request error in one problem: every sentence, in order.
+    private const string FieldAndWholeRequestErrorsCoded =
+        """{"type":"urn:problem-type:Validation.General","title":"Validation failed","status":400,"detail":"One or more validation errors occurred.","code":"Validation.General","errors":[{"field":"customerName","code":"Validation.NotEmpty","description":"'Customer Name' must not be empty."},{"field":"currency","code":"Validation.ExactLength","description":"'Currency' must be 3 characters in length."},{"field":null,"code":"EmailAddress.Invalid","description":"The email address is not in a valid format."}]}""";
+
     private const string ForbiddenCoded =
         """{"title":"Forbidden","status":403,"detail":"The authenticated user lacks the permission this endpoint requires.","code":"Auth.Forbidden"}""";
 
     [Theory]
     // 403 and 400 show the server's detail.
-    [InlineData(403, LockedOutToday, null, LockedOutDetail)]
+    [InlineData(403, LockedOutUncoded, null, LockedOutDetail)]
     [InlineData(403, LockedOutCoded, null, LockedOutDetail)]
     [InlineData(400, MalformedBody, null, "Failed to read parameter \"LoginRequest request\" from the request body as JSON.")]
-    // A 400 with validation errors shows the errors themselves, in order.
-    [InlineData(400, TwoFieldErrorsToday, null, "'Email' must not be empty. 'Password' must not be empty.")]
+    // A 400 with validation errors shows the errors themselves, in order: two field errors, one
+    // whole-request error (null field), and both kinds together.
+    [InlineData(400, TwoFieldErrorsUncoded, null, "'Email' must not be empty. 'Password' must not be empty.")]
     [InlineData(400, TwoFieldErrorsCoded, null, "'Email' must not be empty. 'Password' must not be empty.")]
+    [InlineData(400, WholeRequestErrorCoded, null, "The due date is required and cannot be in the past.")]
+    [InlineData(400, FieldAndWholeRequestErrorsCoded, null,
+        "'Customer Name' must not be empty. 'Currency' must be 3 characters in length. The email address is not in a valid format.")]
     // 429 turns Retry-After into a wait the user can act on.
     [InlineData(429, RateLimited, 42, "Too many requests. Try again in 42 seconds.")]
     [InlineData(429, RateLimited, 1, "Too many requests. Try again in 1 second.")]
     [InlineData(429, RateLimited, null, "Too many requests. Try again shortly.")]
     // 401: the server's sentence, the coded one, or (nothing to read) the invalid-credentials text.
-    [InlineData(401, WrongPasswordToday, null, "The email or password is incorrect.")]
+    [InlineData(401, WrongPasswordUncoded, null, "The email or password is incorrect.")]
     [InlineData(401, WrongPasswordCoded, null, InvalidCredentials)]
     [InlineData(401, null, null, InvalidCredentials)]
     // A 5xx never shows its (opaque) detail.
@@ -109,6 +122,19 @@ public sealed class ApiResponsesTests
     }
 
     [Fact]
+    public async Task Whole_request_error_keeps_its_null_field()
+    {
+        await using var ui = new UiHarness();
+        ui.Api.Always(_ => Responses.Problem(HttpStatusCode.BadRequest, WholeRequestErrorCoded));
+
+        ApiResult<TokenResponse> result = await ui.AuthApi.LoginAsync(
+            new LoginRequest("someone@example.com", "password"), TestContext.Current.CancellationToken);
+
+        result.Problem!.Code.ShouldBe("Invoice.DueDateInPast");
+        result.Errors.ShouldHaveSingleItem().Field.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Failure_without_a_problem_body_has_no_problem_and_no_errors()
     {
         await using var ui = new UiHarness();
@@ -124,48 +150,6 @@ public sealed class ApiResponsesTests
         result.StatusCode.ShouldBe(502);
         result.Problem.ShouldBeNull();
         result.Errors.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task Unreachable_api_is_service_unavailable_with_no_status()
-    {
-        await using var ui = new UiHarness();
-        ui.Api.Respond = static (_, _) => throw new HttpRequestException("Connection refused");
-
-        ApiResult<TokenResponse> result = await ui.AuthApi.LoginAsync(
-            new LoginRequest("someone@example.com", "password"), TestContext.Current.CancellationToken);
-
-        result.IsSuccess.ShouldBeFalse();
-        result.Error.ShouldBe(ServiceUnavailable);
-        result.StatusCode.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task Client_timeout_is_service_unavailable_with_no_status()
-    {
-        await using var ui = new UiHarness(clientTimeout: TimeSpan.FromMilliseconds(100));
-        ui.Api.Respond = static async (_, cancellationToken) =>
-        {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-            return Responses.Status(HttpStatusCode.OK);
-        };
-
-        ApiResult<TokenResponse> result = await ui.AuthApi.LoginAsync(
-            new LoginRequest("someone@example.com", "password"), TestContext.Current.CancellationToken);
-
-        result.Error.ShouldBe(ServiceUnavailable);
-        result.StatusCode.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task Cancellation_the_caller_asked_for_propagates()
-    {
-        await using var ui = new UiHarness();
-        using var cancelled = new CancellationTokenSource();
-        await cancelled.CancelAsync();
-
-        await Should.ThrowAsync<OperationCanceledException>(() => ui.AuthApi.LoginAsync(
-            new LoginRequest("someone@example.com", "password"), cancelled.Token));
     }
 
     [Fact]

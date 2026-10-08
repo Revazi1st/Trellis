@@ -40,6 +40,10 @@
 </EditForm>
 
 @code {
+    /// <summary>The page a protected page sent the user here from; honoured only when it is a page of this app.</summary>
+    [SupplyParameterFromQuery(Name = LoginRedirect.ReturnUrlParameter)]
+    public string? ReturnUrl { get; set; }
+
     private readonly Credentials _model = new();
     private string? _error;
     private bool _busy;
@@ -54,7 +58,7 @@
         if (result.IsSuccess)
         {
             await AuthState.SignInAsync(result.Value!.AccessToken, result.Value.RefreshToken);
-            Navigation.NavigateTo("invoices");
+            Navigation.NavigateTo(LoginRedirect.LocalReturnUrl(ReturnUrl) ?? "invoices");
         }
         else
         {

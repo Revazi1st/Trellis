@@ -60,6 +60,33 @@ public sealed class LoginFlowTests
     }
 
     [Fact]
+    public async Task Signing_in_from_a_protected_page_returns_to_it()
+    {
+        Assert.SkipUnless(UiTestEnvironment.Enabled,
+            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+
+        using IPlaywright playwright = await Playwright.CreateAsync();
+        await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
+        IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
+
+        // Anonymous on a protected page: sent to sign-in, carrying the page as returnUrl.
+        await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/invoices/new");
+        await page.WaitForURLAsync(
+            new Regex("/login\\?returnUrl=invoices%2Fnew$", RegexOptions.None, TimeSpan.FromSeconds(5)),
+            new() { Timeout = 15_000 });
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        await page.FillAsync("input[autocomplete='username']", UiTestEnvironment.SeededAdminEmail);
+        await page.FillAsync("input[autocomplete='current-password']", UiTestEnvironment.SeededAdminPassword);
+        await page.ClickAsync("button[type='submit']");
+
+        await page.WaitForURLAsync(
+            new Regex("/invoices/new$", RegexOptions.None, TimeSpan.FromSeconds(5)),
+            new() { Timeout = 15_000 });
+        await page.Locator("h1", new() { HasText = "New invoice" }).WaitForAsync(new() { Timeout = 15_000 });
+    }
+
+    [Fact]
     public async Task Creating_a_draft_invoice_lands_on_its_detail_page()
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,

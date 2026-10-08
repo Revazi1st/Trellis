@@ -1,6 +1,7 @@
 @page "/register"
 @inject IAuthApiClient AuthApi
 @inject NavigationManager Navigation
+@inject INotificationService Notifier
 
 <PageTitle>Create account — Trellis</PageTitle>
 
@@ -43,6 +44,7 @@
 
         if (result.IsSuccess)
         {
+            Notifier.Success("Account created. Sign in to continue.");
             Navigation.NavigateTo("login");
         }
         else
