@@ -178,6 +178,37 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         second.Value.TenantId.ShouldNotBe(first.Value.TenantId, StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// A user's TenantId is their membership, assigned by whoever creates the account. The interceptor
+    /// stamps only the aggregate roots' shadow column, so a user created while another tenant is
+    /// current (an administrator provisioning a tenant, a seeder, an event handler) keeps its own.
+    /// </summary>
+    [Fact]
+    public async Task Creating_a_user_under_another_tenant_keeps_the_users_own_tenant()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        const string email = "tenant-b-user@test.dev";
+
+        AmbientTenant.CurrentTenantId = TenantA;
+        try
+        {
+            using IServiceScope scope = _system!.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = new ApplicationUser { Id = Guid.CreateVersion7(), UserName = email, Email = email, TenantId = TenantB };
+            (await userManager.CreateAsync(user, Password)).Succeeded.ShouldBeTrue();
+        }
+        finally
+        {
+            AmbientTenant.CurrentTenantId = null;
+        }
+
+        using IServiceScope read = _system!.CreateScope();
+        ApplicationUser? stored = await read.ServiceProvider.GetRequiredService<AppDbContext>().Users
+            .AsNoTracking()
+            .SingleOrDefaultAsync(static user => user.Email == email, ct);
+        stored.ShouldNotBeNull().TenantId.ShouldBe(TenantB);
+    }
+
     [Fact]
     public async Task Outbox_rows_carry_the_originating_tenant_and_handlers_run_under_it()
     {

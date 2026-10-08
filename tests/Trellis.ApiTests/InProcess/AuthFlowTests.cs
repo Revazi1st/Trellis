@@ -10,10 +10,14 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Shouldly;
 using Trellis.Api.Contracts.Auth;
+using Trellis.Application.Options;
 using Trellis.Persistence.Identity;
 using Xunit;
 
@@ -66,6 +70,35 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         // Nothing was created: the address is not an account on either host.
         (await factory.CreateClient().PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(email, Password), ct))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Register_WithTheShippedProductionConfiguration_IsClosed()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string database = factory.Services.GetRequiredService<IConfiguration>().GetConnectionString("trellis-db")!;
+
+        // Deliberately not an ApiFactory: every fixture states Registration:Mode=Open, and a host setting
+        // cannot be unset (a null value reaches the app as an empty string). This host is Production,
+        // so it reads the committed appsettings.json and nothing else, given only the two values the
+        // repository leaves to each environment: a database and a signing key.
+        await using var unconfigured = new WebApplicationFactory<apihost::Program>();
+        WebApplicationFactory<apihost::Program> shipped = unconfigured.WithWebHostBuilder(builder => builder
+            .UseEnvironment(Environments.Production)
+            .UseSetting("ConnectionStrings:trellis-db", database)
+            .UseSetting("Authentication:SigningKey", ApiFactory.SigningKey));
+
+        // The committed value, not merely the enum's default: deleting the line from appsettings.json fails here.
+        string? configuredMode = shipped.Services.GetRequiredService<IConfiguration>()["Registration:Mode"];
+        RegistrationMode resolvedMode = shipped.Services.GetRequiredService<IOptions<RegistrationOptions>>().Value.Mode;
+        configuredMode.ShouldBe(nameof(RegistrationMode.Closed));
+        resolvedMode.ShouldBe(RegistrationMode.Closed);
+
+        HttpResponseMessage response = await shipped.CreateClient()
+            .PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest(NewEmail(), Password), ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await ProblemCodeAsync(response, ct)).ShouldBe("Auth.RegistrationClosed");
     }
 
     [Theory]

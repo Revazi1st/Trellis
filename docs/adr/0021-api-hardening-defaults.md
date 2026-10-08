@@ -105,7 +105,10 @@ bucket and tests can model "many users behind one host" explicitly (`CreateClien
 - Forgetting authorization on a new endpoint is a red build, not a public endpoint. Adding an anonymous
   endpoint is a reviewed two-line change (the endpoint and the allowlist entry).
 - The deny-by-default group means every non-anonymous endpoint runs with an authenticated principal,
-  which is what lets per-request context (the tenant under ADR-0019's toggle) come from the principal.
+  which is what lets per-request context (the tenant, ADR-0022) come from the principal.
+- Security events name an account by user id; a failed sign-in for an address that matches no account
+  has no user id, so event 1102 logs the masked e-mail (first character plus domain, `j***@example.com`),
+  enough to spot a run against one domain, and never the full address or the password.
 - `aspire publish` output boots safely with no proxy configured; it rate-limits the ingress address
   until the operator sets `ForwardedHeaders__KnownNetworks__0`, and the startup log says so.
 - `/auth/refresh` and `/auth/logout` responses can no longer be 429 because of other users' logins.
