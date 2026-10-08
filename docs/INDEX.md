@@ -5,7 +5,7 @@ Agent entry point — read only what the task needs.
 ## Guides (humans & agents)
 - [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns
 - [development.md](development.md) — prerequisites, commands, running the app, tests
-- [deployment.md](deployment.md) — container images, the migration job, required production config, probes, OTLP
+- [deployment.md](deployment.md) — container images, what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP, outbox and idempotency runbooks
 - [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge
 - [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice
 - [features/auth.md](features/auth.md) — Identity + JWT, refresh rotation/revocation, permissions, lockout
@@ -21,7 +21,7 @@ Agent entry point — read only what the task needs.
 - [0003](adr/0003-hand-rolled-cqrs.md) — hand-rolled CQRS handlers + decorator pipeline (no mediator)
 - [0004](adr/0004-result-over-exceptions.md) — Result pattern over exceptions; ProblemDetails mapping
 - [0005](adr/0005-hand-rolled-strongly-typed-ids.md) — hand-rolled strongly-typed IDs (Vogen alternative)
-- [0006](adr/0006-ef-complex-types-and-interceptors.md) — EF 10 complex types for value objects + SaveChanges interceptors
+- [0006](adr/0006-ef-complex-types-and-interceptors.md) — EF 10 complex types for value objects + SaveChanges interceptors (in-transaction event dispatch superseded by 0018)
 - [0007](adr/0007-identity-in-persistence-custom-jwt-endpoints.md) — Identity in Persistence; custom JWT auth; permission-based authz
 - [0008](adr/0008-containerized-sdk-and-aspire-orchestration.md) — containerized SDK for build/test; Aspire run + E2E need local SDK or CI
 - [0009](adr/0009-test-stack.md) — test pyramid + architecture-fitness tests; free-for-commercial libraries
@@ -33,7 +33,7 @@ Agent entry point — read only what the task needs.
 - [0015](adr/0015-blazor-everywhere-shared-ui.md) — shared render-mode-agnostic Razor Class Library for the Blazor UI
 - [0016](adr/0016-ring-grouped-folders.md) — ring-grouped source folders (Core / Infrastructure / Presentation / Shared)
 - [0017](adr/0017-hand-rolled-specifications.md) — hand-rolled Specification<T>, Domain stays dependency-free
-- [0018](adr/0018-transactional-outbox-and-idempotency.md) — transactional outbox for domain events + command idempotency
+- [0018](adr/0018-transactional-outbox-and-idempotency.md) — transactional outbox for domain events (supersedes 0006's dispatch interceptor) + command idempotency (v2 amendment: reserve in the unit of work, replay the stored response)
 - [0019](adr/0019-multitenancy-toggle.md) — multi-tenancy as an opt-in template toggle
 - [0020](adr/0020-outbound-http-integrations.md) — outbound HTTP integrations: typed client, per-client resilience, validated options
 - [0021](adr/0021-api-hardening-defaults.md) — API hardening defaults: deny-by-default group + allowlist test, forwarded-header trust never widens, rate limits by credential type, headers, limits

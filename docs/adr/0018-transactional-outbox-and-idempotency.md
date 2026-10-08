@@ -1,6 +1,6 @@
 # ADR-0018: Transactional outbox for domain events + command idempotency
 
-- **Status**: accepted — processor semantics (lease claim, per-handler checkpoints, back-off, dead-letter window) refined by ADR-0023
+- **Status**: accepted — supersedes the in-transaction domain-event dispatch of ADR-0006; processor semantics (lease claim, per-handler checkpoints, back-off, dead-letter window) refined by ADR-0023
 - **Amended**: 2026-10-08 — idempotency v2: the reservation rides the command's unit of work and the stored response is replayed (see *Amendment* below)
 - **Date**: 2026-07-16
 

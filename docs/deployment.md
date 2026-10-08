@@ -1,7 +1,8 @@
 # Deployment
 
-Production deployment of a generated solution: container images, the migration job, the
-required configuration, probes, telemetry.
+Production deployment of a generated solution: container images, what `aspire publish` produces,
+edge TLS, the migration job, the required configuration, probes, telemetry, and the outbox and
+idempotency runbooks.
 
 ## Container images — no Dockerfiles, by design
 
@@ -17,16 +18,50 @@ dotnet publish src/Presentation/UI/Trellis.UI.Web /t:PublishContainer   # if the
 Base image, exposed port and entry point derive from the project; registry and tag are MSBuild
 properties (`-p:ContainerRegistry=… -p:ContainerRepository=… -p:ContainerImageTag=…`).
 
-For Docker Compose targets, the AppHost declares `AddDockerComposeEnvironment("compose")` —
-`aspire publish` (local SDK required, ADR-0008) emits compose artifacts from the same
-orchestration model that `aspire run` uses, building the images via `PublishContainer` along
-the way. The generated compose file already encodes the ordering below.
+### Docker Compose: what `aspire publish` produces
 
-What the compose output publishes: the AppHost marks the public surfaces external
-(`WithExternalHttpEndpoints()`), so `api` and, when the UI is included, `web` get a `ports:`
-entry. `postgres` and `migrations` stay on the internal `aspire` network. The publisher also
-adds the Aspire dashboard (`compose-dashboard`) with its UI port published; decide whether it
-belongs in your production environment before you deploy.
+The AppHost declares `AddDockerComposeEnvironment("compose")`, so `aspire publish` (a local SDK and
+the Aspire CLI, ADR-0008) writes a `docker-compose.yaml` and an `.env` from the same orchestration
+model `aspire run` uses. What the publish step of Aspire 13.5 writes, and what it leaves to you:
+
+| Service | As published | Before production |
+|---|---|---|
+| `postgres` | `postgres:18`, a named data volume, port 5432 on the internal `aspire` network only (`expose:`), password from `POSTGRES_PASSWORD` in `.env` | Set a strong `POSTGRES_PASSWORD`; plan backups of the volume. Keep the major version pinned: a data volume does not survive a major upgrade |
+| `migrations` | `${MIGRATIONS_IMAGE}`, no ports, starts once PostgreSQL has *started* (not once it is ready; the job's retrying execution strategy rides out a normal start-up) | Add `Seed__AdminPassword` (the job refuses the default outside Development). No restart policy: it is a one-shot job, and rerunning `docker compose up` reruns it safely |
+| `api` | `${API_IMAGE}`, published as `"${API_PORT}"` (the container port on an **ephemeral host port**), starts only after `migrations` exited 0, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` | Add `Authentication__SigningKey` (the API refuses to boot without it), `Email__Provider`, `Registration__Mode` if wanted, the `ForwardedHeaders__*` lists (below) and `restart: unless-stopped`; publish a fixed host port or none (behind the proxy) |
+| `web` (with the UI) | `${WEB_IMAGE}`, `"${WEB_PORT}"` on an ephemeral host port, service discovery pointed at `http://api:${API_PORT}`, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` | `restart: unless-stopped`; reach it only through the proxy (below) |
+| `compose-dashboard` | The Aspire dashboard (`mcr.microsoft.com/dotnet/nightly/aspire-dashboard`), UI port 18888 published, OTLP on 18889/18890 internal, `restart: always`; every .NET service exports its logs, metrics and traces to it | **Decide** (below) |
+
+`.env` holds the parameters: the three image names, the two container ports and the PostgreSQL
+password, empty until you fill them (or a deploy step does). Build the images with
+`PublishContainer` (above) and put their names in `.env`. Nothing in the file is TLS, a health check
+or a resource limit; nothing sets `ASPNETCORE_ENVIRONMENT`, so every host runs as Production.
+
+**The dashboard.** It is a development tool that also works in production, but it keeps telemetry in
+memory only, it shows every log line and trace (masked, but still operational detail), and its UI is
+published on a host port. Pick one before the first deploy: keep it and remove its `ports:` entry
+(reach it over an SSH tunnel; it asks for the browser token it prints at start-up), or delete the
+service and point `OTEL_EXPORTER_OTLP_ENDPOINT` of every service at your own collector.
+
+### Edge TLS and forwarded headers
+
+The hosts speak plain HTTP; TLS terminates in front of them, at a reverse proxy (Caddy, nginx,
+Traefik), a cloud load balancer or a Kubernetes ingress, which forwards to `api` and `web` over the
+internal network. Then:
+
+- **Tell the API which proxy to trust.** `ForwardedHeaders__KnownProxies__0` (the proxy's fixed IP)
+  or `ForwardedHeaders__KnownNetworks__0` (a CIDR range, e.g. the compose network's subnet: pin it
+  with an `ipam` block, read it with `docker network inspect <project>_aspire`). With neither, the
+  API trusts loopback only (ADR-0021): it logs a startup warning, ignores `X-Forwarded-For` and
+  `X-Forwarded-Proto`, every caller shares the proxy's rate-limit bucket, and logs show the proxy's
+  address. The publisher's `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` cannot widen that trust.
+- **Keep the hosts off the public network.** Only the proxy publishes ports. The web host takes
+  `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` as the framework does (forwarded headers from any
+  address), so it must be reachable only through the proxy; the probes stay internal too (below).
+- **Redirect to HTTPS at the proxy.** Neither host can: the API has no HTTPS redirection at all, and
+  the web host's finds no HTTPS port to redirect to behind a proxy and stays inert. Forward
+  `X-Forwarded-Proto` so both see the original scheme; the web host then sends
+  `Strict-Transport-Security` on HTTPS requests outside Development.
 
 ## Migrations: a one-shot pre-deploy job
 
