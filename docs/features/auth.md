@@ -99,11 +99,21 @@ for input that fails a validator. The host's own rejections use the same vocabul
 401 from refresh signs the circuit out; a 429, a 5xx or an unreachable API keeps the stored pair,
 holds off the next attempt for 5 s and keeps the user signed in (ADR-0021).
 
+Signing out forgets the pair at once, then revokes the refresh token with `POST /auth/logout`
+(`IAuthApiClient.LogoutAsync`, best-effort: if the API cannot be reached the token simply expires);
+UI.Web also revokes it when a circuit closes (`RevokeSessionOnCircuitClose`), since a closed circuit
+takes its tokens with it. An open protected page reacts to the session ending — sign-out, or a
+rejected refresh — by going to `login?returnUrl=<the page>`, and the sign-in page returns there
+afterwards; only a plain relative path inside the app is honoured (`LoginRedirect`), so the query
+string cannot be used as an open redirect.
+
 The clients show what the API said rather than a guess: the lockout 403, a password-policy 400 and
 the register 409 display the problem's `detail`, a 429 says how long to wait (`Retry-After`), a 5xx
 or an unreachable API reads "The service is unavailable right now", and a wrong password reads as
-the server's invalid-credentials sentence. The seeded-admin hint on the sign-in page renders only
-when the host enables `UiOptions.ShowDevelopmentHints` (UI.Web: in Development).
+the server's invalid-credentials sentence. A call that gets no usable answer — no response, a
+timeout, an open circuit, an unreadable body — is the service-unavailable sentence too, never an
+exception (`ApiCall`). The seeded-admin hint on the sign-in page renders only when the host enables
+`UiOptions.ShowDevelopmentHints` (UI.Web: in Development).
 
 Auth rejections are RFC 9457 everywhere: JwtBearer challenges (401) and forbidden (403) responses
 carry problem-details bodies, and rate-limited requests get a 429 problem with `Retry-After` — all
@@ -124,8 +134,9 @@ idempotency — real Identity + PostgreSQL) · `ApiTests/InProcess/AuthRateLimit
 boot; rotation, replay killing the family, logout twice, revoke-all; lockout 4×401 → 403 → 403
 with its security events; equal hash work for an unknown e-mail; refresh-token expiry on an
 adjustable clock; 400 for missing fields) ·
-`ApiTests/Ui` (client-side: failure sentences, refresh tolerance and hold-off, bearer attachment,
-the development-only sign-in hint; fake handlers, no browser) ·
+`ApiTests/Ui` (client-side: failure sentences, transport failures as results, refresh tolerance and
+hold-off, bearer attachment, sign-out revoking the refresh token, the return-URL guard, protected
+pages leaving when the session ends, the development-only sign-in hint; fake handlers, no browser) ·
 `ApiTests/InProcess/TenantIsolationTests` (multi-tenancy toggle, all-options leg: the token carries
 the tenant claim, a token without it is 401, `X-Tenant-Id` never overrides the claim).
 
