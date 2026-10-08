@@ -69,12 +69,15 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
             return id;
         }
 
-        // Now = 2026-07-20 (fixture clock)
-        await Seed("overdue-july", new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero));
-        await Seed("overdue-june", new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
-        await Seed("not-due-yet", new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
-        await Seed("paid", new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero), paid: true);
+        // Issued at the fixture clock's 2026-07-20 (a due date is never past when issued)...
+        await Seed("overdue-september", new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
+        await Seed("overdue-august", new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
+        await Seed("not-due-yet", new DateTimeOffset(2026, 12, 1, 0, 0, 0, TimeSpan.Zero));
+        await Seed("paid", new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero), paid: true);
         await Seed("still-draft", dueDate: null);
+
+        // ...and listed on 2026-10-01, when two of them have fallen due.
+        Time.SetUtcNow(new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero));
 
         using var readScope = CreateScope();
         var list = readScope.ServiceProvider
@@ -84,6 +87,6 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
 
         overdue.IsSuccess.ShouldBeTrue();
         overdue.Value.TotalCount.ShouldBe(2);
-        overdue.Value.Items.Select(static i => i.CustomerName).ShouldBe(["overdue-june", "overdue-july"]);
+        overdue.Value.Items.Select(static i => i.CustomerName).ShouldBe(["overdue-august", "overdue-september"]);
     }
 }

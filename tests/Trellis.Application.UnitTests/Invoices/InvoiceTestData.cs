@@ -12,7 +12,7 @@ internal static class InvoiceTestData
     {
         Invoice invoice = Draft();
         invoice.AddLine("Consulting", Money.Create(100m, "USD").Value);
-        invoice.Issue(new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
+        invoice.Issue(new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero), now: new DateTimeOffset(2026, 7, 15, 0, 0, 0, TimeSpan.Zero));
         invoice.ClearDomainEvents();
         return invoice;
     }
