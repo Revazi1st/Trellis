@@ -56,7 +56,13 @@ namespace Trellis.Persistence.Migrations
                 columns: table => new
                 {
                     Key = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    CreatedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    RequestFingerprint = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    CreatedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    StatusCode = table.Column<int>(type: "integer", nullable: true),
+                    ContentType = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    Body = table.Column<byte[]>(type: "bytea", nullable: true),
+                    Location = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    CompletedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
