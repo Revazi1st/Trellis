@@ -109,7 +109,7 @@ def main() -> int:
             lines = cls.find("lines")
             for line in (lines.iter("line") if lines is not None else ()):
                 by_assembly[(ring, assembly)].add(filename, line)
-    rows ={key: tally for key, tally in by_assembly.items() if key[0] != "other"}
+    rows = {key: tally for key, tally in by_assembly.items() if key[0] != "other"}
     for (ring, _), tally in rows.items():
         by_ring[ring].merge(tally)
 
