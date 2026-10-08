@@ -33,4 +33,13 @@ builder.Services.AddOptions<SeedOptions>()
 builder.Services.AddSingleton(static provider => provider.GetRequiredService<IOptions<SeedOptions>>().Value);
 builder.Services.AddHostedService<MigrationWorker>();
 
-await builder.Build().RunAsync();
+try
+{
+    await builder.Build().RunAsync();
+}
+catch (OptionsValidationException)
+{
+    // The host has already logged it ("Hosting failed to start", naming the key). Exit 1 like any other
+    // failed run — the API waits on this exit code — instead of crashing on an unhandled exception.
+    Environment.ExitCode = 1;
+}
