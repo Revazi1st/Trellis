@@ -69,7 +69,9 @@ because the artifact is what consumers get.
 
 `ProblemComponentsDocumentTransformer` publishes `components.schemas.ProblemResponse` (whose `errors[]`
 items reference `FieldError`) generated from `Api.Contracts.Common.ProblemResponse`/`FieldError` — the
-same records the UI reads (ADR-0024). `ProblemResponsesOperationTransformer` then documents, per
+same records the UI reads (ADR-0024); it requires only `type`, `title`, `status` and `code`, the members every
+problem carries (`errors` is absent outside a validation 400, `detail` on a bare 404/405).
+`ProblemResponsesOperationTransformer` then documents, per
 operation and from its shape: a 400 wherever there is input to reject (a body, a route id, a query
 parameter), a 404 wherever a route id can miss, a 409 on a write to an addressed resource (state rule or
 concurrency; the idempotency 409 keeps its own sentence and gains this one), 429 and 500 everywhere, and

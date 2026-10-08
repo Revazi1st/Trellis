@@ -112,6 +112,10 @@ public sealed class OpenApiDocumentTests
             problem.TryGetProperty(member, out _).ShouldBeTrue($"ProblemResponse.{member}");
         }
 
+        // Only what every problem carries is required: `errors` is absent outside a validation 400, `detail` on a status-code-pages 404.
+        string[] required = [.. schemas.GetProperty("ProblemResponse").GetProperty("required").EnumerateArray().Select(static r => r.GetString()!)];
+        required.ShouldBe(["type", "title", "status", "code"], StringComparer.Ordinal, ignoreOrder: true);
+
         problem.GetProperty("errors").GetProperty("items").GetProperty("$ref").GetString().ShouldBe("#/components/schemas/FieldError");
         JsonElement fieldError = schemas.GetProperty("FieldError").GetProperty("properties");
         fieldError.EnumerateObject().Select(static p => p.Name).ShouldBe(["field", "code", "description"], StringComparer.Ordinal, ignoreOrder: true);

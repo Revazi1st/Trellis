@@ -5,10 +5,11 @@ namespace Trellis.Api.Contracts.Common;
 /// wire shape. Clients branch on <see cref="Code"/> and <see cref="Status"/>, display
 /// <see cref="Detail"/> and <see cref="Errors"/>, and never parse <see cref="Title"/> (ADR-0024).
 /// <para>
-/// A tolerant reader: every member is optional. This API emits every member on every problem it writes
-/// (ADR-0024), but a problem can come from an intermediary rather than from this API, and a server
-/// older than the client may predate a member. <see cref="Errors"/> is present on 400 validation
-/// problems and absent otherwise.
+/// A tolerant reader: every member is optional. This API sets <see cref="Type"/>, <see cref="Title"/>,
+/// <see cref="Status"/> and <see cref="Code"/> on every problem it writes (ADR-0024; the OpenAPI schema
+/// requires exactly those), but a problem can come from an intermediary rather than from this API, and a
+/// server older than the client may predate a member. <see cref="Errors"/> is present on 400 validation
+/// problems and absent otherwise; <see cref="Detail"/> is absent on a bare 404/405.
 /// </para>
 /// </summary>
 /// <param name="Type">URI identifying the problem type.</param>

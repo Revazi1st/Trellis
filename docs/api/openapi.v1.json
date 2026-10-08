@@ -1530,12 +1530,7 @@
           "type",
           "title",
           "status",
-          "detail",
-          "instance",
-          "code",
-          "correlationId",
-          "traceId",
-          "errors"
+          "code"
         ],
         "type": "object",
         "properties": {
