@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# PostToolUse(Edit|Write): if a feature slice changed but its docs didn't, remind (non-blocking).
-# Deterministic reminder only — the hard guarantee is scripts/check-docs-drift.sh in CI.
-set -euo pipefail
-cd "${CLAUDE_PROJECT_DIR:-.}"
+# PostToolUse(Edit|Write): if code changed without the doc that describes it, remind (non-blocking).
+# The code-to-doc mapping lives in one place, scripts/check-docs-drift.sh, run here over the
+# uncommitted changes; CI runs the same script over the whole branch, which is the hard guarantee.
+set -uo pipefail
+cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
-changed="$(git status --porcelain 2>/dev/null || true)"
-features_changed="$(printf '%s\n' "$changed" | grep -E 'src/.*/Features/' || true)"
-docs_changed="$(printf '%s\n' "$changed" | grep -E 'docs/features/' || true)"
+script=scripts/check-docs-drift.sh
+[ -f "$script" ] || exit 0
 
-if [ -n "$features_changed" ] && [ -z "$docs_changed" ]; then
-  cat <<'JSON'
-{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"A feature slice under **/Features/** changed but no docs/features/*.md did. If this adds or changes a feature's behavior, update its doc under docs/features/ (see the add-feature skill). The CI docs-drift check enforces this on PRs."}}
-JSON
-fi
+output="$(GITHUB_ACTIONS='' bash "$script" --working-tree 2>/dev/null)" && exit 0
+case "$output" in
+  *"Update the docs named above"*) ;;
+  *) exit 0 ;; # not a drift finding (no git, say): stay silent rather than nag
+esac
+
+# JSON-escape the report: backslashes and quotes, then newlines as \n.
+escaped="$(printf '%s\n' "$output" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | awk 'BEGIN { ORS = "\\n" } { print }')"
+printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' \
+  "Docs drift in the uncommitted changes (scripts/check-docs-drift.sh):\\n${escaped}The CI docs-drift check enforces this on PRs; the add-feature skill shows a feature doc's shape."
 exit 0

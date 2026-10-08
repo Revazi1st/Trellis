@@ -39,20 +39,30 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Supply chain">
-    <!-- NuGet vulnerability auditing on the full graph (transitive included). -->
+    <!-- NuGet vulnerability auditing on the full graph (transitive included), down to low severity.
+         With warnings as errors (Release/CI) a new advisory fails the build: upgrade, pin the
+         transitive in Directory.Packages.props, or as a last resort add a NuGetAuditSuppress item
+         for that one advisory, with its reason. Playbook: docs/development.md, "Vulnerable packages". -->
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
 
-  <!-- The LICENSE CEILINGS in Directory.Packages.props are enforced, not advisory (ADR-0011).
-       Catches direct references; Dependabot's ignore list covers the bot-upgrade path.
+  <!-- The LICENSE CEILINGS in Directory.Packages.props are enforced, not advisory (ADR-0011), by two
+       targets over one list: EnforceLicenseCeilings fails fast on a direct PackageReference, before
+       restore; EnforceLicenseCeilingsOnResolvedGraph runs after ResolvePackageAssets and checks every
+       package the restore actually resolved, so a banned id cannot arrive as a transitive dependency
+       of an innocent-looking package either. Dependabot's ignore list covers the bot-upgrade path.
        CAUTION: 'dotnet new' evaluates Condition attributes containing item syntax (%/@) and mangles
        them in generated output (the reason this repo uses XML-comment conditionals, ADR-0010) —
-       hence the double-Exclude intersection and the property-only Error condition. -->
+       hence the double-Exclude intersections and the property-only Error conditions. -->
+  <PropertyGroup Label="License ceilings">
+    <LicenseCeilingPackageIds>MediatR;AutoMapper;FluentAssertions;MassTransit;Moq</LicenseCeilingPackageIds>
+  </PropertyGroup>
+
   <Target Name="EnforceLicenseCeilings" BeforeTargets="CollectPackageReferences">
     <ItemGroup>
-      <_ForbiddenPackageNames Include="MediatR;AutoMapper;FluentAssertions;MassTransit;Moq" />
+      <_ForbiddenPackageNames Include="$(LicenseCeilingPackageIds)" />
       <_AllowedPackageReferences Include="@(PackageReference)" Exclude="@(_ForbiddenPackageNames)" />
       <_LicenseViolations Include="@(PackageReference)" Exclude="@(_AllowedPackageReferences)" />
     </ItemGroup>
@@ -61,6 +71,21 @@
     </PropertyGroup>
     <Error Condition="'$(_LicenseViolationList)' != ''"
       Text="Package(s) '$(_LicenseViolationList)' violate the license-ceiling policy (ADR-0011; see LICENSE CEILINGS in Directory.Packages.props for the free alternatives)." />
+  </Target>
+
+  <!-- PackageDependencies (an output of ResolvePackageAssets) holds every package id in
+       project.assets.json: direct and transitive alike. -->
+  <Target Name="EnforceLicenseCeilingsOnResolvedGraph" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <_ForbiddenResolvedPackageNames Include="$(LicenseCeilingPackageIds)" />
+      <_AllowedResolvedPackages Include="@(PackageDependencies)" Exclude="@(_ForbiddenResolvedPackageNames)" />
+      <_ResolvedLicenseViolations Include="@(PackageDependencies)" Exclude="@(_AllowedResolvedPackages)" />
+    </ItemGroup>
+    <PropertyGroup>
+      <_ResolvedLicenseViolationList>@(_ResolvedLicenseViolations)</_ResolvedLicenseViolationList>
+    </PropertyGroup>
+    <Error Condition="'$(_ResolvedLicenseViolationList)' != ''"
+      Text="Package(s) '$(_ResolvedLicenseViolationList)' in the resolved package graph of $(MSBuildProjectName) violate the license-ceiling policy (ADR-0011). Something you reference depends on them; 'dotnet nuget why $(MSBuildProjectFullPath) &lt;id&gt;' shows the path. See LICENSE CEILINGS in Directory.Packages.props for the free alternatives." />
   </Target>
 
 </Project>
