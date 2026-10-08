@@ -28,7 +28,7 @@ YAML has no preprocessor. `dotnet new` reads hash-comment directives in YAML, bu
 
 - **Both branches harmless side by side here** (or one is empty): the plain form. Generated output keeps only the selected branch. Example: the `ui-tests` job in `ci.yml`.
 - **One branch must stay inert here** (say, two steps that start the same service): the doubled-hash form `##if (UseThing)` / `##else` / `##endif`. Comment every line of the inert branch with one `#` in column 0 and double every other hash inside the block. The engine strips each single hash in the branch it keeps and turns `##` into `#`, so the commented lines come alive in generated output. Nothing may nest inside such a block. Example: the Redis steps in `ci.yml`.
-- **Source-only** (a step or comment that must never ship): `#if (TemplateSource)` … `#endif`. `TemplateSource` is a generated constant that is false whenever `dotnet new` runs, so the block runs here and disappears from every generated project. Example: the `ci.yml` step that runs `check-template-toggles.sh`.
+- **Source-only** (a step or comment that must never ship): `#if (TemplateSource)` … `#endif`. `TemplateSource` is a generated constant that is false whenever `dotnet new` runs, so the block runs here and disappears from every generated project. Examples: the `ci.yml` step that runs `check-template-toggles.sh`; in a shipped Markdown file the same condition in the XML-comment form hides maintainer-only prose (the last section of `.claude/rules/tools.md`).
 - **A directive token only ever opens its own line**, with the condition in parentheses and a symbol declared in `template.json`. The engine matches a token anywhere in a line and truncates the shipped file from that point, so never quote one inside a `run:` script, a YAML comment, a shell line or Markdown prose (Markdown's token is the XML-comment form). Files `template.json` excludes unconditionally (`template-ci.yml`, `release.yml`, this skill) are never processed.
 
 ## WARNING: no MSBuild `Condition` containing item syntax
@@ -38,5 +38,5 @@ YAML has no preprocessor. `dotnet new` reads hash-comment directives in YAML, bu
 ## Verify
 
 - `./scripts/dotnet.sh build Trellis.slnx && ./scripts/dotnet.sh test Trellis.slnx` — the repo itself must stay green.
-- `scripts/check-template-toggles.sh` — both host files expose the symbol, every `#if` symbol is declared, YAML/Markdown/shell directives sit alone on their lines and balance, doubled-hash blocks keep their hashes legal.
+- `scripts/check-template-toggles.sh` — both host files expose the symbol, every `#if` symbol is declared, YAML, Markdown and shell directive tokens sit alone on their lines, YAML blocks balance, doubled-hash blocks keep their hashes legal.
 - Template CI is the real gate: every matrix leg instantiates and builds the generated solution (and runs its tests on `test: true` legs). If the toggle's failure modes are visible only at run time, make sure some leg executes them.
