@@ -95,6 +95,30 @@ public sealed partial class ConventionTests
     }
 
     [Fact]
+    public void Domain_event_handlers_carry_a_unique_stable_name()
+    {
+        // The outbox credits a handler under this name; a retry skips credited handlers. Derived from the
+        // CLR name, a rename would re-run a handler that already sent its email (audit 4.5) — so the name
+        // is explicit, lowercase-dotted like the event wire names, and unique (a shared one would make the
+        // second handler look credited and skip it forever).
+        List<(Type Handler, string? Name)> handlers = [.. Architecture.ApplicationAssembly.GetTypes()
+            .Where(static t => t is { IsClass: true, IsAbstract: false }
+                               && t.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDomainEventHandler<>)))
+            .Select(static t => (t, t.GetCustomAttribute<DomainEventHandlerNameAttribute>()?.Name))];
+
+        foreach ((Type handler, string? name) in handlers)
+        {
+            name.ShouldNotBeNull($"{handler.Name} needs [DomainEventHandlerName(\"feature.event.reaction\")] — outbox credits must survive a rename");
+            StableName().IsMatch(name).ShouldBeTrue($"{handler.Name}'s handler name '{name}' must be lowercase and dotted, like 'invoices.paid.send-receipt'");
+        }
+
+        handlers.GroupBy(static h => h.Name, StringComparer.Ordinal)
+            .Where(static g => g.Count() > 1)
+            .Select(static g => $"{g.Key}: {string.Join(", ", g.Select(static h => h.Handler.Name))}")
+            .ShouldBeEmpty("every domain-event handler needs its own name");
+    }
+
+    [Fact]
     public void Aggregates_and_entities_have_no_public_constructors_and_no_public_setters()
     {
         // Interceptor-stamped bookkeeping is the sanctioned exception: those setters exist for the
@@ -180,4 +204,7 @@ public sealed partial class ConventionTests
 
     [GeneratedRegex(@"\.IgnoreQueryFilters\(\s*\)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex BareIgnoreQueryFilters();
+
+    [GeneratedRegex(@"^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex StableName();
 }

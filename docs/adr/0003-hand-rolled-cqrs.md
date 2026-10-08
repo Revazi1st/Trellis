@@ -12,7 +12,7 @@ CQRS use cases need a dispatch mechanism. MediatR is the mainstream choice, but 
 
 Hand-roll the CQRS contracts in `SharedKernel.Messaging`: `ICommand`, `ICommand<TResponse>`, `IQuery<TResponse>`, and `ICommandHandler<>`/`IQueryHandler<>` returning `Result`/`Result<T>`. **Endpoints inject the handler interface directly — there is no mediator/dispatcher.**
 
-Cross-cutting concerns are DI-registered open-generic decorators (`SharedKernel.Decorators`): **Validation → Logging → UnitOfWork → handler**. Registration is automatic via **Scrutor** (`.Scan(...)` for handlers + `.Decorate(...)` for the pipeline) in `Application/DependencyInjection.cs` — one place, no per-handler DI lines.
+Cross-cutting concerns are DI-registered open-generic decorators (`SharedKernel.Decorators`): **Validation → Logging → UnitOfWork → handler**. Registration is automatic via **Scrutor** (`.Scan(...)` for handlers + `.Decorate(...)` for the pipeline) in `Application/DependencyInjection.cs` — one place, no per-handler DI lines. *(Order superseded by the 2026-10-08 amendment below: Logging → Tracing → Validation → UnitOfWork → handler.)*
 
 ## Consequences
 
