@@ -42,7 +42,7 @@ Delete `SeedSampleDataAsync` and its call in `MigrationWorker.cs` (plus dead usi
 
 ## 7. Tests — two kinds
 - **Invoice-specific → delete**: `Domain.UnitTests/Invoices/`, `Application.UnitTests/Invoices/`, `IntegrationTests/InvoicePersistenceTests.cs`, `ApiTests/InvoiceApiFlowTests.cs` (the Aspire E2E — write one for your flow), and the UiTests flows that drive the invoice pages (the login test asserts the Invoices title).
-- **Invoice-as-fixture → port to your aggregate, don't delete the coverage**: `OutboxTests`, `AuditingInterceptorTests`, `SoftDeleteInterceptorTests`, `ConcurrencyTests`, `PaginationTests`, `TenancyTests`, `DomainEventSerializationTests` (also anchors the Domain assembly on `Invoice`), `DecoratorPipelineTests` (handler discovery is reflection-based but the sample inputs are invoice commands), `ApiTests/InProcess/EndpointContractTests` (401/403, RFC 9457, idempotency all ride invoice endpoints), `ContractSerializationTests`.
+- **Invoice-as-fixture → port to your aggregate, don't delete the coverage**: `OutboxTests`, `OutboxRetryTests` (its test handlers subscribe to `InvoicePaidDomainEvent`; `OutboxBackoffTests`/`OutboxOptionsTests` are invoice-free and stay), `AuditingInterceptorTests`, `SoftDeleteInterceptorTests`, `ConcurrencyTests`, `PaginationTests`, `TenancyTests`, `DomainEventSerializationTests` (also anchors the Domain assembly on `Invoice`), `DecoratorPipelineTests` (handler discovery is reflection-based but the sample inputs are invoice commands), `ApiTests/InProcess/EndpointContractTests` (401/403, RFC 9457, idempotency all ride invoice endpoints), `ContractSerializationTests`.
 - `ArchitectureTests/ArchitectureRules.cs`: `DomainAssembly`/`ApiContractsAssembly` anchor on `Invoice`/`InvoiceDto` — re-anchor.
 
 ## 8. Docs

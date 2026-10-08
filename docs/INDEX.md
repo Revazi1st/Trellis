@@ -35,3 +35,4 @@ Agent entry point — read only what the task needs.
 - [0020](adr/0020-outbound-http-integrations.md) — outbound HTTP integrations: typed client, per-client resilience, validated options
 - [0021](adr/0021-api-hardening-defaults.md) — API hardening defaults: deny-by-default group + allowlist test, forwarded-header trust never widens, rate limits by credential type, headers, limits
 - [0022](adr/0022-tenant-on-the-principal.md) — tenant on the principal: membership on the user, claim-only resolution (no header), fail-closed tokens, convention-based scoping of every aggregate root
+- [0023](adr/0023-outbox-lease-and-checkpoints.md) — outbox processor semantics: lease-based claim with dispatch outside the transaction, per-handler checkpoints, token-keyed cancellation, validated `Outbox` options, backlog gauges, SQL re-drive runbook
