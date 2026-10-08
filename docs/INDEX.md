@@ -11,6 +11,9 @@ Agent entry point — read only what the task needs.
 - [features/auth.md](features/auth.md) — Identity + JWT, refresh rotation/revocation, permissions, lockout
 - [features/exchange-rates.md](features/exchange-rates.md) — the reference outbound HTTP integration (typed client, per-client resilience, cached probe)
 - [threat-model.md](threat-model.md) — assets, mitigations that exist today, known gaps to decide before production
+<!--#if (TemplateSource) -->
+- [releasing.md](releasing.md) — releasing the template package: CHANGELOG section, dry run, tag, nuget.org trusted publishing, recovery
+<!--#endif -->
 
 ## Decisions (docs/adr/)
 - [0001](adr/0001-record-architecture-decisions.md) — record ADRs
