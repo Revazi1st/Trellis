@@ -20,28 +20,38 @@ internal sealed class CompletingResult(object? inner, string key, IIdempotencySt
         Stream original = response.Body;
         await using var capture = new ResponseCapture(original, maxReplayBodyBytes);
         response.Body = capture;
+        StoredResponse outcome;
         try
         {
             await ToResult(inner).ExecuteAsync(httpContext);
             // A result that wrote through the body writer may have left bytes in its buffer: push them
             // through the capture before it is detached, or the copy (and the client) would miss them.
-            await response.BodyWriter.FlushAsync(httpContext.RequestAborted);
+            // Never with the request's token: an aborted request is exactly the one whose stored response
+            // must be whole, and the capture absorbs the wire fault that abort may cause.
+            await response.BodyWriter.FlushAsync(CancellationToken.None);
+            outcome = OutcomeOf(response, capture);
         }
         catch (Exception)
         {
+            // The result itself failed before it finished writing: nothing whole to store, only the fact
+            // that the request ended. The reservation, if committed, is completed so a retry is a 409.
             response.Body = original;
             await RecordAsync(httpContext, store, key, StoredResponse.Unavailable(StatusCodes.Status500InternalServerError));
             throw;
         }
 
         response.Body = original;
+        await RecordAsync(httpContext, store, key, outcome);
+        capture.ThrowIfWireFaulted();
+    }
 
+    /// <summary>What went out, as far as a retry may be given it again: only a success within the cap carries its body.</summary>
+    private static StoredResponse OutcomeOf(HttpResponse response, ResponseCapture capture)
+    {
         string? location = response.Headers.Location.ToString() is { Length: > 0 } header ? header : null;
-        StoredResponse outcome = response.StatusCode < StatusCodes.Status400BadRequest && !capture.Overflowed
+        return response.StatusCode < StatusCodes.Status400BadRequest && !capture.Overflowed
             ? new StoredResponse(response.StatusCode, response.ContentType, capture.ToArray(), location)
             : StoredResponse.Unavailable(response.StatusCode, response.ContentType, location);
-
-        await RecordAsync(httpContext, store, key, outcome);
     }
 
     /// <summary>
