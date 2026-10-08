@@ -39,10 +39,15 @@ Seed guards outside Development:
 
 - The worker **refuses to seed the well-known default admin password** — set
   `Seed__AdminPassword` (and consider `Seed__AdminEmail`) or the job exits 1 on a fresh database.
+- The `Seed` section is validated at boot (`AdminEmail` an e-mail, `AdminPassword` ≥ 8 characters,
+  with multi-tenancy `TenantId` ≤ 64): a bad value exits 1 naming the key. A password Identity
+  rejects (it also wants a digit, an upper-case letter and a symbol) exits 1 with every Identity
+  error in the log — never "seeding completed" without an admin.
 - Demo invoices are seeded in Development only.
 
-The job is idempotent: an already-migrated database and an existing admin user are both no-ops,
-so run it on every deploy.
+The job is idempotent: an already-migrated database and an existing admin user are both no-ops
+(an existing admin's password is never changed; one left without its role by an interrupted run is
+given it back), so run it on every deploy.
 
 ## Required configuration
 
@@ -59,7 +64,7 @@ fails the rollout, not the first request.
 | `ForwardedHeaders__KnownProxies__0…` / `ForwardedHeaders__KnownNetworks__0…` | behind ingress | IPs / CIDR ranges of trusted proxies. Without them `X-Forwarded-For` is ignored (loopback-only default — spoof-safe) and every caller shares the ingress IP's rate-limit bucket. `aspire publish` output sets `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`; that switch cannot widen trust — with no list configured the API keeps the loopback-only default and logs a startup warning naming these settings (ADR-0021). A Blazor Server web host signs everyone in from one address: 10 logins/min per web host, by design. |
 | `Kestrel__Limits__MaxRequestBodySize` / `Kestrel__Limits__MaxRequestHeadersTotalSize` | no | Request caps in bytes: 1 MB body (larger → 413) and 32 KB of headers by default. Raise per endpoint for a real upload, not globally. |
 | `Cors__AllowedOrigins__0…` | if browsers call cross-origin | Allowed origins; **none by default** (same-origin only). |
-| `Retention__*` | no | Janitor windows for the bookkeeping tables: `SweepInterval` (1h), `ProcessedOutboxAge` (3d), `DeadLetteredOutboxAge` (30d), `IdempotencyKeyAge` (2d), `DeadRefreshTokenAge` (30d). TimeSpan format, e.g. `7.00:00:00`. |
+| `Retention__*` | no | Janitor windows for the bookkeeping tables: `SweepInterval` (1h; 1 s – 1 day), `InitialDelay` before the first sweep (1m; 0 – 1h), `ProcessedOutboxAge` (3d; ≥ 1h), `DeadLetteredOutboxAge` (30d; ≥ 1 day), `IdempotencyKeyAge` (2d; ≥ 1h), `DeadRefreshTokenAge` (30d; ≥ 1 day — keep it ≥ `Authentication__RefreshTokenDays`, a consumed token is what makes a replay detectable). Every window is capped at 365 days. TimeSpan format, e.g. `7.00:00:00`. A value out of range stops the API at boot, naming the key. |
 
 ## Health probes
 

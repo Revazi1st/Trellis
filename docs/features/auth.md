@@ -58,7 +58,15 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   invoices only in Development. The local-dev admin is `admin@example.com` / `Admin123!`
   (`Seed__AdminEmail` / `Seed__AdminPassword`; with multi-tenancy, `Seed__TenantId` names the
   admin's — and the demo data's — tenant, default `default`). Outside Development it refuses to
-  seed the well-known default admin password — set `Seed__AdminPassword`.
+  seed the well-known default admin password — set `Seed__AdminPassword`. The `Seed` section is
+  validated at boot, and every Identity call in the seed (`IdentitySeed`, in Persistence) is
+  checked: a password Identity rejects fails the run (exit 1) with every Identity error named. A
+  rerun converges — missing roles and permission claims are added, an admin without its role gets
+  it back, an existing admin's password is left alone.
+- **Registration is one transaction**: the account and its Member role are created together inside
+  the execution strategy's transaction. If the role cannot be assigned the account is rolled back —
+  a reported failure answers 500 `Auth.RegistrationFailed`, nothing is created, and the e-mail can
+  register again (no role-less account that signs in with no permissions).
 
 ## API (`src/Presentation/Api/Trellis.Api/Features/Auth/`)
 
