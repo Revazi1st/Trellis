@@ -48,6 +48,16 @@ dotnet build Trellis.slnx -c Release
 dotnet test Trellis.slnx                     # integration and API tests start PostgreSQL in Docker
 ```
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs the secret scan, the format check, the Release build, every test with
+coverage, the API contract (the OpenAPI document diffed against the running app) and the SDK-container
+build; its docs-drift job honours a `docs-not-needed` pull-request label, which you create in your
+repository. `.github/workflows/codeql.yml` runs on a public repository, and on a private one only once
+GitHub Advanced Security code scanning is enabled and the `CODEQL_ENABLED` repository variable
+(Settings → Secrets and variables → Actions → Variables) is `true`. Dependabot is configured in
+`.github/dependabot.yml`.
+
 ## Where to look next
 
 - [AGENTS.md](AGENTS.md): the conventions and boundaries, written for people and coding agents alike.

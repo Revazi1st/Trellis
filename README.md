@@ -14,10 +14,25 @@ A best-practices .NET 10 **solution template**: rich DDD, Clean Architecture wit
 
 ## Use the template
 
+From nuget.org, once a version is published there (see [CHANGELOG.md](CHANGELOG.md) for what each
+version contains):
+
 ```bash
 dotnet new install Trellis.Templates
 dotnet new trellis -n Your.Project
 ```
+
+From a clone of this repository, which is what to do before the first release or to try `main`:
+
+```bash
+git clone https://github.com/Revazi1st/trellis.git
+dotnet new install ./trellis                   # a folder install; `dotnet new uninstall ./trellis` removes it
+dotnet new trellis -n Your.Project -o Your.Project
+```
+
+A folder install records `0.0.0-source` as the template version in the generated project's
+marker (below); packing first (`dotnet pack eng/Trellis.TemplatePack -o nupkg`) and installing the
+`.nupkg` records the package version instead.
 
 Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 
@@ -26,9 +41,28 @@ Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 | `--include-ui` | on | Blazor web UI (UI.Common + UI.Web), orchestrated by Aspire |
 | `--use-redis` | off | Redis distributed cache as a HybridCache L2 |
 | `--use-serilog` | off | Serilog structured logging (console) alongside OpenTelemetry |
-| `--use-multitenancy` | off | Tenant seam: `tenant` claim on the principal, `TenantId` column + `"Tenant"` query filter on every aggregate root |
+| `--use-multitenancy` | off | Tenant seam: `tenant` claim on the principal, `TenantId` column + `"Tenant"` query filter on every aggregate root ¹ |
 | `--include-ui-tests` | off | Playwright browser tests for the Blazor UI (opt-in at run time) |
 | `--skip-restore` | off | Skip the automatic `dotnet restore` |
+
+¹ The shipped initial migration is generated without the tenant columns, so a project created with
+`--use-multitenancy` regenerates it once before the first run
+([docs/development.md](docs/development.md#multi-tenancy-optional); `dotnet new` prints the reminder).
+
+### What a generated project contains
+
+The solution, its tests, CI (`.github/workflows/ci.yml` and `codeql.yml`), the docs, the ADRs and the
+AI assets, all renamed after your project. It does **not** inherit this repository's own README,
+CHANGELOG, contributing and security policies, code owners, issue forms or release runbook: it gets a
+README written for the project, an empty CHANGELOG, and `.trellis-template.json`, which records the
+template version and the options used ([docs/upgrading.md](docs/upgrading.md) regenerates from it).
+`LICENSE` stays this template's MIT notice; see *License* below.
+
+**CodeQL on a private repository**: code scanning is free on public repositories and part of GitHub
+Advanced Security on private ones. The generated `codeql.yml` runs on a public repository, and on a
+private one only once code scanning is enabled there and the `CODEQL_ENABLED` repository variable
+(Settings → Secrets and variables → Actions → Variables) is `true`; without that, a private
+repository skips the job instead of failing its upload every week.
 
 ### Naming your project
 
@@ -127,19 +161,39 @@ flowchart RL
 | `src/Presentation/UI` | UI.Common, UI.Web | Shared Blazor component library + the web host |
 | `src/Shared` | ServiceDefaults | Aspire service defaults (OTel, health, discovery, resilience) |
 | `tools` | AppHost, MigrationService | Aspire orchestration + DB migrate/seed worker |
-| `tests` | 5 projects | Unit, architecture, integration (Testcontainers), E2E (Aspire.Hosting.Testing) |
+| `tests` | 6 projects | Domain and Application unit tests, architecture, integration (Testcontainers), API (the in-process HTTP pipeline + the opt-in Aspire E2E), and Playwright UI tests (only with `--include-ui-tests`) |
 
 ## Highlights
 
 - **Rich DDD** — aggregates with factories + private EF constructors, value objects as EF Core 10 complex types, hand-rolled strongly-typed IDs, domain events through a transactional outbox (written in the same transaction, dispatched after commit), specifications ([docs/features/invoices.md](docs/features/invoices.md) is the reference slice).
 - **CQRS without a mediator** — hand-rolled handlers + a logging→tracing→validation→unit-of-work decorator pipeline; **no commercially-licensed packages** ([ADR-0011](docs/adr/0011-license-ceiling-policy.md)).
-- **Result over exceptions**, mapped to RFC 9457 ProblemDetails at one seam.
+- **Result over exceptions**, mapped to RFC 9457 problem details at one seam, every problem carrying a stable `code` ([ADR-0024](docs/adr/0024-problem-details-v2.md)).
+- **Production-shaped defaults** — endpoints authenticated unless allowlisted, a transactional outbox with per-handler checkpoints, idempotent writes that replay the stored response, options validated at boot, an OpenAPI document committed and compared with the served one on every test run, telemetry exported by prefix.
 - **AI-friendly** — `AGENTS.md`, path-scoped `.claude/rules`, agents, skills, a docs-drift hook, `.mcp.json`, and Architecture Decision Records.
+
+## Make it yours
+
+- **Add a feature** with the `add-feature` skill (`.claude/skills/add-feature/`): a checklist that
+  copies the Invoices reference slice layer by layer and names the test behind every box.
+- **Remove the reference slice** with `remove-feature` once your first feature exists.
+- **Call a third-party API** with `add-integration`, which copies the exchange-rate integration:
+  typed client behind a port, the resilience pipeline replaced rather than stacked, options
+  validated at boot.
+- **Record a decision** with `new-adr`; your ADRs start at 0100, the template's stay below.
+- **Upgrade to a later template version** with [docs/upgrading.md](docs/upgrading.md).
+
+The skills are plain Markdown procedures: an AI agent follows them, and so can you.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Architecture decisions live in [docs/adr](docs/adr/); the docs index for both humans and agents is [docs/INDEX.md](docs/INDEX.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Architecture decisions live in [docs/adr](docs/adr/); the docs
+index for both humans and agents is [docs/INDEX.md](docs/INDEX.md); what changed in each version is in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). A generated project keeps that notice as `LICENSE`, because the MIT
+terms require it to travel with substantial portions of the template, but it does not license your
+product: the generated README asks you to add your own terms. The NuGet packages a generated
+solution references carry their own licenses; [ADR-0011](docs/adr/0011-license-ceiling-policy.md)
+explains the ceilings the build enforces.
