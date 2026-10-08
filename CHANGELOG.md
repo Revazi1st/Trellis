@@ -7,6 +7,53 @@ All notable changes to Trellis are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Outbox v2** (ADR-0023, refines ADR-0018). A validated `Outbox` configuration section
+  (`PollInterval` 5 s, `BatchSize` 20, `MaxAttempts` 8, `BaseRetryDelay` 30 s, `MaxRetryDelay`
+  15 min, `DispatchTimeout` 30 s; a bad value stops the host naming the key). Claimed rows are
+  leased for `DispatchTimeout × (BatchSize + 1)` (10.5 min on the defaults; a graceful stop
+  releases them), each message dispatches in its own scope under a dispatch budget, and every
+  handler's writes commit together with its completion credit (per-handler checkpoint), so a retry
+  never re-runs a handler that already succeeded. Retries back off 30 s, 1 m, 2 m, 4 m, 8 m,
+  15 m, 15 m — dead letter after the eighth failure (~45 min, previously ~7.5 min); unknown event
+  types and poison payloads dead-letter at once; a retry logs Warning (was Error) and dead letter
+  stays Critical. Metrics: `trellis.outbox.dispatched` / `dead_lettered` gain the unit `{message}`
+  and the attribute `trellis.outbox.event_type` (was `event.type`), `dead_lettered` adds
+  `trellis.outbox.reason`, and `trellis.outbox.retries`, `trellis.outbox.dispatch.duration`,
+  `trellis.outbox.pending` and `trellis.outbox.oldest_pending_age` are new; alert thresholds and
+  an SQL re-drive runbook are in `docs/deployment.md`. **Upgrade note**: completion credits are now
+  keyed on `[DomainEventHandlerName]` (stable names such as `invoices.paid.send-receipt`), not the
+  CLR type name — drain the outbox before upgrading a live project, or the handlers of rows still
+  pending re-run once.
+- **Options are validated at boot, every section.** `Retention` (a range on every window, plus a
+  new `InitialDelay`, default 1 min, before the first sweep), `Seed` (`AdminEmail` must be an
+  e-mail, `AdminPassword` at least 8 characters, `TenantId` at most 64), `Email`, `ExternalApis`
+  and `Outbox` fail the host with a message naming the key; `OptionsConventionTests` requires every
+  `*Options` type to carry a validation attribute and be registered with `ValidateOnStart()`.
+- **The e-mail stand-in says so.** `Email:Provider` is `Logging` (default) or `None`; the logging
+  sender writes only the masked recipient (`j***@example.com`), the subject and the body length
+  (event 1201), and the API logs a boot Warning (1203) when `Logging` is active outside Development
+  or an Information line (1204) for `None`.
+- **Exchange rates default to Frankfurter** (`https://api.frankfurter.dev/v1/`; the response's
+  `success` field is optional), with an opt-in live smoke test (`RUN_LIVE_SMOKE_TESTS=1`).
+- **Invoice rules**: `Issue` rejects a missing or past due date (`400 Invoice.DueDateInPast`; the
+  new `IssueInvoiceCommandValidator` catches a body without one) and `Void` raises
+  `InvoiceVoidedDomainEvent` (`invoices.voided.v1`, shipped without a handler). Breaking for code
+  that calls the domain directly: `Invoice.Issue(dueDate)` is now `Issue(dueDate, now)`.
+- **Strongly-typed IDs are `IEquatable<TSelf>`** and serialize as JSON dictionary keys;
+  `Entity<TId>` equality no longer boxes; `Result` converts implicitly from an `Error`.
+- **Telemetry by prefix.** ServiceDefaults subscribes meters and activity sources matching
+  `Trellis.*` (renamed with the project) plus the Polly and EF Core meters, so a host no longer
+  lists them by hand; the resource carries `service.version` and `deployment.environment.name` and
+  defers to `OTEL_SERVICE_NAME` / `OTEL_RESOURCE_ATTRIBUTES`; `TelemetryNamingTests` enforces
+  `trellis.*` instrument and attribute names with units. Renamed (dashboards need updating): the
+  invoice counters' attribute is `trellis.invoice.currency` and the span attribute is
+  `trellis.correlation_id`. Use-case spans tag `usecase.outcome`, `usecase.error_code` and
+  `usecase.error_type`.
+- **Docs & AI assets**: ADR-0023 (outbox lease and checkpoints); dated amendments to ADR-0003
+  (pipeline order and outcome logging) and ADR-0020 (replace, not add, the resilience pipeline;
+  API-only registration); the `add-feature` skill carries a secure-by-default checklist and names
+  the `[DomainEventHandlerName]` requirement; the `add-toggle` skill and `tools.md` document the
+  YAML conditional forms; `.gitignore` covers `nupkg/` and `.claude/worktrees/`.
 - **The UI shows what the API said.** `Api.Contracts` gains `ProblemResponse` and `FieldError`
   (a tolerant mirror of the RFC 9457 body); `ApiResult<T>` carries `StatusCode`, `Problem` and the
   field `Errors`; one `ApiResponses` describer turns problem codes, a 429's `Retry-After`,
@@ -31,8 +78,8 @@ All notable changes to Trellis are documented here. The format follows
   longer mint negative money, and `Entity<TId>` gained `==`/`!=` consistent with `Equals`.
 - **Use-case telemetry**: the logging decorator now logs failures *and throws* with elapsed time
   under a correlation scope (a SaveChanges crash previously produced no use-case log at all), and a
-  new tracing decorator emits one span per use case (pipeline: Validation → Logging → Tracing →
-  UnitOfWork).
+  new tracing decorator emits one span per use case (pipeline now Logging → Tracing → Validation →
+  UnitOfWork, see *Pipeline order* above).
 - **OpenAPI as a contract**: bearer security scheme (Scalar can finally authorize),
   `Idempotency-Key` header + 409 documented on idempotent endpoints, 401/403 on secured ones, and
   the document is committed at `docs/api/openapi.v1.json` with a CI diff gate
@@ -73,6 +120,59 @@ All notable changes to Trellis are documented here. The format follows
   GitHub Actions updates.
 
 ### Reliability & testing
+- **A failed commit is a `Result`, not an exception.** `IUnitOfWork.CommitAsync` returns `Result`;
+  a stale `xmin` becomes `Concurrency.Conflict` and reaches the client as a 409 through the normal
+  error mapping (`ConcurrencyExceptionHandler` is gone), while any other commit crash is an opaque
+  500 that releases the idempotency key so the retry can run (`CommitFailureTests`).
+- **Pipeline order and one outcome line per use case**: Logging → Tracing → Validation →
+  UnitOfWork → handler (validation used to run first, outside the log and span). Information for
+  success and for Validation, NotFound, Conflict, Unauthorized and Forbidden; Warning for
+  `Failure`; Error only for an exception that ends the use case; a validation line lists its
+  `field:code` pairs; the span records the outcome and, on a crash, the exception
+  (`UseCaseOutcomeTests`, `DecoratorPipelineTests` asserts the exact chain for all 12 use cases).
+- **Cancellation rule.** Every catch filter that lets `OperationCanceledException` through is
+  keyed on the caller's own token (`e is not OperationCanceledException ||
+  !token.IsCancellationRequested`): a third party's timeout is logged as a failure and only the
+  real stop stays quiet. Post-commit work (cache eviction, outbox bookkeeping) runs with
+  `CancellationToken.None`. An architecture test scans `src/` and `tools/` for the shape, and
+  another fails any bare `IgnoreQueryFilters()`.
+- **Outbound HTTP, for real this time.** `ExchangeRateClient` maps Polly's timeout, open-circuit
+  and concurrency-limiter rejections to `Unavailable` (they escaped as exceptions before), replaces
+  ServiceDefaults' blanket resilience handler instead of stacking a second one
+  (`RemoveAllResilienceHandlers`), and sizes its total timeout as
+  attempt × (retries + 1) + maxDelay × retries. The blanket handler no longer retries unsafe
+  methods (`DisableForUnsafeHttpMethods`). Third-party clients register through
+  `AddOutboundIntegrations` in the API only, so the migration job never needs or validates the
+  `ExternalApis` section (`ExchangeRateResilienceTests`).
+- **Seed failures fault the migration job.** Every Identity call in the seed is checked
+  (`IdentitySeed`): a rejected admin password or e-mail exits with code 1 naming the step and the
+  Identity error codes (it used to log "completed" and exit 134 on a bad option); reruns converge
+  (missing roles, permission claims and the Administrator role are restored, an existing password
+  is never changed) — `MigrationSeedTests`.
+- **Serilog logs reach the exporter** (`--use-serilog`): `ClearProviders()` runs before
+  `AddServiceDefaults()` and `AddSerilog(..., writeToProviders: true)` forwards to the OpenTelemetry
+  logger provider, so application logs are exported again and the log-asserting tests run under
+  Serilog instead of skipping; the API's appsettings gain a mirrored `Serilog` section
+  (`SerilogExportTests`).
+- **HybridCache lifetimes**: L1 30 s, L2 5 min — a bound on cross-replica staleness, since
+  `RemoveAsync` reaches only the local L1 (`InvoiceReadCacheTests` walks every write).
+- **Correlation id** falls back to the W3C trace id, so `X-Correlation-ID` and the problem body's
+  `traceId` agree (`TraceIdentifier` only when there is no activity).
+- **Paging is stable.** Specifications end every ordering with `Id` (`Overdue` orders by `DueDate`,
+  then `Id`) and `ListPagedAsync` refuses a specification that pages itself or lacks the tiebreak
+  (`SpecificationPagingTests`). Every `DateTimeOffset` is written as UTC
+  (`UtcDateTimeOffsetConverter`; Npgsql rejected non-zero offsets) — `UtcConversionTests`.
+- **Registration is atomic**: `CreateAsync` and `AddToRoleAsync` run in one transaction; a role
+  assignment that fails rolls the account back (`Auth.RegistrationFailed`, 500) and the e-mail can
+  register again (`RegistrationAtomicityTests`).
+- **Data-retention janitor**: waits `InitialDelay` before the first sweep, retries by sweeping
+  again (a failed sweep logs Warning), and `DataRetentionJanitorTests` pins every sweep predicate
+  one second either side of its cutoff.
+- **Suites added**: `OutboxRetryTests` (14), `OutboxBackoffTests`, `OutboxOptionsTests`,
+  `OptionsConventionTests` (15), `DomainEventDispatcherTests`, `IdempotencyPostCommitTests`,
+  `EmailSenderTests`, `ServiceDefaultsTests`, `TelemetryNamingTests`, `CorrelationIdTests`
+  additions, plus unit tests for the due-date rule, the voided event, ID parsing and `Money`
+  operators. The repository suite grew from 266 to 460 tests, all green in every toggle leg.
 - **Blazor sessions survive transient refresh failures**: only a 401 from `POST /auth/refresh`
   ends the session; a 429, a 5xx or an unreachable API keeps the token pair and holds off further
   refresh attempts for 5 s (previously any failed rotation signed the circuit out).
@@ -113,6 +213,20 @@ All notable changes to Trellis are documented here. The format follows
   the browser suite gained wrong-password and create-invoice flows.
 
 ### Security
+- **Shipped defaults are pinned by a test.** `Register_WithTheShippedProductionConfiguration_IsClosed`
+  boots the API from the shipped appsettings in Production and asserts `Registration:Mode=Closed`
+  and a 403 `Auth.RegistrationClosed`.
+- **Tenant stamping is scoped to aggregate roots** (`--use-multitenancy`). `TenantInterceptor`
+  stamps only the shadow `TenantId` of added aggregates; `ApplicationUser.TenantId` and
+  `OutboxMessage.TenantId` are never overwritten by the ambient tenant (an administrator creating
+  a user for another tenant used to hand that user their own tenant).
+- **A blank `Idempotency-Key` is a 400**, not a silent opt-out.
+- **Refresh tokens commit with the use case.** `RefreshTokenStore.StoreAsync` only tracks the token
+  and the command's unit of work commits it; ports never commit (the rule is written down, with
+  the declared exceptions).
+- **gitleaks runs with no allowlist.** None of the removed entries suppressed a finding; the config
+  states when one may be added. ADR-0021 records that security event 1102 logs only the masked
+  e-mail. ADR-0021 also now cites ADR-0022 for where the tenant comes from.
 - **Endpoints require authorization by default** (ADR-0021). The versioned API group calls
   `RequireAuthorization()`; the four auth endpoints are the explicit anonymous allowlist, `/health`
   and `/alive` stay on the host, and a test fails any endpoint that is neither anonymous nor
@@ -170,6 +284,19 @@ All notable changes to Trellis are documented here. The format follows
   section (tagging without notes fails the release).
 
 ### Fixed
+- **An idempotent retry after a cancelled cache eviction applied the command twice.** The four
+  mutating invoice endpoints evicted the read cache with the request token; a client that went
+  away right after the commit turned the eviction into an `OperationCanceledException`, which
+  released the key, so the retry ran the command again (an invoice with two copies of a line).
+  Post-commit work now uses `CancellationToken.None` (`IdempotencyPostCommitTests`).
+- **`--use-serilog` projects exported no application logs** (see *Serilog logs reach the exporter*).
+- **The migration job crashed instead of exiting** on a bad `Seed` option (exit 134, unhandled
+  `OptionsValidationException`); it exits 1 with the key named.
+- **Generated projects failed template-ci's content gate**: `.claude/rules/tests.md` spelled a
+  template directive in prose and `ui.md` carried one mid-line (the engine dropped the line);
+  both now describe the `IncludeUI` guard in words. The maintainer-only part of `tools.md` no
+  longer ships. The `CreateAdminClientAsync` overloads in `ApiFactory` are adjacent again, so the
+  all-options leg builds in Release (S4136).
 - **`GET /invoices/{id}` under `--use-multitenancy` answered 404 for the caller's own tenant** right
   after creation: HybridCache runs its factories on a detached flow where the request's tenant was
   invisible, so the filtered query ran as the system scope. `TenantContext` now remembers the
@@ -225,7 +352,7 @@ All notable changes to Trellis are documented here. The format follows
   `PagedResponse` envelope — it failed on first real run.
 - **The decorator-pipeline test silently skipped the Auth slice.** It hand-listed seven Invoices
   handlers; it now discovers every command/query by reflection and asserts each resolves through
-  the full Validation → Logging → UnitOfWork pipeline.
+  the full Logging → Tracing → Validation → UnitOfWork pipeline.
 - The Blazor invoice list showed only the first page with no controls (pager added), and a failed
   action's error message was wiped by the reload that followed it.
 - Pinned transitive `SSH.NET` to 2026.0.0 (GHSA-q939-rpr3-3284 flagged by NuGetAudit).
