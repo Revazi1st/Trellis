@@ -63,8 +63,16 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
 
         (await tenantA.PostAsJsonAsync($"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Consulting", 100m), ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await tenantA.PostAsJsonAsync($"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(DateTimeOffset.UtcNow.AddDays(-30)), ct))
+        // A due date is never past when issued, and this host runs on the system clock: issue it due a
+        // moment from now, then wait that moment out so it is genuinely overdue when listed.
+        DateTimeOffset dueDate = DateTimeOffset.UtcNow.AddSeconds(3);
+        (await tenantA.PostAsJsonAsync($"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(dueDate), ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        TimeSpan untilOverdue = dueDate - DateTimeOffset.UtcNow;
+        if (untilOverdue > TimeSpan.Zero)
+        {
+            await Task.Delay(untilOverdue + TimeSpan.FromMilliseconds(50), ct);
+        }
 
         PagedResponse<InvoiceDto> seenByB = await ListOverdueAsync(tenantB, ct);
         seenByB.TotalCount.ShouldBe(0);

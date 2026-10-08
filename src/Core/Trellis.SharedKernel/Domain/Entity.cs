@@ -13,8 +13,9 @@ public abstract class Entity<TId>
 
     public TId Id { get; protected init; }
 
+    // EqualityComparer<TId>.Default resolves to the ID's IEquatable<TId>.Equals: no boxing per comparison.
     public override bool Equals(object? obj)
-        => obj is Entity<TId> other && other.GetType() == GetType() && other.Id.Equals(Id);
+        => obj is Entity<TId> other && other.GetType() == GetType() && EqualityComparer<TId>.Default.Equals(Id, other.Id);
 
     public override int GetHashCode() => HashCode.Combine(GetType(), Id);
 

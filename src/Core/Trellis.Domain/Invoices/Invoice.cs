@@ -94,7 +94,12 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
         return Result.Success();
     }
 
-    public Result Issue(DateTimeOffset dueDate)
+    /// <summary>
+    /// Finalizes the draft. <paramref name="now"/> is the caller's clock (the handler passes
+    /// <c>TimeProvider.GetUtcNow()</c>): a missing or past due date would issue an invoice that is
+    /// overdue the moment it exists, so both are rejected.
+    /// </summary>
+    public Result Issue(DateTimeOffset dueDate, DateTimeOffset now)
     {
         if (Status != InvoiceStatus.Draft)
         {
@@ -104,6 +109,11 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
         if (_lines.Count == 0)
         {
             return Result.Failure(InvoiceErrors.NoLines);
+        }
+
+        if (dueDate == default || dueDate < now)
+        {
+            return Result.Failure(InvoiceErrors.DueDateInPast);
         }
 
         Status = InvoiceStatus.Issued;
@@ -133,6 +143,7 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
         }
 
         Status = InvoiceStatus.Voided;
+        Raise(new InvoiceVoidedDomainEvent(Id));
         return Result.Success();
     }
 }
