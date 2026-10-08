@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Fails if the template toggle surface drifts: every boolean parameter in
 # .template.config/template.json must be exposed in dotnetcli.host.json (CLI flag) AND
-# ide.host.json (VS/Rider checkbox), and every '#if (X' symbol in template sources must
-# be a symbol declared in template.json (a typo'd symbol silently strips code).
+# ide.host.json (VS/Rider checkbox), and every '#if (X' symbol in template sources (C#, project,
+# solution, JSON and Razor files, and the .template.config/consumer/ stubs the second source ships)
+# must be a symbol declared in template.json (a typo'd symbol silently strips code).
 #
 # YAML files (workflows, compose, dependabot) get two more checks, because the template engine
 # processes hash-comment conditionals in them: a conditional directive must sit alone on its line
@@ -28,6 +29,11 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 fail=0
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "::error::jq is required to read the sources and exclude lists in .template.config/template.json"
+  exit 1
+fi
 
 # --- every boolean parameter is exposed in both host files ---
 bool_params=$(awk '
@@ -62,8 +68,10 @@ if [ -z "$declared" ]; then
   exit 1
 fi
 
-used=$( { find src tests tools -type f \( -name '*.cs' -o -name '*.csproj' -o -name '*.slnx' \) \
-    -not -path '*/bin/*' -not -path '*/obj/*' -not -path '*/artifacts/*' -print0; \
+# JSON carries the directive behind '//' (appsettings, the consumer marker) and Razor behind '@*'; the
+# token is matched anywhere in a line, so neither prefix needs stripping.
+used=$( { find src tests tools .template.config/consumer \( -name node_modules -o -name bin -o -name obj -o -name artifacts \) -prune \
+    -o -type f \( -name '*.cs' -o -name '*.csproj' -o -name '*.slnx' -o -name '*.json' -o -name '*.razor' \) -print0; \
     find . -maxdepth 1 -name '*.slnx' -print0; } \
   | xargs -0 grep -hoE '#if[[:space:]]*\([^)]*' 2>/dev/null \
   | grep -oE '[A-Za-z_][A-Za-z0-9_]*' | grep -vx 'if' | sort -u) || true
@@ -148,8 +156,20 @@ yaml_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./arti
 
 # Source-only files (excluded from the template output) are never processed by the engine:
 # an exact entry in template.json's exclude list, or a parent folder listed as "dir/**".
+# A file under a further sources[] root (.template.config/consumer/) is shipped by that source even
+# though the first source's ".template.config/**" excludes it, so it is never source-only; those
+# sources carry no exclude list of their own, and the check refuses to guess if one ever does.
+further_roots=$(jq -r '.sources[1:][] | .source | sub("^\\./"; "")' .template.config/template.json)
+if jq -e '[.sources[1:][] | (.exclude // []) | length] | add // 0 | . > 0' .template.config/template.json >/dev/null; then
+  echo "::error file=.template.config/template.json::a sources[] entry after the first has an exclude list; teach source_only() in scripts/check-template-toggles.sh to read it"
+  exit 1
+fi
+
 source_only() {
-  local p="$1"
+  local p="$1" root
+  for root in $further_roots; do
+    case "$p" in "$root"*) return 1 ;; esac
+  done
   grep -qF "\"$p\"" .template.config/template.json && return 0
   while [ "$p" != "." ]; do
     p=$(dirname "$p")
@@ -201,10 +221,6 @@ done
 # source files. The unconditional list (sources[].exclude) also guards against files the repository
 # never tracks (build output, IDE and machine-local state, secrets); such a glob passes when the
 # repository's own .gitignore ignores what it describes, or when it is one of local_only below.
-if ! command -v jq >/dev/null 2>&1; then
-  echo "::error::jq is required to read the exclude lists in .template.config/template.json"
-  exit 1
-fi
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "::error::the exclude-glob check compares against git ls-files; run this script in a git checkout"
   exit 1

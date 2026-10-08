@@ -38,5 +38,5 @@ YAML has no preprocessor. `dotnet new` reads hash-comment directives in YAML, bu
 ## Verify
 
 - `./scripts/dotnet.sh build Trellis.slnx && ./scripts/dotnet.sh test Trellis.slnx` — the repo itself must stay green.
-- `scripts/check-template-toggles.sh` — both host files expose the symbol, every `#if` symbol is declared, YAML, Markdown and shell directive tokens sit alone on their lines, YAML blocks balance, doubled-hash blocks keep their hashes legal.
+- `scripts/check-template-toggles.sh` — both host files expose the symbol, every `#if` symbol is declared (C#, project, solution, JSON and Razor files, the consumer stubs), YAML, Markdown and shell directive tokens sit alone on their lines, YAML blocks balance, doubled-hash blocks keep their hashes legal.
 - Template CI is the real gate: every matrix leg instantiates and builds the generated solution (and runs its tests on `test: true` legs). If the toggle's failure modes are visible only at run time, make sure some leg executes them.
