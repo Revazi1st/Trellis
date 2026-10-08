@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
@@ -52,14 +53,28 @@ public sealed class InvoiceApiFlowTests
         TokenResponse tokens = (await loginResponse.Content.ReadFromJsonAsync<TokenResponse>(ct))!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
 
+        // The overdue listing, against the Development seed (MigrationWorker.SeedSampleDataAsync): it holds
+        // one invoice already past due — the only way to have one, since Issue rejects a past due date.
+        // A page of one exercises the paged envelope; whatever else is listed is not this test's concern.
+        PagedResponse<InvoiceDto> firstPage = (await client.GetFromJsonAsync<PagedResponse<InvoiceDto>>(
+            "/api/v1/invoices/overdue?page=1&pageSize=1", ct))!;
+        firstPage.Page.ShouldBe(1);
+        firstPage.PageSize.ShouldBe(1);
+        firstPage.TotalCount.ShouldBeGreaterThanOrEqualTo(1);
+        firstPage.TotalPages.ShouldBe(firstPage.TotalCount);
+        firstPage.HasPreviousPage.ShouldBeFalse();
+        firstPage.HasNextPage.ShouldBe(firstPage.TotalCount > 1);
+        InvoiceDto oldestOverdue = firstPage.Items.ShouldHaveSingleItem();
+        oldestOverdue.Status.ShouldBe("Issued");
+        oldestOverdue.DueDate.ShouldNotBeNull().ShouldBeLessThan(DateTimeOffset.UtcNow);
+
+        PagedResponse<InvoiceDto> overdueBefore = (await client.GetFromJsonAsync<PagedResponse<InvoiceDto>>(
+            "/api/v1/invoices/overdue?pageSize=100", ct))!;
+        overdueBefore.Items.ShouldContain(static i => i.CustomerName == "Overdue Industries" && i.Total == 1200.00m);
+        overdueBefore.Items.Select(static i => i.DueDate).ShouldBeInOrder(SortDirection.Ascending);
+
         // create draft
-        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
-            "/api/v1/invoices",
-            new CreateInvoiceRequest("ACME Corp", "billing@acme.com", "USD"),
-            ct);
-        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
-        createResponse.Headers.Location.ShouldNotBeNull();
-        Guid id = (await createResponse.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
+        Guid id = await CreateDraftAsync(client, "ACME Corp", ct);
 
         // add lines
         (await client.PostAsJsonAsync($"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Design", 150.50m), ct))
@@ -67,26 +82,48 @@ public sealed class InvoiceApiFlowTests
         (await client.PostAsJsonAsync($"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Build", 349.50m), ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // issue with a past due date so it shows up as overdue
-        (await client.PostAsJsonAsync($"/api/v1/invoices/{id}/issue",
-                new IssueInvoiceRequest(new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero)), ct))
+        // issue, due in 30 days (whole days: the date round-trips through Postgres exactly)
+        DateTimeOffset dueDate = new(DateTime.UtcNow.Date.AddDays(30), TimeSpan.Zero);
+        (await client.PostAsJsonAsync($"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(dueDate), ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         // read back the full aggregate
         InvoiceDto invoice = (await client.GetFromJsonAsync<InvoiceDto>($"/api/v1/invoices/{id}", ct))!;
         invoice.Status.ShouldBe("Issued");
+        invoice.DueDate.ShouldBe(dueDate);
         invoice.Total.ShouldBe(500.00m);
         invoice.Lines.Count.ShouldBe(2);
 
-        // overdue listing includes it — the endpoint returns a paged envelope. Asserted by id only:
-        // whatever else is overdue belongs to the seed data, not to this test.
-        PagedResponse<InvoiceDto> overdue = (await client.GetFromJsonAsync<PagedResponse<InvoiceDto>>(
+        // not yet due, so not overdue: the listing is exactly what it was before this invoice was issued
+        PagedResponse<InvoiceDto> overdueAfter = (await client.GetFromJsonAsync<PagedResponse<InvoiceDto>>(
             "/api/v1/invoices/overdue?pageSize=100", ct))!;
-        overdue.Items.Where(i => i.Id == id).ShouldHaveSingleItem().Total.ShouldBe(500.00m);
+        overdueAfter.Items.ShouldNotContain(i => i.Id == id);
+        overdueAfter.TotalCount.ShouldBe(overdueBefore.TotalCount);
 
         // pay
         (await client.PostAsync($"/api/v1/invoices/{id}/pay", content: null, ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // due-date rule: a past date is the aggregate's 400, a missing one the validator's 400
+        Guid second = await CreateDraftAsync(client, "Late Ltd", ct);
+        (await client.PostAsJsonAsync($"/api/v1/invoices/{second}/lines", new AddInvoiceLineRequest("Audit", 10m), ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        HttpResponseMessage pastDue = await client.PostAsJsonAsync(
+            $"/api/v1/invoices/{second}/issue", new IssueInvoiceRequest(DateTimeOffset.UtcNow.AddDays(-1)), ct);
+        pastDue.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await pastDue.Content.ReadAsStringAsync(ct)).ShouldContain("Invoice.DueDateInPast");
+
+        using StringContent noDueDate = new("{}", Encoding.UTF8, "application/json");
+        HttpResponseMessage missingDue = await client.PostAsync($"/api/v1/invoices/{second}/issue", noDueDate, ct);
+        missingDue.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await missingDue.Content.ReadAsStringAsync(ct)).ShouldContain("\"errors\"");
+
+        // void is terminal: the rejected issues left a draft, which voids once and only once
+        (await client.PostAsync($"/api/v1/invoices/{second}/void", content: null, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await client.PostAsync($"/api/v1/invoices/{second}/void", content: null, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         // error contracts
         HttpResponseMessage notFound = await client.GetAsync($"/api/v1/invoices/{Guid.NewGuid()}", ct);
@@ -99,6 +136,17 @@ public sealed class InvoiceApiFlowTests
 
         HttpResponseMessage conflict = await client.PostAsync($"/api/v1/invoices/{id}/pay", content: null, ct);
         conflict.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    private static async Task<Guid> CreateDraftAsync(HttpClient client, string customerName, CancellationToken ct)
+    {
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/v1/invoices",
+            new CreateInvoiceRequest(customerName, "billing@acme.com", "USD"),
+            ct);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        createResponse.Headers.Location.ShouldNotBeNull();
+        return (await createResponse.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
     }
 
     /// <summary>

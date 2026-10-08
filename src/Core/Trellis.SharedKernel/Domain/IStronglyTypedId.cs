@@ -10,9 +10,11 @@ namespace Trellis.SharedKernel.Domain;
 ///     public override string ToString() => Value.ToString();
 /// }
 /// </code>
+/// A record struct already implements <see cref="IEquatable{T}"/>, so the constraint costs no code; it lets
+/// <see cref="Entity{TId}"/> compare IDs without boxing them.
 /// JSON conversion is generic (see StronglyTypedIdJsonConverterFactory); the EF value converter lives in Persistence.
 /// </summary>
-public interface IStronglyTypedId<TSelf>
+public interface IStronglyTypedId<TSelf> : IEquatable<TSelf>
     where TSelf : struct, IStronglyTypedId<TSelf>
 {
     Guid Value { get; }
