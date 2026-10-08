@@ -1,0 +1,27 @@
+@page "/Error"
+@attribute [ExcludeFromInteractiveRouting]
+@layout ErrorLayout
+@using System.Diagnostics
+
+@* The target of UseExceptionHandler("/Error") outside Development. Rendered statically (no circuit) in a
+   layout that needs no services, so it still works when whatever broke the request broke them too. *@
+
+<PageTitle>Error — Trellis</PageTitle>
+
+<h1>Something went wrong</h1>
+<p class="error" role="alert">An error occurred while processing your request. Please try again.</p>
+
+@if (RequestId is not null)
+{
+    <p class="hint">If it keeps happening, quote this request id: <code>@RequestId</code></p>
+}
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    /// <summary>The failed request's trace (the id the logs and traces carry), else its connection-level id.</summary>
+    private string? RequestId { get; set; }
+
+    protected override void OnInitialized() => RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

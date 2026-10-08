@@ -8,6 +8,9 @@
     <!--#if (IncludeUI) -->
     <!-- The UI client tests (Ui/) drive UI.Common's typed clients and token provider over fake handlers. -->
     <ProjectReference Include="..\..\src\Presentation\UI\Trellis.UI.Common\Trellis.UI.Common.csproj" />
+    <!-- The web host itself, for the Production-mode /Error test (Ui/WebHostTests). Aliased like the Api:
+         its top-level Program would otherwise clash with the Api's. -->
+    <ProjectReference Include="..\..\src\Presentation\UI\Trellis.UI.Web\Trellis.UI.Web.csproj" Aliases="webhost" />
     <!--#endif -->
   </ItemGroup>
 

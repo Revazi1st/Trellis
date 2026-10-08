@@ -1,0 +1,11 @@
+@inherits LayoutComponentBase
+
+@* The error page's layout: markup only, no auth state and no API client (MainLayout needs both). *@
+<div class="page">
+    <header class="topbar">
+        <a class="brand" href="">Trellis</a>
+    </header>
+    <main class="content">
+        @Body
+    </main>
+</div>
