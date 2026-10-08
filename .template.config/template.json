@@ -230,6 +230,12 @@
           ]
         },
         {
+          "condition": "(!UseSerilog)",
+          "exclude": [
+            "tests/Trellis.ApiTests/InProcess/SerilogExportTests.cs"
+          ]
+        },
+        {
           "condition": "(!IncludeUiTests || !IncludeUI)",
           "exclude": [
             "tests/Trellis.UiTests/**"

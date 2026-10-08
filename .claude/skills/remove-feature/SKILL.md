@@ -29,7 +29,7 @@ Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events,
 
 ## 4. Api
 - Delete `Api/Features/Invoices/` (7 endpoints) and `Api.Contracts/Invoices/`.
-- `Program.cs`: remove `InvoiceMetrics.MeterName` from `AddMeter(...)` (keep `OutboxMetrics`).
+- `Program.cs`: no telemetry line to remove — ServiceDefaults subscribes every `Trellis.*` meter, so deleting `InvoiceMetrics` is enough.
 - `Api.Common/Caching/CacheKeys.cs`: replace the `Invoice(id)` method with keys for your feature — keep the class, it is the tenant-scoping seam.
 
 ## 5. UI (if included)

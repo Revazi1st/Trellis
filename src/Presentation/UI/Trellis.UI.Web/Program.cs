@@ -9,14 +9,26 @@ using Trellis.UI.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
+#if (UseSerilog)
+// Serilog replaces the logger factory below and hands every event on to the ILoggerProviders still
+// registered (writeToProviders). Clearing first leaves exactly one: the OpenTelemetry provider that
+// AddServiceDefaults adds, so OTLP log export keeps working and the console is not written twice.
+builder.Logging.ClearProviders();
+
+#endif
 builder.AddServiceDefaults();
 
 #if (UseSerilog)
-builder.Services.AddSerilog(static (services, config) => config
-    .ReadFrom.Configuration(services.GetRequiredService<IConfiguration>())
-    .Enrich.FromLogContext()
-    // Explicit format provider: log output must not vary with the host's locale (CA1305).
-    .WriteTo.Console(formatProvider: System.Globalization.CultureInfo.InvariantCulture));
+// Levels come from a "Serilog" section when the host has one: Serilog does not read Logging:LogLevel.
+// preserveStaticLogger: the host keeps its own logger instead of replacing the process-wide Log.Logger.
+builder.Services.AddSerilog(
+    static (services, config) => config
+        .ReadFrom.Configuration(services.GetRequiredService<IConfiguration>())
+        .Enrich.FromLogContext()
+        // Explicit format provider: log output must not vary with the host's locale (CA1305).
+        .WriteTo.Console(formatProvider: System.Globalization.CultureInfo.InvariantCulture),
+    preserveStaticLogger: true,
+    writeToProviders: true);
 #endif
 
 builder.Services.AddRazorComponents()

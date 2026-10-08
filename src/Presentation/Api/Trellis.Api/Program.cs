@@ -1,6 +1,7 @@
 #if (UseSerilog)
 using Serilog;
 #endif
+using Microsoft.Extensions.Caching.Hybrid;
 using Scalar.AspNetCore;
 using Trellis.Api.Common;
 using Trellis.Api.Common.Authentication;
@@ -8,32 +9,38 @@ using Trellis.Api.Common.Endpoints;
 using Trellis.Api.Common.Hardening;
 using Trellis.Api.Common.Http;
 using Trellis.Application;
-using Trellis.Application.Observability;
 using Trellis.Infrastructure;
 using Trellis.Persistence;
 using Trellis.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 
+#if (UseSerilog)
+// Serilog replaces the logger factory below and hands every event on to the ILoggerProviders still
+// registered (writeToProviders). Clearing first leaves exactly one: the OpenTelemetry provider that
+// AddServiceDefaults adds, so OTLP log export keeps working and the console is not written twice.
+builder.Logging.ClearProviders();
+
+#endif
+// OpenTelemetry for every meter and trace source named Trellis.* (the Invoices business meter, the
+// outbox meter and dispatch spans, the use-case spans), plus health probes and resilient HttpClients.
 builder.AddServiceDefaults();
 
 #if (UseSerilog)
-builder.Services.AddSerilog(static (services, config) => config
-    .ReadFrom.Configuration(services.GetRequiredService<IConfiguration>())
-    .Enrich.FromLogContext()
-    // Explicit format provider: log output must not vary with the host's locale (CA1305).
-    .WriteTo.Console(formatProvider: System.Globalization.CultureInfo.InvariantCulture));
+// Levels come from the "Serilog" section (it mirrors Logging:LogLevel): Serilog does not read Logging.
+// preserveStaticLogger: this host keeps its own logger instead of replacing the process-wide Log.Logger,
+// which several hosts in one process (the in-process test fixtures) would otherwise write through.
+builder.Services.AddSerilog(
+    static (services, config) => config
+        .ReadFrom.Configuration(services.GetRequiredService<IConfiguration>())
+        .Enrich.FromLogContext()
+        // Explicit format provider: log output must not vary with the host's locale (CA1305).
+        .WriteTo.Console(formatProvider: System.Globalization.CultureInfo.InvariantCulture),
+    preserveStaticLogger: true,
+    writeToProviders: true);
 #endif
 
 builder.Services.AddApplication();
-
-// Export the Invoices business meter (counters are incremented by outbox-dispatched event handlers)
-// and the outbox meter + trace source (dispatch spans rejoin the originating request's trace).
-builder.Services.AddOpenTelemetry()
-    .WithMetrics(static metrics => metrics.AddMeter(InvoiceMetrics.MeterName, Trellis.Persistence.Outbox.OutboxMetrics.MeterName))
-    .WithTracing(static tracing => tracing.AddSource(
-        Trellis.Persistence.Outbox.OutboxMetrics.ActivitySourceName,
-        Trellis.SharedKernel.Decorators.TracingDecorators.ActivitySourceName));
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOutboundIntegrations(builder.Configuration);
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trellis-db")
@@ -64,7 +71,16 @@ builder.Services.AddOutboxProcessing();
 builder.Services.AddDataRetention(builder.Configuration);
 
 // HybridCache: in-memory L1 always; a Redis L2 is added below when the UseRedis feature is enabled.
-builder.Services.AddHybridCache();
+// The write endpoints remove an invoice's entry, but RemoveAsync reaches only THIS instance's L1 (and the
+// shared L2): with several API replicas, another replica's L1 keeps serving its copy until it expires. So
+// L1 lives 30 seconds, the bound on cross-replica staleness; with UseRedis the shared L2 keeps entries for
+// five minutes and a replica refills its L1 from there. Without UseRedis there is no L2: every replica
+// caches on its own, for 30 seconds.
+builder.Services.AddHybridCache(static cache => cache.DefaultEntryOptions = new HybridCacheEntryOptions
+{
+    Expiration = TimeSpan.FromMinutes(5),
+    LocalCacheExpiration = TimeSpan.FromSeconds(30),
+});
 #if (UseRedis)
 // Aspire registers an IDistributedCache backed by the "cache" Redis resource, which HybridCache uses as its L2.
 builder.AddRedisDistributedCache("cache");

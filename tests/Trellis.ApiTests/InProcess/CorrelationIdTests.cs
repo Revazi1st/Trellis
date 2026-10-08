@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Net;
+using System.Text.Json;
 using Shouldly;
 using Trellis.Api.Common.Http;
 using Xunit;
@@ -7,10 +10,13 @@ namespace Trellis.ApiTests.InProcess;
 /// <summary>
 /// The correlation id is the one piece of request state a caller can influence, so the tests that
 /// matter are the ones about NOT trusting it: a sane inbound id is honoured, anything else is
-/// replaced by a server-generated one rather than echoed back into logs and headers.
+/// replaced by the server-side id rather than echoed back into logs and headers. The server-side id is
+/// the request's W3C trace id, the same trace a problem body's <c>traceId</c> names.
 /// </summary>
 public sealed class CorrelationIdTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
+    private const string W3CTraceId = "^[0-9a-f]{32}$";
+
     [Fact]
     public async Task A_well_formed_inbound_correlation_id_is_echoed_back()
     {
@@ -42,7 +48,7 @@ public sealed class CorrelationIdTests(ApiFactory factory) : IClassFixture<ApiFa
 
         string echoed = response.Headers.GetValues(CorrelationIdMiddleware.HeaderName).Single();
         string.Equals(echoed, unsafeValue, StringComparison.Ordinal).ShouldBeFalse();
-        echoed.ShouldNotBeNullOrWhiteSpace();
+        echoed.ShouldMatch(W3CTraceId);
     }
 
     [Fact]
@@ -54,6 +60,25 @@ public sealed class CorrelationIdTests(ApiFactory factory) : IClassFixture<ApiFa
 
         response.Headers.GetValues(CorrelationIdMiddleware.HeaderName)
             .ShouldHaveSingleItem()
-            .ShouldNotBeNullOrWhiteSpace();
+            .ShouldMatch(W3CTraceId);
+    }
+
+    [Fact]
+    public async Task Without_an_inbound_id_the_header_names_the_trace_of_the_problem_body()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+
+        using HttpResponseMessage response = await admin.GetAsync($"/api/v1/invoices/{Guid.NewGuid()}", ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        string header = response.Headers.GetValues(CorrelationIdMiddleware.HeaderName).ShouldHaveSingleItem();
+        using JsonDocument problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        string traceId = problem.RootElement.GetProperty("traceId").GetString().ShouldNotBeNull();
+
+        // The framework writes the request activity's id in traceparent form (version, trace id, span id and
+        // flags, dash-separated). The correlation id is its trace-id field, the part every hop shares.
+        ActivityContext.TryParse(traceId, traceState: null, out ActivityContext trace).ShouldBeTrue(traceId);
+        header.ShouldBe(trace.TraceId.ToHexString());
     }
 }

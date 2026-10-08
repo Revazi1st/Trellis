@@ -18,22 +18,16 @@ public sealed class DomainEventsWithoutHandlersTests
     {
         IDomainEventDispatcher dispatcher = new DomainEventDispatcher(new ContainerWithoutHandlers());
         var completedHandlers = new HashSet<string>(StringComparer.Ordinal);
-        var checkpoints = new List<string>();
         IDomainEvent voided = new InvoiceVoidedDomainEvent(InvoiceId.New());
 
         await dispatcher.Dispatch(voided, completedHandlers, TestContext.Current.CancellationToken);
         await dispatcher.Dispatch(
             voided,
             completedHandlers,
-            checkpoint: name =>
-            {
-                checkpoints.Add(name);
-                return Task.CompletedTask;
-            },
+            checkpoint: _ => throw new InvalidOperationException("No handler ran, so nothing may be checkpointed."),
             TestContext.Current.CancellationToken);
 
         completedHandlers.ShouldBeEmpty();
-        checkpoints.ShouldBeEmpty();
     }
 
     /// <summary>
