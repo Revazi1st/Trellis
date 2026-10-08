@@ -9,12 +9,16 @@
     ═══════════════════════════════════════════════════════════════════════════════════
     LICENSE CEILINGS — DO NOT CROSS (applies to humans and AI agents alike)
 
-    The following packages moved to commercial licenses. This solution deliberately
-    avoids them; never add or upgrade to:
+    The following packages moved to commercial licenses (or, for Moq, broke the trust a
+    build dependency needs). This solution deliberately avoids them; never add or upgrade to:
       • MediatR >= 13.0.0            (Lucky Penny, RPL-1.5/commercial) — we hand-roll CQRS handlers
       • AutoMapper >= 15.0.0         (Lucky Penny, RPL-1.5/commercial) — we map manually
       • FluentAssertions >= 8.0.0    (Xceed, proprietary)              — we use Shouldly
       • MassTransit >= 9.0.0         (Massient, commercial)            — use Wolverine/Rebus if messaging is needed
+      • Moq, any version             (4.20.0 shipped SponsorLink)      — we use NSubstitute
+    Enforced, not advisory: the build fails when any of these ids appears anywhere in a
+    project's resolved package graph, transitive dependencies included (Directory.Build.props),
+    and Dependabot never proposes them (.github/dependabot.yml).
     Rationale: docs/adr/0011-license-ceiling-policy.md
     ═══════════════════════════════════════════════════════════════════════════════════
     All versions below verified against nuget.org on 2026-09-25.

@@ -52,6 +52,7 @@ updates:
       - dependency-name: "AutoMapper"
       - dependency-name: "FluentAssertions"
       - dependency-name: "MassTransit"
+      - dependency-name: "Moq"
 
   # One weekly PR for all action bumps: they are SHA pins with version comments, reviewed together.
   - package-ecosystem: github-actions
