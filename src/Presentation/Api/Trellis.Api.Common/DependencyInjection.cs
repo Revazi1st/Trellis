@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Trellis.Api.Common.Caching;
+using Trellis.Api.Common.Endpoints;
 using Trellis.Api.Common.Http;
 using Trellis.Api.Common.OpenApi;
 using Trellis.Application.Abstractions;
@@ -47,18 +48,9 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>OpenAPI 3.1 document generation with typed-ID schemas, the bearer security scheme and idempotency metadata; UI is mapped per-environment in the host.</summary>
+    /// <summary>One OpenAPI 3.1 document per API version (ADR-0025: concrete paths, problem responses by shape, typed-ID and decimal schemas, the bearer scheme, idempotency metadata); the UI is mapped per-environment in the host.</summary>
     public static IServiceCollection AddApiDocumentation(this IServiceCollection services)
-    {
-        services.AddOpenApi(static options =>
-        {
-            options.AddSchemaTransformer<StronglyTypedIdSchemaTransformer>();
-            options.AddDocumentTransformer<SecuritySchemeTransformer>();
-            options.AddOperationTransformer<SecurityRequirementOperationTransformer>();
-            options.AddOperationTransformer<IdempotencyOperationTransformer>();
-        });
-        return services;
-    }
+        => services.AddVersionedOpenApiDocument(ApiVersions.V1);
 
     /// <summary>
     /// Runs after ASP.NET's defaults (which set <c>status</c>, a generic <c>title</c>/<c>type</c> and
