@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Net.Http.Headers;
 using Trellis.Api.Common.Authentication;
 using Trellis.Api.Common.Caching;
 using Trellis.Api.Common.Endpoints;
@@ -15,10 +16,10 @@ namespace Trellis.Api.Features.Invoices;
 
 internal sealed class GetInvoice : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapGet("invoices/{id}", Handle)
-        .WithName(InvoiceEndpoints.GetInvoiceRouteName)
         .RequirePermission(Permissions.Invoices.Read)
+        .SupportsConditionalGet()
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Get one invoice with its lines")
         .WithDescription(
@@ -46,11 +47,12 @@ internal sealed class GetInvoice : IEndpoint
         if (dto is not null)
         {
             // The xmin concurrency token doubles as a weak ETag: pollers pay a 304 instead of the
-            // full aggregate when nothing changed.
-            string etag = $"W/\"{dto.Version}\"";
-            httpContext.Response.Headers.ETag = etag;
+            // full aggregate when nothing changed. Parsed, not string-compared: a client that sends
+            // the strong form, a list or "*" is honoured too (RFC 9110 §13.1.2).
+            EntityTagHeaderValue etag = ConditionalGetExtensions.WeakETag(dto.Version);
+            httpContext.Response.Headers.ETag = etag.ToString();
 
-            return httpContext.Request.Headers.IfNoneMatch.Contains(etag, StringComparer.Ordinal)
+            return httpContext.Request.IsNotModified(etag)
                 ? TypedResults.StatusCode(StatusCodes.Status304NotModified)
                 : TypedResults.Ok(dto);
         }

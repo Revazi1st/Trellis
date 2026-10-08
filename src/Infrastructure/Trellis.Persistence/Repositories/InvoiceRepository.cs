@@ -22,12 +22,19 @@ internal sealed class InvoiceRepository(AppDbContext context) : IInvoiceReposito
         // This method pages; the specification must not, and its order must be total (ends with Id).
         specification.EnsureCanBePaged();
 
+        // The query's validator bounds page and pageSize; these are the programmer-error guards behind it:
+        // an unchecked (page - 1) * pageSize wraps negative for a huge page and Postgres rejects a negative
+        // OFFSET with an error that reads like a database fault.
+        ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
+        int skip = checked((page - 1) * pageSize);
+
         IQueryable<Invoice> source = context.Invoices.AsNoTracking();
 
         int totalCount = await specification.ApplyCriteria(source).CountAsync(cancellationToken);
 
         List<Invoice> items = await specification.ApplyTo(source)
-            .Skip((page - 1) * pageSize)
+            .Skip(skip)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 

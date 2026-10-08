@@ -8,7 +8,7 @@ namespace Trellis.Api.Features.Auth;
 
 internal sealed class RevokeSessions : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapPost("auth/revoke-all", Handle)
         .RequireAuthorization()
         .WithTags(AuthEndpoints.Tag)

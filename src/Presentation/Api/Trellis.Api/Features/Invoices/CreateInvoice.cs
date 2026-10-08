@@ -13,7 +13,7 @@ namespace Trellis.Api.Features.Invoices;
 
 internal sealed class CreateInvoice : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapPost("invoices", Handle)
         .RequirePermission(Permissions.Invoices.Write)
         .RequireIdempotency()
@@ -34,7 +34,7 @@ internal sealed class CreateInvoice : IEndpoint
         return result.IsSuccess
             ? TypedResults.CreatedAtRoute(
                 new CreateInvoiceResponse(result.Value.Value),
-                InvoiceEndpoints.GetInvoiceRouteName,
+                nameof(GetInvoice),
                 new { id = result.Value.Value })
             : CustomResults.Problem(result.Error);
     }
