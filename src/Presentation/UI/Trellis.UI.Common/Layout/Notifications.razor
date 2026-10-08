@@ -1,0 +1,22 @@
+@implements IDisposable
+@inject INotificationService Service
+
+@* Always in the page, empty or not: screen readers announce what appears in a live region that already exists. *@
+<div class="notifications" role="status" aria-live="polite">
+    @if (Service.Current is { } shown)
+    {
+        <p class="notice">
+            <span>@shown.Message</span>
+            <button type="button" class="link-button" aria-label="Dismiss notification" @onclick="Service.Dismiss">✕</button>
+        </p>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Service.Changed += OnChanged;
+
+    // The expiry timer raises Changed off the renderer's thread.
+    private void OnChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Service.Changed -= OnChanged;
+}

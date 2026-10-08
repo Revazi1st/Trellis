@@ -3,7 +3,7 @@
 <div class="page">
     <header class="topbar">
         <a class="brand" href="">Trellis</a>
-        <nav class="nav">
+        <nav class="nav" aria-label="Main">
             <AuthorizeView>
                 <Authorized>
                     <NavLink href="invoices" class="nav-link">Invoices</NavLink>
@@ -20,6 +20,7 @@
         </nav>
     </header>
     <main class="content">
+        <Notifications />
         <ErrorBoundary @ref="_errorBoundary">
             <ChildContent>
                 @Body

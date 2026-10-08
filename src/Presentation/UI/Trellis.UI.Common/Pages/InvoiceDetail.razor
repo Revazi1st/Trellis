@@ -2,6 +2,7 @@
 @inherits ProtectedPage
 @inject IInvoiceApiClient InvoiceApi
 @inject TimeProvider Time
+@inject INotificationService Notifier
 
 <PageTitle>Invoice — Trellis</PageTitle>
 
@@ -11,7 +12,7 @@
 }
 else if (_invoice is null)
 {
-    <p>Loading…</p>
+    <p role="status" aria-live="polite">Loading…</p>
 }
 else
 {
@@ -127,7 +128,7 @@ else
     {
         _busy = true;
         ApiResult<bool> result = await InvoiceApi.PayAsync(Id);
-        _actionError = result.IsSuccess ? null : result.Error;
+        _actionError = Outcome(result, "Invoice marked as paid.");
         _busy = false;
         await LoadAsync();
     }
@@ -136,7 +137,7 @@ else
     {
         _busy = true;
         ApiResult<bool> result = await InvoiceApi.VoidAsync(Id);
-        _actionError = result.IsSuccess ? null : result.Error;
+        _actionError = Outcome(result, "Invoice voided.");
         _busy = false;
         await LoadAsync();
     }
@@ -164,7 +165,24 @@ else
         _busy = true;
         ApiResult<bool> result = await InvoiceApi.IssueAsync(Id, _issue.ToRequest());
         _issueError = result.IsSuccess ? null : _issueServer.Show(result);
+        if (result.IsSuccess)
+        {
+            Notifier.Success("Invoice issued.");
+        }
+
         _busy = false;
         await LoadAsync();
+    }
+
+    /// <summary>The action's error to show, or null after announcing its success.</summary>
+    private string? Outcome(ApiResult<bool> result, string success)
+    {
+        if (!result.IsSuccess)
+        {
+            return result.Error;
+        }
+
+        Notifier.Success(success);
+        return null;
     }
 }

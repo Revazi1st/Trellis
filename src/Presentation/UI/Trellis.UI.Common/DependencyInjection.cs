@@ -20,7 +20,7 @@ public static class DependencyInjection
     public static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(15);
 
     /// <summary>
-    /// Registers the shared UI service layer (typed API clients, bearer handler, auth state).
+    /// Registers the shared UI service layer (typed API clients, bearer handler, auth state, notifications).
     /// The host supplies <paramref name="configureApiClient"/> (base address — e.g. service discovery)
     /// and must register its own <see cref="ITokenStore"/> for the platform.
     /// </summary>
@@ -45,6 +45,8 @@ public static class DependencyInjection
         // token source needs IAuthApiClient to refresh — attaching it here would be a DI cycle.
         services.AddScoped<IInvoiceApiClient>(sp => new InvoiceApiClient(CreateApiClient(sp, configureApiClient, withBearer: true)));
         services.AddScoped<IAuthApiClient>(sp => new AuthApiClient(CreateApiClient(sp, configureApiClient, withBearer: false)));
+
+        services.AddScoped<INotificationService, NotificationService>();
 
         services.AddAuthorizationCore();
         services.AddScoped<TokenAuthenticationStateProvider>();

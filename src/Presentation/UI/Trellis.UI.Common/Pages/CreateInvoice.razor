@@ -1,6 +1,7 @@
 @page "/invoices/new"
 @inherits ProtectedPage
 @inject IInvoiceApiClient InvoiceApi
+@inject INotificationService Notifier
 
 <PageTitle>New invoice — Trellis</PageTitle>
 
@@ -40,6 +41,7 @@
 
         if (result.IsSuccess)
         {
+            Notifier.Success("Draft invoice created.");
             Navigation.NavigateTo($"invoices/{result.Value}");
         }
         else

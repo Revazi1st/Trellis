@@ -1,6 +1,9 @@
-:root { --fg: #1a1a2e; --muted: #6b7280; --accent: #4f46e5; --danger: #dc2626; --border: #e5e7eb; --bg: #fff; }
+/* --on-accent / --on-danger: the text on those fills, each at least 4.5:1 (WCAG AA). Light: white on
+   #4f46e5 6.3:1, on #dc2626 4.8:1. Dark: the fills are light, so the text is the dark background
+   colour: #111827 on #818cf8 5.9:1, on #f87171 6.4:1 (white on them was 3.0:1 and 2.8:1). */
+:root { --fg: #1a1a2e; --muted: #6b7280; --accent: #4f46e5; --on-accent: #fff; --danger: #dc2626; --on-danger: #fff; --border: #e5e7eb; --bg: #fff; }
 @media (prefers-color-scheme: dark) {
-  :root { --fg: #e5e7eb; --muted: #9ca3af; --accent: #818cf8; --danger: #f87171; --border: #374151; --bg: #111827; }
+  :root { --fg: #e5e7eb; --muted: #9ca3af; --accent: #818cf8; --on-accent: #111827; --danger: #f87171; --on-danger: #111827; --border: #374151; --bg: #111827; }
 }
 body { font-family: system-ui, sans-serif; margin: 0; color: var(--fg); background: var(--bg); }
 .page { max-width: 900px; margin: 0 auto; padding: 0 1rem; }
@@ -14,8 +17,9 @@ body { font-family: system-ui, sans-serif; margin: 0; color: var(--fg); backgrou
 .form { display: flex; flex-direction: column; gap: .75rem; max-width: 360px; }
 .form label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 input { padding: .5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); }
-button { padding: .5rem 1rem; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
-button.danger { background: var(--danger); }
+button { padding: .5rem 1rem; border: 0; border-radius: 6px; background: var(--accent); color: var(--on-accent); cursor: pointer; }
+button.danger { background: var(--danger); color: var(--on-danger); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: .6; cursor: default; }
 .link-button { background: none; color: var(--accent); padding: 0; }
 .grid { width: 100%; border-collapse: collapse; margin: 1rem 0; }
@@ -30,6 +34,10 @@ button:disabled { opacity: .6; cursor: default; }
 .hint { color: var(--muted); font-size: .85rem; }
 
 .error-panel { border: 1px solid var(--danger); border-radius: 8px; padding: 1rem 1.25rem; }
+.notice { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0 0 1rem; padding: .5rem 1rem; border: 1px solid var(--accent); border-radius: 6px; }
+input[aria-invalid="true"] { border-color: var(--danger); }
+/* Read by screen readers, not shown (a column header for the row links, for instance). */
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .validation-message { color: var(--danger); font-size: .85rem; }
 .validation-errors { color: var(--danger); margin: .25rem 0; padding-left: 1rem; }
 
