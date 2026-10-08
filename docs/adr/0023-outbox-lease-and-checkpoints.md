@@ -96,6 +96,11 @@ no new package; the `OutboxMessages` schema does not change (the shipped `Initia
   process that crashes after a handler's side effect and before its checkpoint, and a handler that
   ignores its token past the lease. After a crash, in-flight rows reappear within `LeaseDuration`
   (10.5 min with the defaults); shorten `BatchSize` or `DispatchTimeout` to shorten it.
+- **A failed bookkeeping save costs one message, not the batch**: when the database fails a message's
+  failure, dead-letter or Processed save, the processor logs a Warning and goes on with the next message
+  while that row keeps its lease (dispatched again when it expires, credited handlers skipped), anything
+  else that ends a batch early releases the unreached rows' leases before it propagates, and since the
+  budget bounds handlers rather than saves, a slow database can push a batch past its lease as well.
 - **Handler rules** (`.claude/rules/application.md`): handlers run at-least-once; honour the
   `CancellationToken`; do unit-of-work writes before external side effects (a write that fails at the
   checkpoint un-credits the handler, so an e-mail sent before it would go out again); never call

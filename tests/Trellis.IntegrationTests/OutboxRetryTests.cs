@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Shouldly;
@@ -41,6 +42,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     private readonly WritingSwitch _writing = new();
     private readonly FlakyPaidHandler _flaky = new();
     private readonly BlockingPaidHandler _blocking = new();
+    private readonly BookkeepingFault _bookkeepingFault = new();
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -52,6 +54,9 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         services.AddScoped<IDomainEventHandler<InvoicePaidDomainEvent>, WritingPaidHandler>();
         services.AddSingleton<IDomainEventHandler<InvoicePaidDomainEvent>>(_flaky);
         services.AddSingleton<IDomainEventHandler<InvoicePaidDomainEvent>>(_blocking);
+
+        // Appended after the app's own interceptors; inert until a test names the row whose saves fail.
+        services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(_bookkeepingFault));
     }
 
     [Fact]
@@ -271,6 +276,45 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     }
 
     [Fact]
+    public async Task A_leased_message_is_invisible_to_a_second_processor_until_its_lease_expires()
+    {
+        // The issued row first, so the first processor finishes it and is stuck on the paid row alone.
+        InvoiceId id = await IssueInvoiceAsync();
+        Time.Advance(TimeSpan.FromSeconds(1));
+        await PayAsync(id);
+        var options = new OutboxOptions();
+        _blocking.Block = true;
+        _blocking.IgnoreCancellation = true;   // stuck past its budget: only the lease running out lets another processor in
+
+        Task<int> first = CreateOutboxProcessor(options).ProcessBatchAsync(Ct);
+        try
+        {
+            await _blocking.Started.Task.WaitAsync(WaitBudget, Ct);
+            _blocking.Block = false;   // only the call already in flight stays stuck
+            OutboxProcessor second = CreateOutboxProcessor(options);
+
+            // Leased: not due to anyone else while the first processor holds it, finished or not.
+            (await second.ProcessBatchAsync(Ct)).ShouldBe(0);
+
+            // Expired: the second processor claims it while the first is still inside its handler, skips the
+            // receipt the first one's checkpoint already credited, and finishes it.
+            Time.Advance(options.LeaseDuration);
+            (await second.ProcessBatchAsync(Ct)).ShouldBe(1);
+            first.IsCompleted.ShouldBeFalse();
+            (await RowAsync(PaidType)).Status.ShouldBe(OutboxMessageStatus.Processed);
+        }
+        finally
+        {
+            _blocking.Release();
+        }
+
+        // Unstuck, the first processor finishes its copy too: two processors, one receipt.
+        (await first.WaitAsync(WaitBudget, Ct)).ShouldBe(2);
+        (await RowAsync(PaidType)).Status.ShouldBe(OutboxMessageStatus.Processed);
+        await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task A_writing_handler_is_committed_with_its_credit_even_when_a_later_handler_fails()
     {
         _writing.Enabled = true;
@@ -388,6 +432,40 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         (await CreateOutboxProcessor().ProcessBatchAsync(Ct)).ShouldBe(3);
         (await RowsAsync()).ShouldAllBe(static r => r.Status == OutboxMessageStatus.Processed);
         await EmailSender.Received(3).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_failed_bookkeeping_save_costs_its_own_message_and_the_rest_of_the_batch_goes_on()
+    {
+        // Oldest first, so the faulted row is near the head of the batch and the second invoice's rows follow it.
+        await PayNewInvoiceAsync();
+        Time.Advance(TimeSpan.FromSeconds(1));
+        InvoiceId second = await PayNewInvoiceAsync();
+        OutboxMessage faulted = (await RowsAsync()).First(static r => r.Type == PaidType);
+        _bookkeepingFault.MessageId = faulted.Id;   // the database refuses every save of this row from here on
+        var options = new OutboxOptions();
+
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(4);
+
+        // Its first checkpoint failed, then the save of that failure: nothing about the attempt is durable,
+        // so the row holds exactly what the claim gave it — the lease — and comes back when that expires.
+        _bookkeepingFault.Failures.ShouldBe(2);
+        OutboxMessage stranded = await RowAsync(faulted.Id);
+        stranded.Status.ShouldBe(OutboxMessageStatus.Pending);
+        stranded.Attempts.ShouldBe(0);
+        stranded.CompletedHandlers.ShouldBeNull();
+        stranded.NextAttemptAtUtc.ShouldBe(Time.GetUtcNow() + options.LeaseDuration);
+
+        // Everything after it in the same batch was dispatched and booked as if nothing had happened.
+        (await RowsAsync()).Where(r => r.Id != faulted.Id).ShouldAllBe(static r => r.Status == OutboxMessageStatus.Processed);
+        await EmailSender.Received(1).SendAsync("billing@acme.com", Arg.Any<string>(), Arg.Is<string>(body => body.Contains(second.ToString())), Arg.Any<CancellationToken>());
+
+        // Not due before the lease runs out; claimed and finished once it has.
+        _bookkeepingFault.MessageId = null;
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(0);
+        Time.Advance(options.LeaseDuration);
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(1);
+        (await RowAsync(faulted.Id)).Status.ShouldBe(OutboxMessageStatus.Processed);
     }
 
     [Fact]
@@ -565,13 +643,51 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         }
     }
 
-    /// <summary>Signals that it is running, then waits for its token: the shape of a handler stuck on a dependency.</summary>
+    /// <summary>
+    /// Fails every save of one outbox row that runs outside a transaction — its checkpoints, its failure, its
+    /// dead letter, its Processed mark — the way a database that went away mid-batch would. The claim stamps
+    /// its lease inside the claim transaction, so it is left alone.
+    /// </summary>
+    private sealed class BookkeepingFault : SaveChangesInterceptor
+    {
+        private int _failures;
+
+        public Guid? MessageId { get; set; }
+
+        public int Failures => Volatile.Read(ref _failures);
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (MessageId is { } id
+                && eventData.Context is { Database.CurrentTransaction: null } context
+                && context.ChangeTracker.Entries<OutboxMessage>().Any(entry => entry.Entity.Id == id))
+            {
+                Interlocked.Increment(ref _failures);
+                throw new DbUpdateException("Simulated: the database is unavailable.");
+            }
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Signals that it is running, then waits for its token: the shape of a handler stuck on a dependency.
+    /// With <see cref="IgnoreCancellation"/> it waits for <see cref="Release"/> alone — a handler that ignores
+    /// its token, the one way past the budget to the end of a lease (ADR-0023).
+    /// </summary>
     [DomainEventHandlerName("test.blocking")]
     private sealed class BlockingPaidHandler : IDomainEventHandler<InvoicePaidDomainEvent>
     {
+        private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public bool Block { get; set; }
 
+        public bool IgnoreCancellation { get; set; }
+
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Release() => _released.TrySetResult();
 
         public async Task Handle(InvoicePaidDomainEvent domainEvent, CancellationToken cancellationToken)
         {
@@ -581,6 +697,12 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
             }
 
             Started.TrySetResult();
+            if (IgnoreCancellation)
+            {
+                await _released.Task;
+                return;
+            }
+
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
     }
