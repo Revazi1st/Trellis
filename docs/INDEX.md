@@ -11,6 +11,7 @@ Agent entry point — read only what the task needs.
 - [features/auth.md](features/auth.md) — Identity + JWT, refresh rotation/revocation, permissions, lockout
 - [features/exchange-rates.md](features/exchange-rates.md) — the reference outbound HTTP integration (typed client, per-client resilience, cached probe)
 - [threat-model.md](threat-model.md) — assets, mitigations that exist today, known gaps to decide before production
+- [api/openapi.v1.json](api/openapi.v1.json) — the committed OpenAPI contract, regenerated with `UPDATE_OPENAPI_SNAPSHOT=1` and checked against the served document on every test run (ADR-0025)
 <!--#if (TemplateSource) -->
 - [releasing.md](releasing.md) — releasing the template package: CHANGELOG section, dry run, tag, nuget.org trusted publishing, recovery
 <!--#endif -->
