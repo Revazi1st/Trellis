@@ -24,5 +24,5 @@ Also add: the aggregate + value objects + strongly-typed ID(s) + events + `{Aggr
 
 ## Finish
 - `./scripts/dotnet.sh build Trellis.slnx && ./scripts/dotnet.sh test Trellis.slnx`
-- Add a permission constant to `Permissions` if the feature is protected, and grant it to a role in the MigrationService seed.
+- Add a permission constant to `Permissions` (and to `Permissions.All`) for the endpoint's `.RequirePermission(...)`, and grant it to a role in `Roles.Permissions`; the MigrationService and the test hosts seed from that map, never by hand.
 - **Update `docs/features/{feature}.md`** (copy the invoices doc's shape).
