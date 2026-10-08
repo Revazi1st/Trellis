@@ -13,6 +13,7 @@ public static class InvoiceSpecs
         {
             Where(invoice => invoice.Status == InvoiceStatus.Issued && invoice.DueDate < now);
             OrderBy(invoice => invoice.DueDate);
+            OrderBy(invoice => invoice.Id);   // unique tiebreaker: invoices due at the same instant page stably
         }
     }
 }

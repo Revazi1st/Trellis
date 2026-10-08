@@ -19,6 +19,9 @@ internal sealed class InvoiceRepository(AppDbContext context) : IInvoiceReposito
     public async Task<PagedList<Invoice>> ListPagedAsync(
         Specification<Invoice> specification, int page, int pageSize, CancellationToken cancellationToken)
     {
+        // This method pages; the specification must not, and its order must be total (ends with Id).
+        specification.EnsureCanBePaged();
+
         IQueryable<Invoice> source = context.Invoices.AsNoTracking();
 
         int totalCount = await specification.ApplyCriteria(source).CountAsync(cancellationToken);
