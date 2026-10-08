@@ -5,7 +5,7 @@
 
 ## Context
 
-The original plan used Ardalis.Specification (MIT, free, well-maintained) for domain query objects. But it would have been the **only third-party dependency in the Domain layer**, in a solution whose philosophy is hand-rolled, dependency-free Core code (hand-rolled CQRS handlers, Result, strongly-typed IDs) for AI-legibility and zero license exposure. The user confirmed the hand-rolled direction.
+The original plan used Ardalis.Specification (MIT, free, well-maintained) for domain query objects. But it would have been the **only third-party dependency in the Domain layer**, in a solution whose philosophy is hand-rolled, dependency-free Core code (hand-rolled CQRS handlers, Result, strongly-typed IDs) for AI-legibility and zero license exposure. The template authors chose the hand-rolled direction.
 
 ## Decision
 

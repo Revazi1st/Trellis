@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-07-15
+- **Amended**: 2026-10-08 — account lockout, and why it stays visible (see *Amendment* below)
 
 ## Context
 
@@ -23,4 +24,27 @@ The template needs authentication and authorization that is self-contained (no e
 - The permission catalogue (`Permissions`) is the single authorization vocabulary shared by endpoints, seeding, and tokens.
 - Bootstrap admin credentials come from the `Seed` configuration section (dev defaults documented, overridable per environment).
 - Keycloak/OIDC remains a future toggle (its Aspire integration is still preview) — the `CurrentUser`/permission seam makes swapping the issuer a contained change.
-- Blazor circuit auth (M7) will be demo-grade (bearer token in the client); production guidance is BFF/cookies.
+- Blazor circuit auth is demo-grade (a bearer token held per circuit); production guidance is BFF/cookies (ADR-0015).
+
+## Amendment (2026-10-08): account lockout
+
+The decision above left Identity's lockout columns as dead schema: per-account brute force was
+throttled only by the per-source rate limit, which a distributed guesser does not trip. Identity's
+lockout is now on (`Lockout.AllowedForNewUsers`, 5 failed passwords, 15 minutes; a successful login
+resets the counter), checked before the password, and it **stays visible**: a locked account answers
+403 `Auth.AccountLockedOut` whatever password is supplied, and the UI shows the problem's `detail`
+instead of "wrong password".
+
+- **Why not collapse it into the 401.** Hiding the lockout would leave a legitimate user retrying a
+  correct password against a locked account with no way to know why, and support with no signal. A
+  403 never confirms a password (lockout is checked first); that it confirms an account exists is an
+  accepted risk, recorded in `docs/threat-model.md`.
+- **The timing oracle is closed separately.** An unknown e-mail and a wrong password both answer
+  401 `Auth.InvalidCredentials` and both spend one password-hash verification (`DummyPasswordHash`
+  for the unknown address), so neither the answer nor its latency tells them apart.
+- **Every outcome is a security event** (`SecurityEventLog`, events 1101–1104: failed sign-in,
+  failed sign-in for an unknown account with the e-mail masked, lockout tripped, sign-in rejected
+  while locked), carrying the user id, never a password or an e-mail as typed.
+- Per-source throttling stays the API's `auth` rate-limit policy (ADR-0021); lockout is the
+  per-account layer. Fitness: `AuthSecurityTests` (thresholds, reset), `AuthFlowTests` (4 × 401 →
+  403 → 403, the timing oracle through a counting hasher, the events through a capturing logger).

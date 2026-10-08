@@ -19,6 +19,7 @@ paths: ["tools/**/*.{cs,csproj}", ".github/**/*.{yml,yaml}", "docker-compose.yml
 
 ## CI supply-chain gates
 
+- **Central package management** (ADR-0029): versions live only in `Directory.Packages.props` (transitive pinning on); a package family that shares version floors moves in one Dependabot group (`.github/dependabot.yml`) — add a new family to its group in the same change.
 - **NuGetAudit** (`all` + `low`, `Directory.Build.props`) fails Release and CI builds on any advisory, transitive included (NU1901–NU1904). Playbook in `docs/development.md` ("Vulnerable packages"): upgrade, else pin the transitive in `Directory.Packages.props` with the advisory in a comment, else `NuGetAuditSuppress` one advisory with its reason. Never lower the level or the mode to get a build through.
 <!--#if (TemplateSource) -->
 

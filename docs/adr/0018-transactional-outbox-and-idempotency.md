@@ -6,7 +6,7 @@
 
 ## Context
 
-Domain events were dispatched **inside** `SaveChanges` (ADR-0006's original interceptor), so a side-effecting handler (`SendReceiptOnInvoicePaid` sends an email) ran before the transaction committed. With EF retry now owned by the DbContext (P2), a transient Postgres blip could re-run the save and **re-send the email**; a rolled-back transaction could send an email for a payment that never happened. Separately, POST commands weren't idempotent — a client retry created duplicate invoices/payments.
+Domain events were dispatched **inside** `SaveChanges` (ADR-0006's original interceptor), so a side-effecting handler (`SendReceiptOnInvoicePaid` sends an email) ran before the transaction committed. With EF retry owned by the DbContext (`EnableRetryOnFailure`), a transient Postgres blip could re-run the save and **re-send the email**; a rolled-back transaction could send an email for a payment that never happened. Separately, POST commands weren't idempotent — a client retry created duplicate invoices/payments.
 
 ## Decision
 
@@ -18,7 +18,7 @@ Domain events were dispatched **inside** `SaveChanges` (ADR-0006's original inte
 
 ## Consequences
 
-- Closes the concurrency/idempotency/outbox/retry interaction: retried transactions no longer re-fire side effects (outbox), duplicate requests can't double-apply (idempotency), and lost updates are caught (xmin token, P2).
+- Closes the concurrency/idempotency/outbox/retry interaction: retried transactions no longer re-fire side effects (outbox), duplicate requests can't double-apply (idempotency), and lost updates are caught (the `xmin` concurrency token).
 - Eventual delivery of side effects (post-commit) instead of synchronous — the correct trade-off for external effects.
 - Two new tables (`OutboxMessages`, `IdempotencyKeys`). Response replay for idempotency (returning the original response) was named here as the documented evolution; the amendment below delivers it.
 

@@ -15,6 +15,19 @@ Agent entry point — read only what the task needs.
 - [releasing.md](releasing.md) — releasing the template package: CHANGELOG section, dry run, tag, nuget.org trusted publishing, recovery
 <!--#endif -->
 
+## Layer rules (`.claude/rules/`, loaded when you touch a file their glob matches)
+- [api.md](../.claude/rules/api.md) — `src/Presentation/Api/**/*.cs`: one endpoint per use case, problem details, secure by default, rate limits, idempotency, caching, paging, OpenAPI
+- [application.md](../.claude/rules/application.md) — `src/Core/Trellis.Application/**/*.cs`: slices, handlers, validators, ports, event handlers, telemetry names, the pipeline
+- [domain.md](../.claude/rules/domain.md) — `src/Core/Trellis.Domain/**/*.cs`: aggregates, value objects, IDs, events, specifications
+- [infrastructure.md](../.claude/rules/infrastructure.md) — `src/Infrastructure/Trellis.Infrastructure/**/*.cs`: adapters, options, outbound HTTP, e-mail
+- [persistence.md](../.claude/rules/persistence.md) — `src/Infrastructure/Trellis.Persistence/**/*.cs`: EF configurations, interceptors, tenancy, outbox, retention, options, migrations, Identity
+- [sharedkernel.md](../.claude/rules/sharedkernel.md) — `src/Core/Trellis.SharedKernel/**/*.cs`: Result and errors, CQRS contracts, the decorator pipeline, cancellation filters, the unit of work
+- [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, each test project's job, the fitness suites, the OpenAPI snapshot
+- [tools.md](../.claude/rules/tools.md) — `tools/**/*.{cs,csproj}`, `.github/**/*.{yml,yaml}`, `docker-compose.yml`: AppHost, MigrationService, CI supply-chain gates
+<!--#if (IncludeUI) -->
+- [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the host shell
+<!--#endif -->
+
 ## Template decisions (docs/adr/, 0001–0099)
 
 Numbered by the template and updated by template upgrades; record your own from 0100 (the `new-adr` skill).
@@ -44,6 +57,10 @@ Numbered by the template and updated by template upgrades; record your own from 
 - [0023](adr/0023-outbox-lease-and-checkpoints.md) — outbox processor semantics: lease-based claim with dispatch outside the transaction, per-handler checkpoints, token-keyed cancellation, validated `Outbox` options, backlog gauges, SQL re-drive runbook
 - [0024](adr/0024-problem-details-v2.md) — problem details v2: `code`/`type`/`correlationId`/`instance` on every problem, human titles, `errors[]` of `{field, code, description}`, one writer (`CustomResults` + `ProblemCatalog`/`WriteProblemAsync`), status-code pages, malformed requests as 400 problems
 - [0025](adr/0025-openapi-truth.md) — OpenAPI truth: one generated document per API version (transformers, no versioning-OpenAPI package), `operationId` = endpoint class, problem responses by shape from the Contracts schema, conditional GET and paging declared as served, typed status/money/version, snapshot-gated committed document
+- [0026](adr/0026-read-caching.md) — read caching: HybridCache cache-aside in the endpoint, keys only from the scoped `CacheKeys` service (tenant-scoped under multi-tenancy), L1 30 s / L2 5 min as the staleness bound, post-commit eviction, misses never pinned
+- [0027](adr/0027-data-retention.md) — data retention for the bookkeeping tables: `DataRetentionJanitor`, validated `Retention` windows, set-based sweeps that never touch pending outbox rows; business data out of scope
+- [0028](adr/0028-use-case-telemetry.md) — use-case telemetry: one outcome line per invocation with the level by outcome class, one span with outcome tags, `Trellis.*` subscription by prefix, enforced instrument and attribute names
+- [0029](adr/0029-central-package-management.md) — central package management with transitive pinning, NuGetAudit on the whole graph, Dependabot groups for the families that must move together
 
 ## Project decisions (docs/adr/, 0100 and up)
 

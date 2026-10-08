@@ -76,6 +76,20 @@ for f in .claude/rules/*.md; do
       fail=1
     fi
   done <<< "$globs"
+  # docs/INDEX.md lists the rule with the globs its frontmatter declares, so an agent reading the
+  # index knows when the rule loads.
+  entry=$(grep -F "(../.claude/rules/$(basename "$f"))" docs/INDEX.md | head -n 1) || true
+  if [ -z "$entry" ]; then
+    echo "::error::$f is not listed under 'Layer rules' in docs/INDEX.md"
+    fail=1
+  elif [ -n "$globs" ]; then
+    while IFS= read -r glob; do
+      if ! printf '%s' "$entry" | grep -qF "\`$glob\`"; then
+        echo "::error::docs/INDEX.md lists $f without its paths glob '$glob' (keep the entry in step with the frontmatter)"
+        fail=1
+      fi
+    done <<< "$globs"
+  fi
 done
 
 if [ "$fail" -eq 0 ]; then

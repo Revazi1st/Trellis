@@ -12,9 +12,9 @@ The repo must be first-class for AI coding agents (Claude Code especially) witho
 - **`AGENTS.md` is the canonical, tool-neutral instruction file** — architecture, exact commands, dependency-flow rules, three-tier boundaries (always / ask-first / never). Kept lean (~1 screen).
 - **`CLAUDE.md` is a thin wrapper** whose first line is `@AGENTS.md` (imports it at session start) plus a short Claude-specific note. `.github/copilot-instructions.md` points at `AGENTS.md`.
 - **Layer conventions live in `.claude/rules/*.md` with `paths:` frontmatter** so they load only when an agent touches that layer — no permanent context cost.
-- **Skills** (`.claude/skills/`) encode procedures (add-feature, add-migration, run-app, new-adr); **subagents** (`.claude/agents/`) provide focused reviewers.
+- **Skills** (`.claude/skills/`) encode procedures (add-feature, remove-feature, add-integration, add-migration, new-adr, run-app; add-toggle stays in the template's repository); **subagents** (`.claude/agents/`) provide focused reviewers.
 - **One doc set, not two**: humans and agents read the same `docs/`. The "AI layer" is indexes + scoped rules, never parallel prose. `docs/INDEX.md` is the agent entry point; `docs/adr/` supplies the "why".
-- **Docs-sync is layered by strength**: a soft `PostToolUse` hook reminder → an `AGENTS.md` instruction → a **hard CI check** (`scripts/check-docs-drift.sh` fails a PR that changes a feature slice without touching its `docs/features/*.md`). Only the CI check guarantees sync.
+- **Docs-sync is layered by strength**: a soft `PostToolUse` hook reminder → an `AGENTS.md` instruction → a **hard CI check** (`scripts/check-docs-drift.sh` maps every changed path under a feature's folders to that feature's `docs/features/<feature>.md` and fails a PR that changes one without the other; auth, identity and hardening code likewise need `docs/threat-model.md`). Only the CI check guarantees sync.
 - **`.mcp.json`** ships Microsoft Learn, Context7, and Playwright servers (project-scoped; consumers approve on first use).
 
 ## Consequences
