@@ -190,6 +190,33 @@ Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-f
 | ApiTests | Docker (the in-process tests start PostgreSQL with Testcontainers); contract tests always run. The Aspire E2E also needs `RUN_ASPIRE_E2E=1` + a local SDK or CI, otherwise it skips. It drops the AppHost's postgres data volume, so it runs on a throwaway database and never touches your `aspire run` data |
 | UiTests (optional) | `RUN_UI_TESTS=1` + installed browsers + a running app — otherwise the browser test skips |
 
+## Vulnerable packages (NuGetAudit)
+
+Restore audits the whole package graph, transitive packages included, against the GitHub Advisory
+Database (`NuGetAudit`, `NuGetAuditMode` `all`, `NuGetAuditLevel` `low` in `Directory.Build.props`).
+An advisory surfaces as warning NU1901–NU1904 (low to critical), which Release and CI builds treat
+as an error, so an advisory published overnight can turn a green `main` red with no code change.
+That is the point; respond in this order:
+
+1. **Find the path.** The warning names the package and links the advisory;
+   `dotnet nuget why Trellis.slnx <package>` shows which reference pulls it in.
+2. **Upgrade** the direct reference in `Directory.Packages.props` when a newer version of it (or of
+   the package that depends on the vulnerable one) brings the fix.
+3. **Pin the transitive package** otherwise: a `<PackageVersion Include="<package>" Version="<patched>" />`
+   in `Directory.Packages.props` with a comment naming the advisory (the `Microsoft.OpenApi` entry
+   is the worked example). `CentralPackageTransitivePinningEnabled` applies the pin to the
+   transitive reference; delete it once the parent package depends on a fixed version itself.
+4. **Suppress only when no fixed version exists**, or the vulnerable code provably cannot be
+   reached: `<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-xxxx-xxxx-xxxx" />` in an
+   `ItemGroup` of `Directory.Build.props`, with a comment saying why it does not apply here and when
+   to look again. One advisory per entry, never a whole package.
+5. **Raise the level** (`NuGetAuditLevel` to `moderate`) only as a recorded decision (an ADR) for a
+   project that reviews low-severity advisories on a schedule rather than on the build that finds
+   them; keep `NuGetAuditMode` `all`. The template's own CI stays at `low` + `all`.
+
+NU1900 is different: the advisory data could not be downloaded (offline, feed outage). It is not
+an advisory; retry once the feed is reachable.
+
 ## Conventions
 
 Layer rules live in `.claude/rules/` (they also guide AI agents). The short version: dependencies point inward, failures are `Result`s not exceptions, migrations are generated not hand-edited, and no commercially-licensed packages (see the ceilings in `Directory.Packages.props`).

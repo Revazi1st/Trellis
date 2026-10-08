@@ -39,7 +39,10 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Supply chain">
-    <!-- NuGet vulnerability auditing on the full graph (transitive included). -->
+    <!-- NuGet vulnerability auditing on the full graph (transitive included), down to low severity.
+         With warnings as errors (Release/CI) a new advisory fails the build: upgrade, pin the
+         transitive in Directory.Packages.props, or as a last resort add a NuGetAuditSuppress item
+         for that one advisory, with its reason. Playbook: docs/development.md, "Vulnerable packages". -->
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <NuGetAuditLevel>low</NuGetAuditLevel>
