@@ -276,6 +276,45 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     }
 
     [Fact]
+    public async Task A_leased_message_is_invisible_to_a_second_processor_until_its_lease_expires()
+    {
+        // The issued row first, so the first processor finishes it and is stuck on the paid row alone.
+        InvoiceId id = await IssueInvoiceAsync();
+        Time.Advance(TimeSpan.FromSeconds(1));
+        await PayAsync(id);
+        var options = new OutboxOptions();
+        _blocking.Block = true;
+        _blocking.IgnoreCancellation = true;   // stuck past its budget: only the lease running out lets another processor in
+
+        Task<int> first = CreateOutboxProcessor(options).ProcessBatchAsync(Ct);
+        try
+        {
+            await _blocking.Started.Task.WaitAsync(WaitBudget, Ct);
+            _blocking.Block = false;   // only the call already in flight stays stuck
+            OutboxProcessor second = CreateOutboxProcessor(options);
+
+            // Leased: not due to anyone else while the first processor holds it, finished or not.
+            (await second.ProcessBatchAsync(Ct)).ShouldBe(0);
+
+            // Expired: the second processor claims it while the first is still inside its handler, skips the
+            // receipt the first one's checkpoint already credited, and finishes it.
+            Time.Advance(options.LeaseDuration);
+            (await second.ProcessBatchAsync(Ct)).ShouldBe(1);
+            first.IsCompleted.ShouldBeFalse();
+            (await RowAsync(PaidType)).Status.ShouldBe(OutboxMessageStatus.Processed);
+        }
+        finally
+        {
+            _blocking.Release();
+        }
+
+        // Unstuck, the first processor finishes its copy too: two processors, one receipt.
+        (await first.WaitAsync(WaitBudget, Ct)).ShouldBe(2);
+        (await RowAsync(PaidType)).Status.ShouldBe(OutboxMessageStatus.Processed);
+        await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task A_writing_handler_is_committed_with_its_credit_even_when_a_later_handler_fails()
     {
         _writing.Enabled = true;
@@ -632,13 +671,23 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         }
     }
 
-    /// <summary>Signals that it is running, then waits for its token: the shape of a handler stuck on a dependency.</summary>
+    /// <summary>
+    /// Signals that it is running, then waits for its token: the shape of a handler stuck on a dependency.
+    /// With <see cref="IgnoreCancellation"/> it waits for <see cref="Release"/> alone — a handler that ignores
+    /// its token, the one way past the budget to the end of a lease (ADR-0023).
+    /// </summary>
     [DomainEventHandlerName("test.blocking")]
     private sealed class BlockingPaidHandler : IDomainEventHandler<InvoicePaidDomainEvent>
     {
+        private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public bool Block { get; set; }
 
+        public bool IgnoreCancellation { get; set; }
+
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Release() => _released.TrySetResult();
 
         public async Task Handle(InvoicePaidDomainEvent domainEvent, CancellationToken cancellationToken)
         {
@@ -648,6 +697,12 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
             }
 
             Started.TrySetResult();
+            if (IgnoreCancellation)
+            {
+                await _released.Task;
+                return;
+            }
+
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
     }
