@@ -95,5 +95,9 @@ public sealed class AppDbContext(
         // One line per strongly-typed ID (ADR-0005). Adding an aggregate? Register its ID here.
         configurationBuilder.Properties<InvoiceId>().HaveConversion<StronglyTypedIdValueConverter<InvoiceId>>();
         configurationBuilder.Properties<InvoiceLineId>().HaveConversion<StronglyTypedIdValueConverter<InvoiceLineId>>();
+
+        // Every instant is written as UTC: Npgsql rejects a non-zero offset for timestamptz, so a client's
+        // "+02:00" would otherwise fail the save. Covers DateTimeOffset? too; the column type is unchanged.
+        configurationBuilder.Properties<DateTimeOffset>().HaveConversion<UtcDateTimeOffsetConverter>();
     }
 }

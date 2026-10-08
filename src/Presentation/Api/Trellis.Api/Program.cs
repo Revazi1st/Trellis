@@ -39,6 +39,10 @@ builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trell
     ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
 builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
 
+// The data-retention windows are checked at boot too: a zero Retention:SweepInterval would hot-loop the
+// janitor. Persistence binds them but cannot run DataAnnotations itself, so the host that runs it does.
+builder.Services.AddOptions<Trellis.Persistence.Maintenance.RetentionOptions>().ValidateDataAnnotations().ValidateOnStart();
+
 // This host mints and validates tokens, so a missing or too-short signing key must stop it at boot
 // with an actionable message rather than fail the first login. AddApiAuthentication then reads those
 // same validated options — the Authentication section is never bound a second time.

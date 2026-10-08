@@ -14,7 +14,7 @@ paths: ["tools/**/*.{cs,csproj}", ".github/**/*.{yml,yaml}", "docker-compose.yml
 
 - `MigrationWorker` applies EF migrations, seeds, then `StopApplication()` — the API waits on successful exit; a failure sets `ExitCode = 1` so the wait fails loudly.
 - **Non-HTTP host**: registers `SystemCurrentUser` for `ICurrentUser` and (with multi-tenancy) `SystemTenantContext` for `ITenantContext` — every new host-scoped port needs a system stand-in here or `AppDbContext` won't resolve.
-- **Seed guards**: sample data (demo invoices) seeds in Development only; the worker **refuses to seed `SeedOptions.DefaultAdminPassword` outside Development** — override via the `Seed` section in real environments.
+- **Seed guards**: sample data (demo invoices) seeds in Development only; the worker **refuses to seed `SeedOptions.DefaultAdminPassword` outside Development** — override via the `Seed` section in real environments. `SeedOptions` is validated at boot (`ValidateDataAnnotations().ValidateOnStart()`; a failure exits 1), and roles and the admin go through `IdentitySeed` (Persistence), which throws on any failed `IdentityResult` — so a rejected password exits 1 instead of logging success.
 - Permission seeding iterates `Roles.Permissions` (Application) — new permissions/roles flow through automatically; never hard-code them here.
 <!--#if (TemplateSource) -->
 
