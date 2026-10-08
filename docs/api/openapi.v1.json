@@ -1287,6 +1287,7 @@
           "Paid",
           "Voided"
         ],
+        "type": "string",
         "description": "Lifecycle state of an invoice, serialised by name (`\"Issued\"`) so the document declares a string\nenum and clients get a type instead of a free string. Mirrors the domain's `InvoiceStatus`\nmember for member; an architecture test keeps the two equal (ADR-0025)."
       },
       "IssueInvoiceRequest": {

@@ -25,6 +25,7 @@ public static class OpenApiDocumentExtensions
             options.AddDocumentTransformer<ProblemComponentsDocumentTransformer>();
             options.AddSchemaTransformer<StronglyTypedIdSchemaTransformer>();
             options.AddSchemaTransformer<DecimalSchemaTransformer>();
+            options.AddSchemaTransformer<StringEnumSchemaTransformer>();
             options.AddOperationTransformer<SecurityRequirementOperationTransformer>();
             options.AddOperationTransformer<IdempotencyOperationTransformer>();
             // Last on purpose: it gives the 401/403/409 entries the two above create their problem body.
