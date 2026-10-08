@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using Trellis.Application.Abstractions;
 using Trellis.Application.Options;
@@ -12,11 +13,20 @@ namespace Trellis.Infrastructure;
 
 public static class DependencyInjection
 {
-    /// <summary>Non-persistence adapters: clock, email, JWT token minting, outbound HTTP integrations.</summary>
+    /// <summary>First wait before a retry of an outbound call (the standard handler's own default, stated).</summary>
+    private static readonly TimeSpan RetryBaseDelay = TimeSpan.FromSeconds(2);
+
+    /// <summary>Longest single wait between retries, whatever the exponent and jitter produce.</summary>
+    private static readonly TimeSpan RetryMaxDelay = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Non-persistence adapters every host needs: clock, email, JWT token minting. Outbound HTTP
+    /// integrations are not here — see <see cref="AddOutboundIntegrations"/>.
+    /// </summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton(TimeProvider.System);
-        services.AddScoped<IEmailSender, LoggingEmailSender>();
+        services.AddEmailSender(configuration);
 
         // Every options type in the solution is bound this way — annotations declared next to the
         // property they constrain, instead of a Get<T>() with a `?? new T()` fallback that turns a
@@ -54,7 +64,7 @@ public static class DependencyInjection
 
         services.AddScoped<ITokenProvider, JwtTokenProvider>();
 
-        return services.AddExchangeRateProvider(configuration);
+        return services;
     }
 
     /// <summary>
@@ -76,6 +86,59 @@ public static class DependencyInjection
     }
 
     /// <summary>
+    /// What a host that calls out of the process needs, checked at boot: the outbound HTTP
+    /// integrations (ADR-0020) — typed clients, their resilience pipelines and health checks — and the
+    /// e-mail sender's configuration, with a startup notice when e-mail goes nowhere. Register it only
+    /// in hosts that call out: the API (it also drains the outbox, so it is the host that sends e-mail).
+    /// <para>
+    /// A separate call from <see cref="AddInfrastructure"/> for the reason <see cref="RequireValidTokenOptions"/>
+    /// is: the migration service shares that registration but never calls a third party, so nothing
+    /// in an <c>ExternalApis</c> section may stop it from running EF migrations. Validating "only in
+    /// the API" is not enough on its own here: the standard resilience handler validates its own
+    /// options at boot, and those are computed from the integration's options, so merely registering
+    /// a client makes its section a boot requirement of the host. The host that registers the client
+    /// is therefore the host that opts in, and it validates the whole section at boot.
+    /// </para>
+    /// </summary>
+    public static IServiceCollection AddOutboundIntegrations(this IServiceCollection services, IConfiguration configuration)
+    {
+        // The sender itself is registered by AddInfrastructure in every host — Application's event
+        // handlers must be constructible anywhere — but only this host sends, so only it checks the
+        // section at boot and says so when the configured provider sends nothing.
+        services.AddOptions<EmailOptions>().ValidateOnStart();
+        services.AddHostedService<EmailProviderStartupNotice>();
+
+        return services.AddExchangeRateProvider(configuration);
+    }
+
+    /// <summary>
+    /// The <see cref="IEmailSender"/> adapter named by <c>Email:Provider</c>, resolved per scope. The
+    /// options are validated when the sender is first built; a host that sends promotes that to boot
+    /// (<see cref="AddOutboundIntegrations"/>).
+    /// </summary>
+    private static void AddEmailSender(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(
+                static options => Enum.IsDefined(options.Provider),
+                "Email:Provider must be Logging (development stand-in: logs a masked line, sends nothing) or None "
+                + "(discard). A real provider is a new adapter in Infrastructure/Email.");
+
+        services.AddScoped<LoggingEmailSender>();
+        services.AddScoped<DiscardingEmailSender>();
+        services.AddScoped<IEmailSender>(static provider =>
+            provider.GetRequiredService<IOptions<EmailOptions>>().Value.Provider switch
+            {
+                EmailProvider.Logging => provider.GetRequiredService<LoggingEmailSender>(),
+                EmailProvider.None => provider.GetRequiredService<DiscardingEmailSender>(),
+                // Unreachable: the validation above rejects any other value before this runs.
+                var other => throw new InvalidOperationException($"Email:Provider '{other}' has no adapter."),
+            });
+    }
+
+    /// <summary>
     /// The template's reference outbound HTTP integration (ADR-0020). Read the comments before
     /// copying this for a new third party — the defaults that look harmless are the ones that bite.
     /// </summary>
@@ -88,13 +151,7 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        // Resolved once here, up front, because the resilience handler below is configured at
-        // registration time and needs the attempt timeout as a value, not a lazy IOptions.
-        ExchangeRateOptions options =
-            configuration.GetSection(ExchangeRateOptions.SectionName).Get<ExchangeRateOptions>() ?? new ExchangeRateOptions();
-        TimeSpan attemptTimeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
-
-        services.AddHttpClient<IExchangeRateProvider, ExchangeRateClient>(static (provider, client) =>
+        IHttpClientBuilder client = services.AddHttpClient<IExchangeRateProvider, ExchangeRateClient>(static (provider, client) =>
         {
             ExchangeRateOptions current = provider.GetRequiredService<IOptions<ExchangeRateOptions>>().Value;
             string baseUrl = current.BaseUrl.EndsWith('/') ? current.BaseUrl : current.BaseUrl + "/";
@@ -104,23 +161,20 @@ public static class DependencyInjection
             // default would cap the WHOLE pipeline — retries included — and race the per-attempt
             // timeout, producing cancellations that look nothing like what you configured.
             client.Timeout = Timeout.InfiniteTimeSpan;
-        })
-        .AddStandardResilienceHandler(resilience =>
-        {
-            // ServiceDefaults applies AddStandardResilienceHandler() to ALL clients, and its default
-            // per-attempt timeout is 10 seconds. That is fine for a fast JSON API and silently fatal
-            // for a slow one: every attempt is cancelled at 10s no matter what the client's own
-            // timeout says. Any third party that can legitimately take longer needs its attempt
-            // timeout raised HERE, per client — this block is that override.
-            resilience.AttemptTimeout.Timeout = attemptTimeout;
-
-            // The handler validates these against each other: the total must leave room for the
-            // retries, and the breaker's sampling window must be at least twice the attempt timeout.
-            resilience.TotalRequestTimeout.Timeout = attemptTimeout * (options.MaxRetries + 2);
-            resilience.CircuitBreaker.SamplingDuration = attemptTimeout * 2;
-
-            resilience.Retry.MaxRetryAttempts = options.MaxRetries;
         });
+
+        // REPLACE the blanket pipeline, do not add to it. ServiceDefaults puts a standard resilience
+        // handler on EVERY client (10 s per attempt, 30 s total, 3 retries). A second
+        // AddStandardResilienceHandler on its own would nest inside that one: the outer 10 s still
+        // cancels each attempt whatever this client configures, and the retries multiply (each outer
+        // attempt runs this client's whole retry loop). So the inherited handler goes first.
+        // EXTEXP0001: experimental API, kept on purpose. The non-experimental equivalent is
+        // ConfigureAdditionalHttpMessageHandlers removing every ResilienceHandler from the list.
+#pragma warning disable EXTEXP0001
+        client.RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+
+        client.AddStandardResilienceHandler().Configure(ConfigureExchangeRateResilience);
 
         // Singleton: the check caches its probe result, and a per-request instance would throw that
         // cache away every time (see ExchangeRateHealthCheck).
@@ -132,5 +186,32 @@ public static class DependencyInjection
                 tags: ["external"]);
 
         return services;
+    }
+
+    /// <summary>
+    /// The exchange-rate client's own pipeline. It reads <see cref="ExchangeRateOptions"/> through the
+    /// options system when the pipeline is first built — the same validated value the client sees —
+    /// rather than from a snapshot bound at registration time.
+    /// </summary>
+    private static void ConfigureExchangeRateResilience(HttpStandardResilienceOptions resilience, IServiceProvider provider)
+    {
+        ExchangeRateOptions options = provider.GetRequiredService<IOptions<ExchangeRateOptions>>().Value;
+        TimeSpan attemptTimeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+
+        resilience.AttemptTimeout.Timeout = attemptTimeout;
+        resilience.Retry.MaxRetryAttempts = options.MaxRetries;
+
+        // Exponential back-off with jitter, every wait capped, so the worst case is a number.
+        resilience.Retry.Delay = RetryBaseDelay;
+        resilience.Retry.MaxDelay = RetryMaxDelay;
+
+        // The total budget is the worst case of what the lines above grant: every attempt runs to its
+        // timeout AND every wait is the longest one. Anything smaller lets the total timeout cut off a
+        // retry the policy promised (a budget counted in attempts alone forgets the back-off).
+        resilience.TotalRequestTimeout.Timeout =
+            (attemptTimeout * (options.MaxRetries + 1)) + (RetryMaxDelay * options.MaxRetries);
+
+        // The handler validates the breaker's sampling window to be at least twice the attempt timeout.
+        resilience.CircuitBreaker.SamplingDuration = attemptTimeout * 2;
     }
 }

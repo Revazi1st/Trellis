@@ -16,13 +16,12 @@ public sealed class DomainEventsWithoutHandlersTests
     [Fact]
     public async Task Dispatching_an_event_nobody_handles_completes_and_records_nothing()
     {
-        var dispatcher = new DomainEventDispatcher(new ContainerWithoutHandlers());
+        IDomainEventDispatcher dispatcher = new DomainEventDispatcher(new ContainerWithoutHandlers());
         var completedHandlers = new HashSet<string>(StringComparer.Ordinal);
+        var checkpoints = new List<string>();
         IDomainEvent voided = new InvoiceVoidedDomainEvent(InvoiceId.New());
 
-        var checkpoints = new List<string>();
-
-        await dispatcher.Dispatch(voided, completedHandlers, checkpoint: null, TestContext.Current.CancellationToken);
+        await dispatcher.Dispatch(voided, completedHandlers, TestContext.Current.CancellationToken);
         await dispatcher.Dispatch(
             voided,
             completedHandlers,
