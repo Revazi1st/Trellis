@@ -115,27 +115,6 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
     public async Task<HttpClient> CreateAdminClientAsync(CancellationToken cancellationToken)
         => await CreateAuthenticatedClientAsync(AdminEmail, AdminPassword, cancellationToken);
 
-    /// <summary>
-    /// A second host over the SAME database with <paramref name="configureServices"/> applied after the
-    /// app's own registrations — for a fault the real pipeline cannot produce on demand (a commit that
-    /// conflicts or throws, a cache that cancels). Disposed with this factory.
-    /// </summary>
-    public WebApplicationFactory<apihost::Program> WithTestServices(Action<IServiceCollection> configureServices)
-        => WithWebHostBuilder(builder => builder.ConfigureTestServices(configureServices));
-
-    /// <summary>
-    /// A client of <paramref name="host"/> signed in as the seeded admin. The token pair is minted by
-    /// THIS host (same signing key, same database), so a derived host whose own login path is faulted
-    /// still gets an authenticated client.
-    /// </summary>
-    public async Task<HttpClient> CreateAdminClientOnAsync(WebApplicationFactory<apihost::Program> host, CancellationToken cancellationToken)
-    {
-        TokenResponse tokens = await LoginAsAdminAsync(cancellationToken);
-        HttpClient client = host.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
-        return client;
-    }
-
 #if (UseMultitenancy)
     /// <summary>An Administrator in the given tenant (created on first use), logged in. <see cref="TenantA"/> is the seeded admin.</summary>
     public async Task<HttpClient> CreateAdminClientAsync(string tenantId, CancellationToken cancellationToken)
@@ -164,6 +143,27 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
         (await anonymous.PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest(email, AdminPassword), cancellationToken))
             .EnsureSuccessStatusCode();
         return await CreateAuthenticatedClientAsync(email, AdminPassword, cancellationToken);
+    }
+
+    /// <summary>
+    /// A second host over the SAME database with <paramref name="configureServices"/> applied after the
+    /// app's own registrations — for a fault the real pipeline cannot produce on demand (a commit that
+    /// conflicts or throws, a cache that cancels). Disposed with this factory.
+    /// </summary>
+    public WebApplicationFactory<apihost::Program> WithTestServices(Action<IServiceCollection> configureServices)
+        => WithWebHostBuilder(builder => builder.ConfigureTestServices(configureServices));
+
+    /// <summary>
+    /// A client of <paramref name="host"/> signed in as the seeded admin. The token pair is minted by
+    /// THIS host (same signing key, same database), so a derived host whose own login path is faulted
+    /// still gets an authenticated client.
+    /// </summary>
+    public async Task<HttpClient> CreateAdminClientOnAsync(WebApplicationFactory<apihost::Program> host, CancellationToken cancellationToken)
+    {
+        TokenResponse tokens = await LoginAsAdminAsync(cancellationToken);
+        HttpClient client = host.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
+        return client;
     }
 
     /// <summary>Signs in as the seeded admin from a fresh client and returns the token pair.</summary>
