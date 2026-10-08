@@ -149,6 +149,25 @@ public sealed class OpenApiDocumentTests
         }
     }
 
+    [Theory]
+    [InlineData("/api/v1/auth/login", new[] { "401", "403" })]
+    [InlineData("/api/v1/auth/register", new[] { "403", "409" })]
+    [InlineData("/api/v1/auth/refresh", new[] { "401" })]
+    public void Anonymous_auth_operations_declare_their_result_statuses(string path, string[] statuses)
+    {
+        // No security requirement and no route id: the shape cannot infer these, so the endpoint declares them with a bare
+        // .Produces(status) and the transformer gives each the problem body (ADR-0025). Undeclared, a generated client maps the
+        // commonest failure of the sign-in call to a generic exception instead of ProblemResponse.
+        JsonElement responses = Operation("post", path).GetProperty("responses");
+
+        foreach (string status in statuses)
+        {
+            responses.TryGetProperty(status, out JsonElement response).ShouldBeTrue($"POST {path} answers {status} through CustomResults.Problem");
+            response.GetProperty("content").GetProperty(ProblemMediaType).GetProperty("schema").GetProperty("$ref").GetString()
+                .ShouldBe(ProblemSchemaRef, $"POST {path} {status}");
+        }
+    }
+
     [Fact]
     public void Created_responses_document_Location()
     {

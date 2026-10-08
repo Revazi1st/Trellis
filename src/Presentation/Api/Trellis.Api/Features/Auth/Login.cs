@@ -14,6 +14,9 @@ internal sealed class Login : IEndpoint
         .MapPost("auth/login", Handle)
         .AllowAnonymous()
         .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
+        // Result statuses the shape cannot infer on an anonymous endpoint (ADR-0025): the transformer gives them the problem body.
+        .Produces(StatusCodes.Status401Unauthorized)
+        .Produces(StatusCodes.Status403Forbidden)
         .WithTags(AuthEndpoints.Tag)
         .WithSummary("Exchange credentials for an access + refresh token pair")
         .WithDescription(

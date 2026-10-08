@@ -77,6 +77,15 @@ gives every 4xx/5xx — including the 401/403 and idempotency entries earlier tr
 `application/problem+json` body by reference. A 201 declares `Location`. Responses are emitted in status
 order so a diff reads.
 
+The shape cannot see every Result an endpoint returns. An anonymous endpoint has no security requirement
+and no route id, so the 401/403/409 its handler produces through `CustomResults.Problem` (login's
+`Auth.InvalidCredentials`/`Auth.AccountLockedOut`, register's `Auth.RegistrationClosed`/`Auth.EmailAlreadyInUse`,
+refresh's `Auth.InvalidRefreshToken`) are declared on the endpoint with a bare, typeless
+`.Produces(status)`; the transformer fills the empty content the generator leaves with the same
+`ProblemResponse` reference. Never `ProducesProblem` (it inlines the framework's `ProblemDetails`, not the
+Contracts record) or a typed `Produces<T>(4xx)`, and never a status the shape already adds.
+`OpenApiDocumentTests.Anonymous_auth_operations_declare_their_result_statuses` pins the auth ones.
+
 ### Conditional GET is declared and honoured as RFC 9110 says
 
 `.SupportsConditionalGet()` puts `ConditionalGetMetadata` on a GET; the transformer then declares the
@@ -113,8 +122,9 @@ committed file; `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` (
 `scripts/dotnet.sh`) or `scripts/export-openapi.sh` against a running API regenerates it. The CI step
 that boots the app and diffs stays as the independent check of the same bytes. `OpenApiDocumentTests`
 gate the content (prose on every operation, probes out, unique `operationId`s, no `{version}`/`servers`,
-the problem schema on every error, 400/404 by shape, `Location`, conditional-GET members, paging bounds,
-typed status/money/version), and `InvoiceContractTests` proves the same promises on the wire.
+the problem schema on every error, 400/404 by shape, the anonymous auth statuses, `Location`,
+conditional-GET members, paging bounds, typed status/money/version), and `InvoiceContractTests` proves
+the same promises on the wire.
 
 ## Consequences
 

@@ -77,7 +77,9 @@ after each layer.
       anything the endpoint does after the handler succeeded uses `CancellationToken.None`.
 - [ ] `.WithTags(...)`, `.WithSummary(...)` **and** `.WithDescription(...)` [`EndpointMetadataTests`,
       `OpenApiDocumentTests`]. Problem responses, `Location` and the conditional-GET members are added
-      by shape (ADR-0025): never hand-write a `Produces(4xx)`.
+      by shape (ADR-0025). A Result-produced status the shape cannot infer (an anonymous endpoint's
+      401/403/409) is declared with a bare `.Produces(status)`, which the transformer gives the problem
+      body; never `ProducesProblem` or a typed `Produces<T>(4xx)` [`OpenApiDocumentTests`].
 - [ ] Map the `Result`: `result.IsSuccess ? TypedResults.X(...) : CustomResults.Problem(result.Error)`.
       A new HTTP status or problem `code` the API did not answer before gets a row in
       `ProblemDetailsContractTests`.

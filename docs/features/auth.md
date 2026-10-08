@@ -83,8 +83,11 @@ refresh and logout take an unguessable token and sit under the global per-client
 shared source such as the Blazor Server host never turns silent refreshes into 429s (ADR-0021).
 Every other endpoint on the versioned group requires authentication by default; these four are the
 whole anonymous allowlist (`EndpointMetadataTests`). In the OpenAPI document each operation's
-`operationId` is its endpoint class (`Register`, `Login`, `Refresh`, `Logout`, `RevokeSessions`) and the
-400/429/500 problem responses (401/403 on `revoke-all`) are declared by shape (ADR-0025).
+`operationId` is its endpoint class (`Register`, `Login`, `Refresh`, `Logout`, `RevokeSessions`), the
+400/429/500 problem responses (401/403 on `revoke-all`) are declared by shape, and the Result statuses
+an anonymous operation's shape cannot imply are declared on the endpoint with a bare `.Produces(status)`:
+login 401/403, register 403/409, refresh 401 — each with the `ProblemResponse` body (ADR-0025,
+`OpenApiDocumentTests.Anonymous_auth_operations_declare_their_result_statuses`).
 
 Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 problem details whose
 `code` is the identifier below (ADR-0024): `Auth.InvalidCredentials` 401, `Auth.AccountLockedOut` 403,

@@ -15,6 +15,8 @@ internal sealed class Refresh : IEndpoint
     public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapPost("auth/refresh", Handle)
         .AllowAnonymous()
+        // A Result status the shape cannot infer on an anonymous endpoint (ADR-0025): the transformer gives it the problem body.
+        .Produces(StatusCodes.Status401Unauthorized)
         .WithTags(AuthEndpoints.Tag)
         .WithSummary("Rotate a refresh token for a new token pair")
         .WithDescription(

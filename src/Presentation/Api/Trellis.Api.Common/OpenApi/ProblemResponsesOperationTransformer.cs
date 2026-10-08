@@ -11,7 +11,8 @@ namespace Trellis.Api.Common.OpenApi;
 /// Documents the error contract (ADR-0024) on every operation from the operation's shape, so an endpoint
 /// cannot forget it (ADR-0025): a 400 wherever there is input to reject, a 404 wherever a route id can
 /// miss, a 409 on a write to an addressed resource (state rule or concurrency), 429 and 500 everywhere.
-/// Every 4xx/5xx — including the 401/403 and the idempotency 409 earlier transformers add — carries the
+/// Every 4xx/5xx — including the 401/403 and the idempotency 409 earlier transformers add, and a status an anonymous
+/// endpoint declares with a bare <c>.Produces(status)</c> because its shape cannot imply it — carries the
 /// <c>application/problem+json</c> body: a reference to the <c>ProblemResponse</c> component generated
 /// from the Contracts record the clients deserialise into. A 201 declares its <c>Location</c>; an endpoint marked
 /// <c>SupportsConditionalGet()</c> declares <c>If-None-Match</c>, the <c>ETag</c> on its 200 and the 304.
@@ -29,12 +30,13 @@ internal sealed class ProblemResponsesOperationTransformer : IOpenApiOperationTr
 
         AddByShape(operation, context.Description, problem);
 
-        // 401/403 (security transformer) and the idempotency 409 arrive without a body: every error is a problem document.
+        // 401/403 (security transformer), the idempotency 409 and an endpoint's bare .Produces(status) arrive without a body
+        // (the generator gives the last an empty content map): every error is a problem document.
         foreach ((string status, IOpenApiResponse response) in responses)
         {
-            if (status is ['4' or '5', ..] && response is OpenApiResponse concrete)
+            if (status is ['4' or '5', ..] && response is OpenApiResponse { Content: null or { Count: 0 } } concrete)
             {
-                concrete.Content ??= ProblemContent(problem);
+                concrete.Content = ProblemContent(problem);
             }
         }
 

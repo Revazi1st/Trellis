@@ -14,6 +14,9 @@ internal sealed class Register : IEndpoint
         .MapPost("auth/register", Handle)
         .AllowAnonymous()
         .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
+        // Result statuses the shape cannot infer on an anonymous endpoint (ADR-0025): the transformer gives them the problem body.
+        .Produces(StatusCodes.Status403Forbidden)
+        .Produces(StatusCodes.Status409Conflict)
         .WithTags(AuthEndpoints.Tag)
         .WithSummary("Create a new account")
         .WithDescription(
