@@ -14,15 +14,16 @@ namespace Trellis.ApiTests.InProcess;
 /// <summary>
 /// What a client sees when the unit of work does not commit, driven through the real HTTP pipeline on
 /// a derived host whose <see cref="IUnitOfWork"/> is replaced: an expected conflict is a 409 problem
-/// through the Result seam, an unexpected fault is an opaque 500, and either way the idempotency key is
-/// released so the client can retry the same request with the same key.
+/// through the Result seam, an unexpected fault is an opaque 500, and either way nothing is reserved under
+/// the idempotency key — the reservation rides the unit of work (ADR-0018 amendment) — so the client can
+/// retry the same request with the same key.
 /// </summary>
 public sealed class CommitFailureTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private const string ExceptionSecret = "boom: Host=db.internal;Password=hunter2";
 
     [Fact]
-    public async Task A_concurrency_conflict_at_commit_is_a_409_problem_and_releases_the_idempotency_key()
+    public async Task A_concurrency_conflict_at_commit_is_a_409_problem_and_leaves_no_idempotency_reservation()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         var conflicting = factory.WithTestServices(static services => services.AddScoped<IUnitOfWork, ConflictingUnitOfWork>());
@@ -35,17 +36,16 @@ public sealed class CommitFailureTests(ApiFactory factory) : IClassFixture<ApiFa
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
         ProblemResponse problem = await ReadProblemAsync(response, ct);
         problem.Status.ShouldBe((int)HttpStatusCode.Conflict);
-        // CustomResults writes the error code as the title until the problem-details v2 contract adds `code`.
-        (problem.Code ?? problem.Title).ShouldBe(UnitOfWorkErrors.ConcurrencyConflict.Code);
+        problem.Code.ShouldBe(UnitOfWorkErrors.ConcurrencyConflict.Code);
         problem.Detail.ShouldBe(UnitOfWorkErrors.ConcurrencyConflict.Description);
 
-        // The ≥400 outcome released the key: the same request with the same key now succeeds.
+        // The commit never happened, so nothing was reserved: the same request with the same key now succeeds.
         HttpClient healthy = await factory.CreateAdminClientAsync(ct);
         (await PostCreateAsync(healthy, key, ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]
-    public async Task A_commit_that_throws_is_an_opaque_500_with_the_security_headers_and_releases_the_idempotency_key()
+    public async Task A_commit_that_throws_is_an_opaque_500_with_the_security_headers_and_leaves_no_idempotency_reservation()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         var throwing = factory.WithTestServices(static services => services.AddScoped<IUnitOfWork, ThrowingUnitOfWork>());
@@ -70,7 +70,7 @@ public sealed class CommitFailureTests(ApiFactory factory) : IClassFixture<ApiFa
         response.Headers.GetValues("X-Frame-Options").ShouldHaveSingleItem().ShouldBe("DENY");
         response.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem().ShouldBe("frame-ancestors 'none'");
 
-        // The exception released the key: the same request with the same key now succeeds.
+        // The commit never happened, so nothing was reserved: the same request with the same key now succeeds.
         HttpClient healthy = await factory.CreateAdminClientAsync(ct);
         (await PostCreateAsync(healthy, key, ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
     }
