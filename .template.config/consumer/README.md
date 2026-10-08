@@ -23,8 +23,10 @@ You need Docker and the .NET 10 SDK; `aspire run` also needs the Aspire CLI
 (`dotnet tool install -g Aspire.Cli`).
 
 ```bash
-aspire run                                   # PostgreSQL, the migration job, the app and the Aspire dashboard
-dotnet run --project tools/Trellis.AppHost   # the same, without the Aspire CLI
+# PostgreSQL, the migration job, the app and the Aspire dashboard:
+aspire run
+# the same, without the Aspire CLI:
+dotnet run --project tools/Trellis.AppHost
 ```
 
 <!--#if (UseMultitenancy) -->
