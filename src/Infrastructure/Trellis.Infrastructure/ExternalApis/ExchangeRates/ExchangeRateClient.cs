@@ -13,7 +13,7 @@ namespace Trellis.Infrastructure.ExternalApis.ExchangeRates;
 /// <summary>
 /// Typed <see cref="HttpClient"/> adapter for <see cref="IExchangeRateProvider"/>. The client itself
 /// stays deliberately thin: base address, timeout and the retry/circuit-breaker pipeline are all
-/// configured once at registration (see <c>AddInfrastructure</c>), so this file only maps one HTTP
+/// configured once at registration (see <c>AddOutboundIntegrations</c>), so this file only maps one HTTP
 /// call onto the port's Result contract.
 /// </summary>
 /// <remarks>
