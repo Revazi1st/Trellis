@@ -15,7 +15,7 @@ namespace Trellis.ApiTests;
 
 /// <summary>
 /// The reference outbound integration (ADR-0020), exercised through the real registration in
-/// <c>AddInfrastructure</c> — options binding, the typed client and the resilience pipeline all
+/// <c>AddOutboundIntegrations</c> — options binding, the typed client and the resilience pipeline all
 /// included — with only the socket replaced. The contract under test is that nothing a third party
 /// does reaches Application code as an exception: every outcome is a <see cref="Result{T}"/>, except
 /// the caller's own cancellation, which must propagate.
@@ -249,6 +249,7 @@ public sealed class ExchangeRateProviderTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddInfrastructure(configuration);
+        services.AddOutboundIntegrations(configuration);
         // Swap the socket, keep everything else real.
         services.ConfigureHttpClientDefaults(builder => builder.ConfigurePrimaryHttpMessageHandler(() => handler));
         configure?.Invoke(services);

@@ -35,6 +35,7 @@ builder.Services.AddOpenTelemetry()
         Trellis.Persistence.Outbox.OutboxMetrics.ActivitySourceName,
         Trellis.SharedKernel.Decorators.TracingDecorators.ActivitySourceName));
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddOutboundIntegrations(builder.Configuration);
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trellis-db")
     ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
 builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
