@@ -12,7 +12,7 @@ internal sealed class Refresh : IEndpoint
     // Unguessable token: the global limiter bounds load; the strict auth policy is for guessable
     // credentials (login/register). Keeping refresh off it means a shared source (a Blazor Server
     // host refreshing for many users) never turns a silent refresh into a 429 (ADR-0021).
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapPost("auth/refresh", Handle)
         .AllowAnonymous()
         .WithTags(AuthEndpoints.Tag)

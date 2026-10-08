@@ -16,7 +16,7 @@ public static class ApiVersioningExtensions
     {
         services.AddApiVersioning(options =>
         {
-            options.DefaultApiVersion = new ApiVersion(1, 0);
+            options.DefaultApiVersion = ApiVersions.V1;
             options.AssumeDefaultVersionWhenUnspecified = true;
             options.ReportApiVersions = true;
             options.ApiVersionReader = new UrlSegmentApiVersionReader();
@@ -38,7 +38,7 @@ public static class ApiVersioningExtensions
     public static RouteGroupBuilder MapVersionedApiGroup(this WebApplication app)
     {
         ApiVersionSet versionSet = app.NewApiVersionSet()
-            .HasApiVersion(new ApiVersion(1, 0))
+            .HasApiVersion(ApiVersions.V1)
             .ReportApiVersions()
             .Build();
 

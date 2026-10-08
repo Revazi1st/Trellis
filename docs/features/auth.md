@@ -82,7 +82,9 @@ The strict `auth` policy guards the endpoints that take a guessable credential (
 refresh and logout take an unguessable token and sit under the global per-client limiter only, so a
 shared source such as the Blazor Server host never turns silent refreshes into 429s (ADR-0021).
 Every other endpoint on the versioned group requires authentication by default; these four are the
-whole anonymous allowlist (`EndpointMetadataTests`).
+whole anonymous allowlist (`EndpointMetadataTests`). In the OpenAPI document each operation's
+`operationId` is its endpoint class (`Register`, `Login`, `Refresh`, `Logout`, `RevokeSessions`) and the
+400/429/500 problem responses (401/403 on `revoke-all`) are declared by shape (ADR-0025).
 
 Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 problem details whose
 `code` is the identifier below (ADR-0024): `Auth.InvalidCredentials` 401, `Auth.AccountLockedOut` 403,

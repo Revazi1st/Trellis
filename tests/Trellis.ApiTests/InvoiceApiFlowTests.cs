@@ -65,7 +65,7 @@ public sealed class InvoiceApiFlowTests
         firstPage.HasPreviousPage.ShouldBeFalse();
         firstPage.HasNextPage.ShouldBe(firstPage.TotalCount > 1);
         InvoiceDto oldestOverdue = firstPage.Items.ShouldHaveSingleItem();
-        oldestOverdue.Status.ShouldBe("Issued");
+        oldestOverdue.Status.ShouldBe(InvoiceStatus.Issued);
         oldestOverdue.DueDate.ShouldNotBeNull().ShouldBeLessThan(DateTimeOffset.UtcNow);
 
         PagedResponse<InvoiceDto> overdueBefore = (await client.GetFromJsonAsync<PagedResponse<InvoiceDto>>(
@@ -89,7 +89,7 @@ public sealed class InvoiceApiFlowTests
 
         // read back the full aggregate
         InvoiceDto invoice = (await client.GetFromJsonAsync<InvoiceDto>($"/api/v1/invoices/{id}", ct))!;
-        invoice.Status.ShouldBe("Issued");
+        invoice.Status.ShouldBe(InvoiceStatus.Issued);
         invoice.DueDate.ShouldBe(dueDate);
         invoice.Total.ShouldBe(500.00m);
         invoice.Lines.Count.ShouldBe(2);

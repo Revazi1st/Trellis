@@ -45,7 +45,7 @@ you build on top.
 | Clickjacking or injected script in the web UI | CSP `script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin` on every UI.Web response | UI.Web `Program.cs` |
 | Vulnerable dependency pulled in | `NuGetAudit` over the full graph at `low`, warnings are errors on CI | `Directory.Build.props` |
 | Secrets committed to the repository | gitleaks scan over full history on every push and PR | `.github/workflows/ci.yml` |
-| Information disclosure through errors | All expected failures are RFC 9457 problem documents with a stable `code` (ADR-0024); a request the framework cannot bind is a 400/413/415 problem whose `detail` names a parameter or a limit, never a stack; the opaque 500 carries a fixed sentence — exception messages and types stay in the Error log | ADR-0004, ADR-0024 |
+| Information disclosure through errors | All expected failures are RFC 9457 problem documents with a stable `code` (ADR-0024); a request the framework cannot bind is a 400/413/415 problem whose `detail` names a parameter or a limit, never a stack; the opaque 500 carries a fixed sentence — exception messages and types stay in the Error log. The OpenAPI document declares exactly that shape on every operation's 4xx/5xx (schema generated from the Contracts record, ADR-0025), so a client never has to probe for the error format; the document itself is served only in Development | ADR-0004, ADR-0024, ADR-0025 |
 
 ## Accepted risks
 

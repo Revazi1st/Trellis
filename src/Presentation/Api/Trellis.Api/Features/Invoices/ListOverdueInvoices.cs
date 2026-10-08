@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Trellis.Api.Common.Authentication;
 using Trellis.Api.Common.Endpoints;
@@ -14,7 +15,7 @@ namespace Trellis.Api.Features.Invoices;
 
 internal sealed class ListOverdueInvoices : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapGet("invoices/overdue", Handle)
         .RequirePermission(Permissions.Invoices.Read)
         .WithTags(InvoiceEndpoints.Tag)
@@ -22,13 +23,15 @@ internal sealed class ListOverdueInvoices : IEndpoint
         .WithDescription(
             "Issued invoices whose due date has passed, oldest first. Paged via the standard page/pageSize parameters; the response is the PagedResponse envelope, never a bare array.");
 
+    // The paging parameters are inline, camelCase and bounded: that is how the document gets their names
+    // and ranges (ADR-0025). The attributes document; the query's validator enforces the same bounds.
     private static async Task<Results<Ok<PagedResponse<InvoiceDto>>, ProblemHttpResult>> Handle(
-        [AsParameters] PageRequest request,
         IQueryHandler<ListOverdueInvoicesQuery, PagedList<InvoiceResponse>> handler,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [Range(PagingLimits.MinPage, PagingLimits.MaxPage)] int page = PagingLimits.MinPage,
+        [Range(PagingLimits.MinPageSize, PagingLimits.MaxPageSize)] int pageSize = PagingLimits.DefaultPageSize)
     {
-        var result = await handler.Handle(
-            new ListOverdueInvoicesQuery(request.Page, request.PageSize), cancellationToken);
+        var result = await handler.Handle(new ListOverdueInvoicesQuery(page, pageSize), cancellationToken);
 
         return result.IsSuccess
             ? TypedResults.Ok(result.Value.ToPagedResponse(static i => i.ToDto()))

@@ -40,7 +40,7 @@ The slice's codes: `Invoice.NotFound` (404), `Invoice.NotDraft` / `Invoice.NotIs
 
 **Caching**: `GetInvoice` is cache-aside via `HybridCache` (key from the injected `CacheKeys` service); the mutating endpoints (`AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`) invalidate that key on success. A miss is never pinned (the stored null is removed so a later create isn't answered 404 for the TTL), and with the **`UseMultitenancy`** toggle the key carries the tenant — a cache hit bypasses the EF tenant filter, so unscoped keys would leak across tenants. HybridCache uses an in-memory L1 always; a Redis L2 is added when the **`UseRedis`** template toggle is on (Aspire `cache` resource + `AddRedisDistributedCache`). Entries live 30 s in the L1 and 5 min in the L2 (`DefaultEntryOptions` in `Program.cs`): eviction reaches only the instance that handled the write (and the shared L2), so another API replica may serve the previous state, and its ETag, for up to 30 s.
 
-**Pagination**: `GET /invoices/overdue` is paged — binds `PageRequest` (`?page=&pageSize=`, validated 1..100) and returns `PagedResponse<InvoiceDto>` (items + total count + page metadata). The query flows through the repository's `ListPagedAsync` over the existing `Specification<T>` seam. Results are ordered by due date, then by id — the unique tiebreaker every paged specification must end with (`ListPagedAsync` refuses one that does not, or that pages itself), so invoices due at the same instant never repeat or vanish across pages.
+**Pagination**: `GET /invoices/overdue` is paged — `?page=` (1..10000, default 1) and `?pageSize=` (1..100, default 20), bound inline with `[Range(PagingLimits.…)]` so the document states the camelCase names and the bounds (ADR-0025); `ListOverdueInvoicesQueryValidator` enforces the same bounds (a value outside answers 400 `Validation.General` with `field: "page"` / `"pageSize"`), and the response is `PagedResponse<InvoiceDto>` (items + total count + page metadata). The query flows through the repository's `ListPagedAsync` over the existing `Specification<T>` seam, which pages with checked arithmetic (the page cap keeps `OFFSET` bounded; an offset can never wrap negative). Results are ordered by due date, then by id — the unique tiebreaker every paged specification must end with (`ListPagedAsync` refuses one that does not, or that pages itself), so invoices due at the same instant never repeat or vanish across pages.
 
 **Optimistic concurrency**: `Invoice` carries the Postgres `xmin` concurrency token (`InvoiceConfiguration.UseXmin...`). A conflicting write is an expected outcome, not an exception: `IUnitOfWork.CommitAsync` (`AppDbContext`) turns EF's `DbUpdateConcurrencyException` into `UnitOfWorkErrors.ConcurrencyConflict` (`Concurrency.Conflict`), the UnitOfWork decorator returns it as the command's `Result`, and the endpoint maps it to **409** through `CustomResults` like any other conflict (logged at Information, no exception handler involved).
 
@@ -50,15 +50,28 @@ The slice's codes: `Invoice.NotFound` (404), `Invoice.NotDraft` / `Invoice.NotIs
 
 **Business metrics**: `InvoiceMetrics` (meter `Trellis.Invoices`, exported by every host through ServiceDefaults' `Trellis.*` subscription) exports `trellis.invoices.issued` (attribute `trellis.invoice.currency`) and `trellis.invoices.paid`, unit `{invoice}`, incremented by outbox-dispatched event handlers so they count only committed events.
 
-**Conditional GET**: `InvoiceDto.Version` surfaces the xmin concurrency token, `GET /invoices/{id}`
-emits it as a weak ETag, and `If-None-Match` answers **304** — pollers stop re-downloading unchanged
+**Conditional GET**: `InvoiceDto.Version` (a `long`, `format: int64`) surfaces the xmin concurrency
+token, `GET /invoices/{id}` emits it as a weak ETag (`W/"42"`) and declares `.SupportsConditionalGet()`,
+so the document lists `If-None-Match`, the `ETag` header and the 304. The header is parsed, not
+string-compared (RFC 9110 §13.1.2): the weak form, the strong form `"42"`, a list and `*` all answer
+**304** with no body, a stale or unparsable tag answers 200 — pollers stop re-downloading unchanged
 aggregates. (Conditional writes stay guarded by xmin → 409 at commit; an `If-Match` precondition is
 a candidate follow-up.)
 
-**OpenAPI**: the document declares the bearer security scheme (Scalar can authorize), documents the
-`Idempotency-Key` header + 409 on every `RequireIdempotency()` endpoint and 401/403 on secured ones,
-and is committed at `docs/api/openapi.v1.json` — CI regenerates it against the running app and fails
-on drift (`scripts/export-openapi.sh`).
+**Wire types**: `InvoiceDto.Status` is the Contracts enum `InvoiceStatus` serialised by name
+(`"Draft" | "Issued" | "Paid" | "Voided"`, a string enum in the document; `ContractMirrorTests` keeps it
+equal to the domain enum) and money is `decimal` (`format: decimal`).
+
+**OpenAPI** (ADR-0025): `/openapi/v1.json` describes exactly the v1 operations with concrete `/api/v1/…`
+paths and no `servers`; every operation's `operationId` is its endpoint class (`CreateInvoice`,
+`GetInvoice`, …); the bearer security scheme is declared (Scalar can authorize); every operation
+documents its error responses by shape — 400 where there is input, 404 where a route id can miss, 409 on
+a write to an addressed resource (and the `Idempotency-Key` + duplicate 409 on every `RequireIdempotency()`
+endpoint), 401/403 on secured ones, 429 and 500 everywhere — all referencing the `ProblemResponse`
+component generated from the Contracts record; the 201 declares `Location`. The document is committed at
+`docs/api/openapi.v1.json` as the server serialises it: `OpenApiSnapshotTests` compares it with the
+in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` or
+`scripts/export-openapi.sh` regenerates it) and CI diffs it against the running app.
 
 ## UI (`src/Presentation/UI/Trellis.UI.Common/Pages/`)
 
@@ -66,7 +79,7 @@ on drift (`scripts/export-openapi.sh`).
 
 ## Tests
 
-`Domain.UnitTests/Invoices` (invariants, events, spec) · `Application.UnitTests/Invoices` (handlers + pipeline) · `IntegrationTests` (roundtrip, spec→SQL, interceptors, soft-delete, event→email; with multi-tenancy, `TenancyTests`: stamping, filtering, the aggregate-root convention, outbox tenant restore) · `ApiTests` (E2E lifecycle + error contracts; `CommitFailureTests`: a commit conflict is a 409 and a throwing commit an opaque 500, both releasing the key; `IdempotencyPostCommitTests`: a disconnect after the commit keeps the key; `InvoiceReadCacheTests`: every write evicts the cached invoice and retires its ETag, a 404 is never cached; with multi-tenancy, `TenantIsolationTests`: cross-tenant read/write 404, scoped overdue list, header ignored, cache scoped — all-options leg).
+`Domain.UnitTests/Invoices` (invariants, events, spec) · `Application.UnitTests/Invoices` (handlers + pipeline) · `IntegrationTests` (roundtrip, spec→SQL, interceptors, soft-delete, event→email; with multi-tenancy, `TenancyTests`: stamping, filtering, the aggregate-root convention, outbox tenant restore) · `ApiTests` (E2E lifecycle + error contracts; `CommitFailureTests`: a commit conflict is a 409 and a throwing commit an opaque 500, both releasing the key; `IdempotencyPostCommitTests`: a disconnect after the commit keeps the key; `InvoiceReadCacheTests`: every write evicts the cached invoice and retires its ETag, a 404 is never cached; `InvoiceContractTests`: 304 for every matching `If-None-Match` form, paging bounds answer 400 naming the field, `Location` resolves; `OpenApiSnapshotTests` + `OpenApiDocumentTests`: the committed document is the served one and says all of this; with multi-tenancy, `TenantIsolationTests`: cross-tenant read/write 404, scoped overdue list, header ignored, cache scoped — all-options leg).
 
 ## Endpoints
 

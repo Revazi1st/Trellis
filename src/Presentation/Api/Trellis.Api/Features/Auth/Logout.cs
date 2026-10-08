@@ -13,7 +13,7 @@ internal sealed class Logout : IEndpoint
     // and a caller whose access token already expired must still be able to log out.
     // Unguessable token: the global limiter bounds load; the strict auth policy is for guessable
     // credentials (login/register), ADR-0021.
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapPost("auth/logout", Handle)
         .AllowAnonymous()
         .WithTags(AuthEndpoints.Tag)
