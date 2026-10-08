@@ -20,10 +20,21 @@ public sealed class DomainEventsWithoutHandlersTests
         var completedHandlers = new HashSet<string>(StringComparer.Ordinal);
         IDomainEvent voided = new InvoiceVoidedDomainEvent(InvoiceId.New());
 
-        await dispatcher.Dispatch(voided, completedHandlers, TestContext.Current.CancellationToken);
-        await dispatcher.Dispatch([voided], TestContext.Current.CancellationToken);
+        var checkpoints = new List<string>();
+
+        await dispatcher.Dispatch(voided, completedHandlers, checkpoint: null, TestContext.Current.CancellationToken);
+        await dispatcher.Dispatch(
+            voided,
+            completedHandlers,
+            checkpoint: name =>
+            {
+                checkpoints.Add(name);
+                return Task.CompletedTask;
+            },
+            TestContext.Current.CancellationToken);
 
         completedHandlers.ShouldBeEmpty();
+        checkpoints.ShouldBeEmpty();
     }
 
     /// <summary>
