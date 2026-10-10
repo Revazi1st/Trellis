@@ -77,7 +77,7 @@ used=$( { find src tests tools .template.config/consumer \( -name node_modules -
   | grep -oE '[A-Za-z_][A-Za-z0-9_]*' | grep -vx 'if' | sort -u) || true
 
 for s in $used; do
-  if ! echo "$declared" | grep -qx "$s"; then
+  if ! grep -qx "$s" <<< "$declared"; then
     echo "::error::'#if ($s' is used in template sources but '$s' is not declared in template.json"
     fail=1
   fi
@@ -187,7 +187,7 @@ for f in $yaml_files; do
     if [ "$kind" = "ERR" ]; then
       echo "::error file=$f,line=$line::$value"
       fail=1
-    elif ! echo "$declared" | grep -qx "$value"; then
+    elif ! grep -qx "$value" <<< "$declared"; then
       echo "::error file=$f,line=$line::template conditional uses '$value', which is not a symbol declared in template.json"
       fail=1
     fi
@@ -247,7 +247,7 @@ gitignored() {
 check_exclude() {  # $1 = glob, $2 = modifier condition ("" for the unconditional list)
   local glob="$1" condition="$2" line entry
   [ -n "$glob" ] || return 0
-  if git ls-files -- ":(glob)$glob" | grep -q .; then
+  if [ -n "$(git ls-files -- ":(glob)$glob")" ]; then
     return 0
   fi
   if [ -z "$condition" ]; then
@@ -256,7 +256,7 @@ check_exclude() {  # $1 = glob, $2 = modifier condition ("" for the unconditiona
     done
     gitignored "$glob" && return 0
   fi
-  line=$(grep -nF "\"$glob\"" .template.config/template.json | head -n 1 | cut -d: -f1)
+  line=$(grep -nF "\"$glob\"" .template.config/template.json | head -n 1 | cut -d: -f1) || true
   if [ -n "$condition" ]; then
     echo "::error file=.template.config/template.json,line=${line:-1}::exclude glob '$glob' (condition $condition) matches no tracked file. If the file was renamed or deleted, point the glob at the new path or remove it; otherwise the renamed file ships when that option is off"
   else
