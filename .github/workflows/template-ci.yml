@@ -15,8 +15,11 @@ on:
 permissions:
   contents: read
 
+# When release.yml calls this workflow (workflow_call), github.workflow is the CALLER's name
+# ("Release"), so the release gate runs in a group of its own: a push to main during a dry run on
+# main cancels only an older push run of Template CI, never the release's template gate.
 concurrency:
-  group: template-ci-${{ github.ref }}
+  group: template-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
