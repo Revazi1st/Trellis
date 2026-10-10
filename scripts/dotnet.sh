@@ -56,7 +56,8 @@ case "${DOCKER_HOST:-}" in
       if [ "$(uname -s)" = "Darwin" ]; then
         socket=/var/run/docker.sock
       else
-        socket="${DOCKER_HOST#unix://}"
+        socket="${DOCKER_HOST:-}"
+        socket="${socket#unix://}"
         socket="${socket:-/var/run/docker.sock}"
       fi
     fi
@@ -69,7 +70,7 @@ case "${DOCKER_HOST:-}" in
     )
     ;;
   *)
-    echo "error: DOCKER_HOST='$DOCKER_HOST' is not supported by this script; use unix:// or tcp:// (docs/development.md)" >&2
+    echo "error: DOCKER_HOST='${DOCKER_HOST:-}' is not supported by this script; use unix:// or tcp:// (docs/development.md)" >&2
     exit 1
     ;;
 esac
