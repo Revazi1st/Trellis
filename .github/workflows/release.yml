@@ -1,22 +1,127 @@
 name: Release
 
+# The runbook is docs/releasing.md. A real release runs on a pushed v* tag that points at a commit
+# on main. A dry run (Actions > Release > Run workflow, "dry_run" ticked, on main or on a tag)
+# runs every step except the NuGet push and publishing the GitHub release, so the gates, the
+# packing, the provenance attestation, the draft release and the NuGet trusted-publishing login
+# are all proven before anything becomes public.
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: everything except the NuGet push and publishing the GitHub release"
+        type: boolean
+        required: true
+        default: true
+      version:
+        description: "Version to rehearse when not running on a tag (default: <Version> in the pack project)"
+        type: string
+        required: false
 
 permissions:
   contents: read
 
+# Two runs for one ref must never interleave their draft/push/publish steps.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    name: Resolve version & check preconditions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      dry-run: ${{ steps.resolve.outputs.dry-run }}
+    steps:
+      # Full history: the tag-on-main check below needs main's commits.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the version and the mode
+        id: resolve
+        env:
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          dry_run=false
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_DRY_RUN" = "true" ]; then
+            dry_run=true
+          fi
+
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            tag="$GITHUB_REF_NAME"
+            version="${tag#v}"
+            if [ -n "$INPUT_VERSION" ] && [ "$INPUT_VERSION" != "$version" ]; then
+              echo "::error::The version input ($INPUT_VERSION) contradicts the tag ($tag). Leave it empty when running on a tag."
+              exit 1
+            fi
+          else
+            if [ "$dry_run" != "true" ]; then
+              echo "::error::A real release runs on a v* tag (push the tag, or run this workflow on the tag). On a branch, run it only as a dry run."
+              exit 1
+            fi
+            version="$INPUT_VERSION"
+            if [ -z "$version" ]; then
+              version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj | head -n 1)"
+            fi
+            tag="v$version"
+          fi
+
+          if ! printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$version' is not a SemVer version (MAJOR.MINOR.PATCH[-prerelease])."
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "dry-run=$dry_run"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $version as $tag (dry run: $dry_run) from $GITHUB_SHA."
+
+      # Only what went through main's review and CI is released. A dry run on another branch still
+      # rehearses everything else, so there this is a warning.
+      - name: Check the commit is on main
+        env:
+          DRY_RUN: ${{ steps.resolve.outputs.dry-run }}
+        run: |
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "$GITHUB_SHA is on main."
+            exit 0
+          fi
+          message="$GITHUB_SHA ($GITHUB_REF_NAME) is not on main: tag a commit that main contains."
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::warning::$message"
+          else
+            echo "::error::$message"
+            exit 1
+          fi
+
+      - name: Check CHANGELOG.md has notes for this version
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          if ! awk -v ver="$VERSION" 'index($0, "## [" ver "]") == 1 { found = 1 } END { exit !found }' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' section. Write the release notes before tagging (docs/releasing.md)."
+            exit 1
+          fi
+
   test:
     name: Gate — build & test
+    needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
       - name: Build (warnings as errors)
@@ -26,69 +131,149 @@ jobs:
           RUN_ASPIRE_E2E: "1"
         run: dotnet test Trellis.slnx --no-build -c Release
 
-  publish:
-    name: Pack, verify & publish
-    needs: test
+  # The whole template matrix (every toggle leg instantiated, built and, where flagged, tested),
+  # not just the smoke test below: a broken toggle combination must never be published.
+  template:
+    name: Gate — template matrix
+    needs: prepare
+    uses: ./.github/workflows/template-ci.yml
+
+  # Attest, then draft: nothing is public yet. A dry run stops after this job's draft (plus the
+  # NuGet login below); the draft stays for inspection and the next run for the tag replaces it.
+  package:
+    name: Pack, smoke-test, attest & draft the release
+    needs: [prepare, test, template]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write      # create the GitHub Release
-      id-token: write      # NuGet trusted publishing (OIDC) + provenance
+      contents: write      # create the draft GitHub release
+      id-token: write      # sign the provenance attestation (Sigstore, via OIDC)
       attestations: write  # actions/attest-build-provenance
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      DRY_RUN: ${{ needs.prepare.outputs.dry-run }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
 
-      - name: Verify CHANGELOG has notes for this version
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          grep -q "^## \[$VERSION\]" CHANGELOG.md || {
-            echo "::error::CHANGELOG.md has no '## [$VERSION]' section — write the release notes before tagging."
-            exit 1
-          }
-
       - name: Pack template
-        run: dotnet pack eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj -c Release -o ./nupkg -p:Version=${GITHUB_REF_NAME#v}
+        run: dotnet pack eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj -c Release -o ./nupkg "-p:Version=$VERSION"
 
       # Publish exactly what a user will install: instantiate from the .nupkg and build it.
       - name: Smoke-test the packed template
         run: |
           dotnet new install ./nupkg/*.nupkg
-          dotnet new trellis -n Acme.Smoke -o "$RUNNER_TEMP/smoke" --skip-restore true --allow-scripts yes
+          dotnet new trellis -n Acme.Smoke -o "$RUNNER_TEMP/smoke" --skip-restore true
           dotnet build "$RUNNER_TEMP"/smoke/*.slnx -c Release
 
+      # Artifact attestations need a public repository (or GitHub Enterprise Cloud for a private
+      # one); on a private repository on another plan this step fails, and so does the release.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: ./nupkg/*.nupkg
+
+      - name: Extract the release notes from CHANGELOG.md
+        run: |
+          awk -v ver="$VERSION" '
+            index($0, "## [" ver "]") == 1 { grab = 1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::The '## [$VERSION]' section of CHANGELOG.md is empty."
+            exit 1
+          fi
+
+      - name: Draft the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Replace a leftover draft for this tag (an earlier dry run or a failed attempt); never
+          # touch a published one.
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\") | \"\(.id) \(.draft)\"")"
+          while read -r id draft; do
+            [ -n "$id" ] || continue
+            if [ "$draft" != "true" ]; then
+              echo "::error::$TAG is already published as a GitHub release. Release a new version instead."
+              exit 1
+            fi
+            echo "Deleting the leftover draft release $id for $TAG."
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+          done <<< "$existing"
+
+          flags=(--draft --title "$TAG" --notes-file release-notes.md --target "$GITHUB_SHA")
+          if [ "$DRY_RUN" != "true" ]; then flags+=(--verify-tag); fi
+          case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$TAG" ./nupkg/*.nupkg "${flags[@]}"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nupkg
+          path: ./nupkg/*.nupkg
+
+  # Push, then publish: the package reaches nuget.org from the attested draft, and the release
+  # becomes public only once the push succeeded. The nuget.org environment is where approval
+  # rules belong (Settings > Environments); a dry run passes through it too and logs in, which
+  # proves the trusted-publishing setup, but skips both steps that make anything public.
+  publish:
+    name: Push to NuGet & publish the release
+    needs: [prepare, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: nuget.org
+      url: https://www.nuget.org/packages/Trellis.Templates
+    permissions:
+      contents: write      # download the draft's assets and publish the release
+      id-token: write      # NuGet trusted publishing (OIDC)
+    env:
+      TAG: ${{ needs.prepare.outputs.tag }}
+      DRY_RUN: ${{ needs.prepare.outputs.dry-run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      # The package attached to the draft is the one that was smoke-tested and attested.
+      - name: Download the package from the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.nupkg' --dir ./nupkg
+
       # Trusted publishing (OIDC): no long-lived API key. Configure the trusted publisher on
-      # nuget.org (this repo + this workflow) and set the NUGET_USER repository variable to the
-      # nuget.org profile name that owns the package.
+      # nuget.org (this repository, release.yml, the nuget.org environment) and set the NUGET_USER
+      # repository variable to the nuget.org profile that owns the package (docs/releasing.md).
       - name: NuGet login (trusted publishing)
         id: nuget-login
-        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         with:
           user: ${{ vars.NUGET_USER }}
 
       - name: Push to NuGet
-        run: dotnet nuget push "./nupkg/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --skip-duplicate
+        if: env.DRY_RUN != 'true'
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "./nupkg/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY" --skip-duplicate
 
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: ./nupkg/*.nupkg
-
-      - name: Create GitHub Release from the CHANGELOG section
+      - name: Publish the GitHub release
+        if: env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          awk -v ver="$VERSION" '
-            $0 ~ "^## \\[" ver "\\]" { grab = 1; next }
-            grab && /^## \[/ { exit }
-            grab { print }
-          ' CHANGELOG.md > release-notes.md
-          gh release create "$GITHUB_REF_NAME" ./nupkg/*.nupkg --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: nupkg
-          path: ./nupkg/*.nupkg
+      - name: Dry-run summary
+        if: env.DRY_RUN == 'true'
+        run: |
+          {
+            echo "### Release dry run for $TAG"
+            echo
+            echo "Gates, pack, smoke test, provenance attestation, the draft release and the NuGet"
+            echo "trusted-publishing login all ran. Skipped: the NuGet push and publishing the release."
+            echo "The draft release stays for inspection; the real run for $TAG replaces it."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Trellis.Application;
 using Trellis.Infrastructure;
 using Trellis.MigrationService;
@@ -17,13 +18,28 @@ builder.Services.AddSingleton<Trellis.Application.Abstractions.ITenantContext, S
 #endif
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trellis-db")
     ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
+// AddPersistence already turned on Npgsql's retrying execution strategy, which rides out a database that is
+// still starting. The Aspire enrichment adds health checks, tracing and metrics only, never a second retry
+// policy on top.
 builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
 
-builder.Services.AddOpenTelemetry()
-    .WithTracing(static tracing => tracing.AddSource(MigrationWorker.ActivitySourceName));
-
-builder.Services.AddSingleton(
-    builder.Configuration.GetSection(SeedOptions.SectionName).Get<SeedOptions>() ?? new SeedOptions());
+// Validated at boot, like every options type: an e-mail typo, a short password or an over-long tenant id
+// stops the worker here, naming the key, instead of seeding an admin nobody can sign in as. The worker
+// takes the plain POCO.
+builder.Services.AddOptions<SeedOptions>()
+    .Bind(builder.Configuration.GetSection(SeedOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddSingleton(static provider => provider.GetRequiredService<IOptions<SeedOptions>>().Value);
 builder.Services.AddHostedService<MigrationWorker>();
 
-await builder.Build().RunAsync();
+try
+{
+    await builder.Build().RunAsync();
+}
+catch (OptionsValidationException)
+{
+    // The host has already logged it ("Hosting failed to start", naming the key). Exit 1 like any other
+    // failed run — the API waits on this exit code — instead of crashing on an unhandled exception.
+    Environment.ExitCode = 1;
+}

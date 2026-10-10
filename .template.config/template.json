@@ -1,6 +1,6 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "Trellis",
+  "author": "Trellis contributors",
   "classifications": [
     "Web",
     "Clean Architecture",
@@ -11,6 +11,7 @@
   "identity": "Trellis.Solution.CSharp",
   "name": "Trellis Clean Architecture Solution",
   "shortName": "trellis",
+  "description": "A rich-DDD, Clean Architecture .NET 10 solution with vertical-slice minimal APIs, separate Infrastructure and Persistence projects, Aspire orchestration and an optional Blazor UI.",
   "sourceName": "Trellis",
   "preferNameDirectory": true,
   "constraints": {
@@ -58,7 +59,7 @@
       "datatype": "bool",
       "defaultValue": "false",
       "displayName": "Use multi-tenancy",
-      "description": "Add a tenant seam: ITenantContext (claim/header), a TenantId shadow column and a \"Tenant\" EF query filter. Regenerate the initial migration after enabling."
+      "description": "Add a tenant seam: a tenant claim on the principal (ITenantContext), a TenantId shadow column and a \"Tenant\" EF query filter on every aggregate root. Regenerate the initial migration after enabling."
     },
     "IncludeUiTests": {
       "type": "parameter",
@@ -67,29 +68,162 @@
       "displayName": "Include Playwright UI tests",
       "description": "Include a browser-driven UI test project (Playwright). Tests are opt-in at run time via RUN_UI_TESTS=1."
     },
+    "projectPathName": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "safeNamespace",
+      "fileRename": "Trellis",
+      "description": "File and folder names take the same identifier-safe form the engine writes into file content (acme-shop -> acme_shop). Without it, paths keep the raw name (acme-shop.Api) while the .slnx and every ProjectReference say acme_shop.Api, so the solution does not load. A no-op for dotted PascalCase names (Acme.Shop)."
+    },
     "aspireProjectPrefix": {
       "type": "derived",
       "valueSource": "name",
       "valueTransform": "aspireProjectForm",
       "replaces": "Trellis_",
-      "description": "Aspire generates Projects.<AssemblyName with '.' replaced by '_'>. Without this, a dotted name like Acme.Shop would emit Projects.Acme.Shop_Api, which does not exist."
+      "description": "Aspire generates Projects.<project file name with '.' replaced by '_'>. Without this, a dotted name like Acme.Shop would emit Projects.Acme.Shop_Api, which does not exist; starting from the identifier-safe form keeps kebab-case names (acme-shop -> Projects.acme_shop_Api) valid too."
     },
     "aspireResourcePrefix": {
       "type": "derived",
       "valueSource": "name",
       "valueTransform": "aspireResourceForm",
       "replaces": "trellis-",
-      "description": "Aspire resource names allow only letters, digits and hyphens, so dots in the project name must become hyphens."
+      "description": "Aspire resource names allow only letters, digits and hyphens, so every other character in the project name (dots, underscores, spaces) becomes a hyphen."
+    },
+    "envVarPrefix": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "upperSnakeForm",
+      "replaces": "TRELLIS_",
+      "description": "The engine generates no upper-case form of the name, so without this TRELLIS_SDK_IMAGE (scripts/dotnet.sh, scripts/ef.sh) and TRELLIS_DESIGNTIME_DB (AppDbContextFactory) would survive into generated projects. Acme.Shop -> ACME_SHOP_SDK_IMAGE."
+    },
+    "nameIsDottedAlphanumeric": {
+      "type": "generated",
+      "generator": "regexMatch",
+      "parameters": {
+        "source": "name",
+        "pattern": "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$"
+      },
+      "description": "False for names such as acme-shop, Acme_Shop or '1Shop': the engine writes them as underscored identifiers (acme_shop), which the solution's analyzers reject (CA1707, an error in every configuration). Drives the warning post-action. No 'datatype' on purpose: check-template-toggles.sh treats every \"datatype\": \"bool\" symbol as a user-facing toggle."
+    },
+    "TemplateSource": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "false"
+      },
+      "description": "Always false once the engine runs, so a block conditioned on it survives only in the template's own repository, which nothing ever processes (example: the ci.yml step that runs the maintainer-only check-template-toggles.sh). No 'datatype', for the same reason as nameIsDottedAlphanumeric."
+    },
+    "templatePackageId": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "Trellis.Templates"
+      },
+      "replaces": "TEMPLATE-MARKER-PACKAGE",
+      "description": "The NuGet package id, written into the .trellis-template.json marker. A constant, so the engine writes it as is: spelled out in the marker it would be renamed with the project like every other occurrence of the template's name."
+    },
+    "templateShortName": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "trellis"
+      },
+      "replaces": "TEMPLATE-MARKER-SHORT-NAME",
+      "description": "The 'dotnet new' short name, written into the marker (docs/upgrading.md regenerates with it)."
+    },
+    "templateVersion": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "0.0.0-source"
+      },
+      "replaces": "TEMPLATE-MARKER-VERSION",
+      "description": "The template version written into the marker. '0.0.0-source' means installed from a source checkout; packing stamps the package's own version over it (eng/Trellis.TemplatePack, StampTemplateVersion), so a project generated from Trellis.Templates X.Y.Z records X.Y.Z."
+    },
+    "templateRepository": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "https://github.com/Revazi1st/trellis"
+      },
+      "replaces": "TEMPLATE-MARKER-REPOSITORY",
+      "description": "Where the template's CHANGELOG and releases live, written into the marker for docs/upgrading.md."
+    },
+    "templateMarkerFile": {
+      "type": "generated",
+      "generator": "constant",
+      "parameters": {
+        "value": "`.trellis-template.json`"
+      },
+      "replaces": ".trellis\\-template.json",
+      "description": "Shipped prose (the README stub, docs/upgrading.md) names the marker as .trellis\\-template.json, a Markdown-escaped hyphen that renders as the plain name in this repository; the engine writes the name back as code. Spelled plainly, the name would be renamed with the project like any other occurrence of the template's name, and the engine skips a replacement whose value equals its token."
+    },
+    "projectName": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "identity",
+      "replaces": "TEMPLATE-MARKER-NAME",
+      "description": "The name exactly as given to 'dotnet new -n', written into the marker."
+    },
+    "devSigningKeyHead": {
+      "type": "generated",
+      "generator": "guid",
+      "parameters": {
+        "defaultFormat": "n"
+      },
+      "description": "First 32 hex characters of devSigningKey."
+    },
+    "devSigningKeyTail": {
+      "type": "generated",
+      "generator": "guid",
+      "parameters": {
+        "defaultFormat": "n"
+      },
+      "description": "Last 32 hex characters of devSigningKey."
+    },
+    "devSigningKey": {
+      "type": "generated",
+      "generator": "join",
+      "replaces": "dev-only-signing-key-change-me-please-32-bytes-minimum!!",
+      "onlyIf": [
+        {
+          "after": "\"SigningKey\": \""
+        }
+      ],
+      "parameters": {
+        "symbols": [
+          {
+            "type": "const",
+            "value": "dev-only-"
+          },
+          {
+            "type": "ref",
+            "value": "devSigningKeyHead"
+          },
+          {
+            "type": "ref",
+            "value": "devSigningKeyTail"
+          }
+        ],
+        "separator": ""
+      },
+      "description": "Every generated project gets its own Development JWT signing key in place of the repository's fixed placeholder: 'dev-only-' plus 64 hex characters (two random GUIDs, 244 random bits), so a token minted by one project's dev API is worthless against another's. The prefix says what the value is, and it is also why gitleaks' default rules (which skip values containing common words such as 'dev') pass the file with no allowlist entry; a bare hex value of this length is flagged as generic-api-key. onlyIf limits the replacement to the appsettings value; the placeholder keeps working in the template's own repository, where the engine never runs, and needs no .gitleaks.toml allowlist entry."
     }
   },
   "forms": {
+    "identity": { "identifier": "identity" },
+    "safeNamespace": { "identifier": "safe_namespace" },
     "dotsToUnderscores": { "identifier": "replace", "pattern": "\\.", "replacement": "_" },
     "appendUnderscore": { "identifier": "replace", "pattern": "$", "replacement": "_" },
-    "aspireProjectForm": { "identifier": "chain", "steps": [ "dotsToUnderscores", "appendUnderscore" ] },
-    "lower": { "identifier": "lowerCase" },
-    "dotsToHyphens": { "identifier": "replace", "pattern": "\\.", "replacement": "-" },
+    "aspireProjectForm": { "identifier": "chain", "steps": [ "safeNamespace", "dotsToUnderscores", "appendUnderscore" ] },
+    "lower": { "identifier": "lowerCaseInvariant" },
+    "nonAlphanumericToHyphen": { "identifier": "replace", "pattern": "[^a-z0-9]+", "replacement": "-" },
+    "trimLeadingHyphens": { "identifier": "replace", "pattern": "^-+", "replacement": "" },
     "appendHyphen": { "identifier": "replace", "pattern": "$", "replacement": "-" },
-    "aspireResourceForm": { "identifier": "chain", "steps": [ "lower", "dotsToHyphens", "appendHyphen" ] }
+    "aspireResourceForm": { "identifier": "chain", "steps": [ "lower", "nonAlphanumericToHyphen", "trimLeadingHyphens", "appendHyphen" ] },
+    "nonAlphanumericToUnderscore": { "identifier": "replace", "pattern": "[^A-Za-z0-9]+", "replacement": "_" },
+    "upper": { "identifier": "upperCaseInvariant" },
+    "upperSnakeForm": { "identifier": "chain", "steps": [ "safeNamespace", "nonAlphanumericToUnderscore", "upper", "appendUnderscore" ] }
   },
   "sources": [
     {
@@ -99,24 +233,54 @@
         "**/bin/**",
         "**/obj/**",
         "artifacts/**",
+        ".git",
         ".git/**",
         ".idea/**",
         ".vs/**",
         ".vscode/**",
-        "eng/**",
-        "**/.template-test/**",
-        ".claude/settings.local.json",
-        "CLAUDE.local.md",
-        "**/*.user",
+        "eng/Trellis.TemplatePack/**",
+        "eng/Directory.Build.props",
+        "eng/Directory.Build.targets",
         ".template.config/**",
         ".github/workflows/template-ci.yml",
-        ".github/workflows/release.yml"
+        ".github/workflows/release.yml",
+        ".claude/skills/add-toggle/**",
+        "scripts/check-template-toggles.sh",
+        "docs/releasing.md",
+        "README.md",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "CODE_OF_CONDUCT.md",
+        "SECURITY.md",
+        ".github/CODEOWNERS",
+        ".github/ISSUE_TEMPLATE/**",
+        ".claude/settings.local.json",
+        ".claude/worktrees/**",
+        "CLAUDE.local.md",
+        "**/*.user",
+        "**/*.suo",
+        "**/.DS_Store",
+        "**/.aspire/**",
+        "**/TestResults/**",
+        "**/nupkg/**",
+        "**/*.trx",
+        "**/coverage*.json",
+        "**/coverage*.xml",
+        "**/*.coverage",
+        "**/appsettings.*.local.json",
+        "**/*.pfx",
+        "**/*.key"
+      ],
+      "copyOnly": [
+        "LICENSE"
       ],
       "modifiers": [
         {
           "condition": "(!IncludeUI)",
           "exclude": [
-            "src/Presentation/UI/**"
+            "src/Presentation/UI/**",
+            "tests/Trellis.ApiTests/Ui/**",
+            ".claude/rules/ui.md"
           ]
         },
         {
@@ -126,7 +290,15 @@
             "src/Core/Trellis.Application/Abstractions/AmbientTenant.cs",
             "src/Presentation/Api/Trellis.Api.Common/Http/TenantContext.cs",
             "src/Infrastructure/Trellis.Persistence/Interceptors/TenantInterceptor.cs",
-            "src/Infrastructure/Trellis.Persistence/SystemTenantContext.cs"
+            "src/Infrastructure/Trellis.Persistence/SystemTenantContext.cs",
+            "tests/Trellis.IntegrationTests/TenancyTests.cs",
+            "tests/Trellis.ApiTests/InProcess/TenantIsolationTests.cs"
+          ]
+        },
+        {
+          "condition": "(!UseSerilog)",
+          "exclude": [
+            "tests/Trellis.ApiTests/InProcess/SerilogExportTests.cs"
           ]
         },
         {
@@ -136,6 +308,13 @@
           ]
         }
       ]
+    },
+    {
+      "source": "./.template.config/consumer/",
+      "target": "./",
+      "rename": {
+        "template-marker.json": ".trellis-template.json"
+      }
     }
   ],
   "primaryOutputs": [
@@ -144,6 +323,19 @@
     }
   ],
   "postActions": [
+    {
+      "id": "warn: project name",
+      "condition": "(!nameIsDottedAlphanumeric)",
+      "description": "Project name check",
+      "actionId": "AC1156F7-BB77-4DB8-B28F-24EEBCCA1E5C",
+      "applyFileRenamesToManualInstructions": true,
+      "manualInstructions": [
+        {
+          "text": "WARNING: the project name became 'Trellis' in folders and namespaces. Underscores fail analyzer rule CA1707, so this solution will not build. Delete it and re-create it with letters and digits separated by dots (for example Acme.Shop)."
+        }
+      ],
+      "continueOnError": true
+    },
     {
       "id": "restore",
       "condition": "(!skipRestore)",
@@ -162,29 +354,47 @@
       "description": "Make the helper scripts executable",
       "manualInstructions": [
         {
-          "text": "Run 'chmod +x scripts/*.sh'"
+          "text": "Run 'chmod +x scripts/*.sh .claude/hooks/*.sh'"
         }
       ],
-      "actionId": "3A7C4B45-1F5D-4A30-959A-51B88E82B5D2",
+      "actionId": "cb9a6cf3-4f5c-4860-b9d2-03a574959774",
       "args": {
-        "executable": "/bin/chmod",
-        "args": "+x scripts/dotnet.sh scripts/ef.sh scripts/check-docs-drift.sh scripts/check-adr-links.sh scripts/check-template-toggles.sh scripts/export-openapi.sh"
+        "+x": ".claude/hooks/docs-drift.sh scripts/check-adr-links.sh scripts/check-docs-drift.sh scripts/dotnet.sh scripts/ef.sh scripts/export-openapi.sh"
       },
       "continueOnError": true
     },
     {
-      "id": "next steps",
-      "description": "Print the first steps",
+      "id": "next steps: no local SDK",
+      "description": "Next step without a local .NET SDK",
+      "actionId": "AC1156F7-BB77-4DB8-B28F-24EEBCCA1E5C",
+      "applyFileRenamesToManualInstructions": true,
+      "manualInstructions": [
+        {
+          "text": "No local .NET SDK? Build the SDK image once (the docker build line is at the top of scripts/dotnet.sh), then run: ./scripts/dotnet.sh test Trellis.slnx"
+        }
+      ],
+      "continueOnError": true
+    },
+    {
+      "id": "next steps: run",
+      "description": "Run the app",
+      "actionId": "AC1156F7-BB77-4DB8-B28F-24EEBCCA1E5C",
+      "applyFileRenamesToManualInstructions": true,
+      "manualInstructions": [
+        {
+          "text": "Run it: 'aspire run' (needs the Aspire CLI: dotnet tool install -g Aspire.Cli), or without the CLI: dotnet run --project tools/Trellis.AppHost. Seeded admin: admin@example.com / Admin123!"
+        }
+      ],
+      "continueOnError": true
+    },
+    {
+      "id": "next steps: multi-tenancy",
+      "condition": "(UseMultitenancy)",
+      "description": "Regenerate the initial migration",
       "actionId": "AC1156F7-BB77-4DB8-B28F-24EEBCCA1E5C",
       "manualInstructions": [
         {
-          "text": "No local .NET SDK? Build the SDK image once — the exact docker build one-liner is at the top of scripts/dotnet.sh — then verify with: ./scripts/dotnet.sh test <YourSolution>.slnx"
-        },
-        {
-          "text": "Run it (local SDK): aspire run  —  seeded admin admin@trellis.dev / Admin123!"
-        },
-        {
-          "text": "Enabled --use-multitenancy? Regenerate the initial migration first (see docs/development.md)."
+          "text": "Multi-tenancy is on: regenerate the initial migration before the first run (docs/development.md, 'Multi-tenancy')."
         }
       ],
       "continueOnError": true

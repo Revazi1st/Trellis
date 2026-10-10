@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-09-25
+- **Amended**: 2026-10-08 — replace (not add) the blanket pipeline, the real exception set, API-only registration, back-off-aware budget, Frankfurter (see *Amendment* below)
 
 ## Context
 
@@ -30,3 +31,18 @@ The same options discipline now covers `AuthTokenOptions`. Binding and annotatio
 - `Trellis.Infrastructure` takes on `Microsoft.Extensions.Http`, `.Http.Resilience`, `.Diagnostics.HealthChecks` and `.Options.DataAnnotations` — all Microsoft, all within the ADR-0011 license ceilings.
 - `/health` gains an `exchange-rates` entry tagged `external`. Readiness can now report Degraded, which orchestrators treat as still-serving; `/alive` is unaffected because nothing here is tagged `live`.
 - The sample provider is part of the reference material, like the Invoices slice: delete it when the real integration replaces it.
+
+## Amendment (2026-10-08): replace the blanket pipeline, catch what it throws, register only where it is used
+
+The first version taught three things that were wrong in exactly the situations it was written for.
+
+- **"Override per client" stacked instead of replacing.** `AddStandardResilienceHandler(...)` on a client that `ServiceDefaults` already gave one adds a *second* `ResilienceHandler`, nested inside the first: the blanket 10 s attempt timeout still cancels every attempt, and each outer retry reruns the client's whole retry loop. The client now calls `RemoveAllResilienceHandlers()` first (experimental, `EXTEXP0001` suppressed with the reason; the non-experimental equivalent removes every `ResilienceHandler` in `ConfigureAdditionalHttpMessageHandlers`) and then adds its own. **Replace, don't add** — a test boots `AddServiceDefaults()` with the integration and asserts exactly one `ResilienceHandler` in the chain.
+- **The catch set was a bare `HttpClient`'s, not the pipeline's.** Behind the standard handler a timed-out attempt or budget surfaces as Polly's `TimeoutRejectedException` (not `TaskCanceledException`) and an open circuit as `BrokenCircuitException`; both escaped the Result boundary as 500s. The adapter now maps `HttpRequestException`, `TimeoutRejectedException`, `BrokenCircuitException` and any other `ExecutionRejectedException` to `Unavailable`, `JsonException` to `MalformedResponse`, and an `OperationCanceledException` the caller did not cause to `Unavailable`; the caller's own cancellation propagates.
+- **`ValidateOnStart` in `AddInfrastructure` reached the migration host — and moving it was not enough.** The standard resilience handler validates its own options at boot, and the client's are computed from the integration's options, so merely *registering* the client makes its section a boot requirement of the host. Outbound integrations are therefore registered by `AddOutboundIntegrations(configuration)`, which only hosts that call out invoke (the API); it validates their options at boot. `AddInfrastructure` keeps what every host needs. The same call validates `Email:Provider` at boot and warns when the logging stand-in is active outside Development; the e-mail sender itself stays in `AddInfrastructure`, because Application's event handlers must be constructible in every host.
+
+Two smaller corrections ride along. The pipeline reads the validated options through `AddStandardResilienceHandler().Configure((o, sp) => …)` when it is built, instead of a `Get<T>() ?? new T()` snapshot bound at registration. Its total timeout now counts the back-off — `attempt × (retries + 1) + maxDelay × retries`, with waits capped at `Retry.MaxDelay` — because a budget of attempts alone (`attempt × (retries + 2)`) cut off a retry the policy had granted whenever the jittered wait ran long. The default provider moved from `api.exchangerate.host`, which now answers `success:false` at HTTP 200 to every keyless call while its TCP probe stays green, to Frankfurter (`https://api.frankfurter.dev/v1/`, same `latest?base=&symbols=` shape); an explicit `success:false` is still rejected, and an opt-in live smoke test (`RUN_LIVE_SMOKE_TESTS=1`) watches the provider itself.
+
+The default provider then moved once more, to Frankfurter's v2 API (`https://api.frankfurter.dev/v2/`,
+`rates?base=&quotes=`, an array per quote): v1 answers with a `Deprecation` header and a successor
+link. The adapter reads the array, an object with `success:false` stays `Unavailable`, any other shape
+is `MalformedResponse` (`docs/features/exchange-rates.md`).

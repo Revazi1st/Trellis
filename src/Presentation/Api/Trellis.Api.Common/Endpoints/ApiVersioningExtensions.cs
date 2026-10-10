@@ -16,7 +16,7 @@ public static class ApiVersioningExtensions
     {
         services.AddApiVersioning(options =>
         {
-            options.DefaultApiVersion = new ApiVersion(1, 0);
+            options.DefaultApiVersion = ApiVersions.V1;
             options.AssumeDefaultVersionWhenUnspecified = true;
             options.ReportApiVersions = true;
             options.ApiVersionReader = new UrlSegmentApiVersionReader();
@@ -25,14 +25,25 @@ public static class ApiVersioningExtensions
         return services;
     }
 
-    /// <summary>Creates the versioned <c>/api/v{version}</c> group that feature endpoints are mapped onto.</summary>
+    /// <summary>
+    /// Creates the versioned <c>/api/v{version}</c> group that feature endpoints are mapped onto.
+    /// The group is the API boundary, so it is deny-by-default (ADR-0021): every endpoint on it
+    /// requires an authenticated caller and declares its permission with <c>RequirePermission</c>.
+    /// An endpoint that must be reachable without a token opts out with <c>AllowAnonymous()</c>
+    /// (which wins over group metadata) and is listed in <c>EndpointMetadataTests</c>' allowlist.
+    /// Probes and API docs are mapped on the host, never on this group, so they need no exemption.
+    /// That is also why there is no fallback policy: it would silently govern whatever a consumer
+    /// maps on the host tomorrow.
+    /// </summary>
     public static RouteGroupBuilder MapVersionedApiGroup(this WebApplication app)
     {
         ApiVersionSet versionSet = app.NewApiVersionSet()
-            .HasApiVersion(new ApiVersion(1, 0))
+            .HasApiVersion(ApiVersions.V1)
             .ReportApiVersions()
             .Build();
 
-        return app.MapGroup("/api/v{version:apiVersion}").WithApiVersionSet(versionSet);
+        return app.MapGroup("/api/v{version:apiVersion}")
+            .WithApiVersionSet(versionSet)
+            .RequireAuthorization();
     }
 }

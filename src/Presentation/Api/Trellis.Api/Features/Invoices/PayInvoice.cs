@@ -14,7 +14,7 @@ namespace Trellis.Api.Features.Invoices;
 
 internal sealed class PayInvoice : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapPost("invoices/{id}/pay", Handle)
         .RequirePermission(Permissions.Invoices.Write)
         .RequireIdempotency()
@@ -34,7 +34,9 @@ internal sealed class PayInvoice : IEndpoint
 
         if (result.IsSuccess)
         {
-            await cache.RemoveAsync(cacheKeys.Invoice(id.Value), cancellationToken);
+            // Post-commit: an aborted request must not be able to throw here, or the idempotency filter
+            // would release a key whose command already committed and a retry would apply it twice.
+            await cache.RemoveAsync(cacheKeys.Invoice(id.Value), CancellationToken.None);
             return TypedResults.NoContent();
         }
 

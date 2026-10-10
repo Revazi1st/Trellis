@@ -18,19 +18,21 @@ Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events,
 
 ## 2. Application
 - Delete `Features/Invoices/` (7 use-case slices + `EventHandlers/` + `InvoiceResponse.cs`) and `Observability/InvoiceMetrics.cs`.
-- `DependencyInjection.cs`: drop `AddSingleton<InvoiceMetrics>()`.
+- `DependencyInjection.cs`: drop `AddSingleton<InvoiceMetrics>()`. Leave the pipeline's `TryDecorate` lines alone: Invoices holds the only queries (`GetInvoice`, `ListOverdueInvoices`), and `TryDecorate`, unlike Scrutor's `Decorate` (which throws when it finds nothing to wrap), lets an assembly without a single query handler boot. Your first query gets the decorators by itself.
 - `Authorization/Permissions.cs`: remove `Permissions.Invoices`, its two entries in `Permissions.All`, and the `Member` grant in `Roles.Permissions` — replace with your own permissions rather than leaving Member empty.
 
 ## 3. Persistence
 - Delete `Configurations/InvoiceConfiguration.cs`, `Configurations/InvoiceLineConfiguration.cs`, `Repositories/InvoiceRepository.cs`.
-- `AppDbContext.cs`: the `Invoices` DbSet, the `"Tenant"` query filter on `Invoice` (multi-tenancy — re-target it to your aggregate), and the two `InvoiceId`/`InvoiceLineId` lines in `ConfigureConventions`.
+- `AppDbContext.cs`: the `Invoices` DbSet and the two `InvoiceId`/`InvoiceLineId` lines in `ConfigureConventions` (with multi-tenancy, the `"Tenant"` filter is a convention over every aggregate root — nothing per-aggregate to re-target).
 - `DependencyInjection.cs`: the `IInvoiceRepository` registration.
 - `Outbox/DomainEventSerialization.cs` anchors the Domain assembly via `typeof(Invoice)` — re-anchor to any surviving Domain type.
+- **A deployed database may still hold outbox rows for the invoice events** (`invoices.issued.v1`, `invoices.paid.v1`, `invoices.voided.v1`). Drain the outbox before deploying the removal (no pending rows of those types); a row left behind dead-letters as `unknown_type`, and `docs/deployment.md` ("Outbox operations") shows how to delete it.
 
 ## 4. Api
-- Delete `Api/Features/Invoices/` (7 endpoints) and `Api.Contracts/Invoices/`.
-- `Program.cs`: remove `InvoiceMetrics.MeterName` from `AddMeter(...)` (keep `OutboxMetrics`).
+- Delete `Api/Features/Invoices/` (7 endpoints) and `Api.Contracts/Invoices/` (the DTOs and the `InvoiceStatus` wire enum).
+- `Program.cs`: no telemetry line to remove — ServiceDefaults subscribes every `Trellis.*` meter, so deleting `InvoiceMetrics` is enough.
 - `Api.Common/Caching/CacheKeys.cs`: replace the `Invoice(id)` method with keys for your feature — keep the class, it is the tenant-scoping seam.
+- **Regenerate the OpenAPI document**: `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` (`./scripts/dotnet.sh` forwards the variable) and commit `docs/api/openapi.v1.json`. `OpenApiSnapshotTests` fails until the committed document drops the invoice operations and schemas.
 
 ## 5. UI (if included)
 - Delete `Pages/Invoices.razor`, `Pages/InvoiceDetail.razor`, `Pages/CreateInvoice.razor`, `Services/IInvoiceApiClient.cs`, `Services/InvoiceApiClient.cs`.
@@ -41,9 +43,15 @@ Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events,
 Delete `SeedSampleDataAsync` and its call in `MigrationWorker.cs` (plus dead usings). Role/permission seeding reads `Roles.Permissions` and adapts by itself.
 
 ## 7. Tests — two kinds
-- **Invoice-specific → delete**: `Domain.UnitTests/Invoices/`, `Application.UnitTests/Invoices/`, `IntegrationTests/InvoicePersistenceTests.cs`, `ApiTests/InvoiceApiFlowTests.cs` (the Aspire E2E — write one for your flow), and the UiTests flows that drive the invoice pages (the login test asserts the Invoices title).
-- **Invoice-as-fixture → port to your aggregate, don't delete the coverage**: `OutboxTests`, `AuditingInterceptorTests`, `SoftDeleteInterceptorTests`, `ConcurrencyTests`, `PaginationTests`, `TenancyTests`, `DomainEventSerializationTests` (also anchors the Domain assembly on `Invoice`), `DecoratorPipelineTests` (handler discovery is reflection-based but the sample inputs are invoice commands), `ApiTests/InProcess/EndpointContractTests` (401/403, RFC 9457, idempotency all ride invoice endpoints), `ContractSerializationTests`.
+- **Invoice-specific → delete**: `Domain.UnitTests/Invoices/` (keep the `StronglyTypedIdParsingTests` cases worth porting to your IDs), `Application.UnitTests/Invoices/`, `IntegrationTests/InvoicePersistenceTests.cs`, `ApiTests/InProcess/InvoiceContractTests.cs` and `InvoiceReadCacheTests.cs` (write the same two for your feature if it caches or answers conditional GETs), `ApiTests/InvoiceApiFlowTests.cs` (the Aspire E2E — write one for your flow), `ArchitectureTests/ContractMirrorTests.cs`'s `InvoiceStatus` fact, `ApiTests/Ui/InvoiceFormTests.cs`, and the UiTests flows that drive the invoice pages (the login test asserts the Invoices title).
+- **Invoice-as-fixture → port to your aggregate, don't delete the coverage**:
+  - Persistence and outbox: `OutboxTests`, `OutboxRetryTests` (its test handlers subscribe to `InvoicePaidDomainEvent`; `OutboxBackoffTests`/`OutboxOptionsTests` are invoice-free and stay), `AuditingInterceptorTests`, `SoftDeleteInterceptorTests`, `ConcurrencyTests`, `PaginationTests`, `SpecificationPagingTests`, `UtcConversionTests`, `TenancyTests`, `DomainEventSerializationTests` (also anchors the Domain assembly on `Invoice`).
+  - Pipeline: `DecoratorPipelineTests`, `UseCaseOutcomeTests` and their `PipelineHarness` (handler discovery is reflection-based, but the sample inputs are invoice commands and queries).
+  - HTTP contract: `EndpointContractTests`, `ProblemDetailsContractTests`, `CommitFailureTests`, `IdempotencyReplayTests`, `IdempotencyPostCommitTests`, `TenantIsolationTests` (401/403, the problem shape, the unit-of-work failures and idempotency all ride invoice endpoints), `ContractSerializationTests`, and `OpenApiDocumentTests` (its status-enum, money, conditional-GET, `Location` and paging facts name invoice operations: retarget each to an operation of yours that has the shape, or delete the fact when none does).
+  - UI (if included): `UiHarness` and the client tests that script invoice responses (`ApiCallTests`, `ApiResponsesTests`, `BearerTokenHandlerTests`, `NotificationServiceTests`, `ServerValidationTests`).
+  - Domain kernel: `DomainEventsWithoutHandlersTests`, `SharedKernelPrimitiveTests`.
 - `ArchitectureTests/ArchitectureRules.cs`: `DomainAssembly`/`ApiContractsAssembly` anchor on `Invoice`/`InvoiceDto` — re-anchor.
+- `grep -rl Invoice tests` afterwards lists anything this step missed.
 
 ## 8. Docs
 Delete `docs/features/invoices.md`; fix the mentions of the slice as the reference pattern in `AGENTS.md`, `.claude/rules/` and `.claude/skills/add-feature/`. A final `grep -ri invoice` catches stragglers (XML doc comments citing it as an example may simply be reworded).

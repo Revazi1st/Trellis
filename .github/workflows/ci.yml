@@ -28,9 +28,15 @@ jobs:
       # The official image rather than gitleaks-action: the action is free for personal repos but
       # requires a paid GITLEAKS_LICENSE for organisation-owned ones, which would turn this gate red
       # the day the repository moves. --redact keeps any finding out of the public log.
+      # Pinned like the actions: the digest of the v8.30.1 multi-arch index, so a re-pushed tag
+      # cannot change what CI runs. Dependabot does not read images named in a run script; to
+      # bump, take the new digest from "docker buildx imagetools inspect ghcr.io/gitleaks/gitleaks:<tag>"
+      # and re-run the scan over the tree and the full history before merging.
       - name: gitleaks
+        env:
+          GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
         run: |
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 \
+          docker run --rm -v "$PWD:/repo" "$GITLEAKS_IMAGE" \
             detect --source /repo --config /repo/.gitleaks.toml --redact --no-banner --verbose
 
   build-test:
@@ -40,9 +46,9 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # A template installed from a NuGet package loses the Unix executable bit, and the
-      # chmod post-action only runs when the host allows script post-actions. Restore it
-      # explicitly so generated projects work regardless.
+      # A template installed from a NuGet package loses the Unix executable bit. The template's
+      # chmod post-action restores it, but a host that skips post-actions (or a commit made on
+      # Windows) does not, so set it explicitly and generated projects work regardless.
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
 
@@ -60,6 +66,15 @@ jobs:
       - name: ADR link check
         run: ./scripts/check-adr-links.sh
 
+#if (TemplateSource)
+      # Template source only: TemplateSource is a constant that is false whenever dotnet new runs,
+      # so generated projects (which ship neither .template.config nor this script) never see this
+      # step. Here it keeps every template condition symbol declared and every toggle exposed, on
+      # every PR rather than only when the template config changes.
+      - name: Template toggle check
+        run: ./scripts/check-template-toggles.sh
+
+#endif
       - name: Build (warnings as errors)
         run: dotnet build Trellis.slnx --no-restore -c Release
 
@@ -67,12 +82,20 @@ jobs:
       # integration tests and the Aspire orchestration E2E both run here (ADR-0008).
       # Coverage is collected OUT of process (dotnet-coverage wraps the run): the in-process MTP
       # coverage extension aborts the xunit.v3 host, which is why coverage was absent for a while.
+      # eng/coverage.runsettings limits it to the solution's own production code: no test
+      # assemblies, no third-party packages that ship symbols, no migrations, no generated code.
       - name: Test (with coverage)
         env:
           RUN_ASPIRE_E2E: "1"
         run: |
           dotnet tool restore
-          dotnet dotnet-coverage collect -f cobertura -o coverage.cobertura.xml \
+          settings=()
+          if [ -f eng/coverage.runsettings ]; then
+            settings=(--settings eng/coverage.runsettings)
+          else
+            echo "::warning::eng/coverage.runsettings is missing: coverage also measures test assemblies, third-party packages and migrations (the Core gate below is unaffected)."
+          fi
+          dotnet dotnet-coverage collect "${settings[@]}" -f cobertura -o coverage.cobertura.xml \
             "dotnet test Trellis.slnx --no-build -c Release -- --report-trx --results-directory TestResults"
 
       - name: Upload coverage
@@ -80,6 +103,14 @@ jobs:
         with:
           name: coverage
           path: coverage.cobertura.xml
+          retention-days: 14
+
+      # A per-assembly table in the job summary, and a floor under the Core ring (src/Core:
+      # SharedKernel, Domain, Application), where the business rules live and tests are cheapest.
+      # Core measured 97.4% of 704 lines when the gate was introduced; 90 is the conservative floor
+      # below that. Raise it as coverage grows; never lower it to get a change through.
+      - name: Coverage summary and Core gate
+        run: python3 .github/scripts/coverage-summary.py coverage.cobertura.xml --min-core-line-rate 90
 
       # A flaky Testcontainers/Aspire run must not have to be reproduced blind.
       - name: Upload test results on failure
@@ -90,6 +121,108 @@ jobs:
           path: TestResults
           if-no-files-found: ignore
 
+  # The committed OpenAPI document is the API's public contract artifact (ADR-0013): regenerating
+  # it against the running app catches accidental wire-contract changes. A job of its own, not a
+  # step of the optional browser-test job, so every project keeps this gate whatever options
+  # created it.
+  api-contract:
+    name: API contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+#if (TemplateSource)
+      # The Redis blocks in this file are actionable conditionals: their directive lines start with
+      # a doubled hash, and dotnet new strips one leading hash from every line of the branch it
+      # keeps (a doubled hash becomes a single one). Here the Redis lines stay comments and only the
+      # PostgreSQL branch runs; a project generated with --use-redis gets the Redis branch instead.
+      # Keep every hash in those branches either the leading one or doubled: the engine strips any
+      # other single hash (check-template-toggles.sh enforces this).
+#endif
+##if (UseRedis)
+#      ## The API's HybridCache L2 (AddRedisDistributedCache in Program.cs) needs Redis, which
+#      ## docker-compose.yml starts under its redis profile on host port 6379.
+#      - name: Start PostgreSQL and Redis
+#        run: docker compose --profile redis up -d --wait postgres redis
+##else
+      - name: Start PostgreSQL
+        run: docker compose up -d --wait postgres
+##endif
+
+      - name: Build the API and the migration service
+        run: |
+          dotnet build src/Presentation/Api/Trellis.Api -c Release
+          dotnet build tools/Trellis.MigrationService -c Release
+
+      # The API's background services (outbox, data retention) query the schema from their first
+      # tick, so the database is migrated before the API starts.
+      - name: Migrate & seed
+        env:
+          DOTNET_ENVIRONMENT: Development
+        run: dotnet run --project tools/Trellis.MigrationService -c Release --no-build --no-launch-profile -- "--ConnectionStrings:trellis-db=Host=localhost;Port=5433;Database=trellis;Username=postgres;Password=postgres"
+
+      - name: Start the API
+        env:
+          # The OpenAPI document is mapped only in Development.
+          ASPNETCORE_ENVIRONMENT: Development
+##if (UseRedis)
+#          ## ConnectionStrings:cache, which AddRedisDistributedCache("cache") reads.
+#          ConnectionStrings__cache: localhost:6379
+##endif
+        run: |
+          mkdir -p "$RUNNER_TEMP/applogs"
+          dotnet run --project src/Presentation/Api/Trellis.Api -c Release --no-build --no-launch-profile -- \
+            "--ConnectionStrings:trellis-db=Host=localhost;Port=5433;Database=trellis;Username=postgres;Password=postgres" \
+            --urls http://localhost:5171 > "$RUNNER_TEMP/applogs/api.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -fsS http://localhost:5171/alive >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "::group::api.log"; cat "$RUNNER_TEMP/applogs/api.log" || true; echo "::endgroup::"
+          echo "::error::The API did not become ready (see the api.log group above)" && exit 1
+
+      - name: OpenAPI contract diff
+        run: |
+          ./scripts/export-openapi.sh http://localhost:5171
+          git diff --exit-code docs/api/openapi.v1.json || {
+            echo "::error::The API's OpenAPI document changed. If intentional, regenerate docs/api/openapi.v1.json (scripts/export-openapi.sh) and commit it."
+            exit 1
+          }
+
+  # The no-local-SDK path (scripts/dotnet.sh, ADR-0008) on a stock Linux Docker Engine, the host
+  # where it breaks most easily: Testcontainers started from inside the SDK container reach their
+  # sibling containers through host.docker.internal, which only Docker Desktop resolves unaided.
+  sdk-container:
+    name: SDK container
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Build the SDK image
+        run: docker build -t trellis-sdk:10.0 scripts/sdk-image
+
+      - name: Build (in the SDK container)
+        run: ./scripts/dotnet.sh build Trellis.slnx
+
+      - name: Integration tests (in the SDK container)
+        run: ./scripts/dotnet.sh test tests/Trellis.IntegrationTests
+
+#if (IncludeUiTests && IncludeUI)
+  # Browser tests against the real API and Web hosts. A generated project carries this job only
+  # when it was created with --include-ui-tests (and the UI); otherwise there is no UiTests project.
   ui-tests:
     name: Playwright UI
     runs-on: ubuntu-latest
@@ -105,8 +238,13 @@ jobs:
         with:
           global-json-file: global.json
 
+##if (UseRedis)
+#      - name: Start PostgreSQL and Redis
+#        run: docker compose --profile redis up -d --wait
+##else
       - name: Start PostgreSQL
         run: docker compose up -d --wait
+##endif
 
       - name: Build
         run: dotnet build Trellis.slnx -c Release
@@ -119,6 +257,10 @@ jobs:
       - name: Start API and Web
         env:
           ASPNETCORE_ENVIRONMENT: Development
+##if (UseRedis)
+#          ## ConnectionStrings:cache for the API's Redis L2; the web host does not read it.
+#          ConnectionStrings__cache: localhost:6379
+##endif
         run: |
           mkdir -p "$RUNNER_TEMP/applogs"
           # Capture each host's output: when readiness times out, the startup exception is the only
@@ -130,7 +272,7 @@ jobs:
           Services__api__http__0=http://localhost:5171 \
             dotnet run --project src/Presentation/UI/Trellis.UI.Web -c Release --no-build --no-launch-profile -- \
             --urls http://localhost:5170 > "$RUNNER_TEMP/applogs/web.log" 2>&1 &
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             curl -fsS http://localhost:5170/alive >/dev/null 2>&1 && curl -fsS http://localhost:5171/alive >/dev/null 2>&1 && exit 0
             sleep 2
           done
@@ -147,16 +289,7 @@ jobs:
           UI_TESTS_BASE_URL: http://localhost:5170
         run: dotnet test tests/Trellis.UiTests -c Release --no-build
 
-      # The committed OpenAPI document is the API's public contract artifact (ADR-0013):
-      # regenerating it against the running app catches accidental wire-contract changes.
-      - name: OpenAPI contract diff
-        run: |
-          ./scripts/export-openapi.sh http://localhost:5171
-          git diff --exit-code docs/api/openapi.v1.json || {
-            echo "::error::The API's OpenAPI document changed. If intentional, regenerate docs/api/openapi.v1.json (scripts/export-openapi.sh) and commit it."
-            exit 1
-          }
-
+#endif
   docs-drift:
     name: Docs drift
     runs-on: ubuntu-latest

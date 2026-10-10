@@ -4,7 +4,7 @@ using Trellis.SharedKernel.Results;
 
 namespace Trellis.Application.Features.Auth;
 
-/// <summary>Mints an access+refresh pair and persists the refresh token's hash. Shared by login and refresh.</summary>
+/// <summary>Mints an access+refresh pair and adds the refresh token's hash to the command's unit of work (committed with it). Shared by login and refresh.</summary>
 internal static class TokenIssuer
 {
     public static async Task<Result<AuthTokens>> IssueAsync(

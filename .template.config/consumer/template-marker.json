@@ -1,0 +1,37 @@
+{
+  "$comment": "Written by dotnet new when this solution was generated: the template, its version, the name and the options used. docs/upgrading.md regenerates from it, so keep it and do not edit it.",
+  "template": {
+    "package": "TEMPLATE-MARKER-PACKAGE",
+    "shortName": "TEMPLATE-MARKER-SHORT-NAME",
+    "version": "TEMPLATE-MARKER-VERSION",
+    "repository": "TEMPLATE-MARKER-REPOSITORY"
+  },
+  "name": "TEMPLATE-MARKER-NAME",
+  "options": {
+//#if (IncludeUI)
+    "include-ui": true,
+//#else
+    "include-ui": false,
+//#endif
+//#if (UseRedis)
+    "use-redis": true,
+//#else
+    "use-redis": false,
+//#endif
+//#if (UseSerilog)
+    "use-serilog": true,
+//#else
+    "use-serilog": false,
+//#endif
+//#if (UseMultitenancy)
+    "use-multitenancy": true,
+//#else
+    "use-multitenancy": false,
+//#endif
+//#if (IncludeUiTests)
+    "include-ui-tests": true
+//#else
+    "include-ui-tests": false
+//#endif
+  }
+}

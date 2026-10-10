@@ -9,7 +9,7 @@ namespace Trellis.Persistence.Interceptors;
 /// <summary>
 /// Stamps IAuditable entities from TimeProvider + ICurrentUser. Aggregate-root aware: adding, changing or
 /// removing a child entity also stamps its auditable root, because touching children IS modifying the aggregate.
-/// Registered last so it sees everything the other interceptors changed. Writes go through the entry API —
+/// Registered after the outbox and soft-delete interceptors so it sees everything they changed. Writes go through the entry API —
 /// DetectChanges has already run by interception time, so plain property sets on Unchanged/Modified entries
 /// would not be picked up.
 /// </summary>

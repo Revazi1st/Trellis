@@ -4,10 +4,17 @@
 
   // Reuses the same image the CLI scripts use: .NET SDK + docker CLI.
   // Keeping one image means the IDE and ./scripts/dotnet.sh behave identically.
+  // The Dockerfile COPYs nothing, so its own folder is the whole build context (".." would send
+  // the entire repository, build output included, to the engine on every image build).
   "build": {
     "dockerfile": "../scripts/sdk-image/Dockerfile",
-    "context": ".."
+    "context": "../scripts/sdk-image"
   },
+
+  // host.docker.internal (the connection strings below, TESTCONTAINERS_HOST_OVERRIDE, the
+  // "(dev container)" launch profiles) resolves on Docker Desktop by itself; on Linux Docker
+  // Engine only with this mapping to the host gateway.
+  "runArgs": ["--add-host=host.docker.internal:host-gateway"],
 
   // Match the mount path used by scripts/dotnet.sh so obj/ and artifacts/ stay
   // valid across both (project.assets.json records absolute paths).
@@ -16,6 +23,9 @@
 
   "mounts": [
     // Testcontainers integration tests and the Aspire orchestrator start sibling containers.
+    // The source is the socket as the ENGINE sees it: /var/run/docker.sock for Docker Desktop,
+    // Colima and OrbStack; rootless Docker or Podman on Linux need their own path here
+    // (docs/development.md, "Docker engines other than Docker Desktop").
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     // Share the NuGet cache with ./scripts/dotnet.sh — nothing is cached on the host.
     "source=trellis-nuget,target=/root/.nuget/packages,type=volume"

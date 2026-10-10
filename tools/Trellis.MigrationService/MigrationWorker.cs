@@ -1,8 +1,9 @@
 using System.Diagnostics;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Trellis.Application.Authorization;
+#if (UseMultitenancy)
+using Trellis.Application.Abstractions;
+#endif
 using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.Persistence;
@@ -34,7 +35,7 @@ internal sealed class MigrationWorker(
             AppDbContext context = services.GetRequiredService<AppDbContext>();
             await ApplyMigrationsAsync(context, stoppingToken);
 
-            await SeedRolesAndPermissionsAsync(services.GetRequiredService<RoleManager<IdentityRole<Guid>>>());
+            await IdentitySeed.EnsureRolesAndPermissionsAsync(services.GetRequiredService<RoleManager<IdentityRole<Guid>>>());
             await SeedAdminUserAsync(services.GetRequiredService<UserManager<ApplicationUser>>());
 
             // Demo invoices are a local-dev convenience only.
@@ -47,7 +48,8 @@ internal sealed class MigrationWorker(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Database migration failed");
+            logger.LogError(exception, "Database migration or seeding failed");
+            activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
             activity?.AddException(exception);
             Environment.ExitCode = 1;
         }
@@ -61,73 +63,77 @@ internal sealed class MigrationWorker(
         await strategy.ExecuteAsync(() => context.Database.MigrateAsync(cancellationToken));
     }
 
-    private static async Task SeedRolesAndPermissionsAsync(RoleManager<IdentityRole<Guid>> roleManager)
-    {
-        foreach ((string roleName, IReadOnlyList<string> permissions) in Roles.Permissions)
-        {
-            IdentityRole<Guid>? role = await roleManager.FindByNameAsync(roleName);
-            if (role is null)
-            {
-                role = new IdentityRole<Guid>(roleName) { Id = Guid.CreateVersion7() };
-                await roleManager.CreateAsync(role);
-            }
-
-            var existing = (await roleManager.GetClaimsAsync(role))
-                .Where(c => c.Type == AuthClaims.Permission)
-                .Select(c => c.Value)
-                .ToHashSet(StringComparer.Ordinal);
-
-            foreach (string permission in permissions.Where(p => !existing.Contains(p)))
-            {
-                await roleManager.AddClaimAsync(role, new Claim(AuthClaims.Permission, permission));
-            }
-        }
-    }
-
     private async Task SeedAdminUserAsync(UserManager<ApplicationUser> userManager)
     {
-        if (await userManager.FindByEmailAsync(seedOptions.AdminEmail) is not null)
-        {
-            return;
-        }
-
-        if (!environment.IsDevelopment() && seedOptions.UsesDefaultAdminPassword)
+        // The default-password guard applies only when the account is about to be created: an existing
+        // admin's password is never touched, so a rerun with the default left in place is harmless.
+        if (!environment.IsDevelopment()
+            && seedOptions.UsesDefaultAdminPassword
+            && await userManager.FindByEmailAsync(seedOptions.AdminEmail) is null)
         {
             throw new InvalidOperationException(
                 "Refusing to seed the well-known default admin password outside Development. "
                 + $"Set {SeedOptions.SectionName}__AdminPassword (and consider {SeedOptions.SectionName}__AdminEmail) for this environment.");
         }
 
-        var admin = new ApplicationUser
-        {
-            Id = Guid.CreateVersion7(),
-            UserName = seedOptions.AdminEmail,
-            Email = seedOptions.AdminEmail,
-            EmailConfirmed = true,
-        };
-
-        await userManager.CreateAsync(admin, seedOptions.AdminPassword);
-        await userManager.AddToRoleAsync(admin, Roles.Administrator);
+        // Throws, naming every Identity error, when Identity rejects the account (a password that fails
+        // its rules, a duplicate user name) — ExecuteAsync turns that into exit code 1, never "completed".
+        await IdentitySeed.EnsureAdministratorAsync(
+            userManager,
+            seedOptions.AdminEmail,
+            seedOptions.AdminPassword
+#if (UseMultitenancy)
+            , seedOptions.TenantId
+#endif
+            );
     }
 
+#if (!UseMultitenancy)
     private static async Task SeedSampleDataAsync(AppDbContext context, CancellationToken cancellationToken)
     {
         if (await context.Invoices.AnyAsync(cancellationToken))
         {
             return;
         }
+#else
+    private async Task SeedSampleDataAsync(AppDbContext context, CancellationToken cancellationToken)
+    {
+        // The worker has no request, so SystemTenantContext yields no tenant; the demo rows must
+        // belong to the seeded admin's tenant or the admin would never see them. AmbientTenant is
+        // what the "Tenant" filter (for the AnyAsync probe below), the TenantInterceptor and the
+        // outbox row for InvoiceIssued all read.
+        AmbientTenant.CurrentTenantId = seedOptions.TenantId;
+        try
+        {
+            await SeedSampleDataCoreAsync(context, cancellationToken);
+        }
+        finally
+        {
+            AmbientTenant.CurrentTenantId = null;
+        }
+    }
+
+    private static async Task SeedSampleDataCoreAsync(AppDbContext context, CancellationToken cancellationToken)
+    {
+        if (await context.Invoices.AnyAsync(cancellationToken))
+        {
+            return;
+        }
+#endif
 
         EmailAddress email = EmailAddress.Create("billing@sample.dev").Value;
         Currency usd = Currency.Create("USD").Value;
         Currency eur = Currency.Create("EUR").Value;
 
+        // Demo history: each invoice is issued "as of" a date before its due date, since Issue rejects a
+        // due date that is already past at the moment of issuing.
         Invoice overdue = Invoice.Create("Overdue Industries", email, usd).Value;
         overdue.AddLine("Consulting", Money.Create(1200m, usd).Value);
-        overdue.Issue(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
+        overdue.Issue(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero), now: new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero));
 
         Invoice paid = Invoice.Create("Prompt Payers Ltd", email, eur).Value;
         paid.AddLine("Design sprint", Money.Create(4800m, eur).Value);
-        paid.Issue(new DateTimeOffset(2026, 6, 15, 0, 0, 0, TimeSpan.Zero));
+        paid.Issue(new DateTimeOffset(2026, 6, 15, 0, 0, 0, TimeSpan.Zero), now: new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
         paid.MarkPaid(new DateTimeOffset(2026, 6, 20, 9, 30, 0, TimeSpan.Zero));
         paid.ClearDomainEvents();   // seeding is not a business payment — no receipt email
 

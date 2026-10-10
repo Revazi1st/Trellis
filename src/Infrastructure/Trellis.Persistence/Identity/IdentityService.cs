@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using Trellis.Application.Abstractions;
 using Trellis.Application.Authorization;
 using Trellis.Application.Features.Auth;
@@ -8,9 +11,24 @@ namespace Trellis.Persistence.Identity;
 
 /// <summary>ASP.NET Core Identity-backed implementation of the application's identity port.</summary>
 internal sealed class IdentityService(
+    AppDbContext context,
     UserManager<ApplicationUser> userManager,
-    RoleManager<IdentityRole<Guid>> roleManager) : IIdentityService
+    RoleManager<IdentityRole<Guid>> roleManager,
+    ILogger<IdentityService> logger) : IIdentityService
 {
+    /// <summary>The account was created but could not be given its role; both were rolled back.</summary>
+    private static readonly Error RoleAssignmentFailed = Error.Failure(
+        "Auth.RegistrationFailed",
+        "The account could not be set up, so nothing was created. Try again later.");
+
+    /// <summary>
+    /// Creates the account and gives it the Member role as one unit. UserManager saves after each call,
+    /// so on its own a failed role assignment would leave an account that signs in with no permissions
+    /// and whose e-mail can never register again; inside one transaction a failure — a reported
+    /// <see cref="IdentityResult"/> or an exception — rolls the account back with it. The transaction
+    /// runs inside the execution strategy because the retrying strategy refuses a user-initiated one
+    /// otherwise; a retried attempt starts from a clean change tracker.
+    /// </summary>
     public async Task<Result<Guid>> RegisterAsync(string email, string password, CancellationToken cancellationToken)
     {
         if (await userManager.FindByEmailAsync(email) is not null)
@@ -18,32 +36,85 @@ internal sealed class IdentityService(
             return Result.Failure<Guid>(AuthErrors.EmailAlreadyInUse);
         }
 
-        var user = new ApplicationUser { UserName = email, Email = email };
-        IdentityResult result = await userManager.CreateAsync(user, password);
+        IExecutionStrategy strategy = context.Database.CreateExecutionStrategy();
+        int attempt = 0;
 
-        if (!result.Succeeded)
+        return await strategy.ExecuteAsync(
+            async attemptToken =>
+            {
+                if (attempt++ > 0)
+                {
+                    context.ChangeTracker.Clear();
+                }
+
+                return await CreateMemberAsync(email, password, attemptToken);
+            },
+            cancellationToken);
+    }
+
+    private async Task<Result<Guid>> CreateMemberAsync(string email, string password, CancellationToken cancellationToken)
+    {
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        var user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+#if (UseMultitenancy)
+            // Self-registration provisions a fresh tenant; the registrant is its first user. Joining
+            // an existing tenant is an invitation flow this template does not ship (ADR-0022).
+            TenantId = Guid.CreateVersion7().ToString(),
+#endif
+        };
+        IdentityResult created = await userManager.CreateAsync(user, password);
+
+        if (!created.Succeeded)
         {
             return Result.Failure<Guid>(Error.Validation(
                 "Auth.RegistrationFailed",
-                string.Join(" ", result.Errors.Select(static e => e.Description))));
+                string.Join(" ", created.Errors.Select(static e => e.Description))));
         }
 
-        await userManager.AddToRoleAsync(user, Roles.Member);
+        IdentityResult assigned = await userManager.AddToRoleAsync(user, Roles.Member);
 
+        if (!assigned.Succeeded)
+        {
+            // The account goes with the role (CancellationToken.None: an abandoned rollback would leave the
+            // row to the connection's fate). The tracked rows go too, so nothing later in this scope
+            // mistakes them for persisted ones.
+            await transaction.RollbackAsync(CancellationToken.None);
+            context.ChangeTracker.Clear();
+            logger.LogWarning(
+                "Registration rolled back: assigning the {Role} role failed ({Errors})",
+                Roles.Member,
+                string.Join(", ", assigned.Errors.Select(static e => e.Code)));
+            return Result.Failure<Guid>(RoleAssignmentFailed);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
         return user.Id;
     }
 
+    /// <summary>
+    /// An unknown e-mail and a wrong password both answer <see cref="AuthErrors.InvalidCredentials"/>
+    /// after the same password-hash work. A locked account answers <see cref="AuthErrors.AccountLockedOut"/>
+    /// whatever password is supplied: the lockout check runs before the password check, so a 403 never
+    /// confirms a password (docs/threat-model.md accepts that it confirms the account exists).
+    /// </summary>
     public async Task<Result<AuthenticatedUser>> ValidateCredentialsAsync(string email, string password, CancellationToken cancellationToken)
     {
         ApplicationUser? user = await userManager.FindByEmailAsync(email);
 
         if (user is null)
         {
+            DummyPasswordHash.Verify(userManager.PasswordHasher, password);
+            SecurityEventLog.LoginFailedUnknownAccount(logger, email);
             return Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials);
         }
 
         if (await userManager.IsLockedOutAsync(user))
         {
+            SecurityEventLog.LoginRejectedLockedOut(logger, user.Id);
             return Result.Failure<AuthenticatedUser>(AuthErrors.AccountLockedOut);
         }
 
@@ -51,9 +122,15 @@ internal sealed class IdentityService(
         {
             // Counts toward lockout; Identity locks the account at the configured threshold.
             await userManager.AccessFailedAsync(user);
-            return Result.Failure<AuthenticatedUser>(await userManager.IsLockedOutAsync(user)
-                ? AuthErrors.AccountLockedOut
-                : AuthErrors.InvalidCredentials);
+
+            if (await userManager.IsLockedOutAsync(user))
+            {
+                SecurityEventLog.AccountLockedOut(logger, user.Id);
+                return Result.Failure<AuthenticatedUser>(AuthErrors.AccountLockedOut);
+            }
+
+            SecurityEventLog.LoginFailed(logger, user.Id);
+            return Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials);
         }
 
         await userManager.ResetAccessFailedCountAsync(user);
@@ -89,6 +166,13 @@ internal sealed class IdentityService(
             }
         }
 
-        return new AuthenticatedUser(user.Id, user.Email!, [.. permissions]);
+        return new AuthenticatedUser(
+            user.Id,
+            user.Email!,
+            [.. permissions]
+#if (UseMultitenancy)
+            , user.TenantId
+#endif
+            );
     }
 }

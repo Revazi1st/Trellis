@@ -1,6 +1,10 @@
 # Trellis — Agent Instructions
 
-Trellis is a rich-DDD, Clean Architecture **.NET 10** solution and a `dotnet new` template (packed from `eng/Trellis.TemplatePack`). Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
+Trellis is a rich-DDD, Clean Architecture **.NET 10** solution. Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
+<!--#if (TemplateSource) -->
+
+This repository is also the `dotnet new` template that generates such solutions (`.template.config/`, packed from `eng/Trellis.TemplatePack`). Template work has its own tools: the `add-toggle` skill, the source-only section of `.claude/rules/tools.md`, `scripts/check-template-toggles.sh` and `docs/releasing.md`. Files a generated project must not inherit as they are (README, CHANGELOG, the governance files) are excluded in `template.json`; the project gets the stubs in `.template.config/consumer/` instead.
+<!--#endif -->
 
 ## Commands
 
@@ -14,12 +18,12 @@ docker build -t trellis-sdk:10.0 scripts/sdk-image   # one-time
 ./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence
 ```
 
-**Aspire orchestration needs a real host, not the container** (ADR-0008): `aspire run` and the `Aspire.Hosting.Testing` E2E test need a local .NET 10 SDK or CI. `aspire run` brings up postgres + migrations + api + web. Seeded admin: `admin@trellis.dev` / `Admin123!`.
+**Aspire orchestration needs a real host, not the container** (ADR-0008): `aspire run` and the `Aspire.Hosting.Testing` E2E test need a local .NET 10 SDK or CI. `aspire run` brings up postgres + migrations + api + web. Seeded admin: `admin@example.com` / `Admin123!`.
 
 ## Dependency flow (architecture-test enforced)
 
 ```
-SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Api → Api.Common
+SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Api → Api.Common → Api.Contracts
 Api → Api.Contracts ← UI.Common ;  UI.Web → UI.Common
 ```
 
@@ -27,16 +31,16 @@ Dependencies point inward. **Infrastructure and Persistence are peers — never 
 
 ## How we build things
 
-- **CQRS, no mediator**: hand-rolled `ICommand(Handler)`/`IQuery(Handler)` + decorator pipeline (validation→logging→unit-of-work). Endpoints inject handlers directly.
+- **CQRS, no mediator**: hand-rolled `ICommand(Handler)`/`IQuery(Handler)` + decorator pipeline (logging→tracing→validation→unit-of-work). Endpoints inject handlers directly.
 - **Result, not exceptions**: return `Result`/`Result<T>`; the API maps errors to RFC 9457 problem details. Exceptions are for the truly unexpected only.
-- **Rich domain**: aggregates via `static Create(...) → Result<T>` + private EF ctor; value objects = sealed records mapped as EF complex types; hand-rolled strongly-typed IDs; domain events dispatched by a SaveChanges interceptor.
-- **Reference feature**: `src/Core/Trellis.Application/Features/Invoices` + `docs/features/invoices.md`. Copy it (use the `add-feature` skill).
-- **Reference integration**: calling a third party goes through `src/Infrastructure/Trellis.Infrastructure/ExternalApis/` + `docs/features/exchange-rates.md` (ADR-0020) — typed client behind a port returning `Result`, resilience overridden per client (ServiceDefaults' blanket handler cancels every attempt at 10s), options validated at boot.
+- **Rich domain**: aggregates via `static Create(...) → Result<T>` + private EF ctor; value objects = sealed records mapped as EF complex types; hand-rolled strongly-typed IDs; domain events written to the transactional outbox by a SaveChanges interceptor in the same transaction, then dispatched after commit by `OutboxProcessor` (at-least-once, per-handler checkpoints — ADR-0018, ADR-0023).
+- **Reference feature**: `src/Core/Trellis.Application/Features/Invoices` + `docs/features/invoices.md`. Copy it with the `add-feature` skill (a checklist of what the tests enforce); delete it with `remove-feature` once your own feature exists.
+- **Reference integration**: calling a third party goes through `src/Infrastructure/Trellis.Infrastructure/ExternalApis/` + `docs/features/exchange-rates.md` (ADR-0020) — typed client behind a port returning `Result`, resilience replaced per client — not added (ServiceDefaults' blanket handler cancels every attempt at 10s), registered by the API only (`AddOutboundIntegrations`), options validated at boot. The `add-integration` skill walks through it.
 
 Layer-specific conventions load automatically from `.claude/rules/` when you touch matching files. The "why" behind decisions is in `docs/adr/` — read `docs/INDEX.md` to find them.
 
 ## Boundaries
 
-- **Always**: run build + tests before finishing a change; update `docs/features/<x>.md` when a feature's behavior changes (CI enforces this).
+- **Always**: run build + tests before finishing a change; regenerate `docs/api/openapi.v1.json` after any endpoint or contract change (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` — `OpenApiSnapshotTests` fails until you do); update `docs/features/<feature>.md` in the same change as anything under that feature's folders (`Features/<Feature>/`, `Domain/<Feature>/`, `Api.Contracts/<Feature>/`, `ExternalApis/<Feature>/`, its EF configurations and UI pages), and `docs/threat-model.md` when authentication, hardening or identity code changes — `scripts/check-docs-drift.sh` enforces both in CI (the edit hook runs the same check).
 - **Ask first**: adding a NuGet package (check the LICENSE CEILINGS block in `Directory.Packages.props`); adding a project.
-- **Never**: reference Infrastructure↔Persistence; hand-edit files under `Migrations/`; throw for expected failures instead of returning a `Result`; commit secrets; add MediatR / AutoMapper / FluentAssertions / MassTransit (commercial — see `Directory.Packages.props`).
+- **Never**: reference Infrastructure↔Persistence; hand-edit files under `Migrations/`; throw for expected failures instead of returning a `Result`; commit secrets; add MediatR / AutoMapper / FluentAssertions / MassTransit / Moq (the license ceilings — see `Directory.Packages.props`, ADR-0011).

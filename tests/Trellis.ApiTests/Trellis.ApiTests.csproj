@@ -5,7 +5,22 @@
     <!-- Aliased: both the AppHost and the Api define a top-level Program; the in-process factory needs the Api's. -->
     <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api\Trellis.Api.csproj" Aliases="apihost" />
     <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api.Contracts\Trellis.Api.Contracts.csproj" />
+    <!--#if (IncludeUI) -->
+    <!-- The UI client tests (Ui/) drive UI.Common's typed clients and token provider over fake handlers. -->
+    <ProjectReference Include="..\..\src\Presentation\UI\Trellis.UI.Common\Trellis.UI.Common.csproj" />
+    <!-- The web host itself, for the Production-mode /Error test (Ui/WebHostTests). Aliased like the Api:
+         its top-level Program would otherwise clash with the Api's. -->
+    <ProjectReference Include="..\..\src\Presentation\UI\Trellis.UI.Web\Trellis.UI.Web.csproj" Aliases="webhost" />
+    <!--#endif -->
   </ItemGroup>
+
+  <!--#if (IncludeUI) -->
+  <PropertyGroup>
+    <!-- Defines IncludeUI for the template SOURCE so the Ui/ tests compile here.
+         Removed at 'dotnet new' time when the UI is excluded. -->
+    <DefineConstants>$(DefineConstants);IncludeUI</DefineConstants>
+  </PropertyGroup>
+  <!--#endif -->
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.Testing" />

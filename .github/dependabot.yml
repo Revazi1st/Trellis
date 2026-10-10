@@ -18,30 +18,61 @@ updates:
       #      Microsoft.Extensions.* >= 10.0.12, so an Aspire bump in isolation breaks restore.
       # Grouping them means one PR moves the pin and the requirement together. The same reasoning
       # covers IdentityModel/OpenApi, which are pinned only to satisfy AspNetCore's transitives.
+      # dotnet-ef is the local tool in .config/dotnet-tools.json (Dependabot's nuget ecosystem
+      # reads that manifest); it moves with the EF Core runtime it scaffolds migrations for.
       microsoft:
         patterns:
           - "Microsoft.AspNetCore.*"
-          - "Microsoft.EntityFrameworkCore.*"
+          - "Microsoft.EntityFrameworkCore*"   # no dot: the bare Microsoft.EntityFrameworkCore too
           - "Microsoft.Extensions.*"
           - "Microsoft.IdentityModel.*"
           - "Microsoft.OpenApi"
           - "Aspire.*"
           - "Npgsql.*"
+          - "dotnet-ef"
       opentelemetry:
         patterns: ["OpenTelemetry.*"]
+      # xunit.v3 and Microsoft.Testing.Extensions.TrxReport both build on Microsoft.Testing.Platform
+      # and must move together: a test-group PR that bumped xunit.v3 alone failed every test run with
+      # "TypeLoadException: Could not load type 'IDataConsumer'".
       test:
-        patterns: ["xunit*", "Shouldly", "NSubstitute", "Testcontainers*", "Respawn", "Bogus", "NetArchTest*"]
+        patterns:
+          - "xunit*"
+          - "Microsoft.Testing.*"
+          - "Microsoft.Playwright"
+          - "Shouldly"
+          - "NSubstitute"
+          - "Testcontainers*"
+          - "Respawn"
+          - "Bogus"
+          - "NetArchTest*"
     # Never let bots cross the license ceilings (ADR-0011).
     ignore:
       - dependency-name: "MediatR"
       - dependency-name: "AutoMapper"
       - dependency-name: "FluentAssertions"
       - dependency-name: "MassTransit"
+      - dependency-name: "Moq"
 
+  # One weekly PR for all action bumps: they are SHA pins with version comments, reviewed together.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The SDK pinned in global.json (setup-dotnet installs exactly this version in CI). Merging a
+  # bump raises the minimum SDK every contributor and generated project needs, so review it as
+  # such. Major versions (a new .NET, new target framework) are a deliberate migration, not a bump.
+  - package-ecosystem: dotnet-sdk
+    directory: "/"
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # The SDK image every build/test runs through (scripts/dotnet.sh, dev container, CI).
   - package-ecosystem: docker

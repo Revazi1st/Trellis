@@ -1,5 +1,7 @@
 @page "/login"
+@using Microsoft.Extensions.Options
 @inject IAuthApiClient AuthApi
+@inject IOptions<UiOptions> UiOptions
 @inject TokenAuthenticationStateProvider AuthState
 @inject NavigationManager Navigation
 
@@ -27,10 +29,21 @@
     }
 
     <button type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
-    <p class="hint">Seeded admin: <code>admin@trellis.dev</code> / <code>Admin123!</code> · No account? <NavLink href="register">Create one</NavLink></p>
+    <p class="hint">
+        @* Well-known local-dev credentials: advertised only where the host says it is a developer's machine. *@
+        @if (UiOptions.Value.ShowDevelopmentHints)
+        {
+            <span>Seeded admin: <code>admin@example.com</code> / <code>Admin123!</code> · </span>
+        }
+        No account? <NavLink href="register">Create one</NavLink>
+    </p>
 </EditForm>
 
 @code {
+    /// <summary>The page a protected page sent the user here from; honoured only when it is a page of this app.</summary>
+    [SupplyParameterFromQuery(Name = LoginRedirect.ReturnUrlParameter)]
+    public string? ReturnUrl { get; set; }
+
     private readonly Credentials _model = new();
     private string? _error;
     private bool _busy;
@@ -45,7 +58,7 @@
         if (result.IsSuccess)
         {
             await AuthState.SignInAsync(result.Value!.AccessToken, result.Value.RefreshToken);
-            Navigation.NavigateTo("invoices");
+            Navigation.NavigateTo(LoginRedirect.LocalReturnUrl(ReturnUrl) ?? "invoices");
         }
         else
         {

@@ -19,7 +19,12 @@ internal sealed class OutboxMessage
 
     public DateTimeOffset OccurredAtUtc { get; init; }
 
-    /// <summary>Not eligible for dispatch before this instant — exponential backoff between attempts.</summary>
+    /// <summary>
+    /// Not eligible for dispatch before this instant: the exponential back-off between attempts, or the
+    /// in-flight lease while a processor holds the row (ADR-0023). A claim stamps
+    /// <c>now + OutboxOptions.LeaseDuration</c> here, so every other processor sees the row as "not due"
+    /// until this one finishes it or dies — same column, same partial index, no extra state.
+    /// </summary>
     public DateTimeOffset NextAttemptAtUtc { get; set; }
 
     public DateTimeOffset? ProcessedAtUtc { get; set; }

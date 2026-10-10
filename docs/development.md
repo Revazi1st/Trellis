@@ -2,20 +2,25 @@
 
 ## Prerequisites
 
-- **Docker** (Desktop/OrbStack). All build/test runs through the SDK container — no local .NET SDK required for the inner loop.
-- A **local .NET 10 SDK** only if you want `aspire run` (the full orchestrated app; ADR-0008).
+| Tool | Needed for |
+|---|---|
+| **Docker** (Docker Desktop, OrbStack, Colima, Linux Docker Engine; Podman with caveats, see [below](#docker-engines-other-than-docker-desktop)) | everything: PostgreSQL, Testcontainers, the SDK container |
+| **.NET 10 SDK** on the host | `aspire run` and the Aspire E2E test (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container |
+| **Aspire CLI 13.5 or later**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK; the AppHost is on Aspire 13.5.4, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app |
+| **PowerShell** (`pwsh`) | installing the Playwright browsers for the optional UI tests |
 
-One-time: build the SDK image (base SDK + docker CLI, needed by Testcontainers/Aspire):
+No .NET SDK on the host? Build the SDK image once (base SDK + docker CLI, needed by
+Testcontainers/Aspire) and run every command through `./scripts/dotnet.sh`:
 
 ```bash
 docker build -t trellis-sdk:10.0 scripts/sdk-image
 ```
 
-## IDE: open in the dev container (recommended)
+## IDE: open in the dev container (no host SDK)
 
-This repo is **Docker-only** — there is no .NET SDK on the host, so an IDE cannot resolve types
-locally. `.devcontainer/devcontainer.json` fixes that by running the IDE backend *inside* the same
-SDK image the scripts use.
+Without a .NET SDK on the host an IDE cannot resolve types locally.
+`.devcontainer/devcontainer.json` fixes that by running the IDE backend *inside* the same SDK
+image the scripts use. With a host SDK you can skip this section and open the solution directly.
 
 **Rider**: open the solution → Rider detects `.devcontainer` and offers *"Reopen in Dev Container"*
 (or use **File → Remote Development → Dev Containers**). VS Code: *Dev Containers: Reopen in Container*.
@@ -37,6 +42,33 @@ orchestrator work from inside it too, and it shares the `trellis-nuget` package 
 ./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence
 ```
 
+### Docker engines other than Docker Desktop
+
+The SDK container starts the Testcontainers PostgreSQL as a *sibling* container through the
+engine's socket, then reaches its published port via `host.docker.internal`. Docker Desktop
+resolves that name by itself; everywhere else `scripts/dotnet.sh`, `scripts/ef.sh` and the dev
+container map it to the host gateway (`--add-host=host.docker.internal:host-gateway`).
+`scripts/dotnet.sh` picks the socket to mount like this:
+
+| Setup | What to set |
+|---|---|
+| Docker Desktop, OrbStack, Linux Docker Engine | nothing: `/var/run/docker.sock` |
+| Colima (macOS) | nothing, with or without `DOCKER_HOST`: on macOS the engine runs in a VM and resolves mount sources there, so the script always mounts the VM's `/var/run/docker.sock` |
+| Rootless Docker (Linux) | `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock`, which the rootless setup tells you to set anyway; the script mounts that path |
+| Podman 5+ (Linux) | `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock` (after `systemctl --user enable --now podman.socket`); the docker CLI then drives Podman, or set `DOCKER_BIN=podman`. Rootless Podman also needs `TESTCONTAINERS_RYUK_DISABLED=true`, as Testcontainers recommends |
+| Podman machine (macOS) | a rootful machine (`podman machine set --rootful`), its API socket in `DOCKER_HOST` (or `DOCKER_BIN=podman`), and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/run/podman/podman.sock`, the socket's path inside the VM |
+| A TCP endpoint (`DOCKER_HOST=tcp://…`) | nothing: the script passes `DOCKER_HOST` through and mounts no socket. The address must be reachable from inside a container, so not `127.0.0.1` |
+
+`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` is the socket path *as the engine sees it*. When set it
+overrides all of the above: the script mounts it and hands it to Testcontainers for its resource
+reaper. Every other `TESTCONTAINERS_*` variable in your shell is forwarded into the container, so
+the [Testcontainers recipes](https://dotnet.testcontainers.org/custom_configuration/) apply
+unchanged. The dev container mounts `/var/run/docker.sock`; for rootless Docker or Podman, change
+the `source=` of that mount in `.devcontainer/devcontainer.json` to your socket. This
+repository's own runs exercise two of these paths: Docker Desktop, and Linux Docker Engine in the
+`sdk-container` CI job (`scripts/dotnet.sh` on `ubuntu-latest`). The others follow the engines'
+and Testcontainers' documentation.
+
 ## Secrets
 
 `Authentication:SigningKey` gates API startup — missing or under 32 characters and the API
@@ -55,7 +87,7 @@ environment/secret store (see [deployment.md](deployment.md)).
 
 ## Running the app
 
-Seeded admin for every option below: `admin@trellis.dev` / `Admin123!`.
+Seeded admin for every option below: `admin@example.com` / `Admin123!`.
 
 ### From the IDE, in the dev container (no local SDK)
 
@@ -103,8 +135,15 @@ it forwards what `forwardPorts` declares, which is why 8080 is listed too. Never
 
 ### With a local SDK
 
-`aspire run` — PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire
-dashboard, all wired together. This is the best loop when a host SDK is available.
+```bash
+aspire run                                   # needs the Aspire CLI (Prerequisites)
+dotnet run --project tools/Trellis.AppHost   # the same app, no CLI needed
+```
+
+PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire dashboard, all
+wired together; open the dashboard URL either command prints. This is the best loop when a host
+SDK is available. The Aspire CLI reads the AppHost path from the committed `aspire.config.json`
+(`appHost.path`), the project settings file it would otherwise create on first use.
 
 ### Containerized smoke
 
@@ -112,10 +151,13 @@ See the `run-app` skill — Postgres + migration worker + API (+ web) as sibling
 
 ## Multi-tenancy (optional)
 
-Generate with `--use-multitenancy` to add the tenant seam: `ITenantContext` (resolved from the
-`tenant` claim, falling back to the `X-Tenant-Id` header), a `TenantId` shadow column stamped by
-`TenantInterceptor`, and a named `"Tenant"` EF query filter (opt out with
-`IgnoreQueryFilters(["Tenant"])`). See ADR-0019.
+Generate with `--use-multitenancy` to add the tenant seam: `ITenantContext`, resolved from the
+**`tenant` claim only** — minted at login from the user's persisted membership
+(`AspNetUsers.TenantId`); there is no tenant header, and a token without the claim is rejected.
+Every aggregate root automatically gets a `TenantId` shadow column stamped by `TenantInterceptor`
+and a named `"Tenant"` EF query filter (opt out with `IgnoreQueryFilters(["Tenant"])`). The seeded
+admin and the demo data are in tenant `default` (`Seed__TenantId`); a self-registered user gets a
+fresh tenant. See ADR-0019 and ADR-0022.
 
 Because this adds a column, **regenerate the initial migration** in the generated project:
 
@@ -127,12 +169,16 @@ Because this adds a column, **regenerate the initial migration** in the generate
 ## UI tests (optional)
 
 Generate with `--include-ui-tests` to add `tests/Trellis.UiTests` (Playwright). The project always
-builds, but the browser tests are **opt-in at run time** — they need real browsers and a running app:
+builds, but the browser tests are **opt-in at run time** — they need real browsers and a running app
+at a known address. `UI_TESTS_BASE_URL` names it (default `https://localhost:7170`, the web host's
+`https` launch profile). `aspire run` gives the web host a port of its own choosing, so either copy the
+`web` URL from the dashboard into `UI_TESTS_BASE_URL`, or run the projects from their launch profiles
+(migration job, then the API's and the web host's `https` profiles) so the default fits:
 
 ```bash
-aspire run                                    # in another terminal
-pwsh artifacts/bin/Trellis.UiTests/debug/playwright.ps1 install chromium
-RUN_UI_TESTS=1 dotnet test tests/Trellis.UiTests
+dotnet build tests/Trellis.UiTests                                        # creates playwright.ps1
+pwsh artifacts/bin/Trellis.UiTests/debug/playwright.ps1 install chromium  # once
+RUN_UI_TESTS=1 UI_TESTS_BASE_URL=http://localhost:5170 dotnet test tests/Trellis.UiTests   # the http profile
 ```
 
 Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-free
@@ -145,8 +191,35 @@ Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-f
 | Domain/Application UnitTests | nothing (in-memory) |
 | IntegrationTests | Docker (Testcontainers spins up PostgreSQL) |
 | ArchitectureTests | nothing |
-| ApiTests | `RUN_ASPIRE_E2E=1` + a local SDK or CI (Aspire orchestration) — otherwise the E2E skips; contract tests always run |
+| ApiTests | Docker (the in-process tests start PostgreSQL with Testcontainers); contract tests always run. The Aspire E2E also needs `RUN_ASPIRE_E2E=1` + a local SDK or CI, otherwise it skips. It drops the AppHost's postgres data volume, so it runs on a throwaway database and never touches your `aspire run` data |
 | UiTests (optional) | `RUN_UI_TESTS=1` + installed browsers + a running app — otherwise the browser test skips |
+
+## Vulnerable packages (NuGetAudit)
+
+Restore audits the whole package graph, transitive packages included, against the GitHub Advisory
+Database (`NuGetAudit`, `NuGetAuditMode` `all`, `NuGetAuditLevel` `low` in `Directory.Build.props`).
+An advisory surfaces as warning NU1901–NU1904 (low to critical), which Release and CI builds treat
+as an error, so an advisory published overnight can turn a green `main` red with no code change.
+That is the point; respond in this order:
+
+1. **Find the path.** The warning names the package and links the advisory;
+   `dotnet nuget why Trellis.slnx <package>` shows which reference pulls it in.
+2. **Upgrade** the direct reference in `Directory.Packages.props` when a newer version of it (or of
+   the package that depends on the vulnerable one) brings the fix.
+3. **Pin the transitive package** otherwise: a `<PackageVersion Include="<package>" Version="<patched>" />`
+   in `Directory.Packages.props` with a comment naming the advisory (the `Microsoft.OpenApi` entry
+   is the worked example). `CentralPackageTransitivePinningEnabled` applies the pin to the
+   transitive reference; delete it once the parent package depends on a fixed version itself.
+4. **Suppress only when no fixed version exists**, or the vulnerable code provably cannot be
+   reached: `<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-xxxx-xxxx-xxxx" />` in an
+   `ItemGroup` of `Directory.Build.props`, with a comment saying why it does not apply here and when
+   to look again. One advisory per entry, never a whole package.
+5. **Raise the level** (`NuGetAuditLevel` to `moderate`) only as a recorded decision (an ADR) for a
+   project that reviews low-severity advisories on a schedule rather than on the build that finds
+   them; keep `NuGetAuditMode` `all`. The template's own CI stays at `low` + `all`.
+
+NU1900 is different: the advisory data could not be downloaded (offline, feed outage). It is not
+an advisory; retry once the feed is reachable.
 
 ## Conventions
 

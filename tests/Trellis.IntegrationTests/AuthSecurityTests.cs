@@ -4,6 +4,7 @@ using Shouldly;
 using Trellis.Application.Abstractions;
 using Trellis.Application.Authorization;
 using Trellis.Application.Features.Auth;
+using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Results;
 using Xunit;
 
@@ -17,6 +18,9 @@ namespace Trellis.IntegrationTests;
 public sealed class AuthSecurityTests(DatabaseFixture database) : IntegrationTestBase(database)
 {
     private const string Password = "Sup3r-secret!";
+
+    private async Task CommitAsync(CancellationToken ct)
+        => (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).IsSuccess.ShouldBeTrue();
 
     /// <summary>Respawn wipes AspNetRoles between tests; registration needs the Member role to exist.</summary>
     private async Task<Guid> RegisterUserAsync(string email, CancellationToken ct)
@@ -85,12 +89,36 @@ public sealed class AuthSecurityTests(DatabaseFixture database) : IntegrationTes
         DateTimeOffset expires = Now.AddDays(7);
         await store.StoreAsync(userId, "hash-session-1", expires, ct);
         await store.StoreAsync(userId, "hash-session-2", expires, ct);
+        await CommitAsync(ct);   // the store only tracks; in the app the command's unit of work commits
 
         (await store.ConsumeAsync("hash-session-1", ct)).Value.ShouldBe(userId);
 
         // Replaying the consumed token is the stolen-token signal: it fails AND kills session 2.
         (await store.ConsumeAsync("hash-session-1", ct)).IsFailure.ShouldBeTrue();
         (await store.ConsumeAsync("hash-session-2", ct)).IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_stored_refresh_token_is_saved_by_the_unit_of_work_not_by_the_store()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        var store = Services.GetRequiredService<IRefreshTokenStore>();
+        Guid userId = await RegisterUserAsync("uow@test.dev", ct);
+
+        await store.StoreAsync(userId, "hash-uncommitted", Now.AddDays(7), ct);
+
+        // Ports never commit: until the command's unit of work does, no other scope can see the token…
+        using (IServiceScope before = CreateScope())
+        {
+            (await before.ServiceProvider.GetRequiredService<IRefreshTokenStore>().ConsumeAsync("hash-uncommitted", ct))
+                .IsFailure.ShouldBeTrue();
+        }
+
+        // …and once it has, the token is live.
+        await CommitAsync(ct);
+        using IServiceScope after = CreateScope();
+        (await after.ServiceProvider.GetRequiredService<IRefreshTokenStore>().ConsumeAsync("hash-uncommitted", ct))
+            .Value.ShouldBe(userId);
     }
 
     [Fact]
@@ -103,6 +131,7 @@ public sealed class AuthSecurityTests(DatabaseFixture database) : IntegrationTes
         DateTimeOffset expires = Now.AddDays(7);
         await store.StoreAsync(userId, "hash-logout", expires, ct);
         await store.StoreAsync(userId, "hash-other", expires, ct);
+        await CommitAsync(ct);
 
         await store.RevokeAsync("hash-logout", ct);
         await store.RevokeAsync("hash-logout", ct);   // double logout — no error, no side effects
@@ -113,6 +142,7 @@ public sealed class AuthSecurityTests(DatabaseFixture database) : IntegrationTes
         // semantics are verified on a fresh pair.
         await store.StoreAsync(userId, "hash-a", expires, ct);
         await store.StoreAsync(userId, "hash-b", expires, ct);
+        await CommitAsync(ct);
         int revoked = await store.RevokeAllAsync(userId, ct);
         revoked.ShouldBe(2);
         (await store.ConsumeAsync("hash-a", ct)).IsFailure.ShouldBeTrue();

@@ -1,25 +1,24 @@
-# Config for the CI secret scan (.github/workflows/ci.yml -> gitleaks). Extends the default rule set
-# and allowlists ONLY values that are committed on purpose: development placeholders and fixed test
-# keys. Real secrets belong in user-secrets locally and in the platform's secret store in every other
+# Config for the CI secret scan (.github/workflows/ci.yml -> gitleaks): the default rule set and,
+# deliberately, no allowlist. Nothing committed on purpose trips a default rule (checked with the
+# digest-pinned ghcr.io/gitleaks/gitleaks:v8.30.1 image over the tracked tree, the full history and
+# generated output): the development signing-key placeholder, the dev-only-<64 hex> key every
+# generated project gets in its place, the in-process test host's fixed key, the local-only
+# Postgres credentials of the compose stack and Testcontainers, and the generated OpenAPI document.
+# A bare random value of the generated key's length is flagged, which is the point.
+#
+# If a rule starts flagging a value committed on purpose, add the narrowest entry that silences
+# exactly that finding, with its reason, never a pattern that would also cover a real secret. Use
+# the [[allowlists]] array (the single [allowlist] table is the deprecated form), anchor the path
+# to the one file, and require path AND value so the file keeps being scanned for anything else:
+#
+#   [[allowlists]]
+#   description = "<why this exact value is safe to commit>"
+#   condition = "AND"
+#   paths = ['''^docs/api/openapi\.v1\.json$''']
+#   regexTarget = "match"
+#   regexes = ['''<the exact committed value>''']
+#
+# Real secrets belong in user-secrets locally and in the platform's secret store in every other
 # environment — see docs/threat-model.md.
 [extend]
 useDefault = true
-
-[allowlist]
-description = "Known-benign committed placeholders and test fixtures"
-paths = [
-    # Example/templated config carries <fill-me> placeholders, never real values.
-    '''.*\.example$''',
-    # The committed OpenAPI contract is generated output; any "key"-shaped string in it is a schema
-    # property name, not a credential.
-    '''docs/api/openapi\.v1\.json$''',
-]
-regexes = [
-    # The development signing key, which is committed deliberately and is unusable anywhere else:
-    # the API refuses to boot in any environment without its own configured key.
-    '''dev-only-signing-key-change-me-please-32-bytes-minimum!!''',
-    # The in-process API test host's fixed signing key.
-    '''in-process-test-signing-key-32-chars-minimum!!''',
-    # Local-only Postgres credentials for the dev compose stack and Testcontainers.
-    '''Username=postgres;Password=postgres''',
-]

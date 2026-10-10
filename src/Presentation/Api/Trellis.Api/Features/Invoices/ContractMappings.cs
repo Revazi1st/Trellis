@@ -17,7 +17,8 @@ internal static class ContractMappings
             response.CustomerName,
             response.CustomerEmail,
             response.Currency,
-            response.Status,
+            // By name: the Contracts enum mirrors the domain's member for member (an architecture test holds that).
+            Enum.Parse<InvoiceStatus>(response.Status),
             response.DueDate,
             response.PaidAtUtc,
             response.Total,

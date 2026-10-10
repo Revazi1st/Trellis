@@ -14,4 +14,11 @@ public interface IIdentityService
 }
 
 /// <summary>An authenticated principal with the permissions aggregated from its roles.</summary>
-public sealed record AuthenticatedUser(Guid Id, string Email, IReadOnlyList<string> Permissions);
+public sealed record AuthenticatedUser(
+    Guid Id,
+    string Email,
+    IReadOnlyList<string> Permissions
+#if (UseMultitenancy)
+    , string TenantId
+#endif
+    );

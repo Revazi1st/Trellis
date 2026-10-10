@@ -12,6 +12,12 @@ namespace Trellis.Persistence.Maintenance;
 /// Deletes expired bookkeeping rows on a timer: processed/dead-lettered outbox messages, stale
 /// idempotency keys, and dead refresh tokens. Without it all three tables grow without bound.
 /// Set-based ExecuteDelete — no entities are tracked. Safe to run on every replica.
+/// <para>
+/// Pending outbox rows are never swept, however old: a pending row is an event whose handlers have
+/// not all run yet, and deleting it would drop a side effect silently. Only the terminal states
+/// (Processed, DeadLettered) age out. <c>DataRetentionJanitorTests</c> pins every predicate at its
+/// cutoff, one second either side.
+/// </para>
 /// </summary>
 internal sealed class DataRetentionJanitor(
     IServiceScopeFactory scopeFactory,
@@ -21,25 +27,43 @@ internal sealed class DataRetentionJanitor(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!await DelayAsync(options.InitialDelay, stoppingToken))
+        {
+            return;
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await SweepAsync(stoppingToken);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
             {
-                logger.LogError(exception, "Data-retention sweep failed");
+                // Warning, not Error: the next sweep is already scheduled and retries the same deletes
+                // (log-level policy: a scheduled retry is a Warning). A sweep that keeps failing shows
+                // up as this line repeating every SweepInterval.
+                logger.LogWarning(exception, "Data-retention sweep failed; retrying in {SweepInterval}", options.SweepInterval);
             }
 
-            try
+            if (!await DelayAsync(options.SweepInterval, stoppingToken))
             {
-                await Task.Delay(options.SweepInterval, stoppingToken);
+                return;
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+        }
+    }
+
+    /// <summary>Waits on the injected clock (tests drive it with a fake); false when the host is stopping.</summary>
+    private async Task<bool> DelayAsync(TimeSpan delay, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await Task.Delay(delay, timeProvider, stoppingToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            return false;
         }
     }
 

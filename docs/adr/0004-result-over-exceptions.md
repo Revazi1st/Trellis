@@ -1,7 +1,8 @@
 # ADR-0004: Result pattern over exceptions for expected failures
 
-- **Status**: accepted
+- **Status**: accepted — the HTTP mapping paragraph is superseded by ADR-0024 (problem shape v2); the Result decision stands
 - **Date**: 2026-07-14
+- **Amended**: 2026-10-08 — the unit of work sits inside the Result boundary; the HTTP shape moved to ADR-0024 (see *Amendment* below)
 
 ## Context
 
@@ -20,3 +21,22 @@ At the HTTP boundary, `Api.Common/Results/CustomResults.Problem(Error)` maps `Er
 - Failure is part of the type — callers must `Match`/branch; no silent swallow.
 - One translation seam (`CustomResults.Problem`) owns Result→HTTP; endpoints stay `result.IsSuccess ? TypedResults.X : CustomResults.Problem`.
 - No exceptions-as-flow cost; the global handler surface is small.
+
+## Amendment (2026-10-08): the unit of work sits inside the Result boundary; the HTTP shape is ADR-0024's
+
+Two corrections to the text above, recorded here because ADRs are immutable (ADR-0001):
+
+- **The unit of work sits inside the Result boundary.** The decision originally stopped at the handler:
+  a stale concurrency token was an EF exception caught by a dedicated exception handler on its way out.
+  That put one expected failure on the exception path this ADR forbids. `IUnitOfWork.CommitAsync` now
+  returns `Result`; a stale `xmin` is `UnitOfWorkErrors.ConcurrencyConflict` (`Concurrency.Conflict`), the
+  UnitOfWork decorator propagates it like any other failure, and the endpoint maps it through
+  `CustomResults.Problem` (409). There is no concurrency exception handler, and nothing in Presentation
+  catches EF exceptions. The one `IExceptionHandler` left for faults is the opaque 500; a request the
+  framework could not bind (malformed JSON, an unparsable id) is a `BadHttpRequestException` answered as
+  a 400 problem by its own handler — still not an expected *domain* failure, so still not a Result.
+- **The HTTP mapping paragraph is superseded by ADR-0024.** `CustomResults.Problem(Error)` remains the
+  single Result → HTTP seam and the `ErrorType` → status table is unchanged, but the document it writes
+  — human `title`, `code`/`type`/`instance`/`correlationId` on every problem, `errors[]` of
+  `{field, code, description}` on every Result-produced 400 — is specified there, together with the
+  catalogue and the single writer for the non-Result paths.

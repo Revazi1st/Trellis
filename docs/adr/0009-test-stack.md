@@ -20,7 +20,7 @@ The template needs a full test pyramid whose libraries are all free for commerci
 | E2E | **Aspire.Hosting.Testing** | Boots the real AppHost; opt-in via `RUN_ASPIRE_E2E=1` (ADR-0008) |
 | Architecture | **NetArchTest.eNhancedEdition** | Maintained fork (original NetArchTest.Rules is dead since 2021); simple fluent API, xUnit-v3-agnostic |
 
-The pyramid: `Domain.UnitTests` (pure invariants) · `Application.UnitTests` (handlers + decorator pipeline through the real DI container, faked ports) · `ArchitectureTests` (layer rules) · `IntegrationTests` (real Postgres) · `ApiTests` (E2E + always-on contract-serialization guards).
+The pyramid: `Domain.UnitTests` (pure invariants) · `Application.UnitTests` (handlers + decorator pipeline through the real DI container, faked ports) · `ArchitectureTests` (layer rules and conventions) · `IntegrationTests` (real Postgres) · `ApiTests` (the in-process HTTP pipeline via `WebApplicationFactory` + Testcontainers, contract-serialization guards, the UI clients under `ApiTests/Ui`, and the opt-in Aspire E2E) · `UiTests` (Playwright, only with `--include-ui-tests`, opt-in at run time).
 
 **ArchitectureTests** enforce: SharedKernel depends on no other layer; Domain only on SharedKernel; Application not on Infrastructure/Persistence/EF/ASP.NET; **Infrastructure ∤ Persistence and Persistence ∤ Infrastructure** (the peer rule); no inner layer on Presentation; Api.Contracts is dependency-free; command/query handlers are sealed and internal.
 

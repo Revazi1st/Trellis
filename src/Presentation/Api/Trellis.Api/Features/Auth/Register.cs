@@ -10,14 +10,19 @@ namespace Trellis.Api.Features.Auth;
 
 internal sealed class Register : IEndpoint
 {
-    public static void Map(IEndpointRouteBuilder app) => app
+    public static RouteHandlerBuilder Map(IEndpointRouteBuilder app) => app
         .MapPost("auth/register", Handle)
         .AllowAnonymous()
         .RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)
+        // Result statuses the shape cannot infer on an anonymous endpoint (ADR-0025): the transformer gives them the problem body.
+        .Produces(StatusCodes.Status403Forbidden)
+        .Produces(StatusCodes.Status409Conflict)
         .WithTags(AuthEndpoints.Tag)
         .WithSummary("Create a new account")
         .WithDescription(
-            "Creates a new account with the default member role. The account can sign in immediately; permissions come from its roles.");
+            "Creates a new account with the default member role when self-registration is open (Registration:Mode = Open). "
+            + "The default, Closed, answers 403 Auth.RegistrationClosed and creates nothing. "
+            + "A new account can sign in immediately; permissions come from its roles.");
 
     private static async Task<Results<Ok<RegisterResponse>, ProblemHttpResult>> Handle(
         RegisterRequest request,

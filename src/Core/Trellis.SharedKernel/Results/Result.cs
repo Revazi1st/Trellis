@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-
 namespace Trellis.SharedKernel.Results;
 
 /// <summary>Outcome of an operation that can fail. Failures carry an <see cref="Error"/>; exceptions are reserved for the truly exceptional (ADR-0004).</summary>
@@ -19,7 +17,6 @@ public class Result
 
     public bool IsSuccess { get; }
 
-    [MemberNotNullWhen(false, nameof(IsSuccess))]
     public bool IsFailure => !IsSuccess;
 
     public Error Error { get; }
@@ -31,6 +28,9 @@ public class Result
     public static Result Failure(Error error) => new(false, error);
 
     public static Result<TValue> Failure<TValue>(Error error) => new(default, false, error);
+
+    /// <summary>Lets a handler <c>return SomeErrors.X;</c> for a non-generic <see cref="Result"/>, as <see cref="Result{TValue}"/> already allows.</summary>
+    public static implicit operator Result(Error error) => Failure(error);
 
     /// <summary>
     /// Success when every result succeeded; otherwise a single error carrying ALL the failures

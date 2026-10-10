@@ -16,11 +16,12 @@ jobs:
     name: Analyze (C#)
     runs-on: ubuntu-latest
     # Code scanning is a GitHub Advanced Security feature: free for PUBLIC repositories, paid for
-    # private ones. While this repo is private the analysis itself succeeds but the SARIF upload
-    # fails with "Code scanning is not enabled for this repository", turning every scheduled run
-    # red (and mailing the owner weekly). Gate on visibility instead of deleting the workflow:
-    # it stays dormant while private and starts working by itself the moment the repo goes public.
-    if: github.event.repository.visibility == 'public'
+    # private ones. Without it the analysis itself succeeds but the SARIF upload fails with "Code
+    # scanning is not enabled for this repository", turning every scheduled run red (and mailing
+    # the owner weekly). So the job runs on a public repository, and on a private one only once
+    # code scanning is licensed and switched on there and the CODEQL_ENABLED repository variable
+    # (Settings > Secrets and variables > Actions > Variables) is set to true.
+    if: github.event.repository.visibility == 'public' || vars.CODEQL_ENABLED == 'true'
     timeout-minutes: 45
     permissions:
       security-events: write
@@ -36,6 +37,9 @@ jobs:
         with:
           languages: csharp
           build-mode: manual
+          # The default suite plus the security-extended queries (more coverage, slightly more
+          # false positives); findings land in the Security tab.
+          queries: security-extended
       - name: Build
         run: dotnet build Trellis.slnx -c Release
       - name: Analyze

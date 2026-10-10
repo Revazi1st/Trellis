@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-07-14
+- **Amended**: 2026-10-08 — pipeline order and outcome logging (see *Amendment* below)
 
 ## Context
 
@@ -11,7 +12,7 @@ CQRS use cases need a dispatch mechanism. MediatR is the mainstream choice, but 
 
 Hand-roll the CQRS contracts in `SharedKernel.Messaging`: `ICommand`, `ICommand<TResponse>`, `IQuery<TResponse>`, and `ICommandHandler<>`/`IQueryHandler<>` returning `Result`/`Result<T>`. **Endpoints inject the handler interface directly — there is no mediator/dispatcher.**
 
-Cross-cutting concerns are DI-registered open-generic decorators (`SharedKernel.Decorators`): **Validation → Logging → UnitOfWork → handler**. Registration is automatic via **Scrutor** (`.Scan(...)` for handlers + `.Decorate(...)` for the pipeline) in `Application/DependencyInjection.cs` — one place, no per-handler DI lines.
+Cross-cutting concerns are DI-registered open-generic decorators (`SharedKernel.Decorators`) wrapping the handler; the order first recorded here ran validation outermost, then logging, then the unit of work. Registration is automatic via **Scrutor** (`.Scan(...)` for handlers + `.Decorate(...)` for the pipeline) in `Application/DependencyInjection.cs` — one place, no per-handler DI lines. *(Order superseded by the 2026-10-08 amendment below: **Logging → Tracing → Validation → UnitOfWork → handler**.)*
 
 ## Consequences
 
@@ -19,3 +20,7 @@ Cross-cutting concerns are DI-registered open-generic decorators (`SharedKernel.
 - The one place DIY would be worse than a library — open-generic decoration — uses Scrutor (MIT, ~40KB), not hand-rolled.
 - Adding a use case = a command/query + a sealed handler + a validator; it is picked up by the scan with no wiring (the `add-feature` skill scaffolds it).
 - Direct handler injection makes the call graph explicit for humans and AI agents.
+
+## Amendment (2026-10-08): Logging → Tracing → Validation → UnitOfWork → handler
+
+The original order above put Validation outermost, so a rejected request returned before Logging and Tracing ran: no log line, no span. The pipeline is now **Logging → Tracing → Validation → UnitOfWork → handler** (queries skip UnitOfWork), registered with `TryDecorate` so a project with no queries (or no commands) still boots. Every invocation writes exactly one outcome line and one span; the log level follows the outcome class — Information for success and for classified expected failures (Validation, NotFound, Conflict, Unauthorized, Forbidden), Warning for an unclassified `ErrorType.Failure`, Error only for an exception that ends the use case. `IUnitOfWork.CommitAsync` returns `Result`, so a stale concurrency token travels through the pipeline as a Conflict outcome instead of an exception (ADR-0004). The decision above — hand-rolled contracts, Scrutor decoration, direct handler injection — is unchanged.

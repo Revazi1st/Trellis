@@ -19,3 +19,4 @@ Consumers: `Api` binds them in endpoints and maps them to/from Application comma
 - Contracts stay free of domain types and behavior; mapping Application responses → contracts is explicit in the endpoints (`ContractMappings`).
 - A future public client SDK can ship this assembly as-is.
 - API versioning is handled by `Asp.Versioning` (URL segment, `/api/v{version:apiVersion}`, supported versions reported in a header). Adding a v2 is additive: a new version on the set plus versioned contract namespaces — the contracts assembly is unversioned by design and grows sibling namespaces.
+- Per-version OpenAPI document generation, the problem schema generated from these records, and the snapshot gate on the committed `docs/api/openapi.v1.json`: ADR-0025.

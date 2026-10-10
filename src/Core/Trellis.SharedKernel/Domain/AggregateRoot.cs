@@ -1,6 +1,6 @@
 namespace Trellis.SharedKernel.Domain;
 
-/// <summary>Consistency boundary. Raise domain events from state transitions; the persistence layer dispatches them on SaveChanges.</summary>
+/// <summary>Consistency boundary. Raise domain events from state transitions; the persistence layer writes them to the outbox in the same SaveChanges and the outbox processor dispatches them after the commit (ADR-0018).</summary>
 public abstract class AggregateRoot<TId> : Entity<TId>, IHasDomainEvents
     where TId : struct, IStronglyTypedId<TId>
 {

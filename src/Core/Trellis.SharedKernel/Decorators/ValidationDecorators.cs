@@ -5,7 +5,11 @@ using Trellis.SharedKernel.Results;
 
 namespace Trellis.SharedKernel.Decorators;
 
-/// <summary>Runs every registered FluentValidation validator for the message; short-circuits to a <see cref="ValidationError"/> without invoking the handler.</summary>
+/// <summary>
+/// Runs every registered FluentValidation validator for the message; short-circuits to a
+/// <see cref="ValidationError"/> without invoking the handler (or, for a command, the unit of work).
+/// Sits inside Logging and Tracing, so a rejected request still gets its outcome line and its span.
+/// </summary>
 public static class ValidationDecorators
 {
     public sealed class CommandHandler<TCommand>(
@@ -72,6 +76,26 @@ public static class ValidationDecorators
 
         return failures.Length == 0
             ? null
-            : new ValidationError([.. failures.Select(static f => Error.Validation(f.PropertyName, f.ErrorMessage))]);
+            : new ValidationError([.. failures.Select(static f => new FieldError(f.PropertyName, CodeFor(f), f.ErrorMessage))]);
+    }
+
+    /// <summary>
+    /// FluentValidation's <c>ErrorCode</c> defaults to the validator type name; strip the suffix so the
+    /// wire says <c>Validation.NotEmpty</c>, let an explicit <c>.WithErrorCode("Invoice.DueDateInPast")</c>
+    /// through verbatim, and name a failure without any code <c>Validation.Invalid</c>.
+    /// </summary>
+    internal static string CodeFor(ValidationFailure failure)
+    {
+        const string BuiltInSuffix = "Validator";
+        string? code = failure.ErrorCode;
+
+        if (string.IsNullOrEmpty(code))
+        {
+            return "Validation.Invalid";
+        }
+
+        return code.EndsWith(BuiltInSuffix, StringComparison.Ordinal) && code.Length > BuiltInSuffix.Length
+            ? "Validation." + code[..^BuiltInSuffix.Length]
+            : code;
     }
 }
