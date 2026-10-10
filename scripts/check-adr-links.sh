@@ -5,6 +5,8 @@
 # if the template's own repository holds an ADR numbered 0100 or more, or if a 'paths:' glob in
 # .claude/rules/*.md matches zero files (a renamed directory silently unloads a rule).
 set -euo pipefail
+# Under pipefail, "echo … | grep -q" is a race: grep exits on the first match, echo can get EPIPE and
+# the pipeline fails although the match was found. Membership tests use here-strings instead.
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 fail=0
@@ -16,7 +18,7 @@ refs=$(grep -rhoE 'ADR-[0-9]{4}' --include='*.md' --include='*.cs' --include='*.
 existing=$(find docs/adr -name '*.md' -exec basename {} \; | grep -oE '^[0-9]{4}' | sort -u)
 
 for n in $refs; do
-  if ! echo "$existing" | grep -qx "$n"; then
+  if ! grep -qx "$n" <<< "$existing"; then
     echo "::error::ADR-$n is referenced but docs/adr/$n-*.md does not exist"
     fail=1
   fi
@@ -84,7 +86,7 @@ for f in .claude/rules/*.md; do
     fail=1
   elif [ -n "$globs" ]; then
     while IFS= read -r glob; do
-      if ! printf '%s' "$entry" | grep -qF "\`$glob\`"; then
+      if ! grep -qF "\`$glob\`" <<< "$entry"; then
         echo "::error::docs/INDEX.md lists $f without its paths glob '$glob' (keep the entry in step with the frontmatter)"
         fail=1
       fi

@@ -115,7 +115,7 @@ done || true)"
 
 for feature in $(printf '%s\n' "$owned" | cut -f1 | grep -vx '\*' | sort -u); do
   doc="docs/features/$(kebab "$feature").md"
-  if ! printf '%s\n' "$changed" | grep -qxF "$doc"; then
+  if ! grep -qxF "$doc" <<< "$changed"; then
     if [ -f "$doc" ]; then
       report "The $feature feature changed without a $doc update:"
     else
@@ -134,7 +134,7 @@ if [ -n "$shared" ] && [ -z "$feature_doc_changed" ]; then
 fi
 
 security_changed="$(printf '%s\n' "$changed" | grep -E '^src/.*/(Authentication|Hardening|Identity|Features/Auth)/' || true)"
-if [ -n "$security_changed" ] && ! printf '%s\n' "$changed" | grep -qxF 'docs/threat-model.md'; then
+if [ -n "$security_changed" ] && ! grep -qxF 'docs/threat-model.md' <<< "$changed"; then
   report "Authentication, hardening or identity code changed without a docs/threat-model.md update:"
   printf '%s\n' "$security_changed" | sed 's/^/  /'
   fail=1
