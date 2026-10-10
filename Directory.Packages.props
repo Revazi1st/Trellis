@@ -100,7 +100,7 @@
     <!-- TRX reports for CI failure artifacts (out-of-process safe, unlike the in-process coverage extension).
          Version MUST track the Microsoft.Testing.Platform that xunit.v3 runs on, or the test host dies with
          "Could not load type 'IDataConsumer' from Microsoft.Testing.Platform". xunit.v3 4.x ships platform
-         2.x, so 4.0.1 and 2.4.1 move together — never bump one alone. -->
+         2.x (4.0.2 pulls platform 2.5.1), so 4.0.2 and 2.5.1 move together — never bump one alone. -->
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
