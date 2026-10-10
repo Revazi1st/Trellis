@@ -30,7 +30,7 @@ next, and the GitHub release is published only after the push succeeded.
    `Trellis.Templates` package id.
 2. **Trusted publisher on nuget.org** (no API key is stored anywhere). Under your account's
    *Trusted Publishing* page, add a GitHub Actions policy: repository owner `Revazi1st`,
-   repository `trellis`, workflow file `release.yml`, environment `nuget.org`.
+   repository `Trellis`, workflow file `release.yml`, environment `nuget.org`.
 3. **`NUGET_USER` repository variable** — the nuget.org **profile name** (not the e-mail) that
    owns the policy: *Settings → Secrets and variables → Actions → Variables*. `NuGet/login`
    exchanges the workflow's OIDC token for a short-lived API key on behalf of that user.
@@ -59,7 +59,7 @@ next, and the GitHub release is published only after the push succeeded.
    or `gh workflow run release.yml --ref main -f dry_run=true -f version=X.Y.Z`. Approve the
    `nuget.org` environment when it asks. Then check the run is green, the draft release's notes
    and attached `.nupkg`, and the provenance:
-   `gh attestation verify Trellis.Templates.X.Y.Z.nupkg --repo Revazi1st/trellis` (download the
+   `gh attestation verify Trellis.Templates.X.Y.Z.nupkg --repo Revazi1st/Trellis` (download the
    asset from the draft first).
 4. **Tag and push.** Tag the `main` commit the dry run used, annotated:
    `git tag -a vX.Y.Z -m "vX.Y.Z" <sha>` then `git push origin vX.Y.Z`. The push starts the real
