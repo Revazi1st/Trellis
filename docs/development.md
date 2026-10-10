@@ -6,7 +6,7 @@
 |---|---|
 | **Docker** (Docker Desktop, OrbStack, Colima, Linux Docker Engine; Podman with caveats, see [below](#docker-engines-other-than-docker-desktop)) | everything: PostgreSQL, Testcontainers, the SDK container |
 | **.NET 10 SDK** on the host | `aspire run` and the Aspire E2E test (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container |
-| **Aspire CLI 13.5 or later**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK; the AppHost is on Aspire 13.5.4, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app |
+| **Aspire CLI 13.5 or later**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK; the AppHost is on Aspire 13.6.1, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app |
 | **PowerShell** (`pwsh`) | installing the Playwright browsers for the optional UI tests |
 
 No .NET SDK on the host? Build the SDK image once (base SDK + docker CLI, needed by

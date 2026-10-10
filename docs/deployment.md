@@ -22,7 +22,7 @@ properties (`-p:ContainerRegistry=… -p:ContainerRepository=… -p:ContainerIma
 
 The AppHost declares `AddDockerComposeEnvironment("compose")`, so `aspire publish` (a local SDK and
 the Aspire CLI, ADR-0008) writes a `docker-compose.yaml` and an `.env` from the same orchestration
-model `aspire run` uses. What the publish step of Aspire 13.5 writes, and what it leaves to you:
+model `aspire run` uses. What the publish step of Aspire 13.6 writes, and what it leaves to you:
 
 | Service | As published | Before production |
 |---|---|---|
