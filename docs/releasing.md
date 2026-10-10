@@ -37,9 +37,10 @@ next, and the GitHub release is published only after the push succeeded.
 4. **`nuget.org` environment** — *Settings → Environments → New environment*, named exactly
    `nuget.org`. Add yourself (or the release owners) as required reviewers, and limit deployments
    to the `main` branch and `v*` tags (dry runs run on `main`, releases on tags).
-5. **A public repository.** Build-provenance attestations are available to public repositories
-   on every plan; a private repository needs GitHub Enterprise Cloud, otherwise the `Attest build
-   provenance` step fails, and the release with it.
+5. **A public repository (for attestation).** Build-provenance attestations are available to
+   public repositories on every plan; a private repository needs GitHub Enterprise Cloud. On any
+   other private repository the `Attest build provenance` step is skipped with a warning and the
+   release goes out unattested, so `gh attestation verify` finds nothing for that package.
 6. **The `docs-not-needed` label.** The CI `Docs drift` job (`scripts/check-docs-drift.sh`)
    skips itself on a pull request carrying it — the escape hatch for refactors that change no
    behaviour. Create it once:

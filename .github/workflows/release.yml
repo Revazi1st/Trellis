@@ -170,11 +170,18 @@ jobs:
           dotnet build "$RUNNER_TEMP"/smoke/*.slnx -c Release
 
       # Artifact attestations need a public repository (or GitHub Enterprise Cloud for a private
-      # one); on a private repository on another plan this step fails, and so does the release.
+      # one). On any other private repository the step is skipped with a warning, so a dry run or a
+      # release still completes; the package is simply not attested until the repository is public.
       - name: Attest build provenance
+        if: github.event.repository.visibility == 'public'
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: ./nupkg/*.nupkg
+
+      - name: Attestation skipped (private repository)
+        if: github.event.repository.visibility != 'public'
+        run: |
+          echo "::warning::Build-provenance attestation skipped: $GITHUB_REPOSITORY is private. Make the repository public (or use GitHub Enterprise Cloud) to attest releases."
 
       - name: Extract the release notes from CHANGELOG.md
         run: |
