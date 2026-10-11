@@ -5,6 +5,8 @@ paths: ["tests/**/*.cs"]
 
 # Testing rules
 
+Which project a test belongs in, what each one proves and needs: `docs/development.md` (*Tests*), the canonical map. These are the conventions inside them.
+
 - **xUnit v3** + **Shouldly** (`value.ShouldBe(...)`). Mocks: **NSubstitute**. Never FluentAssertions or Moq.
 - Test names are a sentence about the behaviour, its words joined by underscores (`An_unregistered_unique_violation_throws_out_of_the_commit_and_writes_nothing`): the form most of the suite uses. Some older files name tests `Method_Scenario_Outcome` (`EveryMustRule_NamesItsErrorCode`); stay consistent inside a file and write a new file in the sentence form.
 - **Domain.UnitTests**: pure, no mocks. **Application.UnitTests**: handlers/decorators with faked ports (`Substitute.For<...>`), `FakeTimeProvider` for time. `CommandValidatorConventionTests` lives here because it needs the registered validators: every command with string input has one, and every `Must`/`MustAsync` names its code with `.WithErrorCode("Area.Problem")` (an uncoded predicate would reach clients as `Validation.Predicate`), with `TheMustRuleCheck_FlagsOnlyTheUncodedPredicates` as its control.

@@ -203,13 +203,43 @@ Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-f
 
 ## Tests
 
-| Project | What it needs |
-|---|---|
-| Domain/Application UnitTests | nothing (in-memory) |
-| IntegrationTests | Docker (Testcontainers spins up PostgreSQL) |
-| ArchitectureTests | nothing |
-| ApiTests | Docker (the in-process tests start PostgreSQL with Testcontainers); contract tests always run. The Aspire E2E also needs `RUN_ASPIRE_E2E=1` + a local SDK or CI, otherwise it skips. It drops the AppHost's postgres data volume, so it runs on a throwaway database and never touches your `aspire run` data |
-| UiTests (optional) | `RUN_UI_TESTS=1` + installed browsers + a running app — otherwise the browser test skips |
+This is the map of the test projects: what each one proves about which layer, what it needs to run, and
+when a test of yours belongs in it. The README, `.claude/rules/tests.md` (the conventions inside each
+project) and the `add-feature` skill point here rather than repeat it.
+
+| Project | Proves | Needs | Write a test here when |
+|---|---|---|---|
+| `Domain.UnitTests` | the Domain and the SharedKernel in memory: every invariant and transition of an aggregate, the events it raises, value objects, specifications as predicates, the `Result` kernel | nothing | you add or change a rule of an aggregate or a value object |
+| `Application.UnitTests` | each handler's orchestration over faked ports (NSubstitute, `FakeTimeProvider`), the validators, event handlers, and the decorator pipeline itself (order, span, outcome line, validation) | nothing | you write a handler, a validator or an event handler, or touch a decorator |
+| `ArchitectureTests` | the rules files hold: layer boundaries, conventions by reflection and source scan, the error-code vocabulary, options validated at boot, telemetry names and the telemetry reference | nothing | you introduce a convention: it gets a rule and a positive control, not just prose |
+| `IntegrationTests` | Persistence against a real PostgreSQL: mappings and round trips, specifications translated to SQL, interceptors, concurrency, the outbox and the idempotency store, retention, the migration matching the model | Docker (Testcontainers starts PostgreSQL) | a query, a mapping, an interceptor or anything transactional changes |
+| `ApiTests` | the HTTP contract through the real pipeline: authentication and each endpoint's permission, problem details, idempotency, caching and conditional requests, the served OpenAPI document equal to the committed one, the reference integration over a scripted socket | Docker for the in-process tests (contract and serialization tests run without it). The Aspire E2E also needs `RUN_ASPIRE_E2E=1` and a local SDK or CI, otherwise it skips; it drops the AppHost's postgres data volume, so it runs on a throwaway database and never touches your `aspire run` data | an endpoint answers something the fitness suites do not already pin: its own 404, a business 409, the field codes of its 400, a notable flow end to end |
+
+<!--#if (IncludeUI || UseMultitenancy) -->
+Suites a template option adds, present only in a project generated with it:
+<!--#endif -->
+<!--#if (IncludeUI) -->
+- **`ApiTests/Ui`** (with the UI; optional): UI.Common's typed clients, token handling and form logic over a
+  scripted `HttpMessageHandler` and a manual clock, no browser. Needs nothing more than the rest of
+  `ApiTests`. Write one when a client, a form or a page's behaviour changes.
+<!--#endif -->
+<!--#if (IncludeUiTests && IncludeUI) -->
+- **`UiTests`** (`--include-ui-tests`; optional, and opt-in at run time): the pages in a real browser
+  against a running app. Needs `RUN_UI_TESTS=1`, installed browsers and a running app (see *UI tests*
+  above), otherwise it skips. Write one for a flow only a browser shows; keep them few.
+<!--#endif -->
+<!--#if (UseMultitenancy) -->
+- **`TenancyTests`** (IntegrationTests) and **`TenantIsolationTests`** (ApiTests), with multi-tenancy
+  (optional): stamping, filtering and the aggregate-root convention against PostgreSQL, and cross-tenant
+  reads and writes answering 404 over HTTP. Write one when an aggregate is deliberately shared or a
+  query opts out of the `"Tenant"` filter.
+<!--#endif -->
+
+Where to invest: most of a feature's tests belong in `Domain.UnitTests` and `IntegrationTests`, because a
+rule is cheapest to pin where it lives and a query or a transaction only proves itself against
+PostgreSQL. Every endpoint's permission, problem shape, idempotency and OpenAPI entry is already enforced
+by the fitness suites, so an `ApiTests` test is for what they cannot see, and the Aspire E2E and browser
+tests stay few.
 
 ## Vulnerable packages (NuGetAudit)
 

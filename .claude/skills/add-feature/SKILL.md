@@ -114,7 +114,8 @@ after each layer.
 
 - [ ] Domain.UnitTests for the invariants, Application.UnitTests for the handlers, IntegrationTests
       against PostgreSQL for persistence and specifications, ApiTests for the HTTP contract of a
-      notable flow (the fitness suites above already cover every endpoint).
+      notable flow (the fitness suites above already cover every endpoint). `docs/development.md`
+      (*Tests*) maps what each project proves and where to invest.
 - [ ] **`docs/features/{feature}.md`** (kebab-case: `ExchangeRates` → `exchange-rates.md`), shaped
       like `invoices.md`, plus a line in `docs/INDEX.md` [`check-docs-drift.sh`: a change under the
       feature's folders without its doc fails CI]. A load-bearing decision gets an ADR (the `new-adr`

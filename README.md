@@ -171,6 +171,9 @@ flowchart RL
 | `tools` | AppHost, MigrationService | Aspire orchestration + DB migrate/seed worker |
 | `tests` | 6 projects | Domain and Application unit tests, architecture, integration (Testcontainers), API (the in-process HTTP pipeline + the opt-in Aspire E2E), and Playwright UI tests (only with `--include-ui-tests`) |
 
+What each test project proves, what it needs, and which one a new test belongs in is mapped in
+[docs/development.md](docs/development.md#tests).
+
 ## Highlights
 
 - **Rich DDD** — aggregates with factories + private EF constructors, value objects as EF Core 10 complex types, hand-rolled strongly-typed IDs, domain events through a transactional outbox (written in the same transaction, dispatched after commit), specifications ([docs/features/invoices.md](docs/features/invoices.md) is the reference slice).
