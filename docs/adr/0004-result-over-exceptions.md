@@ -3,6 +3,7 @@
 - **Status**: accepted — the HTTP mapping paragraph is superseded by ADR-0024 (problem shape v2); the Result decision stands
 - **Date**: 2026-07-14
 - **Amended**: 2026-10-08 — the unit of work sits inside the Result boundary; the HTTP shape moved to ADR-0024 (see *Amendment* below)
+- **Amended**: 2026-10-11 — `ErrorType.Unavailable` (503) for a dependency that is down for now (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -11,6 +12,7 @@ Operations fail in expected ways (validation, not-found, conflict, forbidden). M
 ## Decision
 
 Hand-roll a small `Result`/`Result<T>` + `Error(Code, Description, ErrorType)` in `SharedKernel.Results` (no ErrorOr/FluentResults dependency). Domain methods, handlers, and value-object factories return `Result`; **exceptions are reserved for the genuinely unexpected**. `ErrorType` ∈ { Validation, NotFound, Conflict, Unauthorized, Forbidden, Failure }.
+*(Amended 2026-10-11: `ErrorType` also has `Unavailable`; see below.)*
 
 `Error` is the only "reserved keyword" name we allow (CA1716 suppressed) because it is the Result vocabulary. Feature-specific errors live in `{Aggregate}Errors` static classes. `ValidationError` aggregates per-field failures.
 
@@ -40,3 +42,24 @@ Two corrections to the text above, recorded here because ADRs are immutable (ADR
   — human `title`, `code`/`type`/`instance`/`correlationId` on every problem, `errors[]` of
   `{field, code, description}` on every Result-produced 400 — is specified there, together with the
   catalogue and the single writer for the non-Result paths.
+
+## Amendment (2026-10-11): a dependency that is down for now is `Unavailable`, not `Failure`
+
+The six types left one question unanswerable from the status: is this our bug, or is something we
+depend on down? The reference integration's outage (`ExchangeRate.Unavailable`) was a deliberate
+`Failure`, so a gateway, a dashboard or a client saw the same 500 for a third party timing out as for a
+defect. `ErrorType` gains **`Unavailable`**, with an `Error.Unavailable(code, description)` factory:
+something this operation depends on is unreachable, too slow, or refused by our own circuit breaker,
+and the same request may succeed later. `CustomResults.Problem` maps it to **503** with the title
+"Service unavailable" and a fixed `detail` that only says to retry later (ADR-0024's second
+amendment); the outcome line logs it at Warning, the level every unclassified type gets (ADR-0028).
+
+`Unavailable` is not a softer `Failure`. A dependency that answered and **refused** us (our
+credentials, our plan, a URL it does not serve) or that answered something unreadable stays a
+`Failure`: no wait cures our configuration, and a 503 would tell every client to retry a permanent
+fault. The reference adapter draws that line (ADR-0020, amendment of 2026-10-11). The
+`ErrorType` → status table is now Validation → 400, NotFound → 404, Conflict → 409, Unauthorized →
+401, Forbidden → 403, Unavailable → 503, Failure → 500. `Retry-After` on the 503 is deferred: by the
+time an adapter reports `Unavailable` its retry budget is spent, so there is rarely an honest value to
+send; an endpoint that has one (an open circuit's break) sets the header before returning
+`CustomResults.Problem`, the way the idempotency filter's 409 does.

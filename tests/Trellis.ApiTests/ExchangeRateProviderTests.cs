@@ -47,18 +47,38 @@ public sealed class ExchangeRateProviderTests
         requested.ShouldBe(new Uri("https://rates.test/rates?base=EUR&quotes=USD"));
     }
 
-    [Fact]
-    public async Task Provider_maps_an_error_status_to_Unavailable()
+    [Theory]
+    // Our credentials or plan, and a route the provider does not serve (a wrong BaseUrl): no wait cures them.
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.NotFound)]
+    public async Task Provider_maps_a_refusal_of_our_configuration_to_Rejected(HttpStatusCode status)
     {
-        // 404 rather than 500 on purpose: the standard resilience handler retries 5xx, and this test
-        // is about the mapping, not the retry budget.
-        IExchangeRateProvider provider = BuildProvider(
-            new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound)));
+        IExchangeRateProvider provider = BuildProvider(new StubHandler(_ => new HttpResponseMessage(status)));
+
+        Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.ShouldBe(ExchangeRateErrors.Rejected);
+        result.Error.Type.ShouldBe(ErrorType.Failure);
+    }
+
+    [Fact]
+    public async Task Provider_maps_a_server_error_that_outlives_the_retries_to_Unavailable()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        {
+            // Immediate retries: this test is about the mapping, not the back-off.
+            Headers = { RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.Zero) },
+        });
+        IExchangeRateProvider provider = BuildProvider(handler, maxRetries: 1);
 
         Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
 
         result.IsFailure.ShouldBeTrue();
         result.Error.ShouldBe(ExchangeRateErrors.Unavailable);
+        result.Error.Type.ShouldBe(ErrorType.Unavailable);
+        handler.Calls.ShouldBe(2, "a 5xx is retried before it is reported");
     }
 
     [Fact]
@@ -131,7 +151,7 @@ public sealed class ExchangeRateProviderTests
     }
 
     [Fact]
-    public async Task GetRate_SuccessFalseAtHttp200_IsUnavailable()
+    public async Task GetRate_SuccessFalseAtHttp200_IsRejected()
     {
         // exchangerate.host's answer to every call without an access key: a 200 that says it failed.
         IExchangeRateProvider provider = BuildProvider(new StubHandler(_ => Json(
@@ -140,7 +160,7 @@ public sealed class ExchangeRateProviderTests
         Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
 
         result.IsFailure.ShouldBeTrue();
-        result.Error.ShouldBe(ExchangeRateErrors.Unavailable);
+        result.Error.ShouldBe(ExchangeRateErrors.Rejected, "a missing key or an exhausted plan is ours to fix, not an outage to wait out");
     }
 
     [Fact]

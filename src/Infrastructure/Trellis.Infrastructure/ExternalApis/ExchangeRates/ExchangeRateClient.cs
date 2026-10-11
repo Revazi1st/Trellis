@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
@@ -98,7 +99,13 @@ internal sealed class ExchangeRateClient(HttpClient httpClient, ILogger<Exchange
             logger.LogWarning(
                 "Exchange-rate provider answered {StatusCode} for {Base}->{Quote}.",
                 (int)response.StatusCode, baseCurrency, quoteCurrency);
-            return Result.Failure<decimal>(ExchangeRateErrors.Unavailable);
+
+            // Credentials, plan or route refused: no wait cures our configuration. Anything else that
+            // outlived the retries is the provider being down for now.
+            return Result.Failure<decimal>(
+                response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound
+                    ? ExchangeRateErrors.Rejected
+                    : ExchangeRateErrors.Unavailable);
         }
 
         // The root's kind decides how the body is read: Frankfurter answers an array, while a provider that
@@ -114,10 +121,10 @@ internal sealed class ExchangeRateClient(HttpClient httpClient, ILogger<Exchange
         {
             // Some providers report their own failures (missing access key, exhausted quota) as a 200
             // whose body says success:false. That is the provider declining to answer, not a shape we
-            // failed to read.
-            logger.LogWarning(
-                "Exchange-rate provider answered success:false for {Base}->{Quote}.", baseCurrency, quoteCurrency);
-            return Result.Failure<decimal>(ExchangeRateErrors.Unavailable);
+            // failed to read, and not an outage a retry outlasts: our key or plan needs attention.
+            logger.LogError(
+                "Exchange-rate provider answered success:false for {Base}->{Quote}; check the access key and plan.", baseCurrency, quoteCurrency);
+            return Result.Failure<decimal>(ExchangeRateErrors.Rejected);
         }
 
         if (root.ValueKind != JsonValueKind.Array)

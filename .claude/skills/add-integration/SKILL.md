@@ -17,9 +17,10 @@ is the third party (`Stripe`), `{Capability}` what the application needs from it
 
 - [ ] `Abstractions/I{Capability}Provider.cs`: what the application needs, in its own words and types,
       returning `Result`/`Result<T>`. No `HttpClient`, no provider DTO, no provider name leaks in.
-- [ ] `Abstractions/{Capability}Errors.cs`: at least `Unavailable` (transport, timeout, open circuit,
-      the provider's 5xx) and `MalformedResponse` (an answer the adapter cannot read), plus the domain
-      failures the provider can report. Codes are `Area.Problem` (ADR-0024).
+- [ ] `Abstractions/{Capability}Errors.cs`: at least `Unavailable` (`Error.Unavailable`, a 503: transport,
+      timeout, open circuit, the provider's 5xx/429 after the retries), `Rejected` (`Error.Failure`: it
+      refused our credentials, plan or URL, which no wait cures) and `MalformedResponse` (an answer the
+      adapter cannot read), plus the domain failures the provider can report. Codes are `Area.Problem` (ADR-0024).
 
 ## 2. Options (Infrastructure)
 

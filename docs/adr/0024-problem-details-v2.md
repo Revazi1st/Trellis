@@ -5,7 +5,7 @@
 - **Supersedes**: the "At the HTTP boundary…" paragraph of ADR-0004 (the Result decision itself stands).
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
 - **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`); a `Result` never reaches JSON (see *Amendment* below)
-- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence (see *Second amendment* below)
+- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence; the 503 title (see *Second amendment* below)
 
 ## Context
 
@@ -59,6 +59,7 @@ Every response with status ≥ 400 is `application/problem+json` with this shape
    failed", NotFound → "Not found", Conflict → "Conflict", Unauthorized → "Unauthorized", Forbidden →
    "Forbidden", Failure → "Server failure"; the non-Result rows use the catalogue titles below. Titles are
    for people, not for branching.
+   *(Amended 2026-10-11: Unavailable → "Service unavailable"; see the second amendment below.)*
 4. **`detail`** is `Error.Description` or the catalogue sentence. Exception messages never reach `detail`
    except the framework's own `BadHttpRequestException.Message`, which names a parameter or a limit, not
    a stack. The 500's detail is always "An unexpected error occurred."
@@ -206,3 +207,11 @@ the failure is still identifiable from the body, the logs (ADR-0028) and the spa
 reads: a 4xx carries `Error.Description` or the catalogue sentence; a 5xx carries nothing specific,
 whichever writer produced it. `ProblemDetailsContractTests` pins it with a Result-produced 500 whose
 description is a secret.
+
+**A 503 for a dependency that is down.** ADR-0004's amendment adds `ErrorType.Unavailable`;
+`CustomResults.Problem` maps it to 503 with the title "Service unavailable" (`ProblemTitles`, and the
+same title for a bodyless 503 the status-code pages complete) and the fixed `detail` "A service this
+request depends on is unavailable right now. Retry later." (`CustomResults.UnavailableDetail`): like
+every 5xx it never carries the description, and the `code` names the dependency
+(`ExchangeRate.Unavailable`). `ProblemDetailsContractTests` has the 503 row.
+

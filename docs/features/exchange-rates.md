@@ -8,9 +8,19 @@ Like the Invoices slice, this is reference material — delete it once a real in
 ## Port (`src/Core/Trellis.Application/Abstractions/`)
 
 `IExchangeRateProvider.GetRateAsync(baseCurrency, quoteCurrency, ct)` → `Result<decimal>`.
-Failures are `ExchangeRateErrors.Unavailable`, `.MalformedResponse` and `.UnknownCurrency(code)`.
+Failures are split by whether waiting helps:
+
+| Error | `ErrorType` | Our API answers | Means |
+|---|---|---|---|
+| `ExchangeRateErrors.Unavailable` | `Unavailable` | 503 | the provider is down for now: retry later |
+| `ExchangeRateErrors.Rejected` | `Failure` | 500 | the provider refused our credentials, plan or URL: fix the configuration |
+| `ExchangeRateErrors.MalformedResponse` | `Failure` | 500 | an answer the adapter cannot read |
+| `ExchangeRateErrors.UnknownCurrency(…)` | `Validation` | 400 | the caller asked for a currency the feed does not publish |
+
 Nothing the third party does reaches Application code as an exception (ADR-0004) — except the
-caller's own cancellation, which propagates as `OperationCanceledException`.
+caller's own cancellation, which propagates as `OperationCanceledException`. An endpoint that calls
+the port declares the 503 with a bare `.Produces(StatusCodes.Status503ServiceUnavailable)` (ADR-0020,
+amendment of 2026-10-11); none ships today.
 
 ## Adapter (`src/Infrastructure/Trellis.Infrastructure/ExternalApis/ExchangeRates/`)
 
@@ -51,7 +61,7 @@ options at boot, and this client's are computed from `ExchangeRateOptions`.
   `MalformedResponse`; an `OperationCanceledException` the caller did not cause → `Unavailable`. The
   caller's own cancellation is not caught.
 - **A 200 can still be a failure.** An object body with `"success": false` (providers that wrap their
-  errors in a 200) → `Unavailable`; Frankfurter's array is read normally; any other shape — v1's object
+  errors in a 200: a missing key, an exhausted plan) → `Rejected`, logged at Error; Frankfurter's array is read normally; any other shape — v1's object
   among them, or a quote without a rate — → `MalformedResponse`. A quote the answer does not contain
   (an empty array included) → `UnknownCurrency`.
 - **Configuration fails at boot, not on first call.** A malformed `BaseUrl` stops the API with a

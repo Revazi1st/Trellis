@@ -20,6 +20,9 @@ namespace Trellis.Api.Common.Results;
 /// </summary>
 public static class CustomResults
 {
+    /// <summary>The <c>detail</c> of every Result-produced 503, whatever the error's description says.</summary>
+    public const string UnavailableDetail = "A service this request depends on is unavailable right now. Retry later.";
+
     public static ProblemHttpResult Problem(Error error)
     {
         var extensions = new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -41,10 +44,22 @@ public static class CustomResults
         int status = StatusCodeFor(error.Type);
         return TypedResults.Problem(
             title: ProblemTitles.For(error.Type),
-            detail: status >= StatusCodes.Status500InternalServerError ? ProblemCatalog.ServerFailure.Detail : error.Description,
+            detail: DetailFor(error, status),
             statusCode: status,
             extensions: extensions);
     }
+
+    /// <summary>
+    /// A 4xx says what the caller can fix, so it carries the description. A 5xx carries nothing specific:
+    /// the description of a failure can hold what a third party or a connection said, and the code
+    /// already identifies it (ADR-0024 rule 4). A 503 says only that retrying later may help.
+    /// </summary>
+    private static string? DetailFor(Error error, int status) => status switch
+    {
+        StatusCodes.Status503ServiceUnavailable => UnavailableDetail,
+        >= StatusCodes.Status500InternalServerError => ProblemCatalog.ServerFailure.Detail,
+        _ => error.Description,
+    };
 
     private static int StatusCodeFor(ErrorType errorType) => errorType switch
     {
@@ -53,6 +68,7 @@ public static class CustomResults
         ErrorType.Conflict => StatusCodes.Status409Conflict,
         ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
         ErrorType.Forbidden => StatusCodes.Status403Forbidden,
+        ErrorType.Unavailable => StatusCodes.Status503ServiceUnavailable,
         _ => StatusCodes.Status500InternalServerError,
     };
 }

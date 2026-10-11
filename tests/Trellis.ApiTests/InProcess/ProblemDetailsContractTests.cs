@@ -10,6 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Shouldly;
 using Trellis.Api.Common.Hardening;
 using Trellis.Api.Common.Http;
+using Trellis.Api.Common.Results;
 using Trellis.Api.Contracts.Auth;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
@@ -370,6 +371,26 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         string body = await response.Content.ReadAsStringAsync(ct);
         body.ShouldNotContain("boom");
         body.ShouldNotContain("hunter2");
+    }
+
+    [Fact]
+    public async Task An_unavailable_result_is_a_503_that_keeps_its_code_and_only_says_to_retry()
+    {
+        // A dependency that is down for now (ErrorType.Unavailable): a gateway or a client can tell it from
+        // a bug by status alone, and the detail is fixed like every 5xx's.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using var unavailable = factory.WithTestServices(static services => services.AddScoped<IUnitOfWork>(
+            static _ => new FailingUnitOfWork(Error.Unavailable("Storage.Unavailable", ExceptionSecret))));
+        HttpClient admin = await factory.CreateAdminClientOnAsync(unavailable, ct);
+
+        HttpResponseMessage response = await admin.PostAsJsonAsync(
+            "/api/v1/invoices", new CreateInvoiceRequest("Down Co", "d@d.co", "USD"), ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.ServiceUnavailable, "Storage.Unavailable", "/api/v1/invoices", ct);
+        problem.Title.ShouldBe("Service unavailable");
+        problem.Detail.ShouldBe(CustomResults.UnavailableDetail);
+        problem.Errors.ShouldBeNull();
+        (await response.Content.ReadAsStringAsync(ct)).ShouldNotContain("hunter2");
     }
 
     [Fact]

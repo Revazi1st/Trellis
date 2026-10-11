@@ -43,6 +43,7 @@ public static class ProblemTitles
         ErrorType.Conflict => "Conflict",
         ErrorType.Unauthorized => "Unauthorized",
         ErrorType.Forbidden => "Forbidden",
+        ErrorType.Unavailable => "Service unavailable",
         _ => "Server failure",
     };
 
@@ -58,6 +59,7 @@ public static class ProblemTitles
         StatusCodes.Status415UnsupportedMediaType => "Unsupported media type",
         StatusCodes.Status429TooManyRequests => "Too many requests",
         StatusCodes.Status500InternalServerError => "Server failure",
+        StatusCodes.Status503ServiceUnavailable => "Service unavailable",
         StatusCodes.Status504GatewayTimeout => "Request timed out",
         _ => ReasonPhrases.GetReasonPhrase(status) is { Length: > 0 } phrase ? phrase : "Request failed",
     };
