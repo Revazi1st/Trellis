@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
@@ -113,8 +114,8 @@ public static class DependencyInjection
 
     /// <summary>
     /// The <see cref="IEmailSender"/> adapter named by <c>Email:Provider</c>, resolved per scope. The
-    /// options are validated when the sender is first built; a host that sends promotes that to boot
-    /// (<see cref="AddOutboundIntegrations"/>).
+    /// options — the "Email:Smtp" relay included, while SMTP is the one selected — are validated when the
+    /// sender is first built; a host that sends promotes that to boot (<see cref="AddOutboundIntegrations"/>).
     /// </summary>
     private static void AddEmailSender(this IServiceCollection services, IConfiguration configuration)
     {
@@ -123,14 +124,17 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .Validate(
                 static options => Enum.IsDefined(options.Provider),
-                "Email:Provider must be Logging (development stand-in: logs a masked line, sends nothing) or None "
-                + "(discard). A real provider is a new adapter in Infrastructure/Email.");
+                "Email:Provider must be Smtp (the relay under Email:Smtp), Logging (development stand-in: logs a masked "
+                + "line, sends nothing) or None (discard). Another provider is a new adapter in Infrastructure/Email.");
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<EmailOptions>, SmtpOptionsValidator>());
 
+        services.AddScoped<SmtpEmailSender>();
         services.AddScoped<LoggingEmailSender>();
         services.AddScoped<DiscardingEmailSender>();
         services.AddScoped<IEmailSender>(static provider =>
             provider.GetRequiredService<IOptions<EmailOptions>>().Value.Provider switch
             {
+                EmailProvider.Smtp => provider.GetRequiredService<SmtpEmailSender>(),
                 EmailProvider.Logging => provider.GetRequiredService<LoggingEmailSender>(),
                 EmailProvider.None => provider.GetRequiredService<DiscardingEmailSender>(),
                 // Unreachable: the validation above rejects any other value before this runs.
