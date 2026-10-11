@@ -24,7 +24,7 @@ public sealed class SessionCommandHandlerTests
         Result result = await new LogoutCommandHandler(_tokens, _refreshStore)
             .Handle(new LogoutCommand("presented"), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         await _refreshStore.Received(1).RevokeAsync("hashed", Arg.Any<CancellationToken>());
         // Consuming is what replay detection keys on; a logout must never look like a replay.
         await _refreshStore.DidNotReceiveWithAnyArgs().ConsumeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -39,7 +39,7 @@ public sealed class SessionCommandHandlerTests
         Result result = await new RevokeSessionsCommandHandler(_currentUser, _refreshStore)
             .Handle(new RevokeSessionsCommand(), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         await _refreshStore.Received(1).RevokeAllAsync(userId, Arg.Any<CancellationToken>());
     }
 

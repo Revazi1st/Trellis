@@ -23,7 +23,7 @@ public sealed class OutboxTests(DatabaseFixture database) : IntegrationTestBase(
 
         using var payScope = CreateScope();
         (await payScope.ServiceProvider.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
-            .Handle(new PayInvoiceCommand(id), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+            .Handle(new PayInvoiceCommand(id), TestContext.Current.CancellationToken)).ShouldBeSuccess();
 
         // The receipt email is NOT sent inside the transaction…
         await EmailSender.DidNotReceiveWithAnyArgs().SendAsync(default!, default!, default!, Arg.Any<CancellationToken>());

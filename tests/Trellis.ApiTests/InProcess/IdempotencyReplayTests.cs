@@ -336,8 +336,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
                 branch.UseEndpoints(static endpoints => endpoints
                     .MapPost("/capped", static async Task<Ok<CappedResponse>> (CappedRequest request, IUnitOfWork unitOfWork, CancellationToken ct) =>
                     {
-                        Result commit = await unitOfWork.CommitAsync(ct);
-                        commit.IsSuccess.ShouldBeTrue(commit.Error?.Description);
+                        (await unitOfWork.CommitAsync(ct)).ShouldBeSuccess();
                         return TypedResults.Ok(new CappedResponse(new string('x', request.Size)));
                     })
                     .RequireIdempotency(maxReplayBodyBytes: Cap));

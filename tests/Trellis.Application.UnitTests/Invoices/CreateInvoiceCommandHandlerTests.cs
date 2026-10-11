@@ -19,7 +19,7 @@ public sealed class CreateInvoiceCommandHandlerTests
 
         var result = await handler.Handle(new CreateInvoiceCommand("ACME", "a@b.co", "usd"), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.Value.ShouldNotBe(Guid.Empty);
         _invoices.Received(1).Add(Arg.Is<Invoice>(i => i != null && i.Id == result.Value && i.Currency.Code == "USD"));
     }

@@ -31,7 +31,7 @@ public sealed class AuditingInterceptorTests(DatabaseFixture database) : Integra
         Time.Advance(TimeSpan.FromHours(2));
         var addLine = Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>();
         (await addLine.Handle(new AddInvoiceLineCommand(id, "Line", 10m), TestContext.Current.CancellationToken))
-            .IsSuccess.ShouldBeTrue();
+            .ShouldBeSuccess();
 
         using (var scope = CreateScope())
         {

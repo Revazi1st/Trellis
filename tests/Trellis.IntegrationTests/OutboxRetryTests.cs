@@ -510,10 +510,10 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         using (IServiceScope scope = CreateScope())
         {
             AppDbContext context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Invoice invoice = Invoice.Create("ACME", EmailAddress.Create("billing@acme.com").Value, Currency.Create("USD").Value).Value;
-            invoice.AddLine("Line", Money.Create(10m, "USD").Value).IsSuccess.ShouldBeTrue();
-            invoice.Issue(Now.AddDays(14), Now).IsSuccess.ShouldBeTrue();
-            invoice.MarkPaid(Now).IsSuccess.ShouldBeTrue();
+            Invoice invoice = Invoice.Create("ACME", EmailAddress.Create("billing@acme.com").ShouldBeSuccess(), Currency.Create("USD").ShouldBeSuccess()).ShouldBeSuccess();
+            invoice.AddLine("Line", Money.Create(10m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
+            invoice.Issue(Now.AddDays(14), Now).ShouldBeSuccess();
+            invoice.MarkPaid(Now).ShouldBeSuccess();
             context.Set<Invoice>().Add(invoice);
             await context.SaveChangesAsync(Ct);
         }
@@ -871,9 +871,9 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         InvoiceId id = (await Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>()
             .Handle(new CreateInvoiceCommand("ACME", "billing@acme.com", "USD"), Ct)).Value;
         (await Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>()
-            .Handle(new AddInvoiceLineCommand(id, "Line", 10m), Ct)).IsSuccess.ShouldBeTrue();
+            .Handle(new AddInvoiceLineCommand(id, "Line", 10m), Ct)).ShouldBeSuccess();
         (await Services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
-            .Handle(new IssueInvoiceCommand(id, Time.GetUtcNow().AddDays(14)), Ct)).IsSuccess.ShouldBeTrue();
+            .Handle(new IssueInvoiceCommand(id, Time.GetUtcNow().AddDays(14)), Ct)).ShouldBeSuccess();
         return id;
     }
 
@@ -881,7 +881,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     {
         using IServiceScope scope = CreateScope();
         (await scope.ServiceProvider.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
-            .Handle(new PayInvoiceCommand(id), Ct)).IsSuccess.ShouldBeTrue();
+            .Handle(new PayInvoiceCommand(id), Ct)).ShouldBeSuccess();
     }
 
     private async Task<OutboxMessage> RowAsync(string type)
@@ -992,7 +992,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         {
             if (writing.Enabled)
             {
-                repository.Add(Invoice.Create(CustomerName, EmailAddress.Create("copy@acme.com").Value, Currency.Create("USD").Value).Value);
+                repository.Add(Invoice.Create(CustomerName, EmailAddress.Create("copy@acme.com").ShouldBeSuccess(), Currency.Create("USD").ShouldBeSuccess()).ShouldBeSuccess());
             }
 
             return Task.CompletedTask;

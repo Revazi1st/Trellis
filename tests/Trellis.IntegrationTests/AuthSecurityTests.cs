@@ -20,7 +20,7 @@ public sealed class AuthSecurityTests(DatabaseFixture database) : IntegrationTes
     private const string Password = "Sup3r-secret!";
 
     private async Task CommitAsync(CancellationToken ct)
-        => (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).IsSuccess.ShouldBeTrue();
+        => (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).ShouldBeSuccess();
 
     /// <summary>Respawn wipes AspNetRoles between tests; registration needs the Member role to exist.</summary>
     private async Task<Guid> RegisterUserAsync(string email, CancellationToken ct)
@@ -32,7 +32,7 @@ public sealed class AuthSecurityTests(DatabaseFixture database) : IntegrationTes
         }
 
         Result<Guid> registered = await Services.GetRequiredService<IIdentityService>().RegisterAsync(email, Password, ct);
-        registered.IsSuccess.ShouldBeTrue();
+        registered.ShouldBeSuccess();
         return registered.Value;
     }
 
@@ -69,7 +69,7 @@ public sealed class AuthSecurityTests(DatabaseFixture database) : IntegrationTes
             (await identity.ValidateCredentialsAsync("reset@test.dev", "wrong-password", ct)).IsFailure.ShouldBeTrue();
         }
 
-        (await identity.ValidateCredentialsAsync("reset@test.dev", Password, ct)).IsSuccess.ShouldBeTrue();
+        (await identity.ValidateCredentialsAsync("reset@test.dev", Password, ct)).ShouldBeSuccess();
 
         // The counter restarted: four more failures stay "invalid credentials", not "locked".
         for (int attempt = 1; attempt <= 4; attempt++)

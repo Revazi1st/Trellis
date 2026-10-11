@@ -18,7 +18,7 @@ public sealed class AddInvoiceLineCommandHandlerTests
 
         var result = await Handle(new AddInvoiceLineCommand(invoice.Id, "Design", 150.50m));
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         invoice.Lines.ShouldHaveSingleItem().Amount.Amount.ShouldBe(150.50m);
     }
 

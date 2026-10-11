@@ -17,7 +17,7 @@ public sealed class EmailAddressTests
     {
         var email = EmailAddress.Create(input);
 
-        email.IsSuccess.ShouldBeTrue();
+        email.ShouldBeSuccess();
         email.Value.Value.ShouldBe(input.Trim());
     }
 
@@ -56,7 +56,7 @@ public sealed class EmailAddressTests
         string longest = $"{localPart}@{domain}";
 
         longest.Length.ShouldBe(EmailAddress.MaxLength);
-        EmailAddress.Create(longest).IsSuccess.ShouldBeTrue();
+        EmailAddress.Create(longest).ShouldBeSuccess();
     }
 
     [Fact]

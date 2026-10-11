@@ -15,13 +15,13 @@ public sealed class GetInvoiceQueryHandlerTests
     public async Task Maps_aggregate_to_response()
     {
         Invoice invoice = InvoiceTestData.Draft();
-        invoice.AddLine("Design", Money.Create(150.50m, "USD").Value);
+        invoice.AddLine("Design", Money.Create(150.50m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = new GetInvoiceQueryHandler(_invoices);
 
         var result = await handler.Handle(new GetInvoiceQuery(invoice.Id), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.Id.ShouldBe(invoice.Id.Value);
         result.Value.CustomerEmail.ShouldBe("billing@acme.com");
         result.Value.Status.ShouldBe("Draft");

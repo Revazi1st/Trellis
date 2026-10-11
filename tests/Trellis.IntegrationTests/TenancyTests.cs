@@ -165,14 +165,14 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         }
 
         var identity = scope.ServiceProvider.GetRequiredService<IIdentityService>();
-        (await identity.RegisterAsync("first@test.dev", Password, ct)).IsSuccess.ShouldBeTrue();
-        (await identity.RegisterAsync("second@test.dev", Password, ct)).IsSuccess.ShouldBeTrue();
+        (await identity.RegisterAsync("first@test.dev", Password, ct)).ShouldBeSuccess();
+        (await identity.RegisterAsync("second@test.dev", Password, ct)).ShouldBeSuccess();
 
         Result<AuthenticatedUser> first = await identity.ValidateCredentialsAsync("first@test.dev", Password, ct);
         Result<AuthenticatedUser> second = await identity.ValidateCredentialsAsync("second@test.dev", Password, ct);
 
-        first.IsSuccess.ShouldBeTrue();
-        second.IsSuccess.ShouldBeTrue();
+        first.ShouldBeSuccess();
+        second.ShouldBeSuccess();
         first.Value.TenantId.ShouldNotBeNullOrWhiteSpace();
         first.Value.TenantId.Length.ShouldBeLessThanOrEqualTo(64);
         second.Value.TenantId.ShouldNotBeNullOrWhiteSpace();
@@ -225,15 +225,15 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         {
             IServiceProvider services = scope.ServiceProvider;
             (await services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>()
-                .Handle(new AddInvoiceLineCommand(id, "Line", 10m), ct)).IsSuccess.ShouldBeTrue();
+                .Handle(new AddInvoiceLineCommand(id, "Line", 10m), ct)).ShouldBeSuccess();
             (await services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
-                .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), ct)).IsSuccess.ShouldBeTrue();
+                .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), ct)).ShouldBeSuccess();
         }
 
         using (IServiceScope scope = _tenantA!.CreateScope())
         {
             (await scope.ServiceProvider.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
-                .Handle(new PayInvoiceCommand(id), ct)).IsSuccess.ShouldBeTrue();
+                .Handle(new PayInvoiceCommand(id), ct)).ShouldBeSuccess();
         }
 
         // The row remembers who raised the event…
@@ -266,11 +266,11 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         {
             IServiceProvider services = scope.ServiceProvider;
             (await services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>()
-                .Handle(new AddInvoiceLineCommand(id, "Line", 10m), ct)).IsSuccess.ShouldBeTrue();
+                .Handle(new AddInvoiceLineCommand(id, "Line", 10m), ct)).ShouldBeSuccess();
             (await services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
-                .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), ct)).IsSuccess.ShouldBeTrue();
+                .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), ct)).ShouldBeSuccess();
             (await services.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
-                .Handle(new PayInvoiceCommand(id), ct)).IsSuccess.ShouldBeTrue();
+                .Handle(new PayInvoiceCommand(id), ct)).ShouldBeSuccess();
         }
 
         // A system host (no request, no tenant of its own) with a writing handler for the paid event.
@@ -319,7 +319,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         using IServiceScope scope = provider.CreateScope();
         var result = await scope.ServiceProvider.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>()
             .Handle(new CreateInvoiceCommand("Tenant A Corp", "a@a.dev", "USD"), ct);
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         return result.Value;
     }
 

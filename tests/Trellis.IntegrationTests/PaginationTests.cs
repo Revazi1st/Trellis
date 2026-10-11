@@ -26,7 +26,7 @@ public sealed class PaginationTests(DatabaseFixture database) : IntegrationTestB
         {
             InvoiceId id = (await create.Handle(new CreateInvoiceCommand($"Cust {i}", "a@b.co", "USD"), TestContext.Current.CancellationToken)).Value;
             await addLine.Handle(new AddInvoiceLineCommand(id, "Line", 10m), TestContext.Current.CancellationToken);
-            (await issue.Handle(new IssueInvoiceCommand(id, Now.AddDays(1)), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+            (await issue.Handle(new IssueInvoiceCommand(id, Now.AddDays(1)), TestContext.Current.CancellationToken)).ShouldBeSuccess();
         }
 
         // ...then let the clock run past it: all five are overdue.

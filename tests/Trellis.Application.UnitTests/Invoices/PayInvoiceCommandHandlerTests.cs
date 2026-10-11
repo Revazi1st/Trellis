@@ -23,7 +23,7 @@ public sealed class PayInvoiceCommandHandlerTests
 
         var result = await handler.Handle(new PayInvoiceCommand(invoice.Id), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         invoice.Status.ShouldBe(InvoiceStatus.Paid);
         invoice.PaidAtUtc.ShouldBe(Now);
     }

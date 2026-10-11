@@ -30,7 +30,7 @@ public sealed class RegistrationAtomicityTests(DatabaseFixture database) : Integ
         Result<Guid> registered = await Services.GetRequiredService<IIdentityService>()
             .RegisterAsync("member@registration.test", Password, TestContext.Current.CancellationToken);
 
-        registered.IsSuccess.ShouldBeTrue();
+        registered.ShouldBeSuccess();
         using IServiceScope scope = CreateScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         ApplicationUser user = (await users.FindByIdAsync(registered.Value.ToString())).ShouldNotBeNull();
@@ -64,7 +64,7 @@ public sealed class RegistrationAtomicityTests(DatabaseFixture database) : Integ
         // The e-mail is not burned: the same registration succeeds once the role can be assigned.
         Result<Guid> retried = await Services.GetRequiredService<IIdentityService>()
             .RegisterAsync(email, Password, TestContext.Current.CancellationToken);
-        retried.IsSuccess.ShouldBeTrue();
+        retried.ShouldBeSuccess();
     }
 
     [Fact]

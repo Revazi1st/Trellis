@@ -35,7 +35,7 @@ public sealed class DecoratorPipelineTests : IDisposable
             new CreateInvoiceCommand("ACME", "a@b.co", "USD"),
             TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         _pipeline.Invoices.ReceivedWithAnyArgs(1).Add(default!);
         await _pipeline.UnitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
     }
@@ -151,7 +151,7 @@ public sealed class DecoratorPipelineTests : IDisposable
         Result<InvoiceResponse> result = await handler.Handle(new GetInvoiceQuery(invoice.Id), TestContext.Current.CancellationToken);
 
         // A SUCCESSFUL query: the one outcome on which a command would have committed.
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         await _pipeline.UnitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
@@ -204,7 +204,7 @@ public sealed class DecoratorPipelineTests : IDisposable
         var handler = provider.GetRequiredService<ICommandHandler<PingCommand>>();
         PipelineHarness.StagesOf(handler, typeof(ICommandHandler<PingCommand>))
             .ShouldBe([.. PipelineHarness.CommandStages, typeof(PingCommandHandler)]);
-        (await handler.Handle(new PingCommand(), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+        (await handler.Handle(new PingCommand(), TestContext.Current.CancellationToken)).ShouldBeSuccess();
         await _pipeline.UnitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
     }
 

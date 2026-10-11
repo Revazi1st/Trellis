@@ -62,8 +62,8 @@ public sealed class AggregateConcurrencyTests(DatabaseFixture database) : Integr
         Invoice loadedBySecond = await second.Invoices.SingleAsync(invoice => invoice.Id == id, ct);
         uint versionBefore = loadedByFirst.Version;
 
-        loadedByFirst.AddLine("From the first", Money.Create(10m, "USD").Value).IsSuccess.ShouldBeTrue();
-        loadedBySecond.AddLine("From the second", Money.Create(20m, "USD").Value).IsSuccess.ShouldBeTrue();
+        loadedByFirst.AddLine("From the first", Money.Create(10m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
+        loadedBySecond.AddLine("From the second", Money.Create(20m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
         await first.SaveChangesAsync(ct);
 
         loadedByFirst.Version.ShouldNotBe(versionBefore, "adding a line is a change to the invoice");

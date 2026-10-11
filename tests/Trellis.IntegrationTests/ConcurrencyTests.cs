@@ -49,13 +49,13 @@ public sealed class ConcurrencyTests(DatabaseFixture database) : IntegrationTest
         Result committedA = await scopeA.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(ct);
         Result committedB = await scopeB.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(ct);
 
-        committedA.IsSuccess.ShouldBeTrue();
+        committedA.ShouldBeSuccess();
         committedB.Error.ShouldBe(UnitOfWorkErrors.ConcurrencyConflict);
         committedB.Error.ShouldNotBeNull().Type.ShouldBe(ErrorType.Conflict);
 
         // The rejected entries are dropped, so the stale change cannot fail the next commit in this scope.
         scopeB.ServiceProvider.GetRequiredService<AppDbContext>().ChangeTracker.Entries().ShouldBeEmpty();
-        (await scopeB.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).IsSuccess.ShouldBeTrue();
+        (await scopeB.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).ShouldBeSuccess();
 
         // Only A's line reached the database.
         using IServiceScope readScope = CreateScope();
@@ -70,6 +70,6 @@ public sealed class ConcurrencyTests(DatabaseFixture database) : IntegrationTest
     private static async Task AddLineAsync(IServiceScope scope, InvoiceId id, string description, decimal amount, CancellationToken ct)
     {
         Invoice invoice = (await scope.ServiceProvider.GetRequiredService<IInvoiceRepository>().GetByIdAsync(id, ct))!;
-        invoice.AddLine(description, Money.Create(amount, "USD").Value).IsSuccess.ShouldBeTrue();
+        invoice.AddLine(description, Money.Create(amount, "USD").ShouldBeSuccess()).ShouldBeSuccess();
     }
 }

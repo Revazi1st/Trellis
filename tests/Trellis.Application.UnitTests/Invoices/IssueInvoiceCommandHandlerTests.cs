@@ -24,7 +24,7 @@ public sealed class IssueInvoiceCommandHandlerTests
 
         var result = await handler.Handle(new IssueInvoiceCommand(invoice.Id, Now.AddDays(14)), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         invoice.Status.ShouldBe(InvoiceStatus.Issued);
         invoice.DueDate.ShouldBe(Now.AddDays(14));
     }
@@ -104,7 +104,7 @@ public sealed class IssueInvoiceCommandHandlerTests
     private Invoice DraftWithLine()
     {
         Invoice invoice = InvoiceTestData.Draft();
-        invoice.AddLine("Consulting", Money.Create(100m, "USD").Value);
+        invoice.AddLine("Consulting", Money.Create(100m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         return invoice;
     }

@@ -62,19 +62,19 @@ public sealed class UtcConversionTests(DatabaseFixture database) : IntegrationTe
 
     private async Task<InvoiceId> SaveAsync(DateTimeOffset dueDate, DateTimeOffset? paidAt)
     {
-        Currency usd = Currency.Create("USD").Value;
-        Invoice invoice = Invoice.Create("Offset Ltd", EmailAddress.Create("billing@offset.test").Value, usd).Value;
-        invoice.AddLine("Line", Money.Create(10m, usd).Value).IsSuccess.ShouldBeTrue();
-        invoice.Issue(dueDate, now: Time.GetUtcNow().ToOffset(PlusTwo)).IsSuccess.ShouldBeTrue();
+        Currency usd = Currency.Create("USD").ShouldBeSuccess();
+        Invoice invoice = Invoice.Create("Offset Ltd", EmailAddress.Create("billing@offset.test").ShouldBeSuccess(), usd).ShouldBeSuccess();
+        invoice.AddLine("Line", Money.Create(10m, usd).ShouldBeSuccess()).ShouldBeSuccess();
+        invoice.Issue(dueDate, now: Time.GetUtcNow().ToOffset(PlusTwo)).ShouldBeSuccess();
         if (paidAt is { } paid)
         {
-            invoice.MarkPaid(paid).IsSuccess.ShouldBeTrue();
+            invoice.MarkPaid(paid).ShouldBeSuccess();
         }
 
         using IServiceScope scope = CreateScope();
         scope.ServiceProvider.GetRequiredService<IInvoiceRepository>().Add(invoice);
         (await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(TestContext.Current.CancellationToken))
-            .IsSuccess.ShouldBeTrue();
+            .ShouldBeSuccess();
         return invoice.Id;
     }
 }

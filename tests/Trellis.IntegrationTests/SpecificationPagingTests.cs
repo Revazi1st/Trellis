@@ -35,7 +35,7 @@ public sealed class SpecificationPagingTests(DatabaseFixture database) : Integra
             {
                 repository.Add(invoice);
                 (await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(TestContext.Current.CancellationToken))
-                    .IsSuccess.ShouldBeTrue();
+                    .ShouldBeSuccess();
             }
         }
 
@@ -90,10 +90,10 @@ public sealed class SpecificationPagingTests(DatabaseFixture database) : Integra
 
     private Invoice IssuedInvoice(string customer, DateTimeOffset dueDate)
     {
-        Currency usd = Currency.Create("USD").Value;
-        Invoice invoice = Invoice.Create(customer, EmailAddress.Create("billing@ties.test").Value, usd).Value;
-        invoice.AddLine("Line", Money.Create(10m, usd).Value).IsSuccess.ShouldBeTrue();
-        invoice.Issue(dueDate, Time.GetUtcNow()).IsSuccess.ShouldBeTrue();
+        Currency usd = Currency.Create("USD").ShouldBeSuccess();
+        Invoice invoice = Invoice.Create(customer, EmailAddress.Create("billing@ties.test").ShouldBeSuccess(), usd).ShouldBeSuccess();
+        invoice.AddLine("Line", Money.Create(10m, usd).ShouldBeSuccess()).ShouldBeSuccess();
+        invoice.Issue(dueDate, Time.GetUtcNow()).ShouldBeSuccess();
         return invoice;
     }
 

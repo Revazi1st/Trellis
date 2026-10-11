@@ -42,7 +42,7 @@ public sealed class ExchangeRateProviderTests
 
         Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.ShouldBe(1.0825m);
         // The v2 request shape, resolved beneath the configured BaseUrl.
         requested.ShouldBe(new Uri("https://rates.test/rates?base=EUR&quotes=USD"));
@@ -127,7 +127,7 @@ public sealed class ExchangeRateProviderTests
 
         Result<decimal> result = await provider.GetRateAsync("eur", "usd", TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.ShouldBe(1.1217m);
     }
 
@@ -269,7 +269,7 @@ public sealed class ExchangeRateProviderTests
 
         Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.ShouldBe(1.0825m);
         handler.Calls.ShouldBe(2);
     }

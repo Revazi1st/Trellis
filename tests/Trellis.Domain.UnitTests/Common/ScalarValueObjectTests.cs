@@ -13,11 +13,11 @@ public sealed class ScalarValueObjectTests
 {
     [Fact]
     public void An_email_address_round_trips_through_its_stored_value()
-        => RoundTrip<EmailAddress, string>(EmailAddress.Create("jane@example.com").Value).ShouldBe("jane@example.com");
+        => RoundTrip<EmailAddress, string>(EmailAddress.Create("jane@example.com").ShouldBeSuccess()).ShouldBe("jane@example.com");
 
     [Fact]
     public void A_currency_round_trips_through_its_code()
-        => RoundTrip<Currency, string>(Currency.Create("kwd").Value).ShouldBe("KWD");
+        => RoundTrip<Currency, string>(Currency.Create("kwd").ShouldBeSuccess()).ShouldBe("KWD");
 
     [Fact]
     public void Restoring_skips_the_checks_so_a_tightened_rule_never_makes_an_old_row_unreadable()

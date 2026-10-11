@@ -24,18 +24,18 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
 
         Result<InvoiceId> created = await create.Handle(
             new CreateInvoiceCommand("ACME Corp", "billing@acme.com", "usd"), TestContext.Current.CancellationToken);
-        created.IsSuccess.ShouldBeTrue();
+        created.ShouldBeSuccess();
 
         (await addLine.Handle(new AddInvoiceLineCommand(created.Value, "Design", 150.50m), TestContext.Current.CancellationToken))
-            .IsSuccess.ShouldBeTrue();
+            .ShouldBeSuccess();
         (await addLine.Handle(new AddInvoiceLineCommand(created.Value, "Build", 349.50m), TestContext.Current.CancellationToken))
-            .IsSuccess.ShouldBeTrue();
+            .ShouldBeSuccess();
 
         using var readScope = CreateScope();
         var get = readScope.ServiceProvider.GetRequiredService<IQueryHandler<GetInvoiceQuery, InvoiceResponse>>();
         Result<InvoiceResponse> fetched = await get.Handle(new GetInvoiceQuery(created.Value), TestContext.Current.CancellationToken);
 
-        fetched.IsSuccess.ShouldBeTrue();
+        fetched.ShouldBeSuccess();
         InvoiceResponse invoice = fetched.Value;
         invoice.CustomerName.ShouldBe("ACME Corp");
         invoice.CustomerEmail.ShouldBe("billing@acme.com");
@@ -60,11 +60,11 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
             await addLine.Handle(new AddInvoiceLineCommand(id, "Line", 10m), TestContext.Current.CancellationToken);
             if (dueDate is { } due)
             {
-                (await issue.Handle(new IssueInvoiceCommand(id, due), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+                (await issue.Handle(new IssueInvoiceCommand(id, due), TestContext.Current.CancellationToken)).ShouldBeSuccess();
             }
             if (paid)
             {
-                (await pay.Handle(new PayInvoiceCommand(id), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+                (await pay.Handle(new PayInvoiceCommand(id), TestContext.Current.CancellationToken)).ShouldBeSuccess();
             }
             return id;
         }
@@ -85,7 +85,7 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
 
         var overdue = await list.Handle(new ListOverdueInvoicesQuery(Page: 1, PageSize: 20), TestContext.Current.CancellationToken);
 
-        overdue.IsSuccess.ShouldBeTrue();
+        overdue.ShouldBeSuccess();
         overdue.Value.TotalCount.ShouldBe(2);
         overdue.Value.Items.Select(static i => i.CustomerName).ShouldBe(["overdue-august", "overdue-september"]);
     }
