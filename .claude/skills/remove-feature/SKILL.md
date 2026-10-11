@@ -17,7 +17,7 @@ After each step `./scripts/dotnet.sh build Trellis.slnx` — the error frontier 
 Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events, errors, specs, `IInvoiceRepository`). `Domain/Common` is shared, not invoice-owned: `EmailAddress` is used by Auth (`RegisterCommandValidator`) — keep it. `Money` + `Currency` have no other consumer today — delete them (and `MoneyTests`) unless your features want them.
 
 ## 2. Application
-- Delete `Features/Invoices/` (7 use-case slices + `EventHandlers/` + `InvoiceResponse.cs`) and `Observability/InvoiceMetrics.cs`.
+- Delete `Features/Invoices/` (7 use-case slices + `EventHandlers/` + `InvoiceResponse.cs`) and `Observability/InvoiceMetrics.cs`, and the `Trellis.Invoices` rows (`trellis.invoices.issued`, `trellis.invoices.paid`, `trellis.invoice.currency`) from the *Telemetry reference* in `docs/deployment.md`: `TelemetryNamingTests` fails on a documented name the code no longer emits.
 - `DependencyInjection.cs`: drop `AddSingleton<InvoiceMetrics>()`. Leave the pipeline's `TryDecorate` lines alone: Invoices holds the only queries (`GetInvoice`, `ListOverdueInvoices`), and `TryDecorate`, unlike Scrutor's `Decorate` (which throws when it finds nothing to wrap), lets an assembly without a single query handler boot. Your first query gets the decorators by itself.
 - `Authorization/Permissions.cs`: remove `Permissions.Invoices`, its two entries in `Permissions.All`, and the `Member` grant in `Roles.Permissions` — replace with your own permissions rather than leaving Member empty.
 

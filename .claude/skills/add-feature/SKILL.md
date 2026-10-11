@@ -47,7 +47,9 @@ after each layer.
       to a role in `Roles.Permissions`. The MigrationService and the test hosts seed from that map;
       never grant one by hand.
 - [ ] A meter or `ActivitySource` is named `Trellis.<Area>`, instruments `trellis.<area>.<name>`
-      with a unit [`TelemetryNamingTests`]; nothing to register in a host.
+      with a unit, and each new name, unit and `[LoggerMessage]` event id gets its row in
+      `docs/deployment.md`'s *Telemetry reference* [`TelemetryNamingTests`, both ways]; nothing to
+      register in a host.
 - [ ] Options: a POCO with DataAnnotations, bound with `AddOptions<T>().Bind(...)` and validated at
       boot [`OptionsConventionTests`].
 
