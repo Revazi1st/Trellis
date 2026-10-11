@@ -73,6 +73,32 @@ public sealed partial class ConventionTests
     }
 
     [Fact]
+    public void Handlers_live_only_in_Application()
+    {
+        // AddApplication's assembly scan registers Application's handlers, and Scrutor decorates only the
+        // descriptors present when it runs. A handler declared anywhere else is never registered, or, added
+        // by hand later, runs without tracing, logging, validation or a commit, and nothing reports it. The
+        // SharedKernel's pipeline stages implement the contracts too: they wrap a handler, they are not one.
+        List<string> strays = [.. HandlersOutside(
+        [
+            Architecture.SharedKernelAssembly,
+            Architecture.DomainAssembly,
+            Architecture.InfrastructureAssembly,
+            Architecture.PersistenceAssembly,
+            Architecture.ApiContractsAssembly,
+            Architecture.ApiCommonAssembly,
+            Architecture.ApiAssembly,
+        ])];
+
+        strays.ShouldBeEmpty("a command, query or domain-event handler lives in Application's Features/, where the scan and the pipeline find it");
+    }
+
+    [Fact]
+    public void The_location_rule_refuses_a_handler_outside_Application()
+        => HandlersOutside([typeof(PlantedViolations).Assembly])
+            .ShouldContain(typeof(PlantedViolations.HandlerCallingOtherUseCases).FullName!, StringComparer.Ordinal);
+
+    [Fact]
     public void The_composition_rule_refuses_a_handler_calling_other_use_cases()
         => UseCaseCompositionIn(typeof(PlantedViolations.HandlerCallingOtherUseCases))
             .Count()
@@ -275,6 +301,27 @@ public sealed partial class ConventionTests
         => assembly.GetTypes()
             .Where(type => type is { IsClass: true, IsAbstract: false }
                            && type.GetInterfaces().Any(i => i.IsGenericType && contracts.Contains(i.GetGenericTypeDefinition())));
+
+    /// <summary>The handler implementations in <paramref name="assemblies"/>, the SharedKernel's pipeline stages excepted.</summary>
+    private static IEnumerable<string> HandlersOutside(Assembly[] assemblies)
+        => assemblies
+            .SelectMany(static assembly => ImplementationsOf(assembly, HandlerContracts))
+            .Where(static type => !IsPipelineStage(type))
+            .Select(static type => type.FullName!);
+
+    /// <summary>A decorator in the SharedKernel: an open generic whose constructor takes the contract it implements.</summary>
+    private static bool IsPipelineStage(Type type)
+    {
+        if (!type.IsGenericTypeDefinition || type.Assembly != Architecture.SharedKernelAssembly)
+        {
+            return false;
+        }
+
+        HashSet<Type> implemented = [.. type.GetInterfaces().Where(static i => i.IsGenericType).Select(static i => i.GetGenericTypeDefinition())];
+        return type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            .SelectMany(static constructor => constructor.GetParameters())
+            .Any(parameter => parameter.ParameterType.IsGenericType && implemented.Contains(parameter.ParameterType.GetGenericTypeDefinition()));
+    }
 
     /// <summary>Each constructor parameter of <paramref name="handler"/> that reaches another use case or the commit.</summary>
     private static IEnumerable<string> UseCaseCompositionIn(Type handler)
