@@ -27,4 +27,5 @@ Feature-based minimal APIs, separate Infrastructure and Persistence, hand-rolled
 
 The generated project gets its own README and an empty CHANGELOG, plus `.trellis-template.json`
 recording this package's version and the options you chose; its `docs/upgrading.md` uses that file to
-adopt a later version. Release notes: <https://github.com/Revazi1st/trellis/blob/main/CHANGELOG.md>.
+adopt a later version. Release notes: <https://github.com/Revazi1st/Trellis/blob/main/CHANGELOG.md>.
+Credits for the ideas the template borrows: <https://github.com/Revazi1st/Trellis#credits>.

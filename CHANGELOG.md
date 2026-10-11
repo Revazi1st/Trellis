@@ -218,5 +218,5 @@ this version with `docs/upgrading.md` and read these notes first:
 - Projects named in kebab case produced a solution that did not load; such names now get a warning
   and a consistent tree.
 
-[Unreleased]: https://github.com/Revazi1st/trellis/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Revazi1st/trellis/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Revazi1st/Trellis/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Revazi1st/Trellis/releases/tag/v0.1.0

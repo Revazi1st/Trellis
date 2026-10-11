@@ -144,7 +144,7 @@
       "type": "generated",
       "generator": "constant",
       "parameters": {
-        "value": "https://github.com/Revazi1st/trellis"
+        "value": "https://github.com/Revazi1st/Trellis"
       },
       "replaces": "TEMPLATE-MARKER-REPOSITORY",
       "description": "Where the template's CHANGELOG and releases live, written into the marker for docs/upgrading.md."
