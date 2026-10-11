@@ -99,6 +99,13 @@ If you generated a project from 0.1.0, read these before adopting this version w
   Redis with `--use-redis`); `scripts/check-adr-links.sh` also resolves every relative Markdown link;
   `.gitattributes` gives C# diffs hunk headers that name the member.
 - **Aspire dashboard**: a "Scalar" link on the `api` resource.
+- **AppHost launch profiles**: `tools/Trellis.AppHost/Properties/launchSettings.json` with an `https`
+  profile (dashboard at `https://localhost:17171`) and an `http` one (`http://localhost:15171`), so
+  the AppHost runs from Rider's and Visual Studio's Aspire run configuration, which refuses to start
+  without a profile. `dotnet run` and `aspire run` pick the `https` profile too instead of a dynamic
+  dashboard URL. An `appsettings.json` beside it keeps the dashboard's own request logs out of the
+  AppHost console (`Microsoft.AspNetCore` and `Aspire.Hosting.Dcp` at Warning), as the Aspire
+  starter template does.
 - **Template repository** (not in generated projects): a Credits section in the README and the rule
   that keeps it current, a package icon and wider tags, a Discussions link for questions, and a
   Windows leg in Template CI.

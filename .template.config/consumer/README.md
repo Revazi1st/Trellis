@@ -29,6 +29,9 @@ aspire run
 dotnet run --project tools/Trellis.AppHost
 ```
 
+From Rider or Visual Studio, run the `Trellis.AppHost` project with its `https` launch profile
+(`http` if you have no trusted development certificate yet); the dashboard opens by itself.
+
 <!--#if (UseMultitenancy) -->
 Multi-tenancy is on: regenerate the initial migration before the first run
 ([docs/development.md](docs/development.md), "Multi-tenancy").

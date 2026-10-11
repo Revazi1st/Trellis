@@ -162,6 +162,17 @@ wired together; open the dashboard URL either command prints. This is the best l
 SDK is available. The Aspire CLI reads the AppHost path from the committed `aspire.config.json`
 (`appHost.path`), the project settings file it would otherwise create on first use.
 
+From Rider or Visual Studio, run the **Trellis.AppHost** project: its `Properties/launchSettings.json`
+has an `https` profile (the dashboard at `https://localhost:17171`) and an `http` profile
+(`http://localhost:15171`, no certificate involved). The IDE's Aspire run configuration needs one of
+them; without a launch profile it refuses to start, while `dotnet run` and `aspire run` fall back to
+a dynamic dashboard URL. The `https` profile wants a trusted development certificate: run
+`dotnet dev-certs https --trust` once (macOS and Windows prompt for confirmation), or use `http`.
+The AppHost's own profile is the only one Aspire reads: the API, web and migration projects run
+with `ExcludeLaunchProfile = true` and get their endpoints and connection string from Aspire
+(the comment in `tools/Trellis.AppHost/Program.cs` says why). The AppHost reads its `appsettings.json`
+from the project folder; it only sets log levels, so the dashboard's request logs stay out of the console.
+
 ### Containerized smoke
 
 See the `run-app` skill — Postgres + migration worker + API (+ web) as sibling containers on one network.
