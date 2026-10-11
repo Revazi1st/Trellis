@@ -2,9 +2,9 @@ using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using Shouldly;
 using Trellis.Application.Features.Invoices.IssueInvoice;
-using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Results;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.Application.UnitTests.Invoices;
@@ -64,7 +64,7 @@ public sealed class IssueInvoiceCommandHandlerTests
     public async Task Handle_DraftWithoutLines_IsAWholeRequestError()
     {
         // Issue has several rules; only the due date's belongs to one request member.
-        Invoice invoice = InvoiceTestData.Draft();
+        Invoice invoice = InvoiceFactory.Draft();
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = new IssueInvoiceCommandHandler(_invoices, _time);
 
@@ -103,8 +103,7 @@ public sealed class IssueInvoiceCommandHandlerTests
 
     private Invoice DraftWithLine()
     {
-        Invoice invoice = InvoiceTestData.Draft();
-        invoice.AddLine("Consulting", Money.Create(100m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
+        Invoice invoice = InvoiceFactory.DraftWithLine();
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         return invoice;
     }

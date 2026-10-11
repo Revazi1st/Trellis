@@ -1,12 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Trellis.Application.Features.Invoices.AddInvoiceLine;
-using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Domain.Invoices;
 using Trellis.Persistence;
 using Trellis.SharedKernel.Domain;
-using Trellis.SharedKernel.Messaging;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
@@ -16,13 +13,9 @@ public sealed class SoftDeleteInterceptorTests(DatabaseFixture database) : Integ
     [Fact]
     public async Task Remove_becomes_soft_delete_and_preserves_child_lines()
     {
-        var create = Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
-        var addLine = Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>();
-
-        InvoiceId id = (await create.Handle(
-            new CreateInvoiceCommand("ACME", "a@b.co", "USD"), TestContext.Current.CancellationToken)).Value;
-        await addLine.Handle(new AddInvoiceLineCommand(id, "Design", 10m), TestContext.Current.CancellationToken);
-        await addLine.Handle(new AddInvoiceLineCommand(id, "Build", 20m), TestContext.Current.CancellationToken);
+        InvoiceId id = await Services.CreateInvoiceAsync();
+        await Services.AddInvoiceLineAsync(id, "Design");
+        await Services.AddInvoiceLineAsync(id, "Build");
 
         using (var deleteScope = CreateScope())
         {

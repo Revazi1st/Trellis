@@ -3,6 +3,7 @@ using NSubstitute;
 using Shouldly;
 using Trellis.Application.Features.Invoices.PayInvoice;
 using Trellis.Domain.Invoices;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.Application.UnitTests.Invoices;
@@ -17,7 +18,7 @@ public sealed class PayInvoiceCommandHandlerTests
     [Fact]
     public async Task Pays_issued_invoice_stamping_current_time()
     {
-        Invoice invoice = InvoiceTestData.Issued();
+        Invoice invoice = InvoiceFactory.Issued();
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = new PayInvoiceCommandHandler(_invoices, _time);
 
@@ -43,7 +44,7 @@ public sealed class PayInvoiceCommandHandlerTests
     [Fact]
     public async Task Draft_invoice_cannot_be_paid()
     {
-        Invoice invoice = InvoiceTestData.Draft();
+        Invoice invoice = InvoiceFactory.Draft();
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = new PayInvoiceCommandHandler(_invoices, _time);
 

@@ -3,13 +3,11 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.Persistence;
 using Trellis.Persistence.Interceptors;
 using Trellis.SharedKernel.Domain;
-using Trellis.SharedKernel.Messaging;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
@@ -54,7 +52,7 @@ public sealed class AggregateConcurrencyTests(DatabaseFixture database) : Integr
     public async Task A_child_only_change_checks_and_bumps_the_root_version()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
-        InvoiceId id = await CreateInvoiceAsync(ct);
+        InvoiceId id = await Services.CreateInvoiceAsync();
 
         await using AppDbContext first = UnauditedContext();
         await using AppDbContext second = UnauditedContext();
@@ -74,7 +72,7 @@ public sealed class AggregateConcurrencyTests(DatabaseFixture database) : Integr
     public async Task An_untouched_aggregate_is_not_written()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
-        InvoiceId id = await CreateInvoiceAsync(ct);
+        InvoiceId id = await Services.CreateInvoiceAsync();
 
         await using AppDbContext context = UnauditedContext();
         Invoice invoice = await context.Invoices.SingleAsync(loaded => loaded.Id == id, ct);
@@ -83,10 +81,6 @@ public sealed class AggregateConcurrencyTests(DatabaseFixture database) : Integr
         (await context.SaveChangesAsync(ct)).ShouldBe(0);
         invoice.Version.ShouldBe(versionBefore);
     }
-
-    private async Task<InvoiceId> CreateInvoiceAsync(CancellationToken ct)
-        => (await Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>()
-            .Handle(new CreateInvoiceCommand("ACME", "a@b.co", "USD"), ct)).Value;
 
     /// <summary>The real context over the fixture database, but with none of the host's interceptors registered.</summary>
     private AppDbContext UnauditedContext()

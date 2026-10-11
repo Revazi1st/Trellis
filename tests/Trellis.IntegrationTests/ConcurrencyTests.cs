@@ -1,12 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.Persistence;
 using Trellis.SharedKernel.Domain;
-using Trellis.SharedKernel.Messaging;
 using Trellis.SharedKernel.Results;
 using Xunit;
 
@@ -18,7 +16,7 @@ public sealed class ConcurrencyTests(DatabaseFixture database) : IntegrationTest
     public async Task Concurrent_updates_to_the_same_invoice_raise_a_concurrency_conflict()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
-        InvoiceId id = await CreateInvoiceAsync(ct);
+        InvoiceId id = await Services.CreateInvoiceAsync();
 
         // Two independent scopes load the same aggregate (each with its own xmin snapshot).
         using IServiceScope scopeA = CreateScope();
@@ -39,7 +37,7 @@ public sealed class ConcurrencyTests(DatabaseFixture database) : IntegrationTest
     public async Task A_stale_commit_through_the_unit_of_work_is_a_Conflict_result_not_an_exception()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
-        InvoiceId id = await CreateInvoiceAsync(ct);
+        InvoiceId id = await Services.CreateInvoiceAsync();
 
         using IServiceScope scopeA = CreateScope();
         using IServiceScope scopeB = CreateScope();
@@ -62,10 +60,6 @@ public sealed class ConcurrencyTests(DatabaseFixture database) : IntegrationTest
         Invoice stored = (await readScope.ServiceProvider.GetRequiredService<IInvoiceRepository>().GetByIdAsync(id, ct))!;
         stored.Lines.ShouldHaveSingleItem().Description.ShouldBe("From A");
     }
-
-    private async Task<InvoiceId> CreateInvoiceAsync(CancellationToken ct)
-        => (await Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>()
-            .Handle(new CreateInvoiceCommand("ACME", "a@b.co", "USD"), ct)).Value;
 
     private static async Task AddLineAsync(IServiceScope scope, InvoiceId id, string description, decimal amount, CancellationToken ct)
     {

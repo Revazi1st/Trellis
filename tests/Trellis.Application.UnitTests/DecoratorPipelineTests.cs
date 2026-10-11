@@ -7,11 +7,11 @@ using Shouldly;
 using Trellis.Application.Features.Invoices;
 using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Application.Features.Invoices.GetInvoice;
-using Trellis.Application.UnitTests.Invoices;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Messaging;
 using Trellis.SharedKernel.Results;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.Application.UnitTests;
@@ -31,9 +31,7 @@ public sealed class DecoratorPipelineTests : IDisposable
     {
         var handler = _pipeline.Resolve<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
 
-        var result = await handler.Handle(
-            new CreateInvoiceCommand("ACME", "a@b.co", "USD"),
-            TestContext.Current.CancellationToken);
+        var result = await handler.Handle(InvoiceFactory.CreateCommand(), TestContext.Current.CancellationToken);
 
         result.ShouldBeSuccess();
         _pipeline.Invoices.ReceivedWithAnyArgs(1).Add(default!);
@@ -132,8 +130,7 @@ public sealed class DecoratorPipelineTests : IDisposable
         _pipeline.UnitOfWork.CommitAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure(UnitOfWorkErrors.ConcurrencyConflict));
         var handler = _pipeline.Resolve<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
 
-        Result<InvoiceId> result = await handler.Handle(
-            new CreateInvoiceCommand("ACME", "a@b.co", "USD"), TestContext.Current.CancellationToken);
+        Result<InvoiceId> result = await handler.Handle(InvoiceFactory.CreateCommand(), TestContext.Current.CancellationToken);
 
         // The handler succeeded; the commit did not — the caller sees the commit's failure, not the id.
         result.IsFailure.ShouldBeTrue();
@@ -144,7 +141,7 @@ public sealed class DecoratorPipelineTests : IDisposable
     [Fact]
     public async Task Query_pipeline_never_calls_the_unit_of_work()
     {
-        Invoice invoice = InvoiceTestData.Draft();
+        Invoice invoice = InvoiceFactory.Draft();
         _pipeline.Invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = _pipeline.Resolve<IQueryHandler<GetInvoiceQuery, InvoiceResponse>>();
 

@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Domain;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
@@ -62,14 +62,11 @@ public sealed class UtcConversionTests(DatabaseFixture database) : IntegrationTe
 
     private async Task<InvoiceId> SaveAsync(DateTimeOffset dueDate, DateTimeOffset? paidAt)
     {
-        Currency usd = Currency.Create("USD").ShouldBeSuccess();
-        Invoice invoice = Invoice.Create("Offset Ltd", EmailAddress.Create("billing@offset.test").ShouldBeSuccess(), usd).ShouldBeSuccess();
-        invoice.AddLine("Line", Money.Create(10m, usd).ShouldBeSuccess()).ShouldBeSuccess();
-        invoice.Issue(dueDate, now: Time.GetUtcNow().ToOffset(PlusTwo)).ShouldBeSuccess();
-        if (paidAt is { } paid)
-        {
-            invoice.MarkPaid(paid).ShouldBeSuccess();
-        }
+        // Issued by a clock reading at +02:00 too: only the instants matter.
+        DateTimeOffset issuedAt = Time.GetUtcNow().ToOffset(PlusTwo);
+        Invoice invoice = paidAt is { } paid
+            ? InvoiceFactory.Paid(paid, dueDate, issuedAt)
+            : InvoiceFactory.Issued(dueDate, issuedAt);
 
         using IServiceScope scope = CreateScope();
         scope.ServiceProvider.GetRequiredService<IInvoiceRepository>().Add(invoice);

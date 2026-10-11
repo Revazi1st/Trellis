@@ -1,9 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Specifications;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
@@ -89,13 +89,7 @@ public sealed class SpecificationPagingTests(DatabaseFixture database) : Integra
     }
 
     private Invoice IssuedInvoice(string customer, DateTimeOffset dueDate)
-    {
-        Currency usd = Currency.Create("USD").ShouldBeSuccess();
-        Invoice invoice = Invoice.Create(customer, EmailAddress.Create("billing@ties.test").ShouldBeSuccess(), usd).ShouldBeSuccess();
-        invoice.AddLine("Line", Money.Create(10m, usd).ShouldBeSuccess()).ShouldBeSuccess();
-        invoice.Issue(dueDate, Time.GetUtcNow()).ShouldBeSuccess();
-        return invoice;
-    }
+        => InvoiceFactory.Issued(dueDate, issuedAt: Time.GetUtcNow(), customerName: customer);
 
     private sealed class FirstThreeById : Specification<Invoice>
     {

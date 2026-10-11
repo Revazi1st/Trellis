@@ -1,11 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Trellis.Application.Features.Invoices;
-using Trellis.Application.Features.Invoices.AddInvoiceLine;
-using Trellis.Application.Features.Invoices.CreateInvoice;
-using Trellis.Application.Features.Invoices.IssueInvoice;
 using Trellis.Application.Features.Invoices.ListOverdueInvoices;
-using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Messaging;
 using Trellis.SharedKernel.Specifications;
 using Xunit;
@@ -17,16 +13,10 @@ public sealed class PaginationTests(DatabaseFixture database) : IntegrationTestB
     [Fact]
     public async Task Overdue_list_is_paged_with_a_correct_total_count()
     {
-        var create = Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
-        var addLine = Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>();
-        var issue = Services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>();
-
         // Seed 5 invoices due a day after the fixture clock (a due date is never past when issued)...
         for (int i = 0; i < 5; i++)
         {
-            InvoiceId id = (await create.Handle(new CreateInvoiceCommand($"Cust {i}", "a@b.co", "USD"), TestContext.Current.CancellationToken)).Value;
-            await addLine.Handle(new AddInvoiceLineCommand(id, "Line", 10m), TestContext.Current.CancellationToken);
-            (await issue.Handle(new IssueInvoiceCommand(id, Now.AddDays(1)), TestContext.Current.CancellationToken)).ShouldBeSuccess();
+            await Services.IssuedInvoiceAsync(dueDate: Now.AddDays(1), customerName: $"Cust {i}");
         }
 
         // ...then let the clock run past it: all five are overdue.

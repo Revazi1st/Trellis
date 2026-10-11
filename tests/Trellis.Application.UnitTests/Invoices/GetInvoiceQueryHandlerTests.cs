@@ -1,8 +1,8 @@
 using NSubstitute;
 using Shouldly;
 using Trellis.Application.Features.Invoices.GetInvoice;
-using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.Application.UnitTests.Invoices;
@@ -14,8 +14,7 @@ public sealed class GetInvoiceQueryHandlerTests
     [Fact]
     public async Task Maps_aggregate_to_response()
     {
-        Invoice invoice = InvoiceTestData.Draft();
-        invoice.AddLine("Design", Money.Create(150.50m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
+        Invoice invoice = InvoiceFactory.DraftWithLine("Design", 150.50m);
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = new GetInvoiceQueryHandler(_invoices);
 

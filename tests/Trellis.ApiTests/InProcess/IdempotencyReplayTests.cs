@@ -59,7 +59,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
-        Guid invoiceId = await CreateInvoiceAsync(admin, ct);
+        Guid invoiceId = await admin.CreateInvoiceAsync();
         string key = Guid.NewGuid().ToString();
 
         (await AddLineAsync(admin, invoiceId, key, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -125,7 +125,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient healthy = await factory.CreateAdminClientAsync(ct);
-        Guid invoiceId = await CreateInvoiceAsync(healthy, ct);
+        Guid invoiceId = await healthy.CreateInvoiceAsync();
 
         // The gate opens after the command committed and before the response goes out: the exact window
         // in which a second request finds the reservation but no response.
@@ -211,14 +211,6 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         problem.Instance.ShouldBe(instance, body);
         problem.CorrelationId.ShouldBe(response.Headers.GetValues(CorrelationIdMiddleware.HeaderName).Single(), body);
         return problem;
-    }
-
-    private static async Task<Guid> CreateInvoiceAsync(HttpClient client, CancellationToken ct)
-    {
-        HttpResponseMessage created = await client.PostWithIdempotencyKeyAsync(
-            "/api/v1/invoices", new CreateInvoiceRequest("Replay Ltd", "lines@replay.io", "USD"), ct);
-        created.StatusCode.ShouldBe(HttpStatusCode.Created);
-        return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;
     }
 
     private static Task<HttpResponseMessage> PostCreateAsync(HttpClient client, string key, CreateInvoiceRequest request, CancellationToken ct)

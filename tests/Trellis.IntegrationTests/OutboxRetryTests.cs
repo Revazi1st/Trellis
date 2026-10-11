@@ -11,18 +11,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using NSubstitute;
 using Shouldly;
-using Trellis.Application.Features.Invoices.AddInvoiceLine;
-using Trellis.Application.Features.Invoices.CreateInvoice;
-using Trellis.Application.Features.Invoices.IssueInvoice;
-using Trellis.Application.Features.Invoices.PayInvoice;
-using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.Domain.Invoices.Events;
 using Trellis.IntegrationTests.Telemetry;
 using Trellis.Persistence;
 using Trellis.Persistence.Outbox;
 using Trellis.SharedKernel.Domain;
-using Trellis.SharedKernel.Messaging;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
@@ -510,10 +505,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         using (IServiceScope scope = CreateScope())
         {
             AppDbContext context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Invoice invoice = Invoice.Create("ACME", EmailAddress.Create("billing@acme.com").ShouldBeSuccess(), Currency.Create("USD").ShouldBeSuccess()).ShouldBeSuccess();
-            invoice.AddLine("Line", Money.Create(10m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
-            invoice.Issue(Now.AddDays(14), Now).ShouldBeSuccess();
-            invoice.MarkPaid(Now).ShouldBeSuccess();
+            Invoice invoice = InvoiceFactory.Paid(paidAt: Now, dueDate: Now.AddDays(14), issuedAt: Now);
             context.Set<Invoice>().Add(invoice);
             await context.SaveChangesAsync(Ct);
         }
@@ -866,22 +858,12 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         return id;
     }
 
-    private async Task<InvoiceId> IssueInvoiceAsync()
-    {
-        InvoiceId id = (await Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>()
-            .Handle(new CreateInvoiceCommand("ACME", "billing@acme.com", "USD"), Ct)).Value;
-        (await Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>()
-            .Handle(new AddInvoiceLineCommand(id, "Line", 10m), Ct)).ShouldBeSuccess();
-        (await Services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
-            .Handle(new IssueInvoiceCommand(id, Time.GetUtcNow().AddDays(14)), Ct)).ShouldBeSuccess();
-        return id;
-    }
+    private Task<InvoiceId> IssueInvoiceAsync() => Services.IssuedInvoiceAsync();
 
     private async Task PayAsync(InvoiceId id)
     {
         using IServiceScope scope = CreateScope();
-        (await scope.ServiceProvider.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
-            .Handle(new PayInvoiceCommand(id), Ct)).ShouldBeSuccess();
+        await scope.ServiceProvider.PayInvoiceAsync(id);
     }
 
     private async Task<OutboxMessage> RowAsync(string type)
@@ -992,7 +974,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         {
             if (writing.Enabled)
             {
-                repository.Add(Invoice.Create(CustomerName, EmailAddress.Create("copy@acme.com").ShouldBeSuccess(), Currency.Create("USD").ShouldBeSuccess()).ShouldBeSuccess());
+                repository.Add(InvoiceFactory.Draft(CustomerName, customerEmail: "copy@acme.com"));
             }
 
             return Task.CompletedTask;
