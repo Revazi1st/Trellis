@@ -164,7 +164,10 @@ token, `GET /invoices/{id}` emits it as a strong ETag (`"42"`: the version moves
 line's included) and declares `.SupportsConditionalGet()`, so the document lists `If-None-Match`, the
 `ETag` header and the 304. The header is parsed, not string-compared (RFC 9110 §13.1.2): the strong
 form, the weak form `W/"42"`, a list and `*` all answer **304** with no body, a stale or unparsable tag
-answers 200 — pollers stop re-downloading unchanged aggregates.
+answers 200 — pollers stop re-downloading unchanged aggregates. The 200 and the 304 set
+`Cache-Control: private, no-cache` themselves, the one opt-out from the API's `no-store` default
+(ADR-0021 amendment): a browser may keep the invoice but revalidates it with the ETag before each use,
+while the 404 and every other API response stay `no-store`.
 
 **Conditional writes** (ADR-0025 amendment): `AddInvoiceLine`, `IssueInvoice`, `PayInvoice` and
 `VoidInvoice` take an optional `If-Match` with that ETag (`.SupportsConditionalWrite()`). The endpoint

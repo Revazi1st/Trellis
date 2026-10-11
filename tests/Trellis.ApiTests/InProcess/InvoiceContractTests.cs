@@ -54,6 +54,33 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
     }
 
     [Fact]
+    public async Task Get_invoice_lets_a_browser_keep_and_revalidate_it_while_other_reads_stay_no_store()
+    {
+        // The conditional GET opts out of the API's no-store default, on the 200 and the 304 alike; a read
+        // without an ETag keeps the default (ADR-0021 amendment).
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        (Guid id, long version) = await CreateAndReadAsync(admin, ct);
+
+        using HttpResponseMessage full = await admin.GetAsync($"/api/v1/invoices/{id}", ct);
+        using HttpResponseMessage revalidated = await GetWithIfNoneMatchAsync(admin, id, $"\"{version}\"", ct);
+        using HttpResponseMessage list = await admin.GetAsync("/api/v1/invoices/overdue", ct);
+
+        full.StatusCode.ShouldBe(HttpStatusCode.OK);
+        revalidated.StatusCode.ShouldBe(HttpStatusCode.NotModified);
+        foreach (HttpResponseMessage response in new[] { full, revalidated })
+        {
+            System.Net.Http.Headers.CacheControlHeaderValue cacheControl = response.Headers.CacheControl.ShouldNotBeNull();
+            cacheControl.Private.ShouldBeTrue();
+            cacheControl.NoCache.ShouldBeTrue();
+            cacheControl.NoStore.ShouldBeFalse();
+        }
+
+        list.StatusCode.ShouldBe(HttpStatusCode.OK);
+        list.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task A_write_naming_the_current_ETag_applies_and_a_stale_one_is_a_412_that_changes_nothing()
     {
         // The exposure If-Match closes: a colleague adds a line after you loaded the draft, and your Issue
