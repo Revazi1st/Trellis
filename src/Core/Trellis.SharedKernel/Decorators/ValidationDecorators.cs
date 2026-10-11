@@ -93,10 +93,10 @@ public static class ValidationDecorators
     /// <summary>
     /// FluentValidation's <c>ErrorCode</c> defaults to the validator type name; strip the suffix so the
     /// wire says <c>Validation.NotEmpty</c>, and let an explicit <c>.WithErrorCode("Invoice.DueDateInPast")</c>
-    /// through verbatim. A <c>Must</c> without a code is no exception: its validator is the
-    /// <c>PredicateValidator</c>, so it arrives as <c>Validation.Predicate</c> (<c>Validation.AsyncPredicate</c>
-    /// for <c>MustAsync</c>), which tells a client nothing; give it a code (ADR-0024, rule 5). Only a failure
-    /// whose code is empty, such as a <c>Custom</c> rule's <c>AddFailure</c>, becomes <c>Validation.Invalid</c>.
+    /// through verbatim. An uncoded <c>Must</c> follows the first rule, because its validator is the
+    /// <c>PredicateValidator</c>: it arrives as <c>Validation.Predicate</c> (<c>Validation.AsyncPredicate</c>
+    /// for <c>MustAsync</c>), which tells a client nothing, so give it a code (ADR-0024, rule 5). Only a
+    /// failure whose code is empty, such as a <c>Custom</c> rule's <c>AddFailure</c>, becomes <c>Validation.Invalid</c>.
     /// </summary>
     internal static string CodeFor(ValidationFailure failure)
     {
