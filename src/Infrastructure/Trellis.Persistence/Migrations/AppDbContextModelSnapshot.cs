@@ -419,6 +419,7 @@ namespace Trellis.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("OccurredAtUtc")
