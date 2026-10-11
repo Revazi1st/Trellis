@@ -56,6 +56,14 @@ public sealed class AppDbContext(
         }
     }
 
+    /// <summary>
+    /// Concurrency at the aggregate boundary is a property of the model, not of a host's wiring: the
+    /// promotion pass is attached here, after whatever interceptors the host registered, so every instance
+    /// of this context — the API's, the migration worker's, a test's — runs it (ADR-0006).
+    /// </summary>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        => optionsBuilder.AddInterceptors(Interceptors.AggregateConcurrencyInterceptor.Instance);
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
