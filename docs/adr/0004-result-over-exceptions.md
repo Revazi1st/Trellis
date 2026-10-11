@@ -3,7 +3,7 @@
 - **Status**: accepted — the HTTP mapping paragraph is superseded by ADR-0024 (problem shape v2); the Result decision stands
 - **Date**: 2026-07-14
 - **Amended**: 2026-10-08 — the unit of work sits inside the Result boundary; the HTTP shape moved to ADR-0024 (see *Amendment* below)
-- **Amended**: 2026-10-11 — `ErrorType.Unavailable` (503) for a dependency that is down for now, `ErrorType.PreconditionFailed` (412) for a version the caller expected (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-10-11 — `ErrorType.Unavailable` (503) for a dependency that is down for now, `ErrorType.PreconditionFailed` (412) for a version the caller expected (see *Amendment (2026-10-11)* below); CA1806 in `.editorconfig` fails a Release build that discards a Domain or `Result` value, the partial stand-in for a type-aware analyzer (see *Consequences*)
 
 ## Context
 

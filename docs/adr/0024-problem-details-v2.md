@@ -5,7 +5,7 @@
 - **Supersedes**: the "At the HTTP boundary…" paragraph of ADR-0004 (the Result decision itself stands).
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
 - **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`); a `Result` never reaches JSON (see *Amendment* below)
-- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence; the 503 and 412 titles; the field of a body value of the wrong type; `WWW-Authenticate` on every 401; two more idempotency outcomes (see *Second amendment* below)
+- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence; the 503 and 412 titles; the field of a body value of the wrong type; `WWW-Authenticate` on every 401; two more idempotency outcomes (see *Second amendment* below); and a correction to rule 5: an uncoded `Must` arrives as `Validation.Predicate`, not `Validation.Invalid`, so the validator convention test refuses it
 
 ## Context
 
