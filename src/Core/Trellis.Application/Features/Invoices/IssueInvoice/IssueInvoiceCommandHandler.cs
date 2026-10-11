@@ -13,6 +13,7 @@ internal sealed class IssueInvoiceCommandHandler(IInvoiceRepository invoices, Ti
 
         return invoice is null
             ? Result.Failure(InvoiceErrors.NotFound(command.InvoiceId))
-            : invoice.Issue(command.DueDate, timeProvider.GetUtcNow());
+            : invoice.Issue(command.DueDate, timeProvider.GetUtcNow())
+                .AtField(nameof(command.DueDate), InvoiceErrors.DueDateInPast);
     }
 }

@@ -4,6 +4,7 @@ using Shouldly;
 using Trellis.Application.Features.Invoices.IssueInvoice;
 using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
+using Trellis.SharedKernel.Results;
 using Xunit;
 
 namespace Trellis.Application.UnitTests.Invoices;
@@ -36,7 +37,9 @@ public sealed class IssueInvoiceCommandHandlerTests
 
         var result = await handler.Handle(new IssueInvoiceCommand(invoice.Id, Now.AddDays(-1)), TestContext.Current.CancellationToken);
 
-        result.Error.ShouldBe(InvoiceErrors.DueDateInPast);
+        FieldError error = result.Error.ShouldBeOfType<FieldError>();
+        error.Field.ShouldBe(nameof(IssueInvoiceCommand.DueDate));
+        error.Code.ShouldBe(InvoiceErrors.DueDateInPast.Code);
         invoice.Status.ShouldBe(InvoiceStatus.Draft);
         invoice.DomainEvents.ShouldBeEmpty();
     }
@@ -54,7 +57,20 @@ public sealed class IssueInvoiceCommandHandlerTests
             new IssueInvoiceCommand(invoice.Id, new DateTimeOffset(2099, 1, 1, 0, 0, 0, TimeSpan.Zero)),
             TestContext.Current.CancellationToken);
 
-        result.Error.ShouldBe(InvoiceErrors.DueDateInPast);
+        result.Error.ShouldNotBeNull().Code.ShouldBe(InvoiceErrors.DueDateInPast.Code);
+    }
+
+    [Fact]
+    public async Task Handle_DraftWithoutLines_IsAWholeRequestError()
+    {
+        // Issue has several rules; only the due date's belongs to one request member.
+        Invoice invoice = InvoiceTestData.Draft();
+        _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
+        var handler = new IssueInvoiceCommandHandler(_invoices, _time);
+
+        var result = await handler.Handle(new IssueInvoiceCommand(invoice.Id, Now.AddDays(-1)), TestContext.Current.CancellationToken);
+
+        result.Error.ShouldBe(InvoiceErrors.NoLines);
     }
 
     [Fact]

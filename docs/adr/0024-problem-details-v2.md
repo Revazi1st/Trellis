@@ -4,6 +4,7 @@
 - **Date**: 2026-10-08
 - **Supersedes**: the "At the HTTP boundary…" paragraph of ADR-0004 (the Result decision itself stands).
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
+- **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`); a `Result` never reaches JSON (see *Amendment* below)
 
 ## Context
 
@@ -64,7 +65,9 @@ Every response with status ≥ 400 is `application/problem+json` with this shape
    `ErrorType.Validation`), never elsewhere:
    - `field` is the **JSON path of the offending request member** (`customerName`, `lines[0].amount`:
      camelCase per segment, computed at the API seam from FluentValidation's `PropertyName`), or `null`
-     when the error is about the request as a whole (every domain value-object error).
+     when the error is about the request as a whole (every domain value-object error). *(Superseded by
+     the 2026-10-11 amendment below: a handler names the field of a value-object or aggregate-rule error
+     with `AtField`; `null` remains for an error about the request as a whole, such as `Invoice.NoLines`.)*
    - `code` per entry: a FluentValidation failure is `Validation.` + the validator name without its
      `Validator` suffix (`Validation.NotEmpty`, `Validation.MaximumLength`, `Validation.Email`); a rule with
      `.WithErrorCode("Invoice.DueDateInPast")` passes its code through; a failure with no code is
@@ -88,7 +91,8 @@ explicitly in the OpenAPI document (ADR-0025), so generators do not guess.
 `FieldError(Field, Code, Description) : Error` is what `ValidationDecorators` emits per FluentValidation
 failure (it replaces the internal `FieldValidationFailure` of the pipeline-v2 pass); domain errors stay
 plain `Error`s; `ValidationError` aggregates both and `Result.Combine` flattens nested ones unchanged.
-The outcome log line's `field:code` pairs read the same record.
+The outcome log line's `field:code` pairs read the same record. *(Refined by the 2026-10-11 amendment
+below: `Combine` merges only when every failure is a validation error.)*
 
 ### One writer, one catalogue (Api.Common)
 
@@ -152,3 +156,38 @@ a time, by deserialising each response into `ProblemResponse`.
   identical in Development and Production — the in-process tests prove what production does.
 - The `type` URN is not dereferenceable. A product that wants documentation links changes
   `ProblemTypes.Prefix` once; every consumer that branched on `code` is unaffected.
+
+## Amendment (2026-10-11): `Result.Combine` merges only validation failures; value-object errors name their field; a `Result` never reaches JSON
+
+**`Combine` is type-aware.** As first written, `Result.Combine` flattened any two failures into one
+`Validation.General`, so two NotFounds, or a NotFound beside a Failure, answered 400 and logged at
+Information. It now merges into a `ValidationError` only when every failure is `ErrorType.Validation`
+(nested ones still flattened); otherwise it returns one error unmerged: the first `Failure`, else the
+first non-validation failure. The validation errors beside it are dropped, because the 404 or the 500 is
+the answer that matters. A single failure is returned as it is. `Combine<T1, T2>` and `Combine<T1, T2, T3>` apply the same rule
+and keep the values as a tuple, which the deconstructing `Bind`/`Map` overloads unpack, so
+`CreateInvoiceCommandHandler` is one chain. The wire contract above is unchanged.
+
+**Value-object and aggregate-rule errors name the request field.** Rule 5 made every domain
+value-object error a whole-request error, so an API client or the Blazor form could not put
+"The email address is not in a valid format." under the e-mail input when `"a@b"` passed every shape
+check and only `EmailAddress.Create` rejected it. The Domain stays transport-free: factories and
+aggregate methods still return plain `Error`s. The handler, which knows which request member it passed,
+attributes the failure with `Result.AtField(member)` (in `ResultExtensions`):
+`EmailAddress.Create(command.CustomerEmail).AtField(nameof(command.CustomerEmail))`. `AtField` rewraps
+a plain `ErrorType.Validation` error as `FieldError(member, code, description)`. It passes through every
+other type, an existing `FieldError` and an aggregated `ValidationError`, so each value object is
+attributed before `Combine`. The code-selective overload, `AtField(member, params Error[] only)`, serves a
+value object spanning two inputs or an aggregate method with several rules: `Invoice.Issue` attributes
+`Invoice.DueDateInPast` to `dueDate` while `Invoice.NoLines` stays `field: null`. The shape of `errors[]`
+is unchanged and so is every `code`; only which entries carry a path changed. A client that read
+`field: null` as "a domain error" branches on `code` instead, as "What consumers may rely on" already says.
+`ProblemDetailsContractTests` pins both kinds.
+
+**A `Result` never reaches JSON.** `CustomResults.Problem` is the only translation, but nothing enforced
+it: an endpoint that returned `Task<Result<T>>` instead of mapping it compiled, passed every gate and
+answered 200 with the Result's own members on success and a 500 on failure. Both Result types now carry
+`[JsonConverter(typeof(ResultJsonGuard))]`, a converter factory that throws `NotSupportedException`
+naming `TypedResults` and `CustomResults.Problem` instead of serialising. Minimal APIs resolve the
+response contract when they build the endpoint, so such an endpoint stops the host at boot, and every
+in-process test with it; `ProblemDetailsContractTests` proves it with a throwaway endpoint.
