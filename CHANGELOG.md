@@ -26,6 +26,18 @@ If you generated a project from 0.1.0, read these before adopting this version w
 - **Dashboards**: the use-case span attributes are `trellis.usecase.outcome`,
   `trellis.usecase.error_code` and `trellis.usecase.error_type`, and the outcome log line changed
   shape (see *Changed*).
+- **`POST /invoices` requires an `Idempotency-Key`** (400 `Idempotency.KeyRequired` without one); the
+  writes to an existing invoice still accept it optionally. A repeated header or a comma-separated list
+  is 400 `Idempotency.InvalidKey` instead of being joined into one key the caller never sent.
+- **Two new `ErrorType`s change statuses.** `ExchangeRate.Unavailable` is a **503** (was 500) and a
+  refusal by the provider is the new 500 `ExchangeRate.Rejected`; a stale `If-Match` on an invoice
+  write is **412** `Invoice.VersionMismatch`. A client that branched on 500 for the outage should
+  branch on 503, and a decorator or classifier of your own that switches over `ErrorType` has two more
+  values, `Unavailable` and `PreconditionFailed`.
+- **A Release build fails on a discarded Domain or `Result` value** (CA1806 over `src/` and `tools/`):
+  a dropped `invoice.Issue(…)` or `Result.Combine(…)` is an error. Handle it or write `_ = …`.
+- **`GET /invoices/{id}` emits a strong ETag** (`"42"`, was `W/"42"`); `If-None-Match` still compares
+  weakly, so a stored tag keeps answering 304.
 
 ### Added
 
@@ -82,6 +94,54 @@ If you generated a project from 0.1.0, read these before adopting this version w
 - **Template repository** (not in generated projects): a Credits section in the README and the rule
   that keeps it current, a package icon and wider tags, a Discussions link for questions, and a
   Windows leg in Template CI.
+- **503 `Unavailable` and 412 `PreconditionFailed`** (ideas from
+  [xavierjohn/Trellis](https://github.com/xavierjohn/Trellis)): `ErrorType.Unavailable` with
+  `Error.Unavailable(code, description)` is a dependency that is down for now; `CustomResults.Problem`
+  answers **503** "Service unavailable" with a fixed `detail` ("A service this request depends on is
+  unavailable right now. Retry later.") and the error's `code` (no `Retry-After`: the adapter's retry
+  budget is spent by then). `ErrorType.PreconditionFailed` with `Error.PreconditionFailed(code,
+  description)` answers **412** "Precondition failed" with the error's own description.
+  `ProblemDetailsContractTests` has a row for each.
+- **Conditional writes** (xavierjohn/Trellis): `AddInvoiceLine`, `IssueInvoice`, `PayInvoice` and
+  `VoidInvoice` take an optional `If-Match` carrying the ETag the `GET` emitted
+  (`.SupportsConditionalWrite()` declares the header and the 412 in the OpenAPI document; the commands
+  gained `uint? ExpectedVersion`, compared by `InvoicePreconditions.ToWrite`). A stale, weak, listed or
+  foreign tag is 412 `Invoice.VersionMismatch` that changes nothing; `*` or no header is unconditional
+  (no 428); a missing invoice stays a 404. The Blazor detail page sends the version it loaded and shows
+  "Someone else changed this in the meantime" over the reloaded invoice on a 412.
+- **One permission per endpoint, pinned** (idea from amantinband/clean-architecture):
+  `EndpointMetadataTests.ExpectedPermissions` lists each endpoint's one permission beside
+  `AnonymousAllowlist` and fails on a missing, extra or stale row; a wire-level theory calls every
+  endpoint with only its permission (its own status) and with every other one (403 `Auth.Forbidden`).
+  `ApiFactory.CreateClientWithPermissions(params string[])` mints a token through the host's
+  `ITokenProvider` for tests of your own.
+- **Fitness tests** (ideas from xavierjohn/Trellis): `ErrorCodeVocabularyTests` reads every
+  `Error.<Type>(` factory, `.WithErrorCode(` and `ProblemCatalog` row under `src/` and `tools/` and
+  requires the `Area.Problem` shape, one meaning per code and no code shared between a catalogue row
+  and an `*Errors` class; `ConventionTests` refuses a handler that injects another `ICommandHandler` or
+  `IUnitOfWork` (a use case never runs another one) and any handler outside Application; a value
+  object may have neither a public constructor nor a public `set`/`init`;
+  `CommandValidatorConventionTests` fails a `Must`/`MustAsync` without `.WithErrorCode(…)` (it would
+  reach clients as `Validation.Predicate`); `OptionsConventionTests` boots the API with
+  `Email:Provider=Smtp` and one broken relay setting per row. Every new rule has a positive control over
+  a planted violation (`PlantedViolations`), named without `Invoice` so `remove-feature` leaves it alone.
+- **A Release build fails on a discarded `Result`**, the CA1806 stand-in for the analyzer idea from
+  xavierjohn/Trellis: `.editorconfig` lists every Domain member and `Result` combinator by
+  documentation-ID prefix under `[{src,tools}/**.cs]`, so a new aggregate is covered without an edit and
+  the prefixes follow the project name into a generated project. It matches by name, not by type, and
+  cannot see a dropped `await` of a `Task<Result>`.
+- **A body value of the wrong type names its field**: `"amount": "abc"` is still 400 `Request.Malformed`,
+  now with `errors: [{ field: "lines[0].amount", code: "Request.InvalidValue", description: "The value
+  is not of the type this field expects." }]`; a JSON syntax error names no field.
+- **Tests**: `UniqueConstraintTests` (an unregistered unique violation still throws out of
+  `CommitAsync` and writes nothing, beside the registered one that maps to a `Result`);
+  `InvoiceFormMirrorTests` (the UI forms' lengths equal the Domain constants);
+  `UseCaseLoggingOptionsTests`; `ShouldHaveMediaType`/`ShouldBeProblemJson` assertions that fail when
+  `Content-Type` is missing (the `?.MediaType` form passed when both responses lacked the header).
+- **Docs**: `docs/INDEX.md` lists every skill under *Skills*, and `check-adr-links.sh` fails when one is
+  missing; the persistence rule names the lease fence and handler isolation, the infrastructure rule the
+  SMTP sender and its selected-only validation; a threat-model row for the SMTP relay credentials;
+  `docs/features/exchange-rates.md` carries the probed Frankfurter status table.
 
 ### Changed
 
@@ -120,6 +180,19 @@ If you generated a project from 0.1.0, read these before adopting this version w
   rollback. The auth validators bound the e-mail at 254 (was 320).
 - **Migration job**: a sample invoice whose transition fails stops the run with exit 1 instead of
   saving a half-built invoice.
+- **HTTP contract** (ADR-0021 and ADR-0024 amendments): every `/api/` response carries
+  `Cache-Control: no-store`, problems and the ETagged `GET` included, unless the endpoint sets its own
+  (`/auth/` is `no-store` whatever it sets); every 401 carries `WWW-Authenticate: Bearer`, the
+  Result-produced ones from login and refresh included.
+- **Exchange rates** (xavierjohn/Trellis): the reference client maps the provider's status by the
+  endpoint's contract (Frankfurter was probed): 422 and 400 → `ExchangeRate.UnknownCurrency` naming
+  both codes (the provider's text is never copied); 404, 401 and 403 → `ExchangeRate.Rejected`, logged
+  at Error as a misconfiguration; 408, 429 and 5xx after the retries, a timeout, an open circuit or
+  the limiter → `ExchangeRate.Unavailable` (503); an unreadable body → `ExchangeRate.MalformedResponse`
+  (500). The `add-integration` skill says to probe and map a new provider the same way.
+- **`Telemetry:IncludeErrorDetail`** is bound by the API host and is `true` only in
+  `appsettings.Development.json`: the error description is on the outcome line in Development and off
+  everywhere else unless you set it.
 
 ### Fixed
 
@@ -138,6 +211,8 @@ If you generated a project from 0.1.0, read these before adopting this version w
   256-character column with a 500.
 - The outcome log line was written after its use-case span had ended, so it linked to the HTTP
   request's span.
+- A lower-case quote currency (`usd`) came back from the exchange-rate client as
+  `ExchangeRate.UnknownCurrency`; the quote is matched case-insensitively.
 
 ### Security
 
@@ -148,6 +223,12 @@ If you generated a project from 0.1.0, read these before adopting this version w
   Identity's descriptions.
 - SMTP credentials are refused unless STARTTLS is on, the relay's reply (which quotes the recipient)
   is dropped from the error the outbox stores, and the log line masks the recipient.
+- **No `Error.Description` reaches a 5xx `detail`** (xavierjohn/Trellis): `CustomResults.Problem` works
+  out the status first and writes the catalogue sentence for any status of 500 or more, keeping the
+  `code`, so a third party's reply or a connection's complaint carried by a `Failure` never reaches a
+  client.
+- `Cache-Control: no-store` on every API response by default keeps per-user data and problem documents
+  out of browser and proxy caches.
 
 ## [0.1.0] - 2026-10-08
 
