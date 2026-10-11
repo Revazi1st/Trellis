@@ -211,7 +211,7 @@ describes planned work that is not in the template yet; the marker goes when it 
   - the per-use-case request collection and the Getting Started walkthrough, one request and body per step;
   - a configuration-gated SMTP sender and the user-secrets setup walkthrough;
   - the Domain Overview device, plain words before architecture, and the folder map that prompted our slice tree;
-  - *when adopted*: one authorization test per use case, which prompted pinning each endpoint's permission, and the permission-scoped token idiom;
+  - one authorization test per use case, which prompted pinning each endpoint's permission, and the permission-scoped token idiom;
   - *when adopted*: use-case drivers, optional-parameter factories, the paired HTTP test client and the switchable current-user double (rewritten, no MediatR);
   - *when adopted*: the one-test-suite-per-use-case discipline with test folders mirroring the Application slice;
   - *when adopted*: the eventual-consistency walkthrough shape, the one-aggregate-per-use-case explanation, and the idea of a reference time-triggered use case;
@@ -224,10 +224,11 @@ describes planned work that is not in the template yet; the marker goes when it 
   - value-object errors attributed to the request field, a type-aware and tuple `Result.Combine`, and whole-request validation errors;
   - error descriptions redacted from the outcome log line, and tracing outside logging;
   - concurrency promotion at the aggregate boundary, and declared unique constraints as 409;
-  - *once imported*: the build-time analyzer for a discarded `Result`, and the guard against a handler invoking another handler;
-  - *once imported*: error descriptions redacted from every 5xx `detail`;
-  - *once imported*: upstream status mapped by endpoint contract, `Unavailable` as 503, and optional `If-Match` on transition POSTs;
-  - *once imported*: the error-code vocabulary fitness test and the value-object constructor test.
+  - the guard against a handler invoking another handler;
+  - error descriptions redacted from every 5xx `detail`;
+  - upstream status mapped by endpoint contract, `Unavailable` as 503, and optional `If-Match` on transition POSTs;
+  - the error-code vocabulary fitness test and the value-object constructor test;
+  - *once imported*: the build-time analyzer for a discarded `Result`.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [ErrorOr](https://github.com/amantinband/error-or) by Amichai Mantinband (MIT): the `Error`/`ErrorType` vocabulary our hand-rolled `Result` mirrors (ADR-0004).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
