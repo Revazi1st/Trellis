@@ -268,7 +268,7 @@ public sealed partial class ConventionTests
     [InlineData("([\"SoftDeleted\"])", false)]
     [InlineData("([\"Tenant\"])", false)]
     public void The_bare_query_filter_scan_tells_a_bare_call_from_a_named_one(string arguments, bool flagged)
-        => BareIgnoreQueryFilters().IsMatch("context.Invoices.IgnoreQueryFilters" + arguments).ShouldBe(flagged);
+        => BareIgnoreQueryFilters().IsMatch("context.Orders.IgnoreQueryFilters" + arguments).ShouldBe(flagged);
 
     /// <summary>
     /// Positive control for the cancellation-filter scan, which also expects zero violations: the filter is

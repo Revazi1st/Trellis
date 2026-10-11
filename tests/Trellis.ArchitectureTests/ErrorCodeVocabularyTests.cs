@@ -41,7 +41,7 @@ public sealed partial class ErrorCodeVocabularyTests
     [Fact]
     public void Codes_are_Area_dot_Problem_in_PascalCase()
         => Found.Value.MalformedCodes().ShouldBeEmpty(
-            "a code is 'Area.Problem': PascalCase, one dot (Invoice.NotDraft); a family prefix is 'Area.'");
+            "a code is 'Area.Problem': PascalCase, one dot (Auth.EmailAlreadyInUse); a family prefix is 'Area.'");
 
     [Fact]
     public void A_code_keeps_one_meaning()
@@ -73,10 +73,10 @@ public sealed partial class ErrorCodeVocabularyTests
     }
 
     [Theory]
-    [InlineData("invoice.NotDraft")]
-    [InlineData("Invoice.not_draft")]
-    [InlineData("Invoice")]
-    [InlineData("Invoice.Not.Draft")]
+    [InlineData("order.NotDraft")]
+    [InlineData("Order.not_draft")]
+    [InlineData("Order")]
+    [InlineData("Order.Not.Draft")]
     [InlineData("")]
     public void The_scan_flags_a_malformed_code(string code)
         => Vocabulary.Read([new SourceFile("src/Planted/PlantedErrors.cs", $$"""
@@ -90,18 +90,18 @@ public sealed partial class ErrorCodeVocabularyTests
     {
         Vocabulary planted = Vocabulary.Read(
         [
-            new SourceFile("src/Planted/InvoiceErrors.cs", """
-                public static readonly Error NotDraft = Error.Conflict("Invoice.NotDraft", "Only a draft can change.");
+            new SourceFile("src/Planted/OrderErrors.cs", """
+                public static readonly Error NotDraft = Error.Conflict("Order.NotDraft", "Only a draft can change.");
                 """),
-            new SourceFile("src/Planted/AddInvoiceLineCommandValidator.cs", """
-                RuleFor(c => c.InvoiceId).Must(BeADraft).WithErrorCode("Invoice.NotDraft");
+            new SourceFile("src/Planted/AddOrderLineCommandValidator.cs", """
+                RuleFor(c => c.OrderId).Must(BeADraft).WithErrorCode("Order.NotDraft");
                 """),
             new SourceFile("src/Planted/ProblemConventions.cs", """
                 public static readonly ProblemDescriptor Locked = new(
                     StatusCodes.Status423Locked,
-                    "Invoice.NotDraft",
+                    "Order.NotDraft",
                     "Locked",
-                    "The invoice is locked.");
+                    "The order is locked.");
                 public static ProblemDescriptor ForStatus(int status) => new(status, "Http." + Suffix(status), "Failed", Detail: null);
                 """),
             new SourceFile("src/Planted/HttpErrors.cs", """
@@ -112,7 +112,7 @@ public sealed partial class ErrorCodeVocabularyTests
         string[] collisions = [.. planted.Collisions()];
 
         collisions.Length.ShouldBe(2);
-        collisions[0].ShouldStartWith("Invoice.NotDraft: Conflict at src/Planted/InvoiceErrors.cs:1, Validation at src/Planted/AddInvoiceLineCommandValidator.cs:1, HTTP 423");
+        collisions[0].ShouldStartWith("Order.NotDraft: Conflict at src/Planted/OrderErrors.cs:1, Validation at src/Planted/AddOrderLineCommandValidator.cs:1, HTTP 423");
         collisions[1].ShouldStartWith("Http.Gone: NotFound at src/Planted/HttpErrors.cs:1 sits in the 'Http.' family");
     }
 
