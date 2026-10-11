@@ -83,6 +83,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
             && !IsCompilersUnawaitedCall(context, dropped, type)
             && !IsSubstituteCallCheck(dropped)
             && !IsAssertion(dropped)
+            && !HandsBackHeldValue(dropped)
             && !IsExpectedToThrow(context.Operation))
         {
             Report(context, Rule, statementValue.Syntax, type);
@@ -258,6 +259,65 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
         => dropped is IInvocationOperation { TargetMethod: { } method }
            && (RootNamespaceName(method.ContainingNamespace) is "Shouldly" or "Xunit"
                || method.ContainingType.GetAttributes().Any(static attribute => attribute.AttributeClass is { Name: "ShouldlyMethodsAttribute" }));
+
+    /// <summary>
+    /// A call that returns a result something else already holds, so dropping the return loses nothing:
+    /// <list type="bullet">
+    /// <item><c>Tap</c> on a result held in a local, parameter or field returns that same result (the
+    /// receiver computed on the spot, <c>invoice.Issue(now).Tap(…);</c>, is still a drop);</item>
+    /// <item>a collection's own method typed by its element (<c>Stack.Pop</c>, <c>Queue.Dequeue</c>,
+    /// <c>ConcurrentDictionary.GetOrAdd</c> and <c>AddOrUpdate</c>) returns an element it holds;</item>
+    /// <item>a method returning the old value of a <c>ref</c> location (<c>Interlocked.Exchange</c>,
+    /// <c>CompareExchange</c>) returns what that location held.</item>
+    /// </list>
+    /// </summary>
+    private static bool HandsBackHeldValue(IOperation dropped)
+    {
+        if (dropped is IAwaitOperation awaited)
+        {
+            dropped = awaited.Operation;
+        }
+
+        if (dropped is not IInvocationOperation { TargetMethod: { } method } invocation)
+        {
+            return false;
+        }
+
+        if (method.OriginalDefinition.ReturnType is ITypeParameterSymbol returned)
+        {
+            if (returned.TypeParameterKind == TypeParameterKind.Type
+                && !method.IsStatic
+                && method.ContainingType.AllInterfaces.Any(static i => i.SpecialType == SpecialType.System_Collections_IEnumerable))
+            {
+                return true;
+            }
+
+            if (method.OriginalDefinition.Parameters.Any(parameter => parameter.RefKind is RefKind.Ref or RefKind.In or RefKind.RefReadOnlyParameter
+                                                                        && SymbolEqualityComparer.Default.Equals(parameter.Type, returned)))
+            {
+                return true;
+            }
+        }
+
+        return method.Name == "Tap"
+               && method.ContainingType.ContainingNamespace is { Name: "Results", ContainingNamespace.Name: "SharedKernel" }
+               && invocation.Arguments.FirstOrDefault(static argument => argument.Parameter?.Ordinal == 0)?.Value is { } receiver
+               && IsHeld(receiver);
+    }
+
+    /// <summary>A reference to a value stored in a local, a parameter, a field or an array element.</summary>
+    private static bool IsHeld(IOperation value)
+    {
+        while (value is IConversionOperation conversion)
+        {
+            value = conversion.Operand;
+        }
+
+        return value.Kind is OperationKind.LocalReference
+            or OperationKind.ParameterReference
+            or OperationKind.FieldReference
+            or OperationKind.ArrayElementReference;
+    }
 
     private static string? RootNamespaceName(INamespaceSymbol? ns)
     {
