@@ -230,6 +230,38 @@ public sealed partial class ConventionTests
             "call IgnoreQueryFilters([\"SoftDeleted\"]) (or [\"Tenant\"]) by name; a deliberate wholesale bypass goes on the allowlist with its reason");
     }
 
+    /// <summary>
+    /// Positive control for a scan that expects zero hits, whose pass cannot otherwise tell a clean codebase
+    /// from a regex that matches nothing. The call is assembled here: written out whole, it would trip the
+    /// very scan it tests, which reads <c>tests/</c> and keeps string literals.
+    /// </summary>
+    [Theory]
+    [InlineData("()", true)]
+    [InlineData("( )", true)]
+    [InlineData("(\n)", true)]
+    [InlineData("([\"SoftDeleted\"])", false)]
+    [InlineData("([\"Tenant\"])", false)]
+    public void The_bare_query_filter_scan_tells_a_bare_call_from_a_named_one(string arguments, bool flagged)
+        => BareIgnoreQueryFilters().IsMatch("context.Invoices.IgnoreQueryFilters" + arguments).ShouldBe(flagged);
+
+    /// <summary>
+    /// Positive control for the cancellation-filter scan, which also expects zero violations: the filter is
+    /// found, and only the host or request token widens it, never a type-only check or a linked token.
+    /// </summary>
+    [Theory]
+    [InlineData("when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)", true)]
+    [InlineData("when (exception is not OperationCanceledException || ! stoppingToken.IsCancellationRequested && Retryable(exception))", true)]
+    [InlineData("when (e is not OperationCanceledException)", false)]
+    [InlineData("when (e is not OperationCanceledException || !dispatch.Token.IsCancellationRequested)", false)]
+    [InlineData("when (e is not OperationCanceledException || !cancellationTokenSource.Token.IsCancellationRequested)", false)]
+    public void The_cancellation_filter_scan_accepts_only_the_host_or_request_token(string filter, bool accepted)
+    {
+        Match found = CatchFilter().Match($"try {{ }} catch (Exception e) {filter} {{ }}");
+
+        found.Value.ShouldBe(filter);
+        TokenKeyedCancellationFilter().IsMatch(found.Value).ShouldBe(accepted);
+    }
+
     private static bool IsRecord(Type type)
         => type.GetProperty("EqualityContract", BindingFlags.NonPublic | BindingFlags.Instance) is not null;
 
