@@ -3,6 +3,7 @@
 - **Status**: accepted
 - **Date**: 2026-10-08
 - **Amended**: 2026-10-11 — the span wraps the line, descriptions leave the line, stable event ids, final span attribute names, a validation-failure counter (see *Amendment* below)
+- **Amended**: 2026-10-11 — `ErrorType.PreconditionFailed` is a classified expected failure at Information; `ErrorType.Unavailable` stays at Warning (see *Second amendment* below)
 
 ## Context
 
@@ -22,6 +23,7 @@ a contract with every dashboard and alert built on them.
   line lists its `field:code` pairs), Warning for an unclassified `ErrorType.Failure`, Error only for
   an exception that ends the use case, Information for the caller's own cancellation. Each line carries
   the elapsed milliseconds. Handlers do not log their own outcomes.
+  *(Amended 2026-10-11: `PreconditionFailed` is in the Information set, `Unavailable` logs at Warning; see the second amendment.)*
 - **One span per invocation**, started by `TracingDecorators` on the `Trellis.UseCases` source and named
   after the use case, tagged with the outcome (`success`, `failure`, `cancelled`, `exception`), the
   error's code and type on a failure, and the exception itself (`AddException`, status Error) on a crash.
@@ -84,3 +86,15 @@ a contract with every dashboard and alert built on them.
   description unless the opt-in is set, that the line carries the use-case span's id, the span
   attribute names as literals, `error.type` on a crash only, and the counter for a FluentValidation and
   a domain code.
+
+## Second amendment (2026-10-11): the levels of `PreconditionFailed` and `Unavailable`
+
+ADR-0004's amendment added `ErrorType.Unavailable` (503) and `ErrorType.PreconditionFailed` (412) after
+the decision above fixed the Information set, and `LoggingDecorators` logged both at Warning as
+unclassified types. `PreconditionFailed` is now a classified expected failure: a stale `If-Match` is the
+concurrency contract working, as routine as a 404, and a page that retries with the fresh ETag would
+otherwise fill the Warning channel with its own users' edits. It logs at Information. `Unavailable` stays
+at Warning beside an unclassified `Failure`: the request did nothing wrong, but a dependency being down
+is what the Warning channel is for, and the first line written after the retries, the circuit breaker and
+the limiter have given up should reach whoever is on call. `UseCaseOutcomeTests.Every_error_type_logs_one_line_at_its_level`
+pins both rows; `.claude/rules/application.md`'s pipeline line names both levels.

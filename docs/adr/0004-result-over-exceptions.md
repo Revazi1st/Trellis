@@ -22,7 +22,8 @@ At the HTTP boundary, `Api.Common/Results/CustomResults.Problem(Error)` maps `Er
 
 - Failure is part of the type — callers must `Match`/branch; no silent swallow.
   *(Amended 2026-10-11: the build enforces this only in part. CA1806, configured in `.editorconfig`, fails a
-  Release build in `src/` or `tools/` that drops the value of any Domain member or `Result` combinator; it
+  Release build that drops the value of any Domain member or `Result` combinator in any `*.cs` file, the tests
+  included (the section was `[{src,tools}/**.cs]` until the ADR-0009 amendment of the same day widened it); it
   matches by documentation ID, not by type, and cannot see a dropped `await` of a `Task<Result>`. A
   type-aware analyzer would close both gaps; it needs a new project and the Roslyn packages, so it waits for
   approval.)*
