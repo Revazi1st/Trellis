@@ -140,6 +140,21 @@ after each layer.
       against PostgreSQL for persistence and specifications, ApiTests for the HTTP contract of a
       notable flow (the fitness suites above already cover every endpoint). `docs/development.md`
       (*Tests*) maps what each project proves and where to invest.
+- [ ] Test support beside the Invoice one (`.claude/rules/tests.md`, ADR-0009 amendment): a
+      `{Feature}Factory` in `tests/TestSupport/{Feature}/` (namespace `Trellis.TestSupport.{Feature}`:
+      valid commands and aggregates, an optional parameter per value), linked into
+      Application.UnitTests and IntegrationTests like `InvoiceFactory`, by
+      `<Compile Include="..\TestSupport\{Feature}\{Feature}Factory.cs" Link="TestSupport\{Feature}\{Feature}Factory.cs" />`
+      in each csproj; an IntegrationTests `{Feature}Driver` (`IServiceProvider` extensions, one per use
+      case, each running the real handler and returning the id) and an ApiTests `{Feature}HttpDriver`
+      (`HttpClient` extensions, the create over `PostWithIdempotencyKeyAsync`). Arrange-only, no generic
+      `SendAsync`, never in a toggle-conditional file.
+- [ ] Handler tests in `Application.UnitTests/Features/{Feature}/{UseCase}/{UseCase}CommandHandlerTests.cs`
+      (namespaces follow the folders), and the validators' bounds in
+      `Features/{Feature}/{Feature}CommandValidatorTests.cs`: the maximum accepted and one more rejected
+      naming the property, at the Domain constant (`InvoiceCommandValidatorTests` is the model). Every
+      arrange step ends in `ShouldBeSuccess()` [CA1806 fails the Release build on a dropped `Result`,
+      tests included].
 - [ ] **`docs/features/{feature}.md`** (kebab-case: `ExchangeRates` → `exchange-rates.md`), shaped
       like `invoices.md`, plus a line in `docs/INDEX.md` [`check-docs-drift.sh`: a change under the
       feature's folders without its doc fails CI]. A load-bearing decision gets an ADR (the `new-adr`

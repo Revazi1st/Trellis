@@ -4,7 +4,7 @@ Agent entry point — read only what the task needs.
 
 ## Guides (humans & agents)
 - [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns, a request stage by stage, domain versus integration events and what each delivery step guarantees, shipping `Api.Contracts` as a package, scheduled use cases
-- [development.md](development.md) — prerequisites, commands, running the app, the testing map (what each project proves, running part of the suite, which helper for which goal), when a request fails
+- [development.md](development.md) — prerequisites, commands, running the app, the testing map (what each project proves, the shared `tests/TestSupport/` files, running part of the suite, which helper for which goal: `InvoiceFactory`, the drivers, `ShouldBeSuccess()`), when a request fails
 - [deployment.md](deployment.md) — container images (tags, an SBOM), what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP and trace sampling, the telemetry reference (every source, meter, instrument, attribute and log event id, test-checked), outbox and idempotency runbooks
 - [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge
 - [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice
@@ -23,7 +23,7 @@ Agent entry point — read only what the task needs.
 - [infrastructure.md](../.claude/rules/infrastructure.md) — `src/Infrastructure/Trellis.Infrastructure/**/*.cs`: adapters, options, outbound HTTP, e-mail
 - [persistence.md](../.claude/rules/persistence.md) — `src/Infrastructure/Trellis.Persistence/**/*.cs`: EF configurations, interceptors, tenancy, outbox, retention, options, migrations, Identity
 - [sharedkernel.md](../.claude/rules/sharedkernel.md) — `src/Core/Trellis.SharedKernel/**/*.cs`: Result and errors, CQRS contracts, the decorator pipeline, cancellation filters, the unit of work
-- [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, test names, each test project's conventions, the fitness suites and their positive controls, the fixture contract and helpers, the OpenAPI snapshot
+- [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, test names, the shared test support (`tests/TestSupport/`: `ShouldBeSuccess()`, `InvoiceFactory`) and CA1806 over tests, arranging through the drivers (`InvoiceDriver`, `InvoiceHttpDriver`) and the switchable `TestCurrentUser`, each test project's conventions (one folder per use case, the validator boundary tests), the fitness suites and their positive controls, the fixture contract and helpers, the OpenAPI snapshot
 - [tools.md](../.claude/rules/tools.md) — `tools/**/*.{cs,csproj}`, `.github/**/*.{yml,yaml}`, `docker-compose.yml`: AppHost, MigrationService, CI supply-chain gates
 <!--#if (IncludeUI) -->
 - [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the host shell

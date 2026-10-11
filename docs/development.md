@@ -210,10 +210,14 @@ project) and the `add-feature` skill point here rather than repeat it.
 | Project | Proves | Needs | Write a test here when |
 |---|---|---|---|
 | `Domain.UnitTests` | the Domain and the SharedKernel in memory: every invariant and transition of an aggregate, the events it raises, value objects, specifications as predicates, the `Result` kernel | nothing | you add or change a rule of an aggregate or a value object |
-| `Application.UnitTests` | each handler's orchestration over faked ports (NSubstitute, `FakeTimeProvider`), the validators, event handlers, and the decorator pipeline itself (order, span, outcome line, validation) | nothing | you write a handler, a validator or an event handler, or touch a decorator |
+| `Application.UnitTests` | each handler's orchestration over faked ports (NSubstitute, `FakeTimeProvider`), the validators, event handlers, and the decorator pipeline itself (order, span, outcome line, validation) | nothing | you write a handler, a validator or an event handler, or touch a decorator: one folder per use case under `Features/<Feature>/<UseCase>/`, the validators' bounds in `Features/<Feature>/<Feature>CommandValidatorTests.cs` |
 | `ArchitectureTests` | the rules files hold: layer boundaries, conventions by reflection and source scan, the error-code vocabulary, options validated at boot, telemetry names and the telemetry reference | nothing | you introduce a convention: it gets a rule and a positive control, not just prose |
 | `IntegrationTests` | Persistence against a real PostgreSQL: mappings and round trips, specifications translated to SQL, interceptors, concurrency, the outbox and the idempotency store, retention, the migration matching the model | Docker (Testcontainers starts PostgreSQL) | a query, a mapping, an interceptor or anything transactional changes |
 | `ApiTests` | the HTTP contract through the real pipeline: authentication and each endpoint's permission, problem details, idempotency, caching and conditional requests, the served OpenAPI document equal to the committed one, the reference integration over a scripted socket | Docker for the in-process tests (contract and serialization tests run without it). The Aspire E2E also needs `RUN_ASPIRE_E2E=1` and a local SDK or CI, otherwise it skips; it drops the AppHost's postgres data volume, so it runs on a throwaway database and never touches your `aspire run` data | an endpoint answers something the fitness suites do not already pin: its own 404, a business 409, the field codes of its 400, a notable flow end to end |
+
+`tests/TestSupport/` is not a project: it holds the test files several projects share
+(`ResultAssertions.cs` with `ShouldBeSuccess()`, `Invoices/InvoiceFactory.cs`), each compiled into the
+projects that need it by a linked `<Compile Include>` in their csproj.
 
 <!--#if (IncludeUI || UseMultitenancy) -->
 Suites a template option adds, present only in a project generated with it:
@@ -266,7 +270,12 @@ look at, never a pass.
 | The seeded admin, or a member who can only read | `ApiFactory.CreateAdminClientAsync`, `CreateMemberClientAsync` | `ProblemDetailsContractTests` |
 | Many users behind one address (a proxy, the web host) | `ApiFactory.CreateClientFrom(address)` | `AuthRateLimitTests` |
 | A commit that conflicts or throws, a cache that fails | `ApiFactory.WithTestServices(...)`, then `CreateAdminClientOnAsync(host, …)` | `CommitFailureTests` |
-| A POST in an arrange step | `PostWithIdempotencyKeyAsync` | `InvoiceContractTests` |
+| A valid command or aggregate in an arrange step | `InvoiceFactory.CreateCommand(...)`, `InvoiceFactory.DraftWithLine()`, `InvoiceFactory.Issued(...)` (`using Trellis.TestSupport.Invoices;`) | `IssueInvoiceCommandHandlerTests`, `InvoiceCommandValidatorTests` |
+| An invoice in a given state against PostgreSQL | `await Services.CreateInvoiceAsync()`, `IssuedInvoiceAsync()`, `PayInvoiceAsync(id)` (`InvoiceDriver`; on a fresh scope's `ServiceProvider` for a separate unit of work) | `OutboxTests` |
+| An invoice over HTTP in an arrange step | `await client.CreateInvoiceAsync()`, `AddInvoiceLineAsync(id)`, `IssueInvoiceAsync(id, dueDate)` (`InvoiceHttpDriver`) | `ProblemDetailsContractTests` |
+| A POST the drivers do not cover (a test about the create's own answer) | `PostWithIdempotencyKeyAsync` | `InvoiceContractTests` |
+| Acting as another user against PostgreSQL | `IntegrationTestBase.CurrentUser` (`TestCurrentUser`): set its `UserName` or `UserId` | `AuditingInterceptorTests` |
+| A `Result` that must have succeeded | `ShouldBeSuccess()` (`tests/TestSupport/ResultAssertions.cs`), which returns a `Result<T>`'s value and on failure names the error | `InvoiceTests` (the message: `ResultAssertionsTests`) |
 | A problem response, header and body | `ShouldBeProblemJson()`, then read `ProblemResponse` | `ProblemDetailsContractTests` |
 | A new status or problem `code` | a row in `ProblemDetailsContractTests` | — |
 | Time that passes without sleeping | `IntegrationTestBase.Time`, `ApiFactory.Time` (`Reset()` it in a `finally`), `FakeTimeProvider` | `DataRetentionJanitorTests` |
