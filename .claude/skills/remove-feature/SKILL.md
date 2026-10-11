@@ -40,7 +40,7 @@ Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events,
 - `Invoices.razor` owned the home route `/` — give the UI a new home page or login redirects into a 404.
 
 ## 6. MigrationService
-Delete `SeedSampleDataAsync` and its call in `MigrationWorker.cs` (plus dead usings). Role/permission seeding reads `Roles.Permissions` and adapts by itself.
+Delete `SeedSampleDataAsync`, its `Seeded` helper and its call in `MigrationWorker.cs` (plus dead usings). Role/permission seeding reads `Roles.Permissions` and adapts by itself.
 
 ## 7. Tests — two kinds
 - **Invoice-specific → delete**: `Domain.UnitTests/Invoices/` (keep the `StronglyTypedIdParsingTests` cases worth porting to your IDs), `Application.UnitTests/Invoices/`, `IntegrationTests/InvoicePersistenceTests.cs`, `ApiTests/InProcess/InvoiceContractTests.cs` and `InvoiceReadCacheTests.cs` (write the same two for your feature if it caches or answers conditional GETs), `ApiTests/InvoiceApiFlowTests.cs` (the Aspire E2E — write one for your flow), `ArchitectureTests/ContractMirrorTests.cs`'s `InvoiceStatus` fact, `ApiTests/Ui/InvoiceFormTests.cs`, and the UiTests flows that drive the invoice pages (the login test asserts the Invoices title).
