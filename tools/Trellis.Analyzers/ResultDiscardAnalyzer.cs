@@ -76,7 +76,8 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     {
         IOperation statementValue = ((IExpressionStatementOperation)context.Operation).Operation;
         if (DroppedValue(statementValue) is { Type: { } type } dropped
-            && IsResultType(type)
+            && CarriesResult(type)
+            && !IsUnawaitedTask(dropped, type)
             && !IsSubstituteCallCheck(dropped)
             && !IsExpectedToThrow(context.Operation))
         {
@@ -205,9 +206,15 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
         return ns is { IsGlobalNamespace: false } ? ns.Name : null;
     }
 
+    /// <summary>An unawaited task of a result, written as a statement, is left to the compiler's CS4014.</summary>
+    private static bool IsUnawaitedTask(IOperation dropped, ITypeSymbol type)
+        => dropped is not IAwaitOperation && type is INamedTypeSymbol named && TaskValue(named) is not null;
+
     /// <summary>
     /// A result, or a value that holds results the caller can only reach through it: the value of a
-    /// <c>Task&lt;T&gt;</c> or <c>ValueTask&lt;T&gt;</c>, an array element or a sequence element.
+    /// <c>Task&lt;T&gt;</c> or <c>ValueTask&lt;T&gt;</c> (<c>Task.WhenAny</c>), an array element
+    /// (<c>Task.WhenAll</c>), a sequence element (an iterator that never runs until someone reads it) or a
+    /// tuple element.
     /// </summary>
     private static bool CarriesResult(ITypeSymbol type, int depth = 0)
     {
@@ -221,13 +228,17 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
             return true;
         }
 
-        ITypeSymbol? inner = type switch
+        switch (type)
         {
-            IArrayTypeSymbol array => array.ElementType,
-            INamedTypeSymbol named => TaskValue(named) ?? SequenceElement(named),
-            _ => null,
-        };
-        return inner is not null && CarriesResult(inner, depth + 1);
+            case IArrayTypeSymbol array:
+                return CarriesResult(array.ElementType, depth + 1);
+            case INamedTypeSymbol { IsTupleType: true } tuple:
+                return tuple.TupleElements.Any(element => CarriesResult(element.Type, depth + 1));
+            case INamedTypeSymbol named:
+                return (TaskValue(named) ?? SequenceElement(named)) is { } inner && CarriesResult(inner, depth + 1);
+            default:
+                return false;
+        }
     }
 
     /// <summary>The non-generic <c>Task</c>, or an array or sequence of them: a shape that carries no result.</summary>

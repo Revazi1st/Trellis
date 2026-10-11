@@ -41,6 +41,10 @@ public sealed class ResultDiscardAnalyzerTests
             public ValueTask<Result<int>> WithdrawAsync(int amount) => new(Result.Success(amount));
             public Task SaveAsync() => Task.CompletedTask;
             public Task<IdentityResult> CreateUserAsync() => Task.FromResult(IdentityResult.Success);
+            public Result[] CloseAll() => [Close()];
+            public IEnumerable<Result> Closings() { yield return Close(); }
+            public async IAsyncEnumerable<Result> ClosingsAsync() { await Task.Yield(); yield return Close(); }
+            public (Result Outcome, int Lines) CloseAndCount() => (Close(), 1);
         }
         """;
 
@@ -77,6 +81,18 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("a Task<Result> passed as a plain Task", "await Task.WhenAny(account.CloseAsync(), Task.Delay(1));")]
     [InlineData("a Task<Result> through a conditional access stored as a plain Task", "Task? plain = maybe?.CloseAsync(); await (plain ?? Task.CompletedTask);")]
     [InlineData("Task<Result>s seen as plain Tasks", "IEnumerable<Task> all = new[] { account }.Select(a => a.CloseAsync()); await Task.WhenAll(all);")]
+    [InlineData("a Task<Result> waited on as a plain Task", "Task.WaitAll(account.CloseAsync());")]
+    [InlineData("an awaited Task.WhenAll of Task<Result>s", "await Task.WhenAll(account.CloseAsync(), account.CloseAsync());")]
+    [InlineData("an awaited Task.WhenAll over a projection", "await Task.WhenAll(new[] { account }.Select(a => a.CloseAsync()));")]
+    [InlineData("an awaited Task.WhenAll of IdentityResults", "await Task.WhenAll(account.CreateUserAsync(), account.CreateUserAsync());")]
+    [InlineData("an awaited Task.WhenAny of Task<Result>s", "await Task.WhenAny(account.CloseAsync(), account.CloseAsync());")]
+    [InlineData("a Result[]", "account.CloseAll();")]
+    [InlineData("an IEnumerable<Result> iterator that never runs", "account.Closings();")]
+    [InlineData("an IAsyncEnumerable<Result>", "account.ClosingsAsync();")]
+    [InlineData("a List.ConvertAll to results", "new List<Account> { account }.ConvertAll(a => a.Close());")]
+    [InlineData("an Array.ConvertAll to results", "Array.ConvertAll(new[] { account }, a => a.Close());")]
+    [InlineData("a projection to results", "new[] { account }.Select(a => a.Close());")]
+    [InlineData("a tuple holding a Result", "account.CloseAndCount();")]
     public async Task A_dropped_result_is_reported(string shape, string statements)
     {
         ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(InRunMethod(statements));
@@ -98,6 +114,10 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("a List.Add call", "var results = new List<Result>(); results.Add(account.Close());")]
     [InlineData("a held Task<Result> also seen as a plain Task", "Task<Result> closing = account.CloseAsync(); Task plain = closing; await plain; _ = await closing;")]
     [InlineData("a Task<Result> returned as itself", "Task<Result> Closing() => account.CloseAsync(); _ = await Closing();")]
+    [InlineData("a kept Result[]", "Result[] all = account.CloseAll(); GC.KeepAlive(all);")]
+    [InlineData("a deconstructed tuple", "(Result outcome, int lines) = account.CloseAndCount(); GC.KeepAlive(outcome); GC.KeepAlive(lines);")]
+    [InlineData("a dropped sequence of plain values", "new[] { 1 }.Select(static i => i + 1).ToList();")]
+    [InlineData("an awaited Task.WhenAll of plain Tasks", "await Task.WhenAll(account.SaveAsync(), account.SaveAsync());")]
     public async Task A_result_that_is_kept_or_dropped_on_purpose_is_not_reported(string shape, string statements)
     {
         ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(InRunMethod(statements));
