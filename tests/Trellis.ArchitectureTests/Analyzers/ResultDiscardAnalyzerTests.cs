@@ -264,16 +264,29 @@ public sealed class ResultDiscardAnalyzerTests
         realCall.ShouldHaveSingleItem().Id.ShouldBe(ResultDiscardAnalyzer.DiagnosticId);
     }
 
-    [Fact]
-    public async Task An_unawaited_task_of_a_result_is_left_to_CS4014()
+    /// <summary>
+    /// An unawaited task of a result is reported exactly once. The compiler's CS4014 covers a call
+    /// written as a statement inside an async method, lambda or local function; everywhere it is silent
+    /// (a sync method, a non-async lambda, a conditional access) RSLT001 reports it instead.
+    /// </summary>
+    [Theory]
+    [InlineData(true, "account.CloseAsync();", "CS4014")]
+    [InlineData(true, "account.WithdrawAsync(5);", "CS4014")]
+    [InlineData(true, "Func<Task> close = async () => { account.CloseAsync(); await Task.Yield(); }; await close();", "CS4014")]
+    [InlineData(true, "async Task CloseLater() { account.CloseAsync(); await Task.Yield(); } await CloseLater();", "CS4014")]
+    [InlineData(true, "maybe?.CloseAsync();", "RSLT001")]
+    [InlineData(true, "Action close = () => account.CloseAsync(); close();", "RSLT001")]
+    [InlineData(false, "account.CloseAsync();", "RSLT001")]
+    [InlineData(false, "account.CreateUserAsync();", "RSLT001")]
+    [InlineData(false, "Task.Run(() => account.CloseAsync());", "RSLT001")]
+    public async Task An_unawaited_task_of_a_result_is_reported_once_by_CS4014_or_RSLT001(bool inAsyncMethod, string statements, string reportedBy)
     {
-        string source = InRunMethod("account.CloseAsync();");
+        string source = InRunMethod(statements, isAsync: inAsyncMethod);
 
-        ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(source);
+        ImmutableArray<Diagnostic> analyzer = await AnalyzeAsync(source);
+        bool compiler = Compile(source).GetDiagnostics(TestContext.Current.CancellationToken).Any(static d => d.Id == "CS4014");
 
-        diagnostics.ShouldBeEmpty();
-        Compile(source).GetDiagnostics(TestContext.Current.CancellationToken)
-            .ShouldContain(static d => d.Id == "CS4014", "an async method's dropped Task is the compiler's warning");
+        (analyzer.Length, compiler).ShouldBe(reportedBy == "CS4014" ? (0, true) : (1, false), $"`{statements}`");
     }
 
     /// <summary>
@@ -366,7 +379,7 @@ public sealed class ResultDiscardAnalyzerTests
         diagnostics.ShouldAllBe(static d => d.Severity == DiagnosticSeverity.Error);
     }
 
-    private static string InRunMethod(string statements, string extraUsings = "") => $$"""
+    private static string InRunMethod(string statements, string extraUsings = "", bool isAsync = true) => $$"""
         {{Usings}}
         {{extraUsings}}
 
@@ -374,7 +387,7 @@ public sealed class ResultDiscardAnalyzerTests
 
         public static class Snippet
         {
-            public static async Task Run(Account account, Account? maybe)
+            public static {{(isAsync ? "async Task" : "void")}} Run(Account account, Account? maybe)
             {
                 {{statements}}
             }

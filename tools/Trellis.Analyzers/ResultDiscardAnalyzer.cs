@@ -77,7 +77,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
         IOperation statementValue = ((IExpressionStatementOperation)context.Operation).Operation;
         if (DroppedValue(statementValue) is { Type: { } type } dropped
             && CarriesResult(type)
-            && !IsUnawaitedTask(dropped, type)
+            && !IsCompilersUnawaitedCall(context, dropped, type)
             && !IsSubstituteCallCheck(dropped)
             && !IsExpectedToThrow(context.Operation))
         {
@@ -206,9 +206,34 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
         return ns is { IsGlobalNamespace: false } ? ns.Name : null;
     }
 
-    /// <summary>An unawaited task of a result, written as a statement, is left to the compiler's CS4014.</summary>
-    private static bool IsUnawaitedTask(IOperation dropped, ITypeSymbol type)
-        => dropped is not IAwaitOperation && type is INamedTypeSymbol named && TaskValue(named) is not null;
+    /// <summary>
+    /// An unawaited call returning a task of a result, written as the statement itself inside an async
+    /// method, lambda or local function: the compiler's CS4014 reports exactly that, so RSLT001 stays
+    /// quiet there and reports the task everywhere CS4014 is silent (a sync method, a non-async lambda,
+    /// a conditional access).
+    /// </summary>
+    private static bool IsCompilersUnawaitedCall(OperationAnalysisContext context, IOperation dropped, ITypeSymbol type)
+        => dropped is IInvocationOperation
+           && ReferenceEquals(dropped, ((IExpressionStatementOperation)context.Operation).Operation)
+           && type is INamedTypeSymbol named
+           && TaskValue(named) is not null
+           && IsInAsyncFunction(context);
+
+    private static bool IsInAsyncFunction(OperationAnalysisContext context)
+    {
+        for (IOperation? enclosing = context.Operation.Parent; enclosing is not null; enclosing = enclosing.Parent)
+        {
+            switch (enclosing)
+            {
+                case IAnonymousFunctionOperation lambda:
+                    return lambda.Symbol.IsAsync;
+                case ILocalFunctionOperation localFunction:
+                    return localFunction.Symbol.IsAsync;
+            }
+        }
+
+        return context.ContainingSymbol is IMethodSymbol { IsAsync: true };
+    }
 
     /// <summary>
     /// A result, or a value that holds results the caller can only reach through it: the value of a
