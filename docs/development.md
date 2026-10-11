@@ -164,7 +164,8 @@ SDK is available. The Aspire CLI reads the AppHost path from the committed `aspi
 
 From Rider or Visual Studio, run the **Trellis.AppHost** project: its `Properties/launchSettings.json`
 has an `https` profile (the dashboard at `https://localhost:17171`) and an `http` profile
-(`http://localhost:15171`, no certificate involved). The IDE's Aspire run configuration needs one of
+(`http://localhost:15171`, no certificate involved); the ports are picked free when the solution is
+created, so this document names yours. The IDE's Aspire run configuration needs one of
 them; without a launch profile it refuses to start, while `dotnet run` and `aspire run` fall back to
 a dynamic dashboard URL. The `https` profile wants a trusted development certificate: run
 `dotnet dev-certs https --trust` once (macOS and Windows prompt for confirmation), or use `http`.
