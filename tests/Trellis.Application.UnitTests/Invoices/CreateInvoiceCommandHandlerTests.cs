@@ -20,7 +20,7 @@ public sealed class CreateInvoiceCommandHandlerTests
 
         result.IsSuccess.ShouldBeTrue();
         result.Value.Value.ShouldNotBe(Guid.Empty);
-        _invoices.Received(1).Add(Arg.Is<Invoice>(i => i != null && i.Id == result.Value && i.Currency == "USD"));
+        _invoices.Received(1).Add(Arg.Is<Invoice>(i => i != null && i.Id == result.Value && i.Currency.Code == "USD"));
     }
 
     [Fact]

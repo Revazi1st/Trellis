@@ -46,7 +46,7 @@ public sealed class InvoiceTests
         invoice.Status.ShouldBe(InvoiceStatus.Draft);
         invoice.Lines.ShouldBeEmpty();
         invoice.Id.Value.ShouldNotBe(Guid.Empty);
-        invoice.Total.ShouldBe(Money.Zero("USD"));
+        invoice.Total.ShouldBe(Money.Zero(Currency.Create("USD").Value));
     }
 
     [Fact]

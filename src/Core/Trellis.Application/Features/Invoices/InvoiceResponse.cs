@@ -24,7 +24,7 @@ public static class InvoiceMappings
             invoice.Id.Value,
             invoice.CustomerName,
             invoice.CustomerEmail.Value,
-            invoice.Currency,
+            invoice.Currency.Code,
             invoice.Status.ToString(),
             invoice.DueDate,
             invoice.PaidAtUtc,

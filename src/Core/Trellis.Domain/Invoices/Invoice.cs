@@ -17,7 +17,7 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
     private readonly List<InvoiceLine> _lines = [];
 
-    private Invoice(InvoiceId id, string customerName, EmailAddress customerEmail, string currency)
+    private Invoice(InvoiceId id, string customerName, EmailAddress customerEmail, Currency currency)
         : base(id)
     {
         CustomerName = customerName;
@@ -35,8 +35,8 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
     public EmailAddress CustomerEmail { get; private set; } = null!;
 
-    /// <summary>ISO-4217 currency every line must match.</summary>
-    public string Currency { get; private set; } = null!;
+    /// <summary>The currency every line must match; validated once, when the invoice was created.</summary>
+    public Currency Currency { get; private set; } = null!;
 
     public InvoiceStatus Status { get; private set; }
 
@@ -66,7 +66,7 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
     public DateTimeOffset? DeletedAtUtc { get; set; }
 
-    public static Result<Invoice> Create(string? customerName, EmailAddress customerEmail, Common.Currency currency)
+    public static Result<Invoice> Create(string? customerName, EmailAddress customerEmail, Currency currency)
     {
         if (string.IsNullOrWhiteSpace(customerName))
         {
@@ -80,7 +80,7 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
             return InvoiceErrors.CustomerNameTooLong;
         }
 
-        return new Invoice(InvoiceId.New(), name, customerEmail, currency.Code);
+        return new Invoice(InvoiceId.New(), name, customerEmail, currency);
     }
 
     public Result AddLine(string? description, Money amount)
@@ -135,7 +135,7 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
         Status = InvoiceStatus.Issued;
         DueDate = dueDate;
-        Raise(new InvoiceIssuedDomainEvent(Id, Currency));
+        Raise(new InvoiceIssuedDomainEvent(Id, Currency.Code));
         return Result.Success();
     }
 

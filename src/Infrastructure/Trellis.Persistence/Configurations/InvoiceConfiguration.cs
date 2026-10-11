@@ -24,12 +24,14 @@ internal sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             .IsConcurrencyToken();
 
         builder.Property(static i => i.CustomerName).HasMaxLength(Invoice.CustomerNameMaxLength);
-        builder.Property(static i => i.Currency).HasMaxLength(Currency.CodeLength);
         builder.Property(static i => i.Status).HasConversion<string>().HasMaxLength(16);
         builder.Property(static i => i.CreatedBy).HasMaxLength(256);
         builder.Property(static i => i.ModifiedBy).HasMaxLength(256);
 
-        // Value object as EF complex type (table splitting) — the EF 10 recommended mapping for VOs.
+        // Value objects as EF complex types (table splitting) — the EF 10 recommended mapping for VOs.
+        builder.ComplexProperty(static i => i.Currency, static currency =>
+            currency.Property(static c => c.Code).HasColumnName("Currency").HasMaxLength(Currency.CodeLength));
+
         // The column is 320 wide, more than EmailAddress.MaxLength (254): the domain enforces the bound, and
         // narrowing the column is a schema change of its own.
         builder.ComplexProperty(static i => i.CustomerEmail, static email =>
