@@ -53,6 +53,14 @@ public sealed class ResultDiscardAnalyzerTests
             public Marked(object marker) : this() => GC.KeepAlive(marker);
         }
 
+        public sealed class LineBook : IEnumerable<string>
+        {
+            private readonly List<string> _lines = [];
+            public Result Add(string line) { _lines.Add(line); return Result.Success(); }
+            public IEnumerator<string> GetEnumerator() => _lines.GetEnumerator();
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
         public static class AccountErrors
         {
             public static Error NotFound(int id) => Error.NotFound("Account.NotFound", $"No account {id}.");
@@ -110,6 +118,7 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("a ValidationError creation", "new ValidationError([]);")]
     [InlineData("a Task<Result> waited on", "account.CloseAsync().Wait();")]
     [InlineData("a Task<Result> waited on with a timeout", "account.CloseAsync().Wait(TimeSpan.FromSeconds(1));")]
+    [InlineData("a collection initializer whose Add returns a Result", "LineBook book = new() { \"first line\" }; GC.KeepAlive(book);")]
     [InlineData("a dynamic creation of a Result type", "dynamic marker = 1; new Marked(marker);")]
     [InlineData("a new() of a type parameter constrained to Result", "static void Make<T>() where T : Result, new() { new T(); } Make<Marked>();")]
     public async Task A_dropped_result_is_reported(string shape, string statements)
@@ -136,6 +145,7 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("an Error returned as a Result", "Result Refuse() { return AccountErrors.NotFound(1); } _ = Refuse();")]
     [InlineData("a held Task<Result> waited on and read", "Task<Result> closing = account.CloseAsync(); closing.Wait(); _ = closing.Result;")]
     [InlineData("a plain Task waited on", "account.SaveAsync().Wait();")]
+    [InlineData("a collection initializer of results", "List<Result> results = new() { account.Close() }; GC.KeepAlive(results);")]
     [InlineData("a kept Result[]", "Result[] all = account.CloseAll(); GC.KeepAlive(all);")]
     [InlineData("a deconstructed tuple", "(Result outcome, int lines) = account.CloseAndCount(); GC.KeepAlive(outcome); GC.KeepAlive(lines);")]
     [InlineData("a dropped sequence of plain values", "new[] { 1 }.Select(static i => i + 1).ToList();")]

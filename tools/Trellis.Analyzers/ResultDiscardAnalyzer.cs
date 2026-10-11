@@ -70,6 +70,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
         context.RegisterOperationAction(AnalyzeExpressionStatement, OperationKind.ExpressionStatement);
         context.RegisterOperationAction(AnalyzeConversion, OperationKind.Conversion);
         context.RegisterOperationAction(AnalyzeDelegateCreation, OperationKind.DelegateCreation);
+        context.RegisterOperationAction(AnalyzeCollectionInitializer, OperationKind.ObjectOrCollectionInitializer);
     }
 
     private static void AnalyzeExpressionStatement(OperationAnalysisContext context)
@@ -118,6 +119,21 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
             && !IsExpectedToThrow(creation))
         {
             Report(context, TaskRule, reference.Syntax, returned, delegateReturns);
+        }
+    }
+
+    /// <summary>
+    /// <c>new LineBook { "first line" }</c> calls <c>Add</c> for every element and throws each return
+    /// away, so an <c>Add</c> that returns a result has every refusal dropped by the compiler itself.
+    /// </summary>
+    private static void AnalyzeCollectionInitializer(OperationAnalysisContext context)
+    {
+        foreach (IOperation initializer in ((IObjectOrCollectionInitializerOperation)context.Operation).Initializers)
+        {
+            if (initializer is IInvocationOperation { IsImplicit: true, Type: { } type } add && CarriesResult(type))
+            {
+                Report(context, Rule, add.Syntax, type);
+            }
         }
     }
 
