@@ -3,8 +3,9 @@
 # if any docs/adr/*.md is not listed in docs/INDEX.md (template ADRs 0001-0099 above the
 # '## Project decisions' heading, project ADRs 0100 and up below it), if two ADRs share a number,
 # if the template's own repository holds an ADR numbered 0100 or more, if a 'paths:' glob in
-# .claude/rules/*.md matches zero files (a renamed directory silently unloads a rule), or if a
-# relative link in a Markdown file points at a path that does not exist (a moved or renamed doc).
+# .claude/rules/*.md matches zero files (a renamed directory silently unloads a rule), if a skill
+# is missing from the Skills section of docs/INDEX.md (once that section exists), or if a relative
+# link in a Markdown file points at a path that does not exist (a moved or renamed doc).
 set -euo pipefail
 # Under pipefail, "echo … | grep -q" is a race: grep exits on the first match, echo can get EPIPE and
 # the pipeline fails although the match was found. Membership tests use here-strings instead.
@@ -94,6 +95,20 @@ for f in .claude/rules/*.md; do
     done <<< "$globs"
   fi
 done
+
+# --- every skill is listed in docs/INDEX.md, once the index has a Skills section ---
+# Each .claude/skills/<name>/SKILL.md appears there as a (../.claude/skills/<name>/SKILL.md) link,
+# so an agent reading the index finds every skill. A listed skill that no longer exists is a broken
+# link, which the next check reports.
+if grep -q '^## Skills' docs/INDEX.md; then
+  for f in .claude/skills/*/SKILL.md; do
+    [ -e "$f" ] || continue
+    if ! grep -qF "(../$f)" docs/INDEX.md; then
+      echo "::error::$f is not listed under '## Skills' in docs/INDEX.md"
+      fail=1
+    fi
+  done
+fi
 
 # --- every relative Markdown link resolves ---
 # Inline links and images, [text](path) and ![alt](path), outside fenced code blocks and inline code
