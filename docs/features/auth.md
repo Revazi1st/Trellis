@@ -66,7 +66,11 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 - **Registration is one transaction**: the account and its Member role are created together inside
   the execution strategy's transaction. If the role cannot be assigned the account is rolled back —
   a reported failure answers 500 `Auth.RegistrationFailed`, nothing is created, and the e-mail can
-  register again (no role-less account that signs in with no permissions).
+  register again (no role-less account that signs in with no permissions). Two registrations of one
+  e-mail racing each other are decided by the unique user-name index: the loser gets the same 409
+  `Auth.EmailAlreadyInUse` as a sequential duplicate (ADR-0018, amendment of 2026-10-11). A password or
+  e-mail Identity refuses answers 400 `Auth.RegistrationRejected` with one fixed sentence per Identity
+  error code — never Identity's own text, which repeats the e-mail.
 
 ## API (`src/Presentation/Api/Trellis.Api/Features/Auth/`)
 
@@ -91,7 +95,8 @@ login 401/403, register 403/409, refresh 401 — each with the `ProblemResponse`
 
 Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 problem details whose
 `code` is the identifier below (ADR-0024): `Auth.InvalidCredentials` 401, `Auth.AccountLockedOut` 403,
-`Auth.InvalidRefreshToken` 401, `Auth.EmailAlreadyInUse` 409, `Auth.RegistrationClosed` 403, and 400
+`Auth.InvalidRefreshToken` 401, `Auth.EmailAlreadyInUse` 409, `Auth.RegistrationClosed` 403,
+`Auth.RegistrationRejected` 400, `Auth.RegistrationFailed` 500, and 400
 `Validation.General` with `errors[]` (`{field, code, description}`, e.g. `email` / `Validation.NotEmpty`)
 for input that fails a validator. The host's own rejections use the same vocabulary:
 `Auth.Unauthenticated` (the bearer challenge, 401), `Auth.Forbidden` (403), `RateLimit.Exceeded` (429).

@@ -7,10 +7,7 @@ using Microsoft.EntityFrameworkCore;
 #if (UseMultitenancy)
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 #endif
-using Npgsql;
-using Trellis.Application.Abstractions;
 using Trellis.Domain.Invoices;
-using Trellis.Persistence.Idempotency;
 using Trellis.Persistence.Identity;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Results;
@@ -48,23 +45,16 @@ public sealed class AppDbContext(
             ChangeTracker.Clear();
             return Result.Failure(UnitOfWorkErrors.ConcurrencyConflict);
         }
-        catch (DbUpdateException exception) when (IsIdempotencyKeyRace(exception))
+        catch (DbUpdateException exception) when (UniqueConstraintErrors.TryMap(exception, out Error? expected))
         {
-            // Two first requests with one Idempotency-Key raced to the commit (ADR-0018): the loser's whole
-            // unit of work — aggregate, outbox rows and reservation — rolled back with this exception, and
-            // the winner's reservation is the one that stands. Expected, so a Result, not a fault.
+            // A registered unique constraint decided a race (ADR-0018) — two first requests with one
+            // Idempotency-Key, say: the loser's whole unit of work (aggregate, outbox rows, reservation)
+            // rolled back with this exception and the winner's row stands. Expected, so a Result, not a
+            // fault. Any unregistered unique violation is a fault the model did not foresee and still throws.
             ChangeTracker.Clear();
-            return Result.Failure(IdempotencyErrors.Duplicate);
+            return Result.Failure(expected);
         }
     }
-
-    /// <summary>Only the idempotency primary key means duplicate; any other unique violation is a fault the model did not foresee and still throws.</summary>
-    private static bool IsIdempotencyKeyRace(DbUpdateException exception)
-        => exception.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: IdempotencyKeyConfiguration.PrimaryKeyName,
-        };
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

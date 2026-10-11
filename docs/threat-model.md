@@ -105,6 +105,11 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
 - **A half-created account** — *addressed*. Registration creates the user and assigns its role in
   one transaction, so a failed role assignment cannot leave an account that authenticates with no
   permissions and blocks its e-mail; the seed repairs an administrator left without its role.
+- **Registration racing itself, or echoing what was typed** — *addressed*. Two registrations of one
+  e-mail that pass every check together are decided by the unique user-name index, and the loser gets
+  the same 409 `Auth.EmailAlreadyInUse` as a sequential duplicate, not a 500. A registration Identity
+  refuses answers 400 `Auth.RegistrationRejected` built from fixed sentences per Identity error code;
+  Identity's own descriptions, which repeat the e-mail, never reach the response or the outcome log.
 - **CORS is deny-by-default** — *open*, which means it is only as good as the origins you add.
 
 ## Out of scope
