@@ -30,10 +30,10 @@ namespace Trellis.Api.Common.Idempotency;
 /// </list>
 /// A missing header means "no idempotency", unless the endpoint declared
 /// <c>RequireIdempotency(keyRequired: true)</c>, which answers it with a 400
-/// <see cref="IdempotencyHeaderErrors.KeyRequired"/>. A blank key, a key over
+/// <see cref="IdempotencyErrors.KeyRequired"/>. A blank key, a key over
 /// <see cref="MaxKeyLength"/>, a repeated header and a comma-separated list are each a 400
-/// <c>Idempotency.InvalidKey</c>, never a silent opt-out and never two keys joined into one. Everything an
-/// endpoint does after its command succeeded is post-commit work and takes
+/// <see cref="IdempotencyErrors.InvalidKeyCode"/>, never a silent opt-out and never two keys joined
+/// into one. Everything an endpoint does after its command succeeded is post-commit work and takes
 /// <see cref="CancellationToken.None"/>: a fault there ends the request with a 500 but the reservation
 /// is already committed, so the retry is a 409, never a second apply. The filter's own outcomes are
 /// <see cref="IdempotencyErrors"/> written through <see cref="CustomResults"/>, like any endpoint's.
@@ -58,7 +58,7 @@ public sealed class IdempotencyFilter : IEndpointFilter
         if (!http.Request.Headers.TryGetValue(HeaderName, out var header))
         {
             return metadata is { KeyRequired: true }
-                ? CustomResults.Problem(IdempotencyHeaderErrors.KeyRequired)
+                ? CustomResults.Problem(IdempotencyErrors.KeyRequired)
                 : await next(context);
         }
 
@@ -66,7 +66,7 @@ public sealed class IdempotencyFilter : IEndpointFilter
         // sent, and a retry that sends them in another order would be a different request.
         if (header.Count > 1 || header.ToString().Contains(',', StringComparison.Ordinal))
         {
-            return CustomResults.Problem(IdempotencyHeaderErrors.MultipleKeys);
+            return CustomResults.Problem(IdempotencyErrors.MultipleKeys);
         }
 
         string clientKey = header.ToString();

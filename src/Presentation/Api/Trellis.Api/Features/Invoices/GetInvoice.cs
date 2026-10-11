@@ -52,6 +52,12 @@ internal sealed class GetInvoice : IEndpoint
             EntityTagHeaderValue etag = ConditionalGetExtensions.ETag(dto.Version);
             httpContext.Response.Headers.ETag = etag.ToString();
 
+            // The opt-out from the API's no-store default (ADR-0021 amendment), on the 200 and the 304
+            // alike: private keeps the representation out of shared caches, no-cache makes a browser
+            // revalidate it with the ETag on every use instead of serving it blind. The 404 below sets
+            // nothing, so it stays no-store like every other API response.
+            httpContext.Response.Headers.CacheControl = "private, no-cache";
+
             return httpContext.Request.IsNotModified(etag)
                 ? TypedResults.StatusCode(StatusCodes.Status304NotModified)
                 : TypedResults.Ok(dto);

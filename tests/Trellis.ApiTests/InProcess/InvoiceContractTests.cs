@@ -54,6 +54,33 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
     }
 
     [Fact]
+    public async Task Get_invoice_lets_a_browser_keep_and_revalidate_it_while_other_reads_stay_no_store()
+    {
+        // The conditional GET opts out of the API's no-store default, on the 200 and the 304 alike; a read
+        // without an ETag keeps the default (ADR-0021 amendment).
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        (Guid id, long version) = await CreateAndReadAsync(admin, ct);
+
+        using HttpResponseMessage full = await admin.GetAsync($"/api/v1/invoices/{id}", ct);
+        using HttpResponseMessage revalidated = await GetWithIfNoneMatchAsync(admin, id, $"\"{version}\"", ct);
+        using HttpResponseMessage list = await admin.GetAsync("/api/v1/invoices/overdue", ct);
+
+        full.StatusCode.ShouldBe(HttpStatusCode.OK);
+        revalidated.StatusCode.ShouldBe(HttpStatusCode.NotModified);
+        foreach (HttpResponseMessage response in new[] { full, revalidated })
+        {
+            System.Net.Http.Headers.CacheControlHeaderValue cacheControl = response.Headers.CacheControl.ShouldNotBeNull();
+            cacheControl.Private.ShouldBeTrue();
+            cacheControl.NoCache.ShouldBeTrue();
+            cacheControl.NoStore.ShouldBeFalse();
+        }
+
+        list.StatusCode.ShouldBe(HttpStatusCode.OK);
+        list.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task A_write_naming_the_current_ETag_applies_and_a_stale_one_is_a_412_that_changes_nothing()
     {
         // The exposure If-Match closes: a colleague adds a line after you loaded the draft, and your Issue
@@ -85,6 +112,7 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
     [InlineData("W/\"{0}\"")]                 // a weak tag: If-Match compares strongly
     [InlineData("\"{0}\", \"0\"")]           // a list: send the one tag you read
     [InlineData("\"abc\"")]                   // not a tag this API issued
+    [InlineData("\"0{0}\"")]                  // the current version with a leading zero: a tag is its exact text
     [InlineData("not-an-etag")]               // unparsable
     public async Task An_If_Match_that_names_no_single_current_version_is_a_412(string format)
     {
@@ -99,16 +127,22 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
         (await admin.GetFromJsonAsync<InvoiceDto>($"/api/v1/invoices/{id}", ct)).ShouldNotBeNull().Status.ShouldBe(InvoiceStatus.Draft);
     }
 
-    [Fact]
-    public async Task A_missing_invoice_is_a_404_whatever_If_Match_names()
+    [Theory]
+    [InlineData("\"7\"", HttpStatusCode.NotFound)]             // well-formed: the handler looks the invoice up first
+    [InlineData("\"07\"", HttpStatusCode.PreconditionFailed)]  // a leading zero: never issued, refused before the lookup
+    [InlineData("W/\"7\"", HttpStatusCode.PreconditionFailed)] // weak: can never match, refused before the lookup
+    public async Task A_missing_invoice_is_a_404_for_a_well_formed_If_Match_and_a_malformed_one_is_a_412_before_the_lookup(
+        string ifMatch, HttpStatusCode expected)
     {
-        // RFC 9110 §13.2.1: a precondition is ignored when the answer without it would not be a 2xx.
+        // RFC 9110 §13.2.1 ignores a precondition when the answer without it would not be a 2xx, so one strong
+        // tag waits for the lookup. A header that can never match is refused by the endpoint before the handler
+        // runs, and the 412 is the same whether the invoice exists or not.
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
 
-        HttpResponseMessage response = await PostWithIfMatchAsync<object>(admin, $"/api/v1/invoices/{Guid.NewGuid()}/void", body: null, "\"7\"", ct);
+        HttpResponseMessage response = await PostWithIfMatchAsync<object>(admin, $"/api/v1/invoices/{Guid.NewGuid()}/void", body: null, ifMatch, ct);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.StatusCode.ShouldBe(expected);
     }
 
     [Theory]

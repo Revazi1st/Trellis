@@ -3,6 +3,7 @@
 - **Status**: accepted — supersedes the in-transaction domain-event dispatch of ADR-0006; processor semantics (lease claim, per-handler checkpoints, back-off, dead-letter window) refined by ADR-0023
 - **Amended**: 2026-10-08 — idempotency v2: the reservation rides the command's unit of work and the stored response is replayed (see *Amendment* below)
 - **Amended**: 2026-10-11 — declared unique constraints: every registered constraint becomes its `Result`, any unregistered constraint still throws (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-10-11 — one `Idempotency-Key` value per request, a key an endpoint may require, and one owner for every `Idempotency.*` code (see *Second amendment (2026-10-11)* below)
 - **Date**: 2026-07-16
 
 ## Context
@@ -86,3 +87,47 @@ lookup and Identity's own uniqueness check, the second INSERT loses at Identity'
   exists (`RegistrationRaceTests`, which holds both registrations past Identity's checks before either
   inserts). `RegistrationRejectionTests` pins the codes and the PII-free descriptions.
 
+## Second amendment (2026-10-11): one key per request; a key an endpoint may require
+
+### Why
+
+The 2026-10-08 amendment defined what a key buys and what a blank key costs, and said nothing about two
+keys or none. The filter read the header as one string, and a repeated header's values come out of
+`StringValues` joined with a comma, so `a` and `b` became the key `a,b`, one the caller never sent (a
+single value holding a list was taken whole the same way), and a retry that sent them in the other order
+was a different request. And a missing header always meant "no
+idempotency": right for a write to an addressed resource, wrong for a create, where an accidental repeat
+cannot be told from a second intent and a client that forgot the header learns it from a duplicate.
+
+### Decision
+
+- **One value.** The filter accepts exactly one `Idempotency-Key` value. Two headers, or a value with a
+  comma in it, are a 400 `Idempotency.InvalidKey`: never joined, never split, never the first one taken.
+  The code is the one the blank and the too-long key already answer with, because the remedy is the same
+  (send one usable key, or omit the header); the description says which rule the key broke.
+- **A required key is an endpoint's opt-in.** `RequireIdempotency(keyRequired: true)` answers a request
+  without the header with a 400 `Idempotency.KeyRequired`, and the OpenAPI document marks the header
+  required on that operation. The default stays optional, so an endpoint keeps the behaviour above unless
+  it asks. The reference slice opts in on `POST /invoices`; the writes to an existing invoice act on an
+  addressed resource and keep the key optional.
+- **One owner per code.** Every `Idempotency.*` outcome that is an `Error` lives in Application's
+  `IdempotencyErrors`, the header outcomes only the filter produces (`MultipleKeys`, `KeyRequired`) as much
+  as the `Duplicate` the unit of work returns. `Idempotency.InvalidKey` is declared once
+  (`IdempotencyErrors.InvalidKeyCode`) and shared by the blank, too-long and multi-value errors. The
+  `IdempotencyHeaderErrors` class that ADR-0024's second amendment places beside the filter was folded
+  into it; nothing on the wire changed. The fingerprint mismatch stays a `ProblemDescriptor`: a 422 has no
+  `ErrorType` (the 2026-10-08 amendment).
+
+ADR-0024's second amendment records the wire contract of both outcomes (status, code, the
+`ProblemDetailsContractTests` rows); this amendment records the filter's rules behind it.
+
+### Consequences
+
+- A client that sends a key gets the guarantee for exactly the key it sent, or a 400 that says why not.
+- An endpoint author decides per endpoint whether a missing key is acceptable; the document tells the
+  client which.
+- Fitness: `EndpointContractTests` (a repeated header and a list are each a 400 `Idempotency.InvalidKey`
+  with the multi-value description; `POST /invoices` without a key is a 400 `Idempotency.KeyRequired`
+  while a write to an existing invoice still runs without one), `ProblemDetailsContractTests` (the
+  `Idempotency.KeyRequired` row), the OpenAPI snapshot (the header is required on the create only),
+  `ErrorCodeVocabularyTests` (one meaning per code).

@@ -134,6 +134,9 @@ endpoints stay `no-store` whatever they set, because a token pair must never be 
 outside `/api/` (the probes, which write their own `no-cache`; the development-only OpenAPI document
 and Scalar page) are left alone. A conditional GET still works for a client that keeps the `ETag`
 itself, which is what pollers do; only a browser's automatic revalidation needs the endpoint to opt in.
+The reference conditional GET, `GET /invoices/{id}`, is the endpoint that does: its 200 and its 304 set
+`private, no-cache` (the browser may keep the invoice, a shared cache may not, and every use is
+revalidated with the `ETag`), and its 404 sets nothing, so it stays `no-store`.
 
 **Decision 4 reaches the 401s a Result produces.** The JWT challenge always carried
 `WWW-Authenticate`, but a 401 written through `CustomResults` (login's `Auth.InvalidCredentials`,

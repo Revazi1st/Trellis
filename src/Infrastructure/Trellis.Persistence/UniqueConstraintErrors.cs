@@ -19,6 +19,11 @@ namespace Trellis.Persistence;
 /// Registering one is a deliberate act: pin the name in the entity's configuration, add the row below,
 /// and race it in a test (<c>RegistrationRaceTests</c>, <c>IdempotencyStoreTests</c>).
 /// </para>
+/// <para>
+/// <c>UniqueConstraintTests</c> guards the map itself at the commit boundary: a registered constraint comes
+/// back as its <see cref="Result"/>, and an unregistered one beside it (Identity's <c>RoleNameIndex</c>)
+/// still throws, so a map widened to "any unique violation is a Conflict" fails it.
+/// </para>
 /// </summary>
 internal static class UniqueConstraintErrors
 {

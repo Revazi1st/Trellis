@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Trellis.Application.Abstractions;
+using Trellis.Application.Features.Auth;
 using Trellis.SharedKernel.Results;
 
 namespace Trellis.Persistence.Identity;
@@ -52,7 +53,7 @@ internal sealed class RefreshTokenStore(
                     compromisedUserId, revoked);
             }
 
-            return Result.Failure<Guid>(Error.Unauthorized("Auth.InvalidRefreshToken", "The refresh token is invalid or has expired."));
+            return Result.Failure<Guid>(AuthErrors.InvalidRefreshToken);
         }
 
         return await context.Set<RefreshToken>()

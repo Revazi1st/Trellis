@@ -13,9 +13,9 @@ namespace Trellis.SharedKernel.Decorators;
 /// a record of one request's story, not an alarm:
 /// <list type="bullet">
 /// <item>success, and a classified expected failure (Validation, NotFound, Conflict, Unauthorized,
-/// Forbidden): <see cref="LogLevel.Information"/>;</item>
-/// <item>an unclassified failure (<see cref="ErrorType.Failure"/>): <see cref="LogLevel.Warning"/>, until
-/// someone classifies it;</item>
+/// Forbidden, PreconditionFailed): <see cref="LogLevel.Information"/>;</item>
+/// <item>an unclassified failure (<see cref="ErrorType.Failure"/>) and a dependency that is down
+/// (<see cref="ErrorType.Unavailable"/>): <see cref="LogLevel.Warning"/>;</item>
 /// <item>an exception that ends the use case: <see cref="LogLevel.Error"/> — including a downstream
 /// <see cref="OperationCanceledException"/> (an HTTP timeout) while the caller's token is still live;</item>
 /// <item>the caller's own cancellation (client gone, host stopping): <see cref="LogLevel.Information"/>.</item>
@@ -123,12 +123,15 @@ public static partial class LoggingDecorators
     }
 
     /// <summary>
-    /// The failures a caller causes and the API answers with a 4xx: outcomes, not alarms. Everything else —
-    /// <see cref="ErrorType.Failure"/>, and any type added later (a transient "unavailable", say) — logs at
-    /// Warning until someone classifies it here.
+    /// The failures a caller causes and the API answers with a 4xx: outcomes, not alarms. That includes
+    /// <see cref="ErrorType.PreconditionFailed"/>: a stale <c>If-Match</c> is a client that must reload, not
+    /// a fault. <see cref="ErrorType.Unavailable"/> stays at Warning on purpose: nobody did anything wrong,
+    /// but a dependency is down and someone should notice. <see cref="ErrorType.Failure"/>, and any type
+    /// added later, logs at Warning too, until someone classifies it here.
     /// </summary>
     private static bool IsClassifiedExpectedFailure(ErrorType type)
-        => type is ErrorType.Validation or ErrorType.NotFound or ErrorType.Conflict or ErrorType.Unauthorized or ErrorType.Forbidden;
+        => type is ErrorType.Validation or ErrorType.NotFound or ErrorType.Conflict or ErrorType.Unauthorized
+            or ErrorType.Forbidden or ErrorType.PreconditionFailed;
 
     /// <summary>What failed, never what was typed: <c>CustomerName:Validation.NotEmpty, …</c>; a whole-request entry by its code alone.</summary>
     private static string FailuresOf(ValidationError validation)

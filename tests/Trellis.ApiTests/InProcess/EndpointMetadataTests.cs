@@ -338,10 +338,10 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
         HttpResponseMessage created = await admin.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("Cache Co", "c@c.co", "USD"), ct);
-        Guid id = (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;
 
-        // Per-user data, its 404 and a 201 alike: no-store unless the endpoint chose its own.
-        HttpResponseMessage read = await admin.GetAsync($"/api/v1/invoices/{id}", ct);
+        // Per-user data, a 404 and a 201 alike: no-store unless the endpoint chose its own (the conditional
+        // GET of one invoice does, for its 200 and 304: InvoiceContractTests).
+        HttpResponseMessage read = await admin.GetAsync("/api/v1/invoices/overdue", ct);
         HttpResponseMessage missing = await admin.GetAsync($"/api/v1/invoices/{Guid.NewGuid()}", ct);
         read.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
         missing.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
@@ -350,7 +350,7 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
         // An endpoint that sets its own keeps it (here a stand-in sets it before the endpoint runs).
         using var host = factory.WithTestServices(static services => services.AddTransient<IStartupFilter, OwnCacheControlStartupFilter>());
         HttpClient chosen = await factory.CreateAdminClientOnAsync(host, ct);
-        HttpResponseMessage own = await chosen.GetAsync($"/api/v1/invoices/{id}", ct);
+        HttpResponseMessage own = await chosen.GetAsync("/api/v1/invoices/overdue", ct);
         System.Net.Http.Headers.CacheControlHeaderValue kept = own.Headers.CacheControl.ShouldNotBeNull();
         kept.Private.ShouldBeTrue();
         kept.MaxAge.ShouldBe(TimeSpan.FromSeconds(60));

@@ -48,10 +48,11 @@ placeholder variables at the top of the file name the response each value comes 
 | 5 | `GET /api/v1/invoices/{id}` | | 200: status `Issued`, total 1200.00, and an `ETag` header to paste into `@etag` |
 | 6 | the same GET with `If-None-Match: {etag}` | | 304 and no body, until the invoice changes |
 | 7 | `POST /api/v1/invoices/{id}/pay` | | 204; seconds later the api logs `E-mail not sent (Email:Provider=Logging) …`: the outbox handed `invoices.paid.v1` to `SendReceiptOnInvoicePaid` after the commit |
-| 8 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
-| 9 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
-| 10 | `POST /api/v1/auth/login` as the member | as in step 9 | 200: paste its `accessToken` into `@memberToken` |
-| 11 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
+| 8 | step 4 again with `If-Match: {etag}` | same as step 4 | 412 `Invoice.VersionMismatch`: paying moved the version past the ETag you read in step 5, so nothing changes (without the header: 409 `Invoice.AlreadyFinalized`) |
+| 9 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
+| 10 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
+| 11 | `POST /api/v1/auth/login` as the member | as in step 10 | 200: paste its `accessToken` into `@memberToken` |
+| 12 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
 
 To walk through again, change `@createKey` first: the same key keeps answering with the first
 invoice, paid by then, so steps 3, 4 and 7 would answer 409 (`Invoice.NotDraft`,
@@ -83,7 +84,8 @@ src/Core/Trellis.Application/Features/Invoices/
     ├── CreateInvoice/          command + handler + validator, one folder per use case
     ├── AddInvoiceLine/         IssueInvoice/ alike; PayInvoice/ and VoidInvoice/ take only
     │                           an id, so they carry no validator
-    ├── GetInvoice/             the queries (ListOverdueInvoices/ alike)
+    ├── GetInvoice/             query + handler; no validator, it takes only the route's id
+    ├── ListOverdueInvoices/    query + handler + validator (the paging bounds)
     ├── EventHandlers/          SendReceiptOnInvoicePaid, RecordInvoiceMetrics
     └── InvoiceResponse.cs      the read model the queries return
 src/Infrastructure/Trellis.Persistence/
@@ -124,7 +126,7 @@ src/Presentation/UI/Trellis.UI.Common/
 
 ## Application (`src/Core/Trellis.Application/Features/Invoices/`)
 
-Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListOverdueInvoices`. Each carries a validator too, except `PayInvoice`, `VoidInvoice` and `GetInvoice`: they take only the id the route has already bound, which leaves nothing to check. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`) and `InvoiceResponse` (read model).
+Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListOverdueInvoices`. Each carries a validator too, except `PayInvoice`, `VoidInvoice` and `GetInvoice`: they take only the id the route has already bound, which leaves nothing to check. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`), `EventHandlers/RecordInvoiceMetrics` (→ `InvoiceMetrics`: the issued and paid counters, one handler per event) and `InvoiceResponse` (read model).
 
 `CreateInvoiceCommandHandler` is the railway reference, one chain: `Result.Combine(EmailAddress.Create(…), Currency.Create(…))` creates both value objects before failing, so an invalid e-mail and an invalid currency come back in one 400, and the deconstructing `Bind((email, currency) => Invoice.Create(…))` hands both values on. `Combine` merges validation errors only; a 404 or a 500 among the failures is returned on its own (ADR-0024 amendment).
 
@@ -164,15 +166,18 @@ token, `GET /invoices/{id}` emits it as a strong ETag (`"42"`: the version moves
 line's included) and declares `.SupportsConditionalGet()`, so the document lists `If-None-Match`, the
 `ETag` header and the 304. The header is parsed, not string-compared (RFC 9110 §13.1.2): the strong
 form, the weak form `W/"42"`, a list and `*` all answer **304** with no body, a stale or unparsable tag
-answers 200 — pollers stop re-downloading unchanged aggregates.
+answers 200 — pollers stop re-downloading unchanged aggregates. The 200 and the 304 set
+`Cache-Control: private, no-cache` themselves, the one opt-out from the API's `no-store` default
+(ADR-0021 amendment): a browser may keep the invoice but revalidates it with the ETag before each use,
+while the 404 and every other API response stay `no-store`.
 
 **Conditional writes** (ADR-0025 amendment): `AddInvoiceLine`, `IssueInvoice`, `PayInvoice` and
 `VoidInvoice` take an optional `If-Match` with that ETag (`.SupportsConditionalWrite()`). The endpoint
 passes the version to the command's `ExpectedVersion`, the handler compares it with the loaded invoice
 (`InvoicePreconditions.ToWrite`), and a version the invoice has moved on from is **412**
 `Invoice.VersionMismatch` that changes nothing: a colleague's new line can no longer be issued unseen.
-`*` or no header is unconditional (no 428); a weak tag, a list or a value the API never issued is a 412
-too; a missing invoice stays a 404. xmin still guards the remaining load-to-commit window with a 409.
+`*` or no header is unconditional (no 428); a weak tag, a list or a value the API never issued (`"042"`
+included) is a 412 too, before the lookup; a missing invoice stays a 404 for a well-formed tag. xmin still guards the remaining load-to-commit window with a 409.
 The read cache's 30 s L1 can hand a client that reloads from another replica the same stale ETag, so a
 412 can repeat until the entry expires; and the idempotency fingerprint ignores headers, so a retry with
 the same key and another `If-Match` replays the first answer.
@@ -226,8 +231,10 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
   retry is a 409); `IdempotencyPostCommitTests` (a disconnect after the commit keeps the key and the
   retry replays the 204); `InvoiceReadCacheTests` (every write evicts the cached invoice and retires its
   ETag, a 404 is never cached); `InvoiceContractTests` (304 for every matching `If-None-Match` form,
-  a current `If-Match` applies and a stale, weak, listed or foreign one is a 412 that changes nothing, a
-  missing invoice stays a 404, paging bounds answer 400 naming the field, `Location` resolves); `OpenApiSnapshotTests` +
+  `private, no-cache` on the 200 and the 304 while other reads stay `no-store`, a current `If-Match`
+  applies and a stale, weak, listed, zero-padded or foreign one is a 412 that changes nothing, a missing
+  invoice stays a 404 for a well-formed tag, paging bounds answer 400 naming the field, `Location`
+  resolves); `OpenApiSnapshotTests` +
   `OpenApiDocumentTests` (the committed document is the served one and says all of this); with
   multi-tenancy, `TenantIsolationTests` (cross-tenant read/write 404, scoped overdue list, header
   ignored, cache scoped; the all-options leg runs it). `InvoiceApiFlowTests` is the opt-in Aspire E2E.

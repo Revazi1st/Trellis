@@ -17,8 +17,8 @@
 @token = paste-accessToken-from-step-1
 @invoiceId = paste-id-from-step-2
 @etag = paste-ETag-header-from-step-5
-@memberToken = paste-accessToken-from-step-10
-# Step 8 sends this key again to replay step 2. Change it before a second walk-through: the same key
+@memberToken = paste-accessToken-from-step-11
+# Step 9 sends this key again to replay step 2. Change it before a second walk-through: the same key
 # keeps answering with the first invoice, paid by then, so steps 3, 4 and 7 would answer 409.
 @createKey = try-it-1
 
@@ -62,7 +62,7 @@ Content-Type: application/json
   "dueDate": "2099-12-31T00:00:00Z"
 }
 
-### 5. Read it (200: status Issued, total 1200.00, and an ETag header such as W/"812")
+### 5. Read it (200: status Issued, total 1200.00, and an ETag header such as "812")
 GET {{host}}/api/v1/invoices/{{invoiceId}}
 Authorization: Bearer {{token}}
 
@@ -75,7 +75,19 @@ If-None-Match: {{etag}}
 POST {{host}}/api/v1/invoices/{{invoiceId}}/pay
 Authorization: Bearer {{token}}
 
-### 8. Replay step 2: same key, same body (201 again, same Location, Idempotency-Replayed: true)
+### 8. Issue it again, naming the ETag from step 5 (412 Invoice.VersionMismatch, nothing changes)
+# If-Match acts only on the version you read, and paying in step 7 moved it on. The precondition is
+# checked before the invoice's state: without the header this request is a 409 Invoice.AlreadyFinalized.
+POST {{host}}/api/v1/invoices/{{invoiceId}}/issue
+Authorization: Bearer {{token}}
+Content-Type: application/json
+If-Match: {{etag}}
+
+{
+  "dueDate": "2099-12-31T00:00:00Z"
+}
+
+### 9. Replay step 2: same key, same body (201 again, same Location, Idempotency-Replayed: true)
 POST {{host}}/api/v1/invoices
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -87,7 +99,7 @@ Idempotency-Key: {{createKey}}
   "currency": "EUR"
 }
 
-### 9. Register a member; Development opens self-registration (200; 409 once the account exists)
+### 10. Register a member; Development opens self-registration (200; 409 once the account exists)
 POST {{host}}/api/v1/auth/register
 Content-Type: application/json
 
@@ -96,7 +108,7 @@ Content-Type: application/json
   "password": "{{memberPassword}}"
 }
 
-### 10. Sign in as the member (200: accessToken)
+### 11. Sign in as the member (200: accessToken)
 POST {{host}}/api/v1/auth/login
 Content-Type: application/json
 
@@ -105,7 +117,7 @@ Content-Type: application/json
   "password": "{{memberPassword}}"
 }
 
-### 11. Try to create an invoice as the member (403 Auth.Forbidden: members hold invoices:read only)
+### 12. Try to create an invoice as the member (403 Auth.Forbidden: members hold invoices:read only)
 POST {{host}}/api/v1/invoices
 Authorization: Bearer {{memberToken}}
 Content-Type: application/json

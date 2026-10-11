@@ -19,8 +19,8 @@ namespace Trellis.Application.UnitTests;
 /// <summary>
 /// The pipeline's outcome record: every use-case invocation writes exactly one line from the logging
 /// stage, inside its one span, and the log level follows the outcome class — Information for success
-/// and for classified expected failures, Warning for an unclassified failure, Error only for an
-/// exception that ends the use case. Driven through the real container with a capturing logger.
+/// and for classified expected failures, Warning for an unclassified failure or an unavailable
+/// dependency, Error only for an exception that ends the use case. Driven through the real container with a capturing logger.
 /// </summary>
 public sealed class UseCaseOutcomeTests : IDisposable
 {
@@ -141,7 +141,9 @@ public sealed class UseCaseOutcomeTests : IDisposable
     [InlineData(ErrorType.Conflict, LogLevel.Information)]
     [InlineData(ErrorType.Unauthorized, LogLevel.Information)]
     [InlineData(ErrorType.Forbidden, LogLevel.Information)]
+    [InlineData(ErrorType.PreconditionFailed, LogLevel.Information)]
     [InlineData(ErrorType.Failure, LogLevel.Warning)]
+    [InlineData(ErrorType.Unavailable, LogLevel.Warning)]
     public async Task Every_error_type_logs_one_line_at_its_level(ErrorType type, LogLevel expected)
     {
         var error = new Error("Test." + type, "Scripted.", type);
