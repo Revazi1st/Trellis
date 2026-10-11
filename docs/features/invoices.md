@@ -19,6 +19,8 @@ The **reference vertical slice** — the canonical shape to copy for new feature
 
 Use-case slices, each = command/query + `internal sealed` handler + validator: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListOverdueInvoices`. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`) and `InvoiceResponse` (read model).
 
+`CreateInvoiceCommandHandler` is the railway reference, one chain: `Result.Combine(EmailAddress.Create(…), Currency.Create(…))` creates both value objects before failing, so an invalid e-mail and an invalid currency come back in one 400, and the deconstructing `Bind((email, currency) => Invoice.Create(…))` hands both values on. `Combine` merges validation errors only; a 404 or a 500 among the failures is returned on its own (ADR-0024 amendment).
+
 ## Persistence (`src/Infrastructure/Trellis.Persistence/`)
 
 `InvoiceConfiguration` / `InvoiceLineConfiguration` (complex-type mapping, `AutoInclude`, `"SoftDeleted"` filter), `InvoiceRepository`, ID conventions in `AppDbContext`. With `UseMultitenancy`, the `TenantId` shadow column, its index and the `"Tenant"` filter come from the aggregate-root convention in `AppDbContext.OnModelCreating` (ADR-0022) — `InvoiceConfiguration` contains no tenant code, and neither should yours.

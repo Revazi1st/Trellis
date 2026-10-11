@@ -4,6 +4,7 @@
 - **Date**: 2026-10-08
 - **Supersedes**: the "At the HTTP boundary…" paragraph of ADR-0004 (the Result decision itself stands).
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
+- **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures (see *Amendment* below)
 
 ## Context
 
@@ -88,7 +89,8 @@ explicitly in the OpenAPI document (ADR-0025), so generators do not guess.
 `FieldError(Field, Code, Description) : Error` is what `ValidationDecorators` emits per FluentValidation
 failure (it replaces the internal `FieldValidationFailure` of the pipeline-v2 pass); domain errors stay
 plain `Error`s; `ValidationError` aggregates both and `Result.Combine` flattens nested ones unchanged.
-The outcome log line's `field:code` pairs read the same record.
+The outcome log line's `field:code` pairs read the same record. *(Refined by the 2026-10-11 amendment
+below: `Combine` merges only when every failure is a validation error.)*
 
 ### One writer, one catalogue (Api.Common)
 
@@ -152,3 +154,14 @@ a time, by deserialising each response into `ProblemResponse`.
   identical in Development and Production — the in-process tests prove what production does.
 - The `type` URN is not dereferenceable. A product that wants documentation links changes
   `ProblemTypes.Prefix` once; every consumer that branched on `code` is unaffected.
+
+## Amendment (2026-10-11): `Result.Combine` merges only validation failures
+
+As first written, `Result.Combine` flattened any two failures into one `Validation.General`, so two
+NotFounds, or a NotFound beside a Failure, answered 400 and logged at Information. It now merges into a
+`ValidationError` only when every failure is `ErrorType.Validation` (nested ones still flattened);
+otherwise it returns one error unmerged: the first `Failure`, else the first non-validation failure.
+The validation errors beside it are dropped, because the 404 or the 500 is the answer that matters. A
+single failure is returned as it is. `Combine<T1, T2>` and `Combine<T1, T2, T3>` apply the same rule
+and keep the values as a tuple, which the deconstructing `Bind`/`Map` overloads unpack, so
+`CreateInvoiceCommandHandler` is one chain. The wire contract above is unchanged.

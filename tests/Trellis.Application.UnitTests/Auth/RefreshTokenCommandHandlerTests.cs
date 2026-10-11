@@ -62,4 +62,21 @@ public sealed class RefreshTokenCommandHandlerTests
         await _refreshStore.DidNotReceiveWithAnyArgs().StoreAsync(
             Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task A_valid_token_whose_user_is_gone_is_the_same_opaque_rejection()
+    {
+        _tokens.HashRefreshToken(Arg.Any<string>()).Returns("hashed");
+        _refreshStore.ConsumeAsync("hashed", Arg.Any<CancellationToken>()).Returns(Result.Success(User.Id));
+        _identity.GetUserAsync(User.Id, Arg.Any<CancellationToken>())
+            .Returns(Result.Failure<AuthenticatedUser>(Error.NotFound("Auth.UserNotFound", "No such user.")));
+
+        var result = await CreateHandler().Handle(
+            new RefreshTokenCommand("orphaned"), TestContext.Current.CancellationToken);
+
+        // Not a 404 naming the user: the caller learns only that the token is no good.
+        result.Error.ShouldBe(AuthErrors.InvalidRefreshToken);
+        await _refreshStore.DidNotReceiveWithAnyArgs().StoreAsync(
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
 }

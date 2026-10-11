@@ -43,33 +43,69 @@ public class Result
     public static implicit operator Result(Error error) => Failure(error);
 
     /// <summary>
-    /// Success when every result succeeded; otherwise a single error carrying ALL the failures
-    /// (nested <see cref="ValidationError"/>s are flattened) — so a caller creating several value
-    /// objects reports every problem at once instead of one 400 at a time.
+    /// Success when every result succeeded; otherwise ONE error, chosen by type. When every failure is a
+    /// validation error they are merged into a <see cref="ValidationError"/> (nested ones flattened), so a
+    /// caller creating several value objects reports every problem in one 400 instead of one at a time.
+    /// When any failure is of another type, merging would turn a 404 or a 500 into a 400, so the first
+    /// <see cref="ErrorType.Failure"/> wins, else the first non-validation failure; the validation errors
+    /// beside it are dropped. A single failure is returned as it is.
     /// </summary>
     public static Result Combine(params Result[] results)
+        => MergeFailures(results) is { } error ? Failure(error) : Success();
+
+    /// <summary>
+    /// <see cref="Combine(Result[])"/> that keeps the values: both on success, as a tuple the
+    /// deconstructing <c>Bind</c>/<c>Map</c> overloads (<c>(a, b) =&gt; …</c>) unpack.
+    /// </summary>
+    public static Result<(T1, T2)> Combine<T1, T2>(Result<T1> first, Result<T2> second)
+        => MergeFailures([first, second]) is { } error
+            ? Failure<(T1, T2)>(error)
+            : Success((first.Value, second.Value));
+
+    /// <inheritdoc cref="Combine{T1, T2}(Result{T1}, Result{T2})"/>
+    public static Result<(T1, T2, T3)> Combine<T1, T2, T3>(Result<T1> first, Result<T2> second, Result<T3> third)
+        => MergeFailures([first, second, third]) is { } error
+            ? Failure<(T1, T2, T3)>(error)
+            : Success((first.Value, second.Value, third.Value));
+
+    private static Error? MergeFailures(ReadOnlySpan<Result> results)
     {
-        List<Error> errors = [];
+        List<Error> validation = [];
+        Error? first = null;
+        Error? decisive = null;
+        int failures = 0;
+
         foreach (Result result in results)
         {
-            if (result.IsFailure)
+            if (result.IsSuccess)
             {
-                if (result.Error is ValidationError validation)
+                continue;
+            }
+
+            failures++;
+            first ??= result.Error;
+            if (result.Error.Type != ErrorType.Validation)
+            {
+                if (decisive is null || (decisive.Type != ErrorType.Failure && result.Error.Type == ErrorType.Failure))
                 {
-                    errors.AddRange(validation.Errors);
+                    decisive = result.Error;
                 }
-                else
-                {
-                    errors.Add(result.Error);
-                }
+            }
+            else if (result.Error is ValidationError nested)
+            {
+                validation.AddRange(nested.Errors);
+            }
+            else
+            {
+                validation.Add(result.Error);
             }
         }
 
-        return errors.Count switch
+        return failures switch
         {
-            0 => Success(),
-            1 => Failure(errors[0]),
-            _ => Failure(new ValidationError(errors)),
+            0 => null,
+            1 => first,
+            _ => decisive ?? new ValidationError(validation),
         };
     }
 }

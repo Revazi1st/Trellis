@@ -24,6 +24,9 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   already-consumed token revokes *all* of that user's outstanding tokens (OAuth security BCP) and
   logs a warning. A newly minted token is saved by the login/refresh command's unit of work — the
   store never commits on its own — so a command that fails after minting leaves no orphan row.
+  Every refresh failure before minting (an unknown, expired or consumed token, or a user deleted
+  since) answers the same 401 `Auth.InvalidRefreshToken`, so the answer never says which
+  (`MapOnFailure` ahead of the issuing step in `RefreshTokenCommandHandler`).
 - **Account lockout**: 5 failed password attempts lock the account for 15 minutes
   (`Auth.AccountLockedOut` → 403). A successful login resets the counter. This is per-account
   defense; the `auth` rate-limit policy (10/min per user/IP) is the per-source layer.
