@@ -248,10 +248,12 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
             }
 
             var role = new IdentityRole<Guid>(roleName) { Id = Guid.CreateVersion7() };
-            await roleManager.CreateAsync(role);
+            IdentitySeed.EnsureSucceeded(await roleManager.CreateAsync(role), $"Creating role '{roleName}'");
             foreach (string permission in permissions)
             {
-                await roleManager.AddClaimAsync(role, new Claim(AuthClaims.Permission, permission));
+                IdentitySeed.EnsureSucceeded(
+                    await roleManager.AddClaimAsync(role, new Claim(AuthClaims.Permission, permission)),
+                    $"Granting '{permission}' to role '{roleName}'");
             }
         }
 
@@ -268,8 +270,8 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
                 TenantId = TenantA,
 #endif
             };
-            await userManager.CreateAsync(admin, AdminPassword);
-            await userManager.AddToRoleAsync(admin, Roles.Administrator);
+            IdentitySeed.EnsureSucceeded(await userManager.CreateAsync(admin, AdminPassword), $"Creating the administrator '{AdminEmail}'");
+            IdentitySeed.EnsureSucceeded(await userManager.AddToRoleAsync(admin, Roles.Administrator), $"Adding '{AdminEmail}' to role '{Roles.Administrator}'");
         }
     }
 

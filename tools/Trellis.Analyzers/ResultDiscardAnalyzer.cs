@@ -18,7 +18,9 @@ namespace Trellis.Analyzers;
 /// Reported: an invocation, an object creation, an awaited task of a result, and a conditional access
 /// ending in one of those, written as a statement, including the implicit statement of an
 /// expression-bodied lambda, local function or member that returns void. Not reported: an assignment
-/// (so <c>_ = …</c> is the way to drop one on purpose), a return, an argument, and generated code.
+/// (so <c>_ = …</c> is the way to drop one on purpose), a return, an argument, generated code, and
+/// NSubstitute's received-call check (<c>await uow.Received(1).CommitAsync(ct)</c>), which asserts a
+/// call rather than making one.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
@@ -47,8 +49,9 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeExpressionStatement(OperationAnalysisContext context)
     {
         IOperation statementValue = ((IExpressionStatementOperation)context.Operation).Operation;
-        ITypeSymbol? type = DroppedValue(statementValue)?.Type;
-        if (type is not null && IsResultType(type))
+        IOperation? dropped = DroppedValue(statementValue);
+        ITypeSymbol? type = dropped?.Type;
+        if (type is not null && IsResultType(type) && !IsSubstituteCallCheck(dropped!))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Rule,
@@ -72,6 +75,40 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
         return operation.Kind is OperationKind.Invocation or OperationKind.ObjectCreation or OperationKind.Await
             ? operation
             : null;
+    }
+
+    /// <summary>
+    /// NSubstitute's call check, <c>await unitOfWork.Received(1).CommitAsync(ct)</c>: the call on the
+    /// object <c>Received</c>, <c>DidNotReceive</c>, <c>ReceivedWithAnyArgs</c> or
+    /// <c>DidNotReceiveWithAnyArgs</c> returns asserts that the call happened (or did not) and returns a
+    /// placeholder, so there is no outcome to drop. Matched by method name and the NSubstitute namespace.
+    /// </summary>
+    private static bool IsSubstituteCallCheck(IOperation dropped)
+    {
+        if (dropped is IAwaitOperation awaited)
+        {
+            dropped = awaited.Operation;
+        }
+
+        IOperation? receiver = (dropped as IInvocationOperation)?.Instance;
+        while (receiver is IConversionOperation conversion)
+        {
+            receiver = conversion.Operand;
+        }
+
+        return receiver is IInvocationOperation { TargetMethod: { } check }
+               && check.Name is "Received" or "DidNotReceive" or "ReceivedWithAnyArgs" or "DidNotReceiveWithAnyArgs"
+               && RootNamespaceName(check.ContainingNamespace) == "NSubstitute";
+    }
+
+    private static string? RootNamespaceName(INamespaceSymbol? ns)
+    {
+        while (ns is { ContainingNamespace.IsGlobalNamespace: false })
+        {
+            ns = ns.ContainingNamespace;
+        }
+
+        return ns is { IsGlobalNamespace: false } ? ns.Name : null;
     }
 
     private static bool IsResultType(ITypeSymbol type)

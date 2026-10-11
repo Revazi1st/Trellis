@@ -47,7 +47,7 @@ public sealed class ListOverdueInvoicesQueryHandlerTests
             .Returns(new PagedList<Invoice>([], Page: 1, PageSize: 20, TotalCount: 0));
         var handler = new ListOverdueInvoicesQueryHandler(_invoices, _clock);
 
-        await handler.Handle(new ListOverdueInvoicesQuery(), TestContext.Current.CancellationToken);
+        (await handler.Handle(new ListOverdueInvoicesQuery(), TestContext.Current.CancellationToken)).ShouldBeSuccess();
 
         Invoice overdue = InvoiceFactory.Issued(dueDate: Now.AddDays(-1));
         Invoice notYetDue = InvoiceFactory.Issued(dueDate: Now.AddDays(1));

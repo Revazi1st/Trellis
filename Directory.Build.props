@@ -21,6 +21,21 @@
     <TreatWarningsAsErrors Condition="'$(Configuration)' == 'Release' or '$(ContinuousIntegrationBuild)' == 'true'">true</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <!-- RSLT001: a discarded Result fails the Release build (ADR-0030). Every project under src/, tests/
+       and tools/ but the analyzer itself loads tools/Trellis.Analyzers into its compiler.
+       ReferenceOutputAssembly=false keeps the assembly out of the references and the build output,
+       PrivateAssets=all keeps the reference from flowing to the project's consumers, and
+       IsAspireProjectResource=false stops the AppHost from treating it as a service to run. The
+       condition is on the project name, which the template rename changes together with the path.
+       eng/ has its own empty Directory.Build.props, so the template pack never loads it. -->
+  <PropertyGroup Label="Result analyzer">
+    <ResultAnalyzerProject>$(MSBuildThisFileDirectory)tools/Trellis.Analyzers/Trellis.Analyzers.csproj</ResultAnalyzerProject>
+  </PropertyGroup>
+  <ItemGroup Label="Result analyzer" Condition="'$(MSBuildProjectName)' != 'Trellis.Analyzers'">
+    <ProjectReference Include="$(ResultAnalyzerProject)" OutputItemType="Analyzer" ReferenceOutputAssembly="false"
+                      PrivateAssets="all" IsAspireProjectResource="false" />
+  </ItemGroup>
+
   <PropertyGroup Label="Documentation">
     <!-- XML docs feed the built-in OpenAPI generator; CS1591 (missing comment) stays opt-in per type. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

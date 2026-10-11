@@ -4,6 +4,7 @@ using Shouldly;
 using Trellis.Application.Abstractions;
 using Trellis.Application.Authorization;
 using Trellis.Application.Features.Auth;
+using Trellis.Persistence.Identity;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Results;
 using Xunit;
@@ -28,7 +29,9 @@ public sealed class AuthSecurityTests(DatabaseFixture database) : IntegrationTes
         var roleManager = Services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         if (await roleManager.FindByNameAsync(Roles.Member) is null)
         {
-            await roleManager.CreateAsync(new IdentityRole<Guid>(Roles.Member) { Id = Guid.CreateVersion7() });
+            IdentitySeed.EnsureSucceeded(
+                await roleManager.CreateAsync(new IdentityRole<Guid>(Roles.Member) { Id = Guid.CreateVersion7() }),
+                $"Creating role '{Roles.Member}'");
         }
 
         Result<Guid> registered = await Services.GetRequiredService<IIdentityService>().RegisterAsync(email, Password, ct);
