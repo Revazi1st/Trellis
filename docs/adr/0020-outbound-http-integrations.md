@@ -3,7 +3,7 @@
 - **Status**: accepted
 - **Date**: 2026-09-25
 - **Amended**: 2026-10-08 — replace (not add) the blanket pipeline, the real exception set, API-only registration, back-off-aware budget, Frankfurter (see *Amendment* below)
-- **Amended**: 2026-10-11 — an outage is `Unavailable` (503), a refusal stays `Failure` (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-10-11 — an outage is `Unavailable` (503), a refusal stays `Failure`, statuses mapped by endpoint contract (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -61,6 +61,12 @@ situations: the provider being down, and the provider refusing us. ADR-0004 now 
   (401/403), a route it does not serve, meaning a wrong `BaseUrl` or a retired API version (404), or
   said `success:false` in a 200. No wait cures our configuration, so a 503 would mislead.
 - `ExchangeRate.MalformedResponse` stays a `Failure`, and `ExchangeRate.UnknownCurrency` a `Validation`.
+
+The status mapping follows what each status means for the endpoint called, probed against the
+provider, not the status class: Frankfurter answers an unknown currency with a 422, which is the
+caller's input (`UnknownCurrency`, a 400 at our API), while a 404 on its `rates` collection route can
+only be our wrong URL. An upstream 401/403/404 is never forwarded as our own. The table is in
+`docs/features/exchange-rates.md`.
 
 An endpoint that calls an integration declares the 503 explicitly with a bare
 `.Produces(StatusCodes.Status503ServiceUnavailable)`, which the OpenAPI transformer fills with the

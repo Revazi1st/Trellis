@@ -34,7 +34,12 @@ is the third party (`Stripe`), `{Capability}` what the application needs from it
 
 - [ ] `ExternalApis/{Provider}/{Provider}Client.cs`: an `internal sealed` typed client taking
       `HttpClient` (and a logger), implementing the port. Every outcome becomes a `Result`:
-  - a non-success status → `Unavailable` (or the domain error a 4xx means);
+  - **probe the provider's error statuses** (an unknown input, a wrong path, no key) before mapping them;
+  - **map each status by the endpoint's contract**, not its class: 400/422 on input is the domain error,
+    a 404 on a collection route is our wrong URL and 401/403 our key (`Rejected`, logged at Error),
+    408/429/5xx after the retries `Unavailable`. Never forward an upstream 401/403/404 as our own;
+  - read a provider's error code from a 4xx body through a private DTO if you branch on it, and never
+    copy the provider's text into an `Error`;
   - a 200 whose body reports an error, a body of the wrong shape, a missing field → `MalformedResponse`
     or `Unavailable`, never an exception;
   - `catch` what the **pipeline** throws, not what a bare `HttpClient` throws: `HttpRequestException`,

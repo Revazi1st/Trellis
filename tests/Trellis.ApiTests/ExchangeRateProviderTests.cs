@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 using Shouldly;
 using Trellis.Application.Abstractions;
 using Trellis.Infrastructure;
@@ -48,25 +49,61 @@ public sealed class ExchangeRateProviderTests
     }
 
     [Theory]
+    // Frankfurter's live answer to an unknown code on either side (probed): a 422 naming one code.
+    [InlineData(HttpStatusCode.UnprocessableEntity, """{"status":422,"message":"invalid currency: XYZ"}""")]
+    // A provider that rejects input with a plain 400 means the same for this endpoint.
+    [InlineData(HttpStatusCode.BadRequest, """{"message":"bad request"}""")]
+    public async Task Provider_maps_a_rejected_currency_pair_to_UnknownCurrency(HttpStatusCode status, string body)
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
+        IExchangeRateProvider provider = BuildProvider(handler);
+
+        Result<decimal> result = await provider.GetRateAsync("EUR", "XYZ", TestContext.Current.CancellationToken);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe("ExchangeRate.UnknownCurrency");
+        result.Error.Type.ShouldBe(ErrorType.Validation, "a code the provider does not know is the caller's input: a 400 at our API, not a 500");
+        // The provider's text names one code without saying which side; the error names the pair in our words.
+        result.Error.Description.ShouldContain("'EUR'");
+        result.Error.Description.ShouldContain("'XYZ'");
+        result.Error.Description.ShouldNotContain("invalid currency");
+        handler.Calls.ShouldBe(1, "a rejected input is final, not retried");
+    }
+
+    [Theory]
     // Our credentials or plan, and a route the provider does not serve (a wrong BaseUrl): no wait cures them.
     [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden)]
     [InlineData(HttpStatusCode.NotFound)]
-    public async Task Provider_maps_a_refusal_of_our_configuration_to_Rejected(HttpStatusCode status)
+    // A status this endpoint's contract does not list: our request no longer matches the provider's API.
+    [InlineData(HttpStatusCode.MethodNotAllowed)]
+    [InlineData(HttpStatusCode.Conflict)]
+    public async Task Provider_maps_a_refusal_of_our_configuration_to_Rejected_logged_at_Error(HttpStatusCode status)
     {
-        IExchangeRateProvider provider = BuildProvider(new StubHandler(_ => new HttpResponseMessage(status)));
+        var logs = new InProcess.AuthFlowTests.CapturingLoggerProvider();
+        using ServiceProvider services = BuildServices(
+            new StubHandler(_ => new HttpResponseMessage(status)),
+            configure: s => s.AddSingleton<ILoggerProvider>(logs));
 
-        Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
+        Result<decimal> result = await services.GetRequiredService<IExchangeRateProvider>()
+            .GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
 
         result.IsFailure.ShouldBeTrue();
         result.Error.ShouldBe(ExchangeRateErrors.Rejected);
-        result.Error.Type.ShouldBe(ErrorType.Failure);
+        result.Error.Type.ShouldBe(ErrorType.Failure, "a 503 would tell every client to retry a fault only our configuration can fix");
+        logs.All.ShouldContain(
+            log => log.Level == LogLevel.Error && log.Category.EndsWith("ExchangeRateClient", StringComparison.Ordinal),
+            "a refusal of our configuration must page someone, not read as an outage");
     }
 
-    [Fact]
-    public async Task Provider_maps_a_server_error_that_outlives_the_retries_to_Unavailable()
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    [InlineData(HttpStatusCode.RequestTimeout)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    public async Task Provider_maps_a_transient_status_that_outlives_the_retries_to_Unavailable(HttpStatusCode status)
     {
-        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        var handler = new StubHandler(_ => new HttpResponseMessage(status)
         {
             // Immediate retries: this test is about the mapping, not the back-off.
             Headers = { RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.Zero) },
@@ -78,7 +115,20 @@ public sealed class ExchangeRateProviderTests
         result.IsFailure.ShouldBeTrue();
         result.Error.ShouldBe(ExchangeRateErrors.Unavailable);
         result.Error.Type.ShouldBe(ErrorType.Unavailable);
-        handler.Calls.ShouldBe(2, "a 5xx is retried before it is reported");
+        handler.Calls.ShouldBe(2, "a transient status is retried before it is reported");
+    }
+
+    [Fact]
+    public async Task Provider_matches_the_quote_whatever_case_the_caller_used()
+    {
+        // Probed: Frankfurter accepts "usd" and answers it as "USD".
+        IExchangeRateProvider provider = BuildProvider(new StubHandler(_ => Json(
+            """[{"date":"2026-10-11","base":"EUR","quote":"USD","rate":1.1217}]""")));
+
+        Result<decimal> result = await provider.GetRateAsync("eur", "usd", TestContext.Current.CancellationToken);
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.ShouldBe(1.1217m);
     }
 
     [Fact]

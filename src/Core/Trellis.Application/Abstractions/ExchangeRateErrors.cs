@@ -35,4 +35,11 @@ public static class ExchangeRateErrors
     /// <summary>The answer has no rate for <paramref name="code"/>: the feed does not publish that currency.</summary>
     public static Error UnknownCurrency(string code) =>
         Error.Validation("ExchangeRate.UnknownCurrency", $"The exchange-rate provider does not publish a rate for '{code}'.");
+
+    /// <summary>
+    /// The provider refused the pair itself (a code it does not know, on either side) and did not say
+    /// which one in a form worth parsing, so the error names both.
+    /// </summary>
+    public static Error UnknownCurrency(string baseCurrency, string quoteCurrency) =>
+        Error.Validation("ExchangeRate.UnknownCurrency", $"The exchange-rate provider does not publish a rate from '{baseCurrency}' to '{quoteCurrency}'.");
 }

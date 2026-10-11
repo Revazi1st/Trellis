@@ -96,16 +96,7 @@ internal sealed class ExchangeRateClient(HttpClient httpClient, ILogger<Exchange
     {
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogWarning(
-                "Exchange-rate provider answered {StatusCode} for {Base}->{Quote}.",
-                (int)response.StatusCode, baseCurrency, quoteCurrency);
-
-            // Credentials, plan or route refused: no wait cures our configuration. Anything else that
-            // outlived the retries is the provider being down for now.
-            return Result.Failure<decimal>(
-                response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound
-                    ? ExchangeRateErrors.Rejected
-                    : ExchangeRateErrors.Unavailable);
+            return Result.Failure<decimal>(MapFailure(response.StatusCode, baseCurrency, quoteCurrency));
         }
 
         // The root's kind decides how the body is read: Frankfurter answers an array, while a provider that
@@ -132,8 +123,9 @@ internal sealed class ExchangeRateClient(HttpClient httpClient, ILogger<Exchange
             return Result.Failure<decimal>(ExchangeRateErrors.MalformedResponse);
         }
 
+        // The provider accepts a code in any case and answers it upper-cased ("usd" comes back as "USD").
         RateQuote? quote = root.Deserialize<RateQuote[]>(SerializerOptions)?
-            .FirstOrDefault(entry => string.Equals(entry.Quote, quoteCurrency, StringComparison.Ordinal));
+            .FirstOrDefault(entry => string.Equals(entry.Quote, quoteCurrency, StringComparison.OrdinalIgnoreCase));
 
         return quote switch
         {
@@ -142,6 +134,54 @@ internal sealed class ExchangeRateClient(HttpClient httpClient, ILogger<Exchange
             { Rate: { } rate } => Result.Success(rate),
             _ => Result.Failure<decimal>(ExchangeRateErrors.MalformedResponse),
         };
+    }
+
+    /// <summary>
+    /// What an error status means for THIS endpoint, by its contract rather than by status class
+    /// (probed against Frankfurter v2, <c>docs/features/exchange-rates.md</c>). The pipeline has already
+    /// retried what is transient, so whatever arrives here is final. The provider's error text
+    /// (<c>{"status":422,"message":"invalid currency: XYZ"}</c>) is never read into an error: it is the
+    /// third party's wording, and it names one code without saying which side of the pair.
+    /// </summary>
+    private Error MapFailure(HttpStatusCode status, string baseCurrency, string quoteCurrency)
+    {
+        switch (status)
+        {
+            case HttpStatusCode.UnprocessableEntity or HttpStatusCode.BadRequest:
+                // A code in the pair is not one the provider knows: the caller's input, not an outage.
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation(
+                        "Exchange-rate provider rejected the pair {Base}->{Quote} with {StatusCode}.", baseCurrency, quoteCurrency, (int)status);
+                }
+
+                return ExchangeRateErrors.UnknownCurrency(baseCurrency, quoteCurrency);
+
+            case HttpStatusCode.NotFound:
+                // rates is a collection route: a 404 is never "no such rate" (that is a 200 without the
+                // quote) but a route the provider does not serve: a wrong BaseUrl or a retired version.
+                logger.LogError(
+                    "Exchange-rate provider answered 404 for {Base}->{Quote}: misconfiguration, check ExternalApis:ExchangeRates:BaseUrl and the API version.",
+                    baseCurrency, quoteCurrency);
+                return ExchangeRateErrors.Rejected;
+
+            case HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden:
+                // An upstream 401 means OUR key or plan was refused, never that the caller must sign in.
+                logger.LogError(
+                    "Exchange-rate provider refused our credentials or plan with {StatusCode} for {Base}->{Quote}.", (int)status, baseCurrency, quoteCurrency);
+                return ExchangeRateErrors.Rejected;
+
+            case HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError:
+                logger.LogWarning(
+                    "Exchange-rate provider still answered {StatusCode} for {Base}->{Quote} after the retries.", (int)status, baseCurrency, quoteCurrency);
+                return ExchangeRateErrors.Unavailable;
+
+            default:
+                // A status this endpoint's contract does not list: our request no longer matches the provider's API.
+                logger.LogError(
+                    "Exchange-rate provider answered an unexpected {StatusCode} for {Base}->{Quote}.", (int)status, baseCurrency, quoteCurrency);
+                return ExchangeRateErrors.Rejected;
+        }
     }
 
     /// <summary>
