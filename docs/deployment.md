@@ -102,7 +102,7 @@ fails the rollout, not the first request.
 | `Kestrel__Limits__MaxRequestBodySize` / `Kestrel__Limits__MaxRequestHeadersTotalSize` | no | Request caps in bytes: 1 MB body (larger → 413) and 32 KB of headers by default. Raise per endpoint for a real upload, not globally. |
 | `Cors__AllowedOrigins__0…` | if browsers call cross-origin | Allowed origins; **none by default** (same-origin only). |
 | `Retention__*` | no | Janitor windows for the bookkeeping tables: `SweepInterval` (1h; 1 s – 1 day), `InitialDelay` before the first sweep (1m; 0 – 1h), `ProcessedOutboxAge` (3d; ≥ 1h), `DeadLetteredOutboxAge` (30d; ≥ 1 day), `IdempotencyKeyAge` (2d; ≥ 1h), `DeadRefreshTokenAge` (30d; ≥ 1 day — keep it ≥ `Authentication__RefreshTokenDays`, a consumed token is what makes a replay detectable). Every window is capped at 365 days. TimeSpan format, e.g. `7.00:00:00`. A value out of range stops the API at boot, naming the key. |
-| `Outbox__*` | no | The outbox processor (ADR-0023): `PollInterval` (5 s; 100 ms – 10 min) between polls once a batch came back short, `BatchSize` (20; 1 – 1000) rows per claim, `MaxAttempts` (8; 1 – 50) failures before a message is dead-lettered, `BaseRetryDelay` (30 s; 1 s – 1 h) doubling per failure up to `MaxRetryDelay` (15 min; 1 s – 1 day, and ≥ `BaseRetryDelay`), `DispatchTimeout` (30 s; 1 s – 10 min) per message's handlers. Defaults retry after 30 s, 1 m, 2 m, 4 m, 8 m, 15 m, 15 m and dead-letter about 45 minutes after the first failure. A claimed row is leased for `DispatchTimeout × (BatchSize + 1)` (10.5 min): after a **crash** its in-flight rows reappear within that long (a graceful stop releases them at once) — shorten `BatchSize` or `DispatchTimeout` to shorten it. TimeSpan format. A value out of range stops the API at boot, naming the key. |
+| `Outbox__*` | no | The outbox processor (ADR-0023): `PollInterval` (5 s; 100 ms – 10 min) between polls once a batch came back short, `BatchSize` (20; 1 – 1000) rows per claim, `MaxAttempts` (8; 1 – 50) failures before a message is dead-lettered, `BaseRetryDelay` (30 s; 1 s – 1 h) doubling per failure up to `MaxRetryDelay` (15 min; 1 s – 1 day, and ≥ `BaseRetryDelay`), `DispatchTimeout` (30 s; 1 s – 10 min) per message's handlers. Defaults retry after 30 s, 1 m, 2 m, 4 m, 8 m, 15 m, 15 m and dead-letter about 45 minutes after the first failure. A claimed row is leased for `DispatchTimeout × (BatchSize + 1)` (10.5 min): after a **crash** its in-flight rows reappear within that long (a graceful stop releases them at once) — shorten `BatchSize` or `DispatchTimeout` to shorten it. The lease is also the fence: a processor still working on a row after its lease was claimed again writes nothing more to it (the attempt is booked `lease_lost`), so a stale replica cannot undo the new owner's bookkeeping. TimeSpan format. A value out of range stops the API at boot, naming the key. |
 
 ## Health probes
 
@@ -154,8 +154,14 @@ Worth alerting on:
   gauges are sampled by the processor on each poll and are the same global number from every replica:
   take `max`, not `sum`.
 - `trellis.outbox.retries` rate (`error.type` names the exception) — a handler's dependency is
-  struggling; the per-attempt line is logged at Warning. `trellis.outbox.dispatch.duration` (by
-  `trellis.outbox.outcome`) shows whether handlers approach `Outbox__DispatchTimeout`.
+  struggling; the per-attempt line is logged at Warning (event 1301). `trellis.outbox.dispatch.duration`
+  (by `trellis.outbox.outcome`) shows whether handlers approach `Outbox__DispatchTimeout`.
+- `trellis.outbox.dispatch.duration` with `trellis.outbox.outcome=lease_lost` (event 1303, Warning) —
+  a processor outlived its lease: a handler ignored its token past `Outbox__DispatchTimeout`, or the
+  database was slower than the budget (event 1306 then says a batch was cut short for that reason).
+  Another replica finished the row and the stale one wrote nothing; the handler that was in flight may
+  have run twice. Occasional during a deploy or a database hiccup; steady means the lease is too short
+  for the handlers or the database — raise `Outbox__DispatchTimeout`.
 - `resilience.polly.strategy.events` with `event.name=OnCircuitOpened` — an outbound dependency's
   circuit opened; calls fail fast until it closes.
 - `microsoft.entityframeworkcore.optimistic_concurrency_failures` — a rising rate means clients
@@ -196,10 +202,19 @@ DELETE FROM "OutboxMessages" WHERE "Status" = 2 AND "Id" = '<id>';
 
 - A pending row whose `NextAttemptAtUtc` lies minutes ahead is either in back-off (`Attempts` > 0, see
   `Error`) or leased by a processor that is working on it or died holding it. Leases are never released
-  by hand: they expire by themselves within `Outbox__DispatchTimeout × (Outbox__BatchSize + 1)`.
+  by hand: they expire by themselves within `Outbox__DispatchTimeout × (Outbox__BatchSize + 1)`. The
+  lease value is also what every bookkeeping write of the row is conditional on (`NextAttemptAtUtc` is
+  its concurrency token), so an `UPDATE` of that column on a leased row revokes the lease: the processor
+  holding it books `lease_lost` and discards its attempt, and the handlers it had checkpointed stay
+  credited. Harmless, and pointless — the statements above touch dead letters only, which nobody holds.
 - Re-driving a `poison` row without a code fix dead-letters it again on the next poll.
 - `unknown_type` rows mean an event type was removed or renamed while rows were in flight: redeploy a
   type carrying that `[DomainEventName]` and re-drive them.
+- Every outbox log line carries an event id (`OutboxLog`), so an alert matches the id, not the text:
+  1301 retry scheduled (Warning), 1302 dead-lettered (Critical), 1303 lease lost (Warning), 1304 one
+  handler failed while its siblings ran (Warning), 1305 a bookkeeping save failed and the row keeps its
+  lease (Warning), 1306 a batch stopped short of its lease (Warning), 1307 leases released on stop
+  (Information), 1308 a lease release failed (Warning), 1309 a poll failed and will be retried (Warning).
 
 ### Idempotency keys
 

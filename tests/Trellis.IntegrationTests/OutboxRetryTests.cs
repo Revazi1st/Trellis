@@ -23,10 +23,10 @@ namespace Trellis.IntegrationTests;
 
 /// <summary>
 /// The processor's failure semantics against the real database (ADR-0023): what a row looks like after a
-/// handler throws, times out, writes, or cannot even be read; what a second processor and a stopping host
-/// see; and what the meters and spans report. Three test handlers of <c>InvoicePaidDomainEvent</c> are
-/// registered after the real ones (so they are "the later handlers") and switched on per test; the real
-/// receipt e-mail is the side effect that must never be sent twice.
+/// handler throws, times out, writes, or cannot even be read; what a second processor, a processor that
+/// outlived its lease and a stopping host see; and what the meters and spans report. Three test handlers
+/// of <c>InvoicePaidDomainEvent</c> are registered after the real ones (so they are "the later handlers")
+/// and switched on per test; the real receipt e-mail is the side effect that must never be sent twice.
 /// </summary>
 public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTestBase(database)
 {
@@ -36,6 +36,8 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     private const string RecordMetrics = "invoices.paid.record-metrics";
     private const string FlakyName = "test.flaky";
     private const string WritingName = "test.writing";
+    private const string BlockingName = "test.blocking";
+    private const string LeaseLost = "lease_lost";
 
     private static readonly TimeSpan WaitBudget = TimeSpan.FromSeconds(30);
 
@@ -278,6 +280,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     [Fact]
     public async Task A_leased_message_is_invisible_to_a_second_processor_until_its_lease_expires()
     {
+        using var recorder = new MetricRecorder(MeterFactory);
         // The issued row first, so the first processor finishes it and is stuck on the paid row alone.
         InvoiceId id = await IssueInvoiceAsync();
         Time.Advance(TimeSpan.FromSeconds(1));
@@ -308,10 +311,134 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
             _blocking.Release();
         }
 
-        // Unstuck, the first processor finishes its copy too: two processors, one receipt.
+        // Unstuck, the first processor finds the lease gone when it books its copy: the attempt is lease_lost,
+        // nothing of it is written, and the receipt its checkpoint credited went out once.
         (await first.WaitAsync(WaitBudget, Ct)).ShouldBe(2);
         (await RowAsync(PaidType)).Status.ShouldBe(OutboxMessageStatus.Processed);
         await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        recorder.Total("trellis.outbox.dispatched").ShouldBe(2);   // the issued row by the first processor, the paid row by the second
+        recorder.Of("trellis.outbox.dispatch.duration").Count(m => Equals(m.Tags[OutboxMetrics.OutcomeAttribute], LeaseLost)).ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData(8)]   // the stale write would be a back-off: pending again, one attempt counted
+    [InlineData(1)]   // the stale write would be a dead letter
+    public async Task A_processor_that_outlived_its_lease_cannot_overwrite_the_row_the_next_claimant_finished(int maxAttempts)
+    {
+        using var recorder = new MetricRecorder(MeterFactory);
+        using var activities = new ActivityRecorder();
+        InvoiceId id = await IssueInvoiceAsync();
+        Time.Advance(TimeSpan.FromSeconds(1));
+        await PayAsync(id);
+        var options = new OutboxOptions { MaxAttempts = maxAttempts };
+        _blocking.Block = true;
+        _blocking.IgnoreCancellation = true;
+        _blocking.ThrowOnRelease = true;   // when it finally wakes up, its dependency is gone: the stale processor books a failure
+
+        Task<int> stale = CreateOutboxProcessor(options).ProcessBatchAsync(Ct);
+        try
+        {
+            await _blocking.Started.Task.WaitAsync(WaitBudget, Ct);
+            _blocking.Block = false;
+
+            // The lease expires under the stuck handler; a second processor claims the row, skips the
+            // receipt the first one's checkpoint credited, and finishes it.
+            Time.Advance(options.LeaseDuration);
+            (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(1);
+            (await RowAsync(PaidType)).Status.ShouldBe(OutboxMessageStatus.Processed);
+        }
+        finally
+        {
+            _blocking.Release();
+        }
+
+        // The stale processor's bookkeeping — a back-off, or with one attempt a dead letter — finds the
+        // lease gone and affects no row: the Processed row is exactly as the second processor left it.
+        (await stale.WaitAsync(WaitBudget, Ct)).ShouldBe(2);
+        OutboxMessage paid = await RowAsync(PaidType);
+        paid.Status.ShouldBe(OutboxMessageStatus.Processed);
+        paid.Attempts.ShouldBe(0);
+        paid.Error.ShouldBeNull();
+        paid.ProcessedAtUtc.ShouldNotBeNull();
+        ShouldCredit(paid, SendReceipt, BlockingName);
+        await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+        // No retry or dead-letter signal for a write that never landed: the attempt is booked as lease_lost.
+        recorder.Total("trellis.outbox.retries").ShouldBe(0);
+        recorder.Total("trellis.outbox.dead_lettered").ShouldBe(0);
+        recorder.Of("trellis.outbox.dispatch.duration").Count(m => Equals(m.Tags[OutboxMetrics.OutcomeAttribute], LeaseLost)).ShouldBe(1);
+        Activity lost = activities.Stopped.Single(a => Equals(a.GetTagItem(OutboxMetrics.OutcomeAttribute), LeaseLost));
+        lost.GetTagItem(OutboxMetrics.EventTypeAttribute).ShouldBe(PaidType);
+        lost.Status.ShouldBe(ActivityStatusCode.Error);
+        lost.GetTagItem(OutboxMetrics.ErrorTypeAttribute).ShouldBe(typeof(DbUpdateConcurrencyException).FullName);
+    }
+
+    [Fact]
+    public async Task A_batch_stops_before_a_message_whose_budget_would_outlive_the_lease()
+    {
+        // Two invoices, four rows in claim order: issued, paid, issued, paid.
+        var ids = new InvoiceId[2];
+        for (int i = 0; i < ids.Length; i++)
+        {
+            ids[i] = await IssueInvoiceAsync();
+            Time.Advance(TimeSpan.FromSeconds(1));
+            await PayAsync(ids[i]);
+            Time.Advance(TimeSpan.FromSeconds(1));
+        }
+
+        var options = new OutboxOptions();
+        // The first paid row takes so long (a database slower than the budget, played by the clock) that
+        // the next message's whole budget no longer fits before the lease.
+        int slowCalls = 0;
+        _flaky.OnHandle = () =>
+        {
+            if (Interlocked.Increment(ref slowCalls) == 1)
+            {
+                Time.Advance(options.LeaseDuration - options.DispatchTimeout + TimeSpan.FromSeconds(1));
+            }
+        };
+
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(4);
+
+        List<OutboxMessage> rows = await RowsAsync();
+        rows.Take(2).ShouldAllBe(static r => r.Status == OutboxMessageStatus.Processed);
+        // Handed back, not failed: pending, no attempt counted, nothing credited, due at once — never dispatched.
+        DateTimeOffset now = Time.GetUtcNow();
+        rows.Skip(2).ShouldAllBe(r => r.Status == OutboxMessageStatus.Pending && r.Attempts == 0 && r.Error == null && r.CompletedHandlers == null && r.NextAttemptAtUtc == now);
+        _flaky.Calls.ShouldBe(1);
+        await EmailSender.Received(1).SendAsync("billing@acme.com", Arg.Any<string>(), Arg.Is<string>(body => body.Contains(ids[0].ToString())), Arg.Any<CancellationToken>());
+
+        // The next poll claims the two handed back and finishes them.
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(2);
+        (await RowsAsync()).ShouldAllBe(static r => r.Status == OutboxMessageStatus.Processed);
+        await EmailSender.Received(2).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Events_raised_in_one_save_are_claimed_in_the_order_they_were_raised()
+    {
+        // One save, two events on one aggregate — Issued, then Paid — stamped from the same clock reading.
+        using (IServiceScope scope = CreateScope())
+        {
+            AppDbContext context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Invoice invoice = Invoice.Create("ACME", EmailAddress.Create("billing@acme.com").Value, Currency.Create("USD").Value).Value;
+            invoice.AddLine("Line", Money.Create(10m, "USD").Value).IsSuccess.ShouldBeTrue();
+            invoice.Issue(Now.AddDays(14), Now).IsSuccess.ShouldBeTrue();
+            invoice.MarkPaid(Now).IsSuccess.ShouldBeTrue();
+            context.Set<Invoice>().Add(invoice);
+            await context.SaveChangesAsync(Ct);
+        }
+
+        // One microsecond apart (timestamptz's resolution), so the claim's ORDER BY sees the raise order…
+        List<OutboxMessage> rows = await RowsAsync();
+        rows.Select(static r => r.Type).ShouldBe([IssuedType, PaidType]);
+        (rows[1].OccurredAtUtc - rows[0].OccurredAtUtc).ShouldBe(TimeSpan.FromMicroseconds(1));
+        rows.ShouldAllBe(static r => r.NextAttemptAtUtc == Now);   // …and both are due at once.
+
+        // …which is the order a one-row batch claims them in.
+        (await CreateOutboxProcessor(new OutboxOptions { BatchSize = 1 }).ProcessBatchAsync(Ct)).ShouldBe(1);
+        (await RowAsync(IssuedType)).Status.ShouldBe(OutboxMessageStatus.Processed);
+        (await RowAsync(PaidType)).Status.ShouldBe(OutboxMessageStatus.Pending);
     }
 
     [Fact]
@@ -359,16 +486,20 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         failed.GetTagItem(OutboxMetrics.EventTypeAttribute).ShouldBe(PaidType);
         failed.GetTagItem(OutboxMetrics.AttemptAttribute).ShouldBe(1);
         failed.GetTagItem(OutboxMetrics.OutcomeAttribute).ShouldBe("retry_scheduled");
+        failed.GetTagItem(OutboxMetrics.ErrorTypeAttribute).ShouldBe(typeof(InvalidOperationException).FullName);   // semconv: the full type name
 
-        // The unreadable row got a span too — it was started before deserialization.
+        // The unreadable row got a span too — it was started before deserialization; its error.type is the
+        // Result's code, there being no exception.
         Activity dead = activities.Stopped.Single(a => Equals(a.GetTagItem(OutboxMetrics.MessageIdAttribute), unknown.Id));
         dead.Status.ShouldBe(ActivityStatusCode.Error);
         dead.GetTagItem(OutboxMetrics.OutcomeAttribute).ShouldBe("dead_lettered");
         dead.GetTagItem(OutboxMetrics.ReasonAttribute).ShouldBe("unknown_type");
+        dead.GetTagItem(OutboxMetrics.ErrorTypeAttribute).ShouldBe(OutboxErrors.UnknownEventTypeCode);
 
         Activity processed = activities.Stopped.Single(static a => Equals(a.GetTagItem(OutboxMetrics.EventTypeAttribute), IssuedType));
         processed.Status.ShouldBe(ActivityStatusCode.Unset);
         processed.GetTagItem(OutboxMetrics.OutcomeAttribute).ShouldBe("processed");
+        processed.GetTagItem(OutboxMetrics.ErrorTypeAttribute).ShouldBeNull();
     }
 
     [Fact]
@@ -539,7 +670,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         using IServiceScope scope = CreateScope();
         return await scope.ServiceProvider.GetRequiredService<AppDbContext>().Set<OutboxMessage>()
             .AsNoTracking()
-            .OrderBy(static m => m.OccurredAtUtc)
+            .OrderBy(static m => m.OccurredAtUtc).ThenBy(static m => m.Id)   // the claim order
             .ToListAsync(Ct);
     }
 
@@ -634,11 +765,15 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
 
         public Func<Exception> Exception { get; set; } = static () => new InvalidOperationException("downstream down");
 
+        /// <summary>Runs on every call, before the outcome: a test's hook to move the clock while a message is in flight.</summary>
+        public Action? OnHandle { get; set; }
+
         public int Calls => Volatile.Read(ref _calls);
 
         public Task Handle(InvoicePaidDomainEvent domainEvent, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _calls);
+            OnHandle?.Invoke();
             return Throw ? Task.FromException(Exception()) : Task.CompletedTask;
         }
     }
@@ -674,9 +809,10 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     /// <summary>
     /// Signals that it is running, then waits for its token: the shape of a handler stuck on a dependency.
     /// With <see cref="IgnoreCancellation"/> it waits for <see cref="Release"/> alone — a handler that ignores
-    /// its token, the one way past the budget to the end of a lease (ADR-0023).
+    /// its token, the one way past the budget to the end of a lease (ADR-0023) — and with
+    /// <see cref="ThrowOnRelease"/> it then fails, so the processor that outlived its lease books a failure.
     /// </summary>
-    [DomainEventHandlerName("test.blocking")]
+    [DomainEventHandlerName(BlockingName)]
     private sealed class BlockingPaidHandler : IDomainEventHandler<InvoicePaidDomainEvent>
     {
         private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -684,6 +820,8 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         public bool Block { get; set; }
 
         public bool IgnoreCancellation { get; set; }
+
+        public bool ThrowOnRelease { get; set; }
 
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -700,6 +838,11 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
             if (IgnoreCancellation)
             {
                 await _released.Task;
+                if (ThrowOnRelease)
+                {
+                    throw new InvalidOperationException("the dependency went away while the handler was stuck");
+                }
+
                 return;
             }
 

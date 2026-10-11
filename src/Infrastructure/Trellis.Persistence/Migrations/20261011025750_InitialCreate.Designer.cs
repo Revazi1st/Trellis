@@ -13,7 +13,7 @@ using Trellis.Persistence;
 namespace Trellis.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261008105018_InitialCreate")]
+    [Migration("20261011025750_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -411,6 +411,7 @@ namespace Trellis.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("OccurredAtUtc")

@@ -58,12 +58,16 @@ public sealed class OutboxWriteInterceptor(
 
         List<OutboxMessage> messages = [.. aggregates
             .SelectMany(static aggregate => aggregate.DomainEvents)
-            .Select(domainEvent => new OutboxMessage
+            .Select((domainEvent, position) => new OutboxMessage
             {
                 Id = Guid.CreateVersion7(),
                 Type = DomainEventSerialization.TypeNameOf(domainEvent),
                 Content = DomainEventSerialization.Serialize(domainEvent),
-                OccurredAtUtc = now,
+                // Raised in this order, claimed in this order: the rows of one save sit one microsecond
+                // apart (timestamptz's resolution), so the claim's ORDER BY "OccurredAtUtc" is the raise
+                // order and never a coin toss between an Issued and a Paid event of the same save; a tie
+                // across saves falls to the claim's final key, "Id". Due at once regardless.
+                OccurredAtUtc = now.AddMicroseconds(position),
                 NextAttemptAtUtc = now,
                 // Carried across the async boundary: dispatch spans join the originating trace, and
                 // handlers run under the originating tenant.
