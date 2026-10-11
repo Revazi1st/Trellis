@@ -166,6 +166,49 @@ what OWASP lists first among API risks when it is missing.
 Invoices are deliberately not owner-scoped: an invoice belongs to the business, every Member may read it,
 and the reference slice keeps it that way.
 
+## Adding an external identity provider
+
+The API signs and checks its own tokens (ADR-0007). Putting an OpenID Connect provider (Entra ID,
+Keycloak, Auth0) in front of it, beside the local sign-in or instead of it, is not one more
+`AddJwtBearer`; a second bearer scheme breaks in these places, so go through them all:
+
+- **Pick the scheme by issuer.** The permission policies name no authentication scheme
+  (`PermissionPolicyProvider` builds them from `RequireAuthenticatedUser` and the permission alone), so
+  they authenticate with the default scheme. Register the provider's scheme
+  (`AddJwtBearer("External", …)` with its `Authority` and `Audience`) and make the default a policy scheme
+  (`AddPolicyScheme`) whose `ForwardDefaultSelector` reads the token's `iss` and forwards to the local
+  `JwtBearerDefaults.AuthenticationScheme` or to `External`.
+- **Give every scheme the same events.** `AddApiAuthentication` wires the problem-details challenge
+  (`OnChallenge`, which also writes `WWW-Authenticate`) and the forbidden body (`OnForbidden`) on the
+  local scheme only; without them the external scheme's rejections reach clients as the status-code
+  pages' generic `Http.Unauthorized` and `Http.Forbidden` problems, not `Auth.Unauthenticated` and
+  `Auth.Forbidden`.
+<!--#if (UseMultitenancy) -->
+- **Keep the tenant check on the new scheme.** With multi-tenancy the local scheme's `OnTokenValidated`
+  fails a token without a `tenant` claim (ADR-0022); the external scheme needs it too, or such a token
+  reads system-scoped rows instead of being refused.
+<!--#endif -->
+- **Do not carry the HS256 pin over.** `ValidAlgorithms = [SecurityAlgorithms.HmacSha256]` describes the
+  tokens this API mints. The external scheme validates against the provider's published keys with
+  `ValidAlgorithms` set to its asymmetric algorithm (RS256, ES256), never a symmetric one.
+- **Translate the provider's claims into this API's.** Turn off `MapInboundClaims` on that scheme and add
+  an `IClaimsTransformation` that finds the local user for the token's `iss` and `sub` and adds a
+  `ClaimTypes.NameIdentifier` holding that user's `Guid`, plus one `permission` claim per permission
+  (from the provider's roles or the local user's). `CurrentUser` reads `NameIdentifier` as a `Guid`; a
+  provider's `sub` is rarely one, and without the mapping `ICurrentUser.UserId` is null for every external
+  caller, which breaks auditing and ownership and puts them all in the idempotency filter's single
+  `anonymous` partition.
+- **Leave out what the provider owns.** Registration, the lockout and refresh tokens belong to the local
+  sign-in; an external user gets none of them.
+<!--#if (IncludeUI) -->
+- **UI.Web needs a sign-in of its own.** The Blazor pages post a password to `/auth/login`; an external
+  user signs in through an OpenID Connect authorization-code flow or a backend-for-frontend (ADR-0015),
+  and the OIDC handler is a new package: ask first.
+<!--#endif -->
+- **Test the scheme without the provider**: sign an RS256 token with a key the test generates, point the
+  external scheme's issuer and signing key at it, and assert a permission policy's 200 and 403 and the
+  401 problem body.
+
 ## UI
 
 `Login.razor` signs in and `Register.razor` creates a Member account via `IAuthApiClient`;
