@@ -11,6 +11,10 @@ on:
   workflow_dispatch:
   # release.yml runs the whole matrix as a gate before anything is published.
   workflow_call:
+  # Once a night, after ci.yml's own nightly run: Dependabot's auto-merged bumps reach main through
+  # the Actions token, which starts no push run, and the toggle-on legs compile only in this matrix.
+  schedule:
+    - cron: "30 4 * * *"
 
 permissions:
   contents: read

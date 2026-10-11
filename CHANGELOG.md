@@ -212,6 +212,11 @@ If you generated a project from 0.1.0, read these before adopting this version w
   missing; the persistence rule names the lease fence and handler isolation, the infrastructure rule the
   SMTP sender and its selected-only validation; a threat-model row for the SMTP relay credentials;
   `docs/features/exchange-rates.md` carries the probed Frankfurter status table.
+- **Dependency bumps that merge themselves**: `.github/workflows/dependabot-auto-merge.yml` enables
+  GitHub's auto-merge on Dependabot's patch and minor pull requests once the checks pass; a major,
+  a .NET SDK bump and the GitHub Actions group wait for you. `dependabot.yml` holds new versions back
+  for a week (`cooldown`; security updates arrive at once). The workflow acts only when the repository
+  allows auto-merge and a ruleset on `main` requires status checks, and leaves a notice otherwise.
 
 ### Changed
 

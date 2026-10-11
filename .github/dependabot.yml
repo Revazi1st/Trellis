@@ -4,6 +4,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # A new version waits a week before Dependabot proposes it (version updates only: a security
+    # update still arrives at once), so a yanked or compromised release is usually gone by then.
+    # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       # ONE group for the whole Microsoft/Aspire graph — deliberately coarse.
@@ -71,6 +76,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # A new version waits a week before Dependabot proposes it (version updates only: a security
+    # update still arrives at once), so a yanked or compromised release is usually gone by then.
+    # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -82,6 +92,8 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
@@ -91,15 +103,24 @@ updates:
     directory: "/scripts/sdk-image"
     schedule:
       interval: weekly
+    # A new version waits a week before Dependabot proposes it (version updates only: a security
+    # update still arrives at once), so a yanked or compromised release is usually gone by then.
+    # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
+    cooldown:
+      default-days: 7
 
   # Dev-dependency images (postgres, redis) in docker-compose.yml.
   - package-ecosystem: docker-compose
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
 
   # Dev container Features (.devcontainer/devcontainer.json is found from the repo root).
   - package-ecosystem: devcontainers
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
