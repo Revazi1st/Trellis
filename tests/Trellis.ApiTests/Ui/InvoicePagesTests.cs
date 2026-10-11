@@ -99,6 +99,18 @@ public sealed partial class InvoicePagesTests
     }
 
     [Fact]
+    public async Task A_list_that_cannot_load_says_so_and_keeps_the_filter_row()
+    {
+        await using PageHost host = await PageHost.OpenAsync("invoices?status=Paid", static _ => Responses.Status(HttpStatusCode.ServiceUnavailable));
+
+        string html = await host.RenderAsync<Invoices>();
+
+        html.ShouldContain("""<p class="error" role="alert">""");
+        html.ShouldNotContain("Loading");
+        CurrentFilters(html).ShouldBe(["Paid"]);
+    }
+
+    [Fact]
     public async Task Every_row_shows_when_the_invoice_was_created()
     {
         await using PageHost host = await PageHost.OpenAsync("invoices", static _ => Responses.Json(Page(1, Invoice("Ada Lovelace"))));

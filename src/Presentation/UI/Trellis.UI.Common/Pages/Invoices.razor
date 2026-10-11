@@ -91,7 +91,9 @@ else
     {
         if (filter != _filter)
         {
-            _page = null;   // another filter's rows never show under this one's name
+            // Another filter's rows, or its failure, never show under this one's name.
+            _page = null;
+            _error = null;
         }
 
         _filter = filter;
