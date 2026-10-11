@@ -37,10 +37,12 @@ If you generated a project from 0.1.0, read these before adopting this version w
   expected failures and `Unavailable` is a Warning, so an alert on Warning still means a dependency is down.
 - **A Release build fails on a discarded `Result`** (RSLT001, from the new analyzer project
   `tools/Trellis.Analyzers` that `Directory.Build.props` loads into every project, the tests included): a
-  dropped `invoice.Issue(…)` or `Result.Combine(…)`, an awaited `handler.Handle(…)` and an unchecked
-  `IdentityResult` are errors. Handle it or write `_ = …` with a reason; in a test, end the step in
-  `ShouldBeSuccess()` (see *Added*). Adopting this version adds that project to your solution and two
-  pinned build-only packages.
+  dropped `invoice.Issue(…)` or `Result.Combine(…)`, an awaited `handler.Handle(…)`, a forgotten `return`
+  before `InvoiceErrors.X`, an unchecked `IdentityResult` or UI `ApiResult<T>` (in `.razor` files too), an
+  `await Task.WhenAll(…)` over handlers, and a `Task<Result>` returned as a plain `Task`
+  (`public Task Handle(…) => port.PushAsync(…)` in an event handler) are errors. Handle it or write
+  `_ = …` with a reason; in a test, end the step in `ShouldBeSuccess()` (see *Added*). Adopting this
+  version adds that project to your solution and two pinned build-only packages.
 - **`GET /invoices/{id}` emits a strong ETag** (`"42"`, was `W/"42"`); `If-None-Match` still compares
   weakly, so a stored tag keeps answering 304.
 
@@ -135,18 +137,25 @@ If you generated a project from 0.1.0, read these before adopting this version w
   a planted violation (`PlantedViolations`), named without `Invoice` so `remove-feature` leaves it alone.
 - **RSLT001: a discarded `Result` fails the build** (idea from xavierjohn/Trellis, re-implemented;
   ADR-0030). `tools/Trellis.Analyzers`, a netstandard2.0 analyzer every project loads from
-  `Directory.Build.props`, reports a statement that drops a SharedKernel `Result` or `Result<T>` or an
-  `IdentityResult`: a call, an awaited `Task<T>` or `ValueTask<T>`, a conditional access, an object
-  creation, a void expression body. An assignment (`_ = …`), a return, an argument, generated code and
-  NSubstitute's `Received()` checks are not reported. It matches by type and by a namespace ending in
-  `SharedKernel.Results`, so it follows the project name. `Microsoft.CodeAnalysis.CSharp` 5.0.0 and
-  `Microsoft.CodeAnalysis.Analyzers` 3.11.0 are pinned, build-only; Dependabot proposes only their patch
-  updates, because the referenced Roslyn must stay at or below the compiler of the SDK in `global.json`.
-  `ResultDiscardAnalyzerTests` cover each shape, the wiring and a planted discard compiled under the
-  repository's `.editorconfig`. Its first run fixed nineteen drops in the tests (twenty-two with the
-  multitenancy-only fixtures): identity seeding in `ApiFactory`, `AuthSecurityTests` and `TenancyTests`
-  that never checked an `IdentityResult`, a handler test, and the `UseCaseOutcomeTests` that never
-  looked at the outcome they caused.
+  `Directory.Build.props`, reports a statement that drops a SharedKernel `Result`, `Result<T>` or
+  `Error`, the UI's `ApiResult<T>` or an `IdentityResult`, or an array, sequence, tuple or task of one:
+  a call, an awaited `Task<T>` or `ValueTask<T>`, a conditional access, an object creation, `Wait()`, a
+  void expression body, an unawaited task where CS4014 is silent, and a collection initializer's `Add`.
+  It also reports a computed `Task<Result>` converted to a plain `Task`, the shape that let an outbox
+  handler on a `Result` port checkpoint a failed push as done. Razor `@code` blocks are analysed. An
+  assignment (`_ = …`), a return, an argument, generated code, NSubstitute's `Received()` checks, a
+  chaining assertion (`ShouldBeOfType<T>()`), the body of `Should.ThrowAsync(() => …)`, a call that
+  hands back a held result (`Tap` on a local, `Stack.Pop`, `Interlocked.Exchange`) and expression
+  trees are not reported; ADR-0030 lists the gaps. It matches by type and by a namespace ending in
+  `SharedKernel.Results` (or `UI.Common.Services`), so it follows the project name.
+  `Microsoft.CodeAnalysis.CSharp` 5.0.0 and `Microsoft.CodeAnalysis.Analyzers` 3.11.0 are pinned,
+  build-only; Dependabot proposes only their patch updates, because the referenced Roslyn must stay at
+  or below the compiler of the SDK in `global.json`. `ResultDiscardAnalyzerTests` cover each shape, the
+  wiring and a planted discard compiled under the repository's `.editorconfig`. Its first run fixed
+  nineteen drops in the tests (twenty-two with the multitenancy-only fixtures): identity seeding in
+  `ApiFactory`, `AuthSecurityTests` and `TenancyTests` that never checked an `IdentityResult`, a handler
+  test, and the `UseCaseOutcomeTests` that never looked at the outcome they caused; three UI client
+  tests that never checked their `ApiResult<T>` followed.
 - **A body value of the wrong type names its field**: `"amount": "abc"` is still 400 `Request.Malformed`,
   now with `errors: [{ field: "lines[0].amount", code: "Request.InvalidValue", description: "The value
   is not of the type this field expects." }]`; a JSON syntax error names no field.
@@ -274,6 +283,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
 
 ### Fixed
 
+- The `.editorconfig` section that marks EF migrations as generated code, and turns every analyzer off
+  there, matched any folder called `Migrations`, so a feature folder of that name (tenant or data
+  migrations) compiled with no analyzer at all. It names `src/Infrastructure/*.Persistence/Migrations/`
+  now.
 - Two registrations of one e-mail racing each other answered 500; the loser now gets the same 409
   `Auth.EmailAlreadyInUse` as a sequential duplicate, because declared unique constraints map to a
   `Result` by their pinned name (`PK_IdempotencyKeys` → `Idempotency.Duplicate`, `UserNameIndex` →

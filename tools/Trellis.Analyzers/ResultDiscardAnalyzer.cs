@@ -6,21 +6,26 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Trellis.Analyzers;
 
 /// <summary>
-/// RSLT001 (ADR-0030): a statement computes a <c>Result</c>, a <c>Result&lt;T&gt;</c> or an ASP.NET Core
-/// Identity <c>IdentityResult</c> and drops it. A dropped Result is a failure nobody reads:
-/// <c>invoice.Issue(now); return Result.Success();</c> commits a refused transition and answers 2xx.
+/// RSLT001 (ADR-0030): a statement computes a result (the SharedKernel <c>Result</c>, <c>Result&lt;T&gt;</c>
+/// or <c>Error</c>, the UI's <c>ApiResult&lt;T&gt;</c>, ASP.NET Core Identity's <c>IdentityResult</c>) and
+/// drops it, or a <c>Task&lt;Result&gt;</c> is turned into a plain <c>Task</c>. A dropped Result is a failure
+/// nobody reads: <c>invoice.Issue(now); return Result.Success();</c> commits a refused transition and
+/// answers 2xx.
 /// </summary>
 /// <remarks>
 /// Matching is by type, not by method name, so every aggregate method, value-object factory, handler
 /// and combinator is covered without a list, and an awaited <c>Task&lt;Result&gt;</c> is seen through the
-/// <c>await</c>. The SharedKernel types match by name and by a containing namespace ending in
-/// <c>SharedKernel.Results</c>, which keeps working after the template renames the root namespace.
-/// Reported: an invocation, an object creation, an awaited task of a result, and a conditional access
-/// ending in one of those, written as a statement, including the implicit statement of an
-/// expression-bodied lambda, local function or member that returns void. Not reported: an assignment
-/// (so <c>_ = …</c> is the way to drop one on purpose), a return, an argument, generated code, and
-/// NSubstitute's received-call check (<c>await uow.Received(1).CommitAsync(ct)</c>), which asserts a
-/// call rather than making one.
+/// <c>await</c>; a value carrying a result (an array, a sequence, a tuple, a task of one) counts too. The
+/// types match by name and by a containing namespace ending in <c>SharedKernel.Results</c> (or
+/// <c>UI.Common.Services</c>), which keeps working after the template renames the root namespace.
+/// Reported: a call, an awaited task, a creation, <c>Wait()</c> on a task and a conditional access ending
+/// in one of those, written as a statement (the implicit statement of a void expression body included);
+/// an unawaited task where CS4014 is silent; a collection initializer's <c>Add</c>; and a computed
+/// <c>Task&lt;Result&gt;</c> converted to <c>Task</c>. Not reported: an assignment (so <c>_ = …</c> is the
+/// way to drop one on purpose), a return, an argument, NSubstitute's call check, an assertion that hands
+/// back what it checked, the body of a delegate an exception assertion expects to throw, a call that
+/// hands back a result something else holds, an expression tree, and generated code other than Razor's.
+/// The facts in <c>ResultDiscardAnalyzerTests</c> are the specification; ADR-0030 lists the gaps.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer

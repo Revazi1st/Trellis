@@ -23,8 +23,8 @@ At the HTTP boundary, `Api.Common/Results/CustomResults.Problem(Error)` maps `Er
 
 - Failure is part of the type — callers must `Match`/branch; no silent swallow.
   *(Amended 2026-10-11: the build enforces this. RSLT001 (ADR-0030), an analyzer every project loads, fails
-  a Release build on a statement that drops a `Result`, a `Result<T>` or an `IdentityResult`, awaited or not,
-  in every project, the tests included; `_ = …` with a one-line reason drops one on purpose. It replaced the
+  a Release build on a statement that drops a `Result`, a `Result<T>`, an `Error` or an `IdentityResult`,
+  awaited or not, and on a `Task<Result>` turned into a plain `Task`, in every project, the tests included; `_ = …` with a one-line reason drops one on purpose. It replaced the
   CA1806 stand-in, which matched by name and could not see through `await`.)*
 - One translation seam (`CustomResults.Problem`) owns Result→HTTP; endpoints stay `result.IsSuccess ? TypedResults.X : CustomResults.Problem`.
 - No exceptions-as-flow cost; the global handler surface is small.

@@ -301,7 +301,14 @@ tenant (created on first use); `TenantIsolationTests` is the worked example.
   test, assert it (`(await handler.Handle(command, ct)).ShouldBeSuccess()`, or `result.Error.ShouldBe(...)`
   for an expected failure; an Identity call in a fixture goes through `IdentitySeed.EnsureSucceeded`);
   drop it on purpose only when nothing can act on it, as `_ = …;` with a one-line comment saying why.
-  Never a `#pragma` or a severity line in `.editorconfig`.
+  Never a `#pragma` or a severity line in `.editorconfig`. The same applies to a dropped `Error` (a
+  forgotten `return`), the UI's `ApiResult<T>` in a `.razor` `@code` block, and an array or tuple of
+  results (`await Task.WhenAll(...)` over handlers).
+- **`RSLT001: This Task<Result> is converted to Task, which drops its result`**. A member, lambda,
+  variable or argument typed `Task` was handed a `Task<Result>`: `public Task Handle(…) =>
+  port.PushAsync(…);` finishes "successfully" when the push failed. Keep the `Task<Result>` (change the
+  return type), or make the method `async`, await the call and act on the `Result` (an outbox handler
+  throws on a failure it wants retried).
 - **`CS9057` naming the analyzer** ("references version … of the compiler, which is newer than the
   currently running version"): the compiler is older than the Roslyn `tools/Trellis.Analyzers`
   references. Build with the SDK `global.json` names (`dotnet --version` from the repository root
