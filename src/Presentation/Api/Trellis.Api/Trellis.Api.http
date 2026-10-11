@@ -18,7 +18,8 @@
 @invoiceId = paste-id-from-step-2
 @etag = paste-ETag-header-from-step-5
 @memberToken = paste-accessToken-from-step-10
-# The same key replays the first response (step 8); a new value starts a fresh invoice.
+# Step 8 sends this key again to replay step 2. Change it before a second walk-through: the same key
+# keeps answering with the first invoice, paid by then, so steps 3, 4 and 7 would answer 409.
 @createKey = try-it-1
 
 ### 1. Sign in as the seeded admin (200: accessToken, refreshToken, expiresInSeconds)

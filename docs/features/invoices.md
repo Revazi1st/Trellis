@@ -52,10 +52,11 @@ placeholder variables at the top of the file name the response each value comes 
 | 10 | `POST /api/v1/auth/login` as the member | as in step 9 | 200: paste its `accessToken` into `@memberToken` |
 | 11 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
 
-A different `@createKey` starts a fresh invoice; the same key keeps replaying the first one. Tokens
-expire after 15 minutes, so send step 1 again when a request answers 401. Visual Studio and VS
-Code can chain the values instead of pasting them, Rider through a response handler script; the
-file's header shows both.
+To walk through again, change `@createKey` first: the same key keeps answering with the first
+invoice, paid by then, so steps 3, 4 and 7 would answer 409 (`Invoice.NotDraft`,
+`Invoice.AlreadyFinalized`, `Invoice.NotIssued`). Tokens expire after 15 minutes, so send step 1
+again when a request answers 401. Visual Studio and VS Code can chain the values instead of pasting
+them, Rider through a response handler script; the file's header shows both.
 
 <!--#if (IncludeUI) -->
 The web UI (the `web` resource) walks the same lifecycle with clicks: sign in as the admin, create
