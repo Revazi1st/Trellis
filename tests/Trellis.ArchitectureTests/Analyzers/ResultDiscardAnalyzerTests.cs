@@ -412,10 +412,12 @@ public sealed class ResultDiscardAnalyzerTests
     /// The positive control for the build: real Domain, Application and SharedKernel calls dropped in a
     /// planted file, compiled under the repository's own .editorconfig (severities and generated-code
     /// sections, as the compiler reads them) with warnings as errors, as a Release build compiles. Each
-    /// drop is an error; the same file under Migrations/ is generated code and is left alone.
+    /// drop is an error; the same file in Persistence's EF Migrations/ folder is generated code and is
+    /// left alone, while a feature folder that happens to be called Migrations is not.
     /// </summary>
     [Theory]
     [InlineData("src/Core/Trellis.Application/Planted.cs", 3)]
+    [InlineData("src/Core/Trellis.Application/Features/Migrations/Planted.cs", 3)]
     [InlineData("src/Infrastructure/Trellis.Persistence/Planted.cs", 3)]
     [InlineData("tests/Trellis.IntegrationTests/Planted.cs", 3)]
     [InlineData("tools/Trellis.MigrationService/Planted.cs", 3)]

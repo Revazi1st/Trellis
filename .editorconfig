@@ -110,6 +110,9 @@ dotnet_diagnostic.S1135.severity = suggestion       # TODO tracking — allowed,
 # a refused transition. A deliberate discard is `_ = …` with a one-line reason; in a test, an arrange step
 # ends in `.ShouldBeSuccess()`. Never lower RSLT001's severity here.
 
-[{**/Migrations/**.cs,**/*.Designer.cs}]
+# EF Core's generated migrations, and designer files: no analyzer runs there. The glob names the
+# Persistence project's own Migrations/ folder, never any folder of that name, so a feature folder
+# called Migrations (tenant or data migrations) keeps RSLT001 and every other analyzer.
+[{src/Infrastructure/*.Persistence/Migrations/**.cs,**/*.Designer.cs}]
 generated_code = true
 dotnet_analyzer_diagnostic.severity = none
