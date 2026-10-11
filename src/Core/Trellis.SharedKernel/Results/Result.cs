@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace Trellis.SharedKernel.Results;
 
@@ -6,8 +7,10 @@ namespace Trellis.SharedKernel.Results;
 /// Outcome of an operation that can fail. Failures carry an <see cref="Error"/>; exceptions are reserved for the truly
 /// exceptional (ADR-0004). <see cref="Error"/> is null on a success, and the compiler knows it: reading
 /// <c>result.Error.Code</c> warns until an <see cref="IsFailure"/> or <see cref="IsSuccess"/> check proves a failure,
-/// so an unguarded read cannot compile into a 500 with an empty code.
+/// so an unguarded read cannot compile into a 500 with an empty code. A Result is never serialised
+/// (<see cref="ResultJsonGuard"/>): the endpoint maps it.
 /// </summary>
+[JsonConverter(typeof(ResultJsonGuard))]
 public class Result
 {
     protected Result(bool isSuccess, Error? error)
@@ -111,6 +114,7 @@ public class Result
 }
 
 /// <summary>A <see cref="Result"/> carrying a value when successful. Accessing <see cref="Value"/> on a failure throws.</summary>
+[JsonConverter(typeof(ResultJsonGuard))]
 public class Result<TValue> : Result
 {
     protected internal Result(TValue? value, bool isSuccess, Error? error)

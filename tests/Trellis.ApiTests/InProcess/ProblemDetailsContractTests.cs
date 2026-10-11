@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -349,6 +350,24 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         body.ShouldNotContain(nameof(InvalidOperationException));
     }
 
+    [Fact]
+    public async Task An_endpoint_returning_a_result_unmapped_fails_fast_instead_of_answering_200()
+    {
+        // Without the guard this successful Result answered 200 with {"isSuccess":true,…,"value":42} and a
+        // failed one a 500: the endpoint must map it (TypedResults / CustomResults.Problem), never return it.
+        // With it the host refuses to start, because minimal APIs resolve the response's JSON contract when
+        // they build the endpoint; the request is there in case a future framework defers that to the call.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using var host = factory.WithTestServices(static services => services.AddTransient<IStartupFilter, UnmappedResultEndpoint>());
+
+        Exception thrown = await Should.ThrowAsync<Exception>(async () => await host.CreateClient().GetAsync(UnmappedResultEndpoint.Route, ct));
+
+        // ToString carries every inner exception: the guard's NotSupportedException names the fix.
+        string report = thrown.ToString();
+        report.ShouldContain(nameof(NotSupportedException));
+        report.ShouldContain("CustomResults.Problem");
+    }
+
     /// <summary>The contract every problem honours, whichever writer produced it.</summary>
     private static async Task<ProblemResponse> ShouldBeProblemAsync(
         HttpResponseMessage response, HttpStatusCode status, string code, string instance, CancellationToken ct)
@@ -397,5 +416,31 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     {
         public Task<Result> CommitAsync(CancellationToken cancellationToken)
             => throw new InvalidOperationException(ExceptionSecret);
+    }
+
+    /// <summary>
+    /// A throwaway endpoint that makes the mistake the JSON guard exists for: it returns
+    /// <c>Task&lt;Result&lt;int&gt;&gt;</c> instead of mapping it. Mapped in a branch of its own ahead of the
+    /// app's pipeline, so the guard's exception reaches the test instead of the exception handler.
+    /// </summary>
+    private sealed class UnmappedResultEndpoint : IStartupFilter
+    {
+        public const string Route = "/__test/unmapped-result/value";
+
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Map("/__test/unmapped-result", static branch =>
+            {
+                branch.UseRouting();
+                branch.UseEndpoints(static endpoints => endpoints
+                    .MapGet("/value", static async Task<Result<int>> () =>
+                    {
+                        await Task.Yield();
+                        return Result.Success(42);
+                    }));
+            });
+
+            next(app);
+        };
     }
 }

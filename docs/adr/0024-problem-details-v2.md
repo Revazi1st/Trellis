@@ -4,7 +4,7 @@
 - **Date**: 2026-10-08
 - **Supersedes**: the "At the HTTP boundary…" paragraph of ADR-0004 (the Result decision itself stands).
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
-- **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`) (see *Amendment* below)
+- **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`); a `Result` never reaches JSON (see *Amendment* below)
 
 ## Context
 
@@ -157,7 +157,7 @@ a time, by deserialising each response into `ProblemResponse`.
 - The `type` URN is not dereferenceable. A product that wants documentation links changes
   `ProblemTypes.Prefix` once; every consumer that branched on `code` is unaffected.
 
-## Amendment (2026-10-11): `Result.Combine` merges only validation failures; value-object errors name their field
+## Amendment (2026-10-11): `Result.Combine` merges only validation failures; value-object errors name their field; a `Result` never reaches JSON
 
 **`Combine` is type-aware.** As first written, `Result.Combine` flattened any two failures into one `Validation.General`, so two
 NotFounds, or a NotFound beside a Failure, answered 400 and logged at Information. It now merges into a
@@ -183,3 +183,11 @@ value object spanning two inputs or an aggregate method with several rules: `Inv
 is unchanged and so is every `code`; only which entries carry a path changed. A client that read
 `field: null` as "a domain error" branches on `code` instead, as "What consumers may rely on" already says.
 `ProblemDetailsContractTests` pins both kinds.
+
+**A `Result` never reaches JSON.** `CustomResults.Problem` is the only translation, but nothing enforced
+it: an endpoint that returned `Task<Result<T>>` instead of mapping it compiled, passed every gate and
+answered 200 with the Result's own members on success and a 500 on failure. Both Result types now carry
+`[JsonConverter(typeof(ResultJsonGuard))]`, a converter factory that throws `NotSupportedException`
+naming `TypedResults` and `CustomResults.Problem` instead of serialising. Minimal APIs resolve the
+response contract when they build the endpoint, so such an endpoint stops the host at boot, and every
+in-process test with it; `ProblemDetailsContractTests` proves it with a throwaway endpoint.
