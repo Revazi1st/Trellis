@@ -214,6 +214,157 @@ jobs:
             exit 1
           }
 
+  # The images a deploy ships, published the way docs/deployment.md publishes them and booted the
+  # way it configures them. No other job runs dotnet publish or starts a host outside Development,
+  # so a file missing from an image, a setting Production needs that the required-configuration
+  # table does not name, or a host that boots only in Development surfaces here instead of on the
+  # first deploy. It runs on every push and pull request; to spend fewer Actions minutes, give the
+  # job "if: github.event_name == 'push'" and it runs on main only.
+  container-smoke:
+    name: Container smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Fixes the compose network's name (smoke_default): the containers below join it and reach
+      # the database by its service name.
+      COMPOSE_PROJECT_NAME: smoke
+      SMOKE_NETWORK: smoke_default
+      SMOKE_DB: Host=postgres;Port=5432;Database=trellis;Username=postgres;Password=postgres
+      SMOKE_ADMIN_EMAIL: admin@example.com
+      SMOKE_ADMIN_PASSWORD: Smoke-${{ github.run_id }}-Admin!
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # The commands docs/deployment.md gives, with a fixed repository and tag so the steps below
+      # can name the images, and no registry: the SDK loads each image into the local Docker.
+      - name: Publish the API and migration images
+        run: |
+          dotnet publish src/Presentation/Api/Trellis.Api /t:PublishContainer -c Release \
+            -p:ContainerRepository=smoke/api -p:ContainerImageTag=ci
+          dotnet publish tools/Trellis.MigrationService /t:PublishContainer -c Release \
+            -p:ContainerRepository=smoke/migrations -p:ContainerImageTag=ci
+
+#if (IncludeUI)
+      - name: Publish the web image
+        run: |
+          dotnet publish src/Presentation/UI/Trellis.UI.Web /t:PublishContainer -c Release \
+            -p:ContainerRepository=smoke/web -p:ContainerImageTag=ci
+
+#endif
+##if (UseRedis)
+#      - name: Start PostgreSQL and Redis
+#        run: docker compose --profile redis up -d --wait postgres redis
+##else
+      - name: Start PostgreSQL
+        run: docker compose up -d --wait postgres
+##endif
+
+      # The one-shot job every deploy runs first: it must exit 0. Outside Development it refuses to
+      # seed the well-known default admin password, so it gets its own.
+      - name: Migrate and seed (migrations image)
+        run: |
+          docker run --rm --network "$SMOKE_NETWORK" \
+            -e "ConnectionStrings__trellis-db=$SMOKE_DB" \
+            -e "Seed__AdminEmail=$SMOKE_ADMIN_EMAIL" \
+            -e "Seed__AdminPassword=$SMOKE_ADMIN_PASSWORD" \
+            smoke/migrations:ci
+
+      # Production (nothing sets ASPNETCORE_ENVIRONMENT, as in a real deploy) with the API's required
+      # settings from docs/deployment.md and nothing else. Every NAME__KEY variable of this step's
+      # env goes to the container; the signing key is generated here, so no key is ever committed.
+      - name: Start the API (api image)
+        env:
+          ConnectionStrings__trellis-db: ${{ env.SMOKE_DB }}
+          Email__Provider: Logging
+##if (UseRedis)
+#          ## ConnectionStrings:cache, which AddRedisDistributedCache("cache") reads.
+#          ConnectionStrings__cache: redis:6379
+##endif
+        run: |
+          printf 'Authentication__SigningKey=%s\n' "$(openssl rand -hex 32)" > "$RUNNER_TEMP/api.env"
+          env | grep -E '^[A-Za-z][A-Za-z0-9]*__' >> "$RUNNER_TEMP/api.env"
+          docker run -d --name smoke-api --network "$SMOKE_NETWORK" -p 8080:8080 \
+            --env-file "$RUNNER_TEMP/api.env" smoke/api:ci
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:8080/alive > /dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "::error::The API container did not become live (its log is in the last step)" && exit 1
+
+      # Readiness, database included; an RFC 9457 problem from the real pipeline; and a sign-in with
+      # the account the migration job seeded, its token then used on a protected endpoint.
+      - name: Probe the API
+        run: |
+          fail=0
+          body="$RUNNER_TEMP/body"
+          # expect STATUS MEDIA-TYPE LABEL CURL-ARGS...: one request, whose status and media type must
+          # match. LABEL names it in the error, which never echoes the arguments (a password).
+          expect() {
+            local status="$1" media="$2" label="$3" got
+            shift 3
+            got=$(curl -sS -o "$body" -w '%{http_code} %{content_type}' "$@") || got="no response"
+            case "$got" in
+              "$status $media"*) return 0 ;;
+            esac
+            echo "::error::$label answered '$got', expected $status $media"
+            cat "$body" 2>/dev/null; echo
+            fail=1
+            return 1
+          }
+          api=http://localhost:8080
+
+          expect 200 text/plain "GET /health" "$api/health" || true
+
+          if expect 401 application/problem+json "GET /api/v1/invoices/overdue without a token" \
+              "$api/api/v1/invoices/overdue" \
+              && ! jq -e '.status == 401 and (.code | type == "string")' "$body" > /dev/null; then
+            echo "::error::The 401 body is not the API's problem document:"; cat "$body"; echo
+            fail=1
+          fi
+
+          login=$(jq -nc --arg email "$SMOKE_ADMIN_EMAIL" --arg password "$SMOKE_ADMIN_PASSWORD" \
+            '{email: $email, password: $password}')
+          if expect 200 application/json "POST /api/v1/auth/login as the seeded admin" \
+              -X POST -H 'Content-Type: application/json' -d "$login" "$api/api/v1/auth/login"; then
+            token=$(jq -r '.accessToken' "$body")
+            expect 200 application/json "GET /api/v1/invoices/overdue with the admin's token" \
+              -H "Authorization: Bearer $token" "$api/api/v1/invoices/overdue" || true
+          fi
+          exit "$fail"
+
+#if (IncludeUI)
+      # The web host needs only the API's address, which service discovery reads. The probes: it is
+      # ready, the framework script and static assets made it into the image, and the first page
+      # (the sign-in page, after a redirect) renders in Production.
+      - name: Start and probe the web host (web image)
+        run: |
+          docker run -d --name smoke-web --network "$SMOKE_NETWORK" -p 8081:8080 \
+            -e Services__api__http__0=http://smoke-api:8080 smoke/web:ci
+          web=http://localhost:8081
+          for _ in $(seq 1 30); do
+            curl -fsS "$web/alive" > /dev/null 2>&1 && break
+            sleep 2
+          done
+          for path in /health /_framework/blazor.web.js /; do
+            curl -fsSL -o /dev/null "$web$path" || {
+              echo "::error::GET $path on the web host failed (its log is in the last step)"
+              exit 1
+            }
+          done
+
+#endif
+      - name: Container logs
+        if: failure()
+        run: |
+          for name in $(docker ps -a --filter name=smoke- --format '{{.Names}}'); do
+            echo "::group::$name"; docker logs "$name" 2>&1 || true; echo "::endgroup::"
+          done
+
   # The no-local-SDK path (scripts/dotnet.sh, ADR-0008) on a stock Linux Docker Engine, the host
   # where it breaks most easily: Testcontainers started from inside the SDK container reach their
   # sibling containers through host.docker.internal, which only Docker Desktop resolves unaided.

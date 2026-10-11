@@ -18,6 +18,12 @@ dotnet publish src/Presentation/UI/Trellis.UI.Web /t:PublishContainer   # if the
 Base image, exposed port and entry point derive from the project; registry and tag are MSBuild
 properties (`-p:ContainerRegistry=… -p:ContainerRepository=… -p:ContainerImageTag=…`).
 
+CI's `container-smoke` job (`.github/workflows/ci.yml`) publishes these images on every run, runs the
+migration image against PostgreSQL, then boots the API image (and the web image, with the UI) in
+Production with only the settings [Required configuration](#required-configuration) marks as
+required. It checks readiness, a problem document from an anonymous call, and a sign-in as the
+seeded admin, so a setting Production needs and this page does not name fails CI, not a deploy.
+
 ### Docker Compose: what `aspire publish` produces
 
 The AppHost declares `AddDockerComposeEnvironment("compose")`, so `aspire publish` (a local SDK and
