@@ -203,27 +203,31 @@ Questions and ideas are welcome in [GitHub Discussions](https://github.com/Revaz
 
 Trellis takes ideas from other people's work. Each line names what was taken; nothing below is a
 verbatim copy, so the MIT and BSD notices stay with their projects. Templates we only compared
-against are not listed (ADR-0002 names them).
+against are not listed (ADR-0002 names them). A line marked *when adopted* or *once imported*
+describes planned work that is not in the template yet; the marker goes when it lands.
 
 **Templates and libraries we learned from**
-- [clean-architecture](https://github.com/amantinband/clean-architecture) by Amichai Mantinband (MIT), *when adopted*:
+- [clean-architecture](https://github.com/amantinband/clean-architecture) by Amichai Mantinband (MIT):
   - the per-use-case request collection and the Getting Started walkthrough, one request and body per step;
-  - one authorization test per use case, which prompted pinning each endpoint's permission, and the permission-scoped token idiom;
-  - use-case drivers, optional-parameter factories, the paired HTTP test client and the switchable current-user double (rewritten, no MediatR);
-  - the one-test-suite-per-use-case discipline with test folders mirroring the Application slice;
   - a configuration-gated SMTP sender and the user-secrets setup walkthrough;
   - the Domain Overview device, plain words before architecture, and the folder map that prompted our slice tree;
-  - the eventual-consistency walkthrough shape, the one-aggregate-per-use-case explanation, and the idea of a reference time-triggered use case;
-  - the Testing section mapping each test type onto the layers it exercises, and where to invest;
-  - the authorization how-to format, one snippet then who passes, and the self-or-admin idea behind our ownership recipe;
-  - the show-the-code README sections, the visual walkthrough-style README, and feature-first folders in the persistence adapter.
-- [Trellis](https://github.com/xavierjohn/Trellis) by Xavier John (MIT; no affiliation, the shared name is a coincidence), *once imported*:
+  - *when adopted*: one authorization test per use case, which prompted pinning each endpoint's permission, and the permission-scoped token idiom;
+  - *when adopted*: use-case drivers, optional-parameter factories, the paired HTTP test client and the switchable current-user double (rewritten, no MediatR);
+  - *when adopted*: the one-test-suite-per-use-case discipline with test folders mirroring the Application slice;
+  - *when adopted*: the eventual-consistency walkthrough shape, the one-aggregate-per-use-case explanation, and the idea of a reference time-triggered use case;
+  - *when adopted*: the Testing section mapping each test type onto the layers it exercises, and where to invest;
+  - *when adopted*: the authorization how-to format, one snippet then who passes, and the self-or-admin idea behind our ownership recipe;
+  - *when adopted*: the show-the-code README sections, the visual walkthrough-style README, and feature-first folders in the persistence adapter.
+- [Trellis](https://github.com/xavierjohn/Trellis) by Xavier John (MIT; no affiliation, the shared name is a coincidence):
   - lease-fenced outbox bookkeeping writes, and sibling event handlers run on every attempt with only the failed ones retried;
-  - the build-time analyzer for a discarded `Result`, failing fast when a `Result` reaches JSON, and the guard against a handler invoking another handler;
-  - value-object errors attributed to the request field, a type-aware and tuple `Result.Combine`, and concurrency promotion at the aggregate boundary;
-  - error descriptions redacted from the outcome log line and from every 5xx `detail`, and tracing outside logging;
-  - upstream status mapped by endpoint contract, `Unavailable` as 503, declared unique constraints as 409, and optional `If-Match` on transition POSTs;
-  - the error-code vocabulary fitness test, whole-request validation errors, the value-object constructor test, a failed `Result` that names its code, and compiler-guarded `Error` access.
+  - failing fast when a `Result` reaches JSON, a failed `Result` that names its code, and compiler-guarded `Error` access;
+  - value-object errors attributed to the request field, a type-aware and tuple `Result.Combine`, and whole-request validation errors;
+  - error descriptions redacted from the outcome log line, and tracing outside logging;
+  - concurrency promotion at the aggregate boundary, and declared unique constraints as 409;
+  - *once imported*: the build-time analyzer for a discarded `Result`, and the guard against a handler invoking another handler;
+  - *once imported*: error descriptions redacted from every 5xx `detail`;
+  - *once imported*: upstream status mapped by endpoint contract, `Unavailable` as 503, and optional `If-Match` on transition POSTs;
+  - *once imported*: the error-code vocabulary fitness test and the value-object constructor test.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [ErrorOr](https://github.com/amantinband/error-or) by Amichai Mantinband (MIT): the `Error`/`ErrorType` vocabulary our hand-rolled `Result` mirrors (ADR-0004).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
