@@ -124,7 +124,7 @@ src/Presentation/UI/Trellis.UI.Common/
 
 ## Application (`src/Core/Trellis.Application/Features/Invoices/`)
 
-Use-case slices, each = command/query + `internal sealed` handler + validator: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListOverdueInvoices`. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`) and `InvoiceResponse` (read model).
+Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListOverdueInvoices`. Each carries a validator too, except `PayInvoice`, `VoidInvoice` and `GetInvoice`: they take only the id the route has already bound, which leaves nothing to check. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`) and `InvoiceResponse` (read model).
 
 `CreateInvoiceCommandHandler` is the railway reference, one chain: `Result.Combine(EmailAddress.Create(…), Currency.Create(…))` creates both value objects before failing, so an invalid e-mail and an invalid currency come back in one 400, and the deconstructing `Bind((email, currency) => Invoice.Create(…))` hands both values on. `Combine` merges validation errors only; a 404 or a 500 among the failures is returned on its own (ADR-0024 amendment).
 

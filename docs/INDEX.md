@@ -29,6 +29,17 @@ Agent entry point — read only what the task needs.
 - [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the host shell
 <!--#endif -->
 
+## Skills (`.claude/skills/`, step-by-step recipes; invoke one by name, e.g. `/add-feature`)
+- [add-feature](../.claude/skills/add-feature/SKILL.md) — a new aggregate or use case, copied from the Invoices slice from the Domain outward; a checklist that names the test behind each enforced box
+- [add-integration](../.claude/skills/add-integration/SKILL.md) — a call to a third-party HTTP API, copied from ExchangeRates: port, validated options, typed client, per-client resilience, a cheap cached health probe, tests, docs
+- [add-migration](../.claude/skills/add-migration/SKILL.md) — an EF Core migration generated with the containerized `dotnet-ef`, never hand-edited
+<!--#if (TemplateSource) -->
+- [add-toggle](../.claude/skills/add-toggle/SKILL.md) — a new template toggle wired through template config, slnx/csproj conditionals, C# blocks, CI and docs (maintainers only)
+<!--#endif -->
+- [new-adr](../.claude/skills/new-adr/SKILL.md) — record an architecture decision: the next number in the right range (0100 and up for the project's own), the index line, dated amendments instead of edits
+- [remove-feature](../.claude/skills/remove-feature/SKILL.md) — delete the Invoices reference slice from the Domain outward once your own first feature exists
+- [run-app](../.claude/skills/run-app/SKILL.md) — run the full stack with `aspire run` (needs a local SDK) or as sibling containers without one, and verify it end to end
+
 ## Template decisions (docs/adr/, 0001–0099)
 
 Numbered by the template and updated by template upgrades; record your own from 0100 (the `new-adr` skill).
