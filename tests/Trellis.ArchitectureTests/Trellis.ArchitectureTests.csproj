@@ -23,6 +23,13 @@
   <!--#endif -->
 
   <ItemGroup>
+    <!-- ResultDiscardAnalyzerTests host RSLT001 (ADR-0030): the analyzer Directory.Build.props loads into
+         every compiler is referenced here as an assembly too, beside the Roslyn it runs on. -->
+    <ProjectReference Update="$(ResultAnalyzerProject)" ReferenceOutputAssembly="true" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="NetArchTest.eNhancedEdition" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="xunit.v3" />

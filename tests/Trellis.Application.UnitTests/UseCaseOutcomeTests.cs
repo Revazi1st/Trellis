@@ -39,7 +39,7 @@ public sealed class UseCaseOutcomeTests : IDisposable
     [Fact]
     public async Task Success_is_one_Information_line()
     {
-        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())));
+        (await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())))).ShouldBeSuccess();
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Information);
@@ -52,7 +52,8 @@ public sealed class UseCaseOutcomeTests : IDisposable
     {
         var handler = _pipeline.Resolve<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
 
-        await handler.Handle(new CreateInvoiceCommand("", "", "USD"), TestContext.Current.CancellationToken);
+        (await handler.Handle(new CreateInvoiceCommand("", "", "USD"), TestContext.Current.CancellationToken))
+            .Error.ShouldBeOfType<ValidationError>();
 
         // Validation sits INSIDE Logging: the rejected request is not invisible.
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
@@ -69,7 +70,8 @@ public sealed class UseCaseOutcomeTests : IDisposable
         _pipeline.Invoices.GetByIdAsync(Arg.Any<InvoiceId>(), Arg.Any<CancellationToken>()).Returns((Invoice?)null);
         var handler = _pipeline.Resolve<ICommandHandler<PayInvoiceCommand>>();
 
-        await handler.Handle(new PayInvoiceCommand(InvoiceId.New()), TestContext.Current.CancellationToken);
+        (await handler.Handle(new PayInvoiceCommand(InvoiceId.New()), TestContext.Current.CancellationToken))
+            .Error.ShouldNotBeNull().Type.ShouldBe(ErrorType.NotFound);
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Information);
@@ -93,7 +95,8 @@ public sealed class UseCaseOutcomeTests : IDisposable
     [Fact]
     public async Task Unclassified_failure_is_logged_at_Warning()
     {
-        await Handle(new ScriptedCommand(static _ =>
+        // The scripted failure comes straight back; what this test reads is the line it leaves.
+        _ = await Handle(new ScriptedCommand(static _ =>
             Task.FromResult(Result.Failure(Error.Failure("Test.Unclassified", "Nobody classified this yet.")))));
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
@@ -107,7 +110,8 @@ public sealed class UseCaseOutcomeTests : IDisposable
     public async Task A_failure_line_names_the_type_and_code_but_never_the_description()
     {
         // A description can carry what the user typed: Identity's duplicate-account text names the e-mail.
-        await Handle(new ScriptedCommand(static _ =>
+        // The scripted failure comes straight back; what this test reads is the line it leaves.
+        _ = await Handle(new ScriptedCommand(static _ =>
             Task.FromResult(Result.Failure(Error.Conflict("Test.DuplicateAccount", "Email 'jane@example.com' is already taken.")))));
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
@@ -125,7 +129,8 @@ public sealed class UseCaseOutcomeTests : IDisposable
             services.AddScoped<ICommandHandler<ScriptedCommand>, ScriptedCommandHandler>();
         });
 
-        await pipeline.Resolve<ICommandHandler<ScriptedCommand>>().Handle(
+        // The scripted failure comes straight back; what this test reads is the line it leaves.
+        _ = await pipeline.Resolve<ICommandHandler<ScriptedCommand>>().Handle(
             new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.Failure("Test.Unclassified", "Nobody classified this yet.")))),
             TestContext.Current.CancellationToken);
 
@@ -148,7 +153,7 @@ public sealed class UseCaseOutcomeTests : IDisposable
     {
         var error = new Error("Test." + type, "Scripted.", type);
 
-        await Handle(new ScriptedCommand(_ => Task.FromResult(Result.Failure(error))));
+        (await Handle(new ScriptedCommand(_ => Task.FromResult(Result.Failure(error))))).Error.ShouldBe(error);
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(expected);
@@ -239,7 +244,8 @@ public sealed class UseCaseOutcomeTests : IDisposable
     {
         using var spans = new SpanRecorder();
 
-        await Handle(new ScriptedCommand(static _ =>
+        // The scripted failure comes straight back; what this test reads is the span it leaves.
+        _ = await Handle(new ScriptedCommand(static _ =>
             Task.FromResult(Result.Failure(Error.Conflict("Test.Conflict", "Already done.")))));
 
         Activity span = spans.Of(nameof(ScriptedCommand)).ShouldHaveSingleItem();
@@ -260,15 +266,16 @@ public sealed class UseCaseOutcomeTests : IDisposable
     {
         using var counted = new ValidationFailureRecorder();
 
+        // Each Result below is the one scripted or expected; what this test reads is the counter.
         // A FluentValidation failure, rejected by the validation stage...
-        await _pipeline.Resolve<ICommandHandler<GuardedCommand>>().Handle(new GuardedCommand(""), TestContext.Current.CancellationToken);
+        _ = await _pipeline.Resolve<ICommandHandler<GuardedCommand>>().Handle(new GuardedCommand(""), TestContext.Current.CancellationToken);
 
         // ...and a domain rule's, returned by the handler: both reach the outcome site, where they are counted.
-        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.Validation("Test.DomainRule", "A domain rule failed.")))));
+        _ = await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.Validation("Test.DomainRule", "A domain rule failed.")))));
 
         // Neither a success nor a failure of another type counts.
-        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())));
-        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.NotFound("Test.Missing", "Gone.")))));
+        (await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())))).ShouldBeSuccess();
+        _ = await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.NotFound("Test.Missing", "Gone.")))));
 
         counted.Of(nameof(GuardedCommand)).ShouldBe(["Validation.NotEmpty"]);
         counted.Of(nameof(ScriptedCommand)).ShouldBe(["Test.DomainRule"]);
@@ -279,7 +286,7 @@ public sealed class UseCaseOutcomeTests : IDisposable
     {
         using var spans = new SpanRecorder();
 
-        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())));
+        (await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())))).ShouldBeSuccess();
 
         // Tracing wraps Logging: the line is written while the span is current, so a backend links the
         // outcome line to the use case's span rather than to the HTTP request around it.

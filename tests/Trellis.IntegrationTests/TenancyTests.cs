@@ -158,7 +158,9 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         if (await roleManager.FindByNameAsync(Roles.Member) is null)
         {
-            await roleManager.CreateAsync(new IdentityRole<Guid>(Roles.Member) { Id = Guid.CreateVersion7() });
+            IdentitySeed.EnsureSucceeded(
+                await roleManager.CreateAsync(new IdentityRole<Guid>(Roles.Member) { Id = Guid.CreateVersion7() }),
+                $"Creating role '{Roles.Member}'");
         }
 
         var identity = scope.ServiceProvider.GetRequiredService<IIdentityService>();

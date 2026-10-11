@@ -291,6 +291,30 @@ With multi-tenancy, `ApiFactory.CreateAdminClientAsync(tenantId, …)` signs in 
 tenant (created on first use); `TenantIsolationTests` is the worked example.
 <!--#endif -->
 
+## When the build fails
+
+- **`RSLT001: This Result is discarded`** (a warning in Debug, an error in Release and CI). A statement
+  computed a `Result`, a `Result<T>` or an ASP.NET Core Identity `IdentityResult` and dropped it
+  (ADR-0030): `invoice.Issue(now);` before `return Result.Success();` commits a transition the aggregate
+  refused, and `await handler.Handle(command, ct);` in a test never checks the outcome. In this order:
+  use it (return it, `Bind` or `Map` it into the method's own result, or branch on `IsFailure`); in a
+  test, assert it (`(await handler.Handle(command, ct)).ShouldBeSuccess()`, or `result.Error.ShouldBe(...)`
+  for an expected failure; an Identity call in a fixture goes through `IdentitySeed.EnsureSucceeded`);
+  drop it on purpose only when nothing can act on it, as `_ = …;` with a one-line comment saying why.
+  Never a `#pragma` or a severity line in `.editorconfig`. The same applies to a dropped `Error` (a
+  forgotten `return`), the UI's `ApiResult<T>` in a `.razor` `@code` block, and an array or tuple of
+  results (`await Task.WhenAll(...)` over handlers).
+- **`RSLT001: This Task<Result> is converted to Task, which drops its result`**. A member, lambda,
+  variable or argument typed `Task` was handed a `Task<Result>`: `public Task Handle(…) =>
+  port.PushAsync(…);` finishes "successfully" when the push failed. Keep the `Task<Result>` (change the
+  return type), or make the method `async`, await the call and act on the `Result` (an outbox handler
+  throws on a failure it wants retried).
+- **`CS9057` naming the analyzer** ("references version … of the compiler, which is newer than the
+  currently running version"): the compiler is older than the Roslyn `tools/Trellis.Analyzers`
+  references. Build with the SDK `global.json` names (`dotnet --version` from the repository root
+  shows which one runs); an IDE that hosts an older Roslyn only loses the squiggle, while the
+  command-line build still enforces the rule. *Bumping the SDK* below says how far the pin may move.
+
 ## When a request fails
 
 Every problem response carries `traceId` and `code`. Start from the `traceId`, not the `correlationId`,
@@ -352,6 +376,20 @@ That is the point; respond in this order:
 
 NU1900 is different: the advisory data could not be downloaded (offline, feed outage). It is not
 an advisory; retry once the feed is reachable.
+
+## Bumping the SDK
+
+`global.json` pins the SDK with `rollForward: latestFeature`, and Dependabot proposes its feature-band
+and patch updates (a new major version is a migration, not a bump). With a bump:
+
+- CI installs exactly the version in `global.json`; a contributor needs that version or a later
+  feature band of the same major.
+- The SDK image (`scripts/sdk-image/Dockerfile`, pinned by digest and moved by Dependabot's docker
+  updates) must carry an SDK that `global.json` accepts, or `./scripts/dotnet.sh` cannot build.
+- `Microsoft.CodeAnalysis.CSharp` in `Directory.Packages.props` may be raised up to the new compiler's
+  version, never above (ADR-0030): the analyzer project references it, and a compiler older than the
+  referenced version cannot load the analyzer. `dotnet <dotnet root>/sdk/<version>/Roslyn/bincore/csc.dll -version`
+  prints the compiler's version. Raising it is optional.
 
 ## Conventions
 

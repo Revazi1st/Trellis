@@ -53,8 +53,8 @@ hand-written seams instead:
   one mutable `ICurrentUser` of the subcutaneous hosts, so a test can act as a second user.
 - **Checked results.** `ShouldBeSuccess()` (`tests/TestSupport/ResultAssertions.cs`) asserts a `Result`
   succeeded and otherwise names the error's code, type, description and field errors; every arrange
-  step ends in it. CA1806 now covers tests as well as `src/` and `tools/` (`.editorconfig`), so a test
-  that drops a Domain or `Result` value fails the Release build like production code does.
+  step ends in it. RSLT001 (ADR-0030) covers tests as well as `src/` and `tools/`, so a test that drops
+  a `Result`, an awaited one included, fails the Release build like production code does.
 
 The `tests/TestSupport/` files are linked into the test projects that compile them (each csproj names
 them); there is still no shared test project. A feature copied from the Invoices slice gets its own

@@ -10,8 +10,13 @@ Every source file is assigned to the ring folder it lives in (src/Core, src/Infr
 src/Presentation, src/Shared, tools), read from the path the PDB recorded and checked against the
 checkout, so the report and the gate follow the repository layout rather than assembly names.
 Files outside the ring folders (tests, third-party packages that ship symbols, generated code
-under obj/) are not counted even when the collection let them in. Lines are counted once per
-(file, line) even when a file contributes to several classes (partial types, closures).
+under obj/) are not counted even when the collection let them in. Neither is build-time tooling:
+the in-repository analyzer (a project under tools/ whose name ends in .Analyzers, ADR-0030) runs
+inside the compiler and is never deployed, so eng/coverage.runsettings leaves its assembly out of
+the collection and ring_of skips its files as well; the tools row (AppHost, migration job) is the
+same with or without the settings file, and no ring floor ever depends on the analyzer. Lines are
+counted once per (file, line) even when a file contributes to several classes (partial types,
+closures).
 
 --min-line-rate RING=PERCENT sets one ring's floor and may be repeated; a ring without one is
 reported but not gated. --min-core-line-rate PERCENT is the older spelling of
@@ -33,11 +38,15 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 
 RINGS = ("src/Core", "src/Infrastructure", "src/Presentation", "src/Shared", "tools")
+# A project under tools/ whose name ends with this is build-time tooling, not measured (docstring).
+BUILD_TIME_SUFFIX = ".Analyzers"
+NOT_COUNTED = ("other", "build-time")
 CONDITION = re.compile(r"\((\d+)/(\d+)\)")
 
 
 def ring_of(filename: str, repo_root: str) -> str:
-    """The ring folder a source file belongs to, or "other" when it is not this repository's.
+    """The ring folder a source file belongs to, "build-time" for the analyzer project, or "other"
+    when it is not this repository's.
 
     A ring folder alone is no proof: third-party packages that ship symbols record paths such as
     /_/src/Shared/... from their own repositories, so the project folder after the ring must
@@ -51,6 +60,8 @@ def ring_of(filename: str, repo_root: str) -> str:
             continue
         project = path[start + len(marker):].split("/", 1)[0]
         if project and os.path.isdir(os.path.join(repo_root, ring, project)):
+            if ring == "tools" and project.endswith(BUILD_TIME_SUFFIX):
+                return "build-time"
             return ring
     return "other"
 
@@ -141,7 +152,7 @@ def main() -> int:
             lines = cls.find("lines")
             for line in (lines.iter("line") if lines is not None else ()):
                 by_assembly[(ring, assembly)].add(filename, line)
-    rows = {key: tally for key, tally in by_assembly.items() if key[0] != "other"}
+    rows = {key: tally for key, tally in by_assembly.items() if key[0] not in NOT_COUNTED}
     for (ring, _), tally in rows.items():
         by_ring[ring].merge(tally)
 

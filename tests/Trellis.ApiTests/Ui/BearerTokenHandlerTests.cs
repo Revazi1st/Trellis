@@ -36,7 +36,7 @@ public sealed class BearerTokenHandlerTests
             ? Responses.Json(new TokenResponse(rotated, "refresh-2", 900))
             : Responses.Status(HttpStatusCode.NoContent));
 
-        await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), cancellationToken: TestContext.Current.CancellationToken);
+        (await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), cancellationToken: TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
 
         ui.Api.Requests.Select(static r => (r.Path.EndsWith("/auth/refresh", StringComparison.Ordinal), r.Authorization))
             .ShouldBe([(true, null), (false, $"Bearer {rotated}")]);
@@ -48,7 +48,7 @@ public sealed class BearerTokenHandlerTests
         await using var ui = new UiHarness();
         ui.Api.Always(static _ => Responses.Status(HttpStatusCode.Unauthorized));
 
-        await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), cancellationToken: TestContext.Current.CancellationToken);
+        (await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), cancellationToken: TestContext.Current.CancellationToken)).StatusCode.ShouldBe(401);
 
         ui.Api.Requests.ShouldHaveSingleItem().Authorization.ShouldBeNull();
     }
@@ -60,7 +60,7 @@ public sealed class BearerTokenHandlerTests
         await ui.Tokens.SetTokensAsync(TestJwt.ExpiringAt(ui.Clock.GetUtcNow().AddMinutes(10)), "refresh-1");
         ui.Api.Always(static _ => Responses.Json(new TokenResponse("a", "r", 900)));
 
-        await ui.AuthApi.LoginAsync(new LoginRequest("someone@example.com", "password"), TestContext.Current.CancellationToken);
+        (await ui.AuthApi.LoginAsync(new LoginRequest("someone@example.com", "password"), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
 
         ui.Api.Requests.ShouldHaveSingleItem().Authorization.ShouldBeNull();
     }

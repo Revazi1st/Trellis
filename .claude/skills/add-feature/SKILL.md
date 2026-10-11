@@ -153,8 +153,8 @@ after each layer.
       (namespaces follow the folders), and the validators' bounds in
       `Features/{Feature}/{Feature}CommandValidatorTests.cs`: the maximum accepted and one more rejected
       naming the property, at the Domain constant (`InvoiceCommandValidatorTests` is the model). Every
-      arrange step ends in `ShouldBeSuccess()` [CA1806 fails the Release build on a dropped `Result`,
-      tests included].
+      arrange step ends in `ShouldBeSuccess()` [RSLT001 fails the Release build on a dropped `Result`,
+      an awaited one included, in tests too; a deliberate drop is `_ = …` with a reason].
 - [ ] **`docs/features/{feature}.md`** (kebab-case: `ExchangeRates` → `exchange-rates.md`), shaped
       like `invoices.md`, plus a line in `docs/INDEX.md` [`check-docs-drift.sh`: a change under the
       feature's folders without its doc fails CI]. A load-bearing decision gets an ADR (the `new-adr`

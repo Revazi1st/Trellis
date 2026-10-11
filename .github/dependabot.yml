@@ -37,6 +37,11 @@ updates:
           - "dotnet-ef"
       opentelemetry:
         patterns: ["OpenTelemetry.*"]
+      # Roslyn, for the in-repository analyzer (tools/Trellis.Analyzers, ADR-0030): Microsoft.CodeAnalysis.Common
+      # sets the floor of Microsoft.CodeAnalysis.Analyzers, so the two move together. Only their patch
+      # updates reach this group; see the ignore list below.
+      roslyn:
+        patterns: ["Microsoft.CodeAnalysis.*"]
       # xunit.v3 and Microsoft.Testing.Extensions.TrxReport both build on Microsoft.Testing.Platform
       # and must move together: a test-group PR that bumped xunit.v3 alone failed every test run with
       # "TypeLoadException: Could not load type 'IDataConsumer'".
@@ -57,6 +62,14 @@ updates:
       - dependency-name: "FluentAssertions"
       - dependency-name: "MassTransit"
       - dependency-name: "Moq"
+      # The Roslyn the analyzer references must stay at or below the compiler of the SDK in global.json:
+      # an older compiler cannot load the analyzer, and Release turns that warning (CS9057) into an
+      # error. It is raised by hand with an SDK bump (docs/development.md, "Bumping the SDK"); patch
+      # updates stay allowed. When a microsoft-group PR fails restore with NU1109 on
+      # Microsoft.CodeAnalysis.CSharp (EF Core Design raised its Roslyn floor), raise the pin in that
+      # PR, still within the compiler's version.
+      - dependency-name: "Microsoft.CodeAnalysis.*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   # One weekly PR for all action bumps: they are SHA pins with version comments, reviewed together.
   - package-ecosystem: github-actions
