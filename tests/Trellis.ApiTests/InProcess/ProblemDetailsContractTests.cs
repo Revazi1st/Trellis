@@ -91,9 +91,8 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
-        Guid id = await CreateInvoiceAsync(admin, ct);
-        (await admin.PostAsJsonAsync($"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Design", 10m), ct))
-            .IsSuccessStatusCode.ShouldBeTrue();
+        Guid id = await admin.CreateInvoiceAsync();
+        await admin.AddInvoiceLineAsync(id);
 
         HttpResponseMessage response = await admin.PostAsJsonAsync(
             $"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(factory.Time.GetUtcNow().AddDays(-1)), ct);
@@ -109,7 +108,7 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
-        Guid id = await CreateInvoiceAsync(admin, ct);
+        Guid id = await admin.CreateInvoiceAsync();
 
         // A draft with no lines cannot be issued: one plain Error.Validation from the aggregate, about the
         // request as a whole, so the handler attributes it to no field.
@@ -149,7 +148,7 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
-        Guid id = await CreateInvoiceAsync(admin, ct);
+        Guid id = await admin.CreateInvoiceAsync();
 
         HttpResponseMessage response = await admin.PostAsync(
             $"/api/v1/invoices/{id}/{action}", new StringContent(body, Encoding.UTF8, "application/json"), ct);
@@ -301,7 +300,7 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
-        Guid id = await CreateInvoiceAsync(admin, ct);
+        Guid id = await admin.CreateInvoiceAsync();
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/invoices/{id}/void");
         request.Headers.TryAddWithoutValidation("If-Match", "\"1\"").ShouldBeTrue();
 
@@ -509,14 +508,6 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         title.Contains('.', StringComparison.Ordinal).ShouldBeFalse(body);
 
         return problem;
-    }
-
-    private static async Task<Guid> CreateInvoiceAsync(HttpClient client, CancellationToken ct)
-    {
-        HttpResponseMessage created = await client.PostWithIdempotencyKeyAsync(
-            "/api/v1/invoices", new CreateInvoiceRequest("Contract Co", "c@c.co", "USD"), ct);
-        created.StatusCode.ShouldBe(HttpStatusCode.Created);
-        return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
     }
 
     private static async Task<HttpResponseMessage> PostCreateAsync(HttpClient client, string idempotencyKey, CancellationToken ct, string customerName = "Idempotent Co")

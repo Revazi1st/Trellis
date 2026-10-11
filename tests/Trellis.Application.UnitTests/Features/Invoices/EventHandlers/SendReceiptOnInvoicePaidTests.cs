@@ -5,7 +5,7 @@ using Trellis.Domain.Invoices;
 using Trellis.Domain.Invoices.Events;
 using Xunit;
 
-namespace Trellis.Application.UnitTests.Invoices;
+namespace Trellis.Application.UnitTests.Features.Invoices.EventHandlers;
 
 public sealed class SendReceiptOnInvoicePaidTests
 {

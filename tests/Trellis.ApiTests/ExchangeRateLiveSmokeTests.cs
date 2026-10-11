@@ -35,8 +35,7 @@ public sealed class ExchangeRateLiveSmokeTests
         Result<decimal> result = await provider.GetRequiredService<IExchangeRateProvider>()
             .GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue($"the default provider answered {result.Error?.Code}: {result.Error?.Description}");
-        result.Value.ShouldBeInRange(0.5m, 2.5m);
+        result.ShouldBeSuccess("the default provider refused a rate it should know").ShouldBeInRange(0.5m, 2.5m);
     }
 
     [Fact]

@@ -1,10 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Trellis.Application.Features.Invoices.AddInvoiceLine;
-using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Domain.Invoices;
 using Trellis.Persistence;
-using Trellis.SharedKernel.Messaging;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
@@ -14,9 +11,7 @@ public sealed class AuditingInterceptorTests(DatabaseFixture database) : Integra
     [Fact]
     public async Task Creation_and_modification_are_stamped_with_clock_and_user()
     {
-        var create = Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
-        InvoiceId id = (await create.Handle(
-            new CreateInvoiceCommand("ACME", "a@b.co", "USD"), TestContext.Current.CancellationToken)).Value;
+        InvoiceId id = await Services.CreateInvoiceAsync();
 
         using (var scope = CreateScope())
         {
@@ -24,14 +19,14 @@ public sealed class AuditingInterceptorTests(DatabaseFixture database) : Integra
                 .Invoices.FindAsync([id], TestContext.Current.CancellationToken);
 
             invoice!.CreatedAtUtc.ShouldBe(Now);
-            invoice.CreatedBy.ShouldBe(CurrentUserName);
+            invoice.CreatedBy.ShouldBe(TestCurrentUser.DefaultUserName);
             invoice.ModifiedAtUtc.ShouldBeNull();
         }
 
+        // Someone else edits it two hours later: the modification carries them, the creation keeps its author.
         Time.Advance(TimeSpan.FromHours(2));
-        var addLine = Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>();
-        (await addLine.Handle(new AddInvoiceLineCommand(id, "Line", 10m), TestContext.Current.CancellationToken))
-            .IsSuccess.ShouldBeTrue();
+        CurrentUser.UserName = "a-colleague";
+        await Services.AddInvoiceLineAsync(id);
 
         using (var scope = CreateScope())
         {
@@ -39,8 +34,9 @@ public sealed class AuditingInterceptorTests(DatabaseFixture database) : Integra
                 .Invoices.FindAsync([id], TestContext.Current.CancellationToken);
 
             invoice!.ModifiedAtUtc.ShouldBe(Now.AddHours(2));
-            invoice.ModifiedBy.ShouldBe(CurrentUserName);
+            invoice.ModifiedBy.ShouldBe("a-colleague");
             invoice.CreatedAtUtc.ShouldBe(Now);
+            invoice.CreatedBy.ShouldBe(TestCurrentUser.DefaultUserName);
         }
     }
 }

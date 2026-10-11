@@ -50,7 +50,7 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         Services.GetRequiredService<IIdempotencyStore>().Reserve("taken", Fingerprint);
-        (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).IsSuccess.ShouldBeTrue();
+        (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).ShouldBeSuccess();
 
         // A sequential duplicate, not a race: the commit boundary maps by constraint name, whoever lost.
         using IServiceScope second = CreateScope();

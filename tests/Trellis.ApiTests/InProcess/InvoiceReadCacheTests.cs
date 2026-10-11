@@ -24,7 +24,7 @@ public sealed class InvoiceReadCacheTests(ApiFactory factory) : IClassFixture<Ap
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
-        Guid id = await CreateAsync(admin, ct);
+        Guid id = await admin.CreateInvoiceAsync();
 
         // Warm: a 200 with an ETag; sending that ETag back is a 304, the poller's cheap path.
         string draftTag = await ShouldServeAsync(admin, id, previousTag: null, "Draft", ct);
@@ -47,7 +47,7 @@ public sealed class InvoiceReadCacheTests(ApiFactory factory) : IClassFixture<Ap
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
-        Guid id = await CreateAsync(admin, ct);
+        Guid id = await admin.CreateInvoiceAsync();
         string draftTag = await ShouldServeAsync(admin, id, previousTag: null, "Draft", ct);
 
         (await PostAsync(admin, $"/api/v1/invoices/{id}/void", body: null, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -64,7 +64,7 @@ public sealed class InvoiceReadCacheTests(ApiFactory factory) : IClassFixture<Ap
         // The API mints invoice ids, so a client cannot ask for one before it exists. Hiding a real invoice
         // (a soft delete straight in the database, which no endpoint's eviction sees) stands in for "not
         // there yet"; un-hiding it is its arrival.
-        Guid id = await CreateAsync(admin, ct);
+        Guid id = await admin.CreateInvoiceAsync();
         await SetDeletedAtAsync(id, DateTimeOffset.UtcNow, ct);
         (await admin.GetAsync($"/api/v1/invoices/{id}", ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
@@ -103,14 +103,6 @@ public sealed class InvoiceReadCacheTests(ApiFactory factory) : IClassFixture<Ap
 
     private static async Task<InvoiceDto> GetAsync(HttpClient client, Guid id, CancellationToken ct)
         => (await client.GetFromJsonAsync<InvoiceDto>($"/api/v1/invoices/{id}", ct)).ShouldNotBeNull();
-
-    private static async Task<Guid> CreateAsync(HttpClient client, CancellationToken ct)
-    {
-        HttpResponseMessage created = await client.PostWithIdempotencyKeyAsync(
-            "/api/v1/invoices", new CreateInvoiceRequest("Read Cache Ltd", "cache@example.com", "USD"), ct);
-        created.StatusCode.ShouldBe(HttpStatusCode.Created);
-        return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;
-    }
 
     private static Task<HttpResponseMessage> PostAsync(HttpClient client, string path, object? body, CancellationToken ct)
         => body is null ? client.PostAsync(path, content: null, ct) : client.PostAsJsonAsync(path, body, ct);

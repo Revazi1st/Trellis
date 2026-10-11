@@ -20,7 +20,6 @@ namespace Trellis.IntegrationTests;
 public abstract class IntegrationTestBase(DatabaseFixture database) : IAsyncLifetime
 {
     protected static readonly DateTimeOffset Now = new(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
-    protected const string CurrentUserName = "integration-tests";
 
     private ServiceProvider? _provider;
     private IServiceScope? _scope;
@@ -28,6 +27,9 @@ public abstract class IntegrationTestBase(DatabaseFixture database) : IAsyncLife
     protected IEmailSender EmailSender { get; } = Substitute.For<IEmailSender>();
 
     protected FakeTimeProvider Time { get; } = new(Now);
+
+    /// <summary>Who the host runs as; switch it between two use cases to act as someone else.</summary>
+    internal TestCurrentUser CurrentUser { get; } = new();
 
     /// <summary>This test's meters: a <see cref="MetricRecorder"/> over it sees only what this test emits.</summary>
     internal TestMeterFactory MeterFactory { get; } = new();
@@ -42,7 +44,7 @@ public abstract class IntegrationTestBase(DatabaseFixture database) : IAsyncLife
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<TimeProvider>(Time);
         services.AddSingleton(EmailSender);
-        services.AddSingleton<ICurrentUser>(new TestCurrentUser());
+        services.AddSingleton<ICurrentUser>(CurrentUser);
 #if (UseMultitenancy)
         services.AddSingleton<Trellis.Application.Abstractions.ITenantContext, SystemTenantContext>();
 #endif
@@ -86,12 +88,5 @@ public abstract class IntegrationTestBase(DatabaseFixture database) : IAsyncLife
         {
             await _provider.DisposeAsync();
         }
-    }
-
-    private sealed class TestCurrentUser : ICurrentUser
-    {
-        public Guid? UserId { get; } = Guid.CreateVersion7();
-
-        public string? UserName => CurrentUserName;
     }
 }

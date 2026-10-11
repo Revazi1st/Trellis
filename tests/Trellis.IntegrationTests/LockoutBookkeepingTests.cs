@@ -46,7 +46,7 @@ public sealed class LockoutBookkeepingTests(DatabaseFixture database) : Integrat
 
         Result<AuthenticatedUser> signedIn = await SignInAsync(log, Password);
 
-        signedIn.IsSuccess.ShouldBeTrue();
+        signedIn.ShouldBeSuccess();
         CapturedEntry entry = log.Entries.Where(static e => e.EventId.Id == 1106).ShouldHaveSingleItem();
         entry.Level.ShouldBe(LogLevel.Warning);
         entry.Message.ShouldContain(nameof(IdentityErrorDescriber.ConcurrencyFailure));
@@ -56,7 +56,7 @@ public sealed class LockoutBookkeepingTests(DatabaseFixture database) : Integrat
     {
         await IdentitySeed.EnsureRolesAndPermissionsAsync(Services.GetRequiredService<RoleManager<IdentityRole<Guid>>>());
         (await Services.GetRequiredService<IIdentityService>().RegisterAsync(Email, Password, TestContext.Current.CancellationToken))
-            .IsSuccess.ShouldBeTrue();
+            .ShouldBeSuccess();
     }
 
     private async Task<Result<AuthenticatedUser>> SignInAsync(ILogger<IdentityService> logger, string password)

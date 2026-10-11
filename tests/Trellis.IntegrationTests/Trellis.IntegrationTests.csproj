@@ -6,7 +6,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Bogus" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="NSubstitute" />
@@ -14,6 +13,15 @@
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <!-- Shared test support (tests/TestSupport): one source file compiled into each test project that sees the
+       SharedKernel, no project of its own. ShouldBeSuccess() comes with the global using; the Invoice
+       factory, which needs the Application commands, only where they are visible. -->
+  <ItemGroup>
+    <Compile Include="..\TestSupport\ResultAssertions.cs" Link="TestSupport\ResultAssertions.cs" />
+    <Compile Include="..\TestSupport\Invoices\InvoiceFactory.cs" Link="TestSupport\Invoices\InvoiceFactory.cs" />
+    <Using Include="Trellis.TestSupport" />
   </ItemGroup>
 
 </Project>

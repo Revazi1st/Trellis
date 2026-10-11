@@ -1,9 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Specifications;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
@@ -35,7 +35,7 @@ public sealed class SpecificationPagingTests(DatabaseFixture database) : Integra
             {
                 repository.Add(invoice);
                 (await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(TestContext.Current.CancellationToken))
-                    .IsSuccess.ShouldBeTrue();
+                    .ShouldBeSuccess();
             }
         }
 
@@ -89,13 +89,7 @@ public sealed class SpecificationPagingTests(DatabaseFixture database) : Integra
     }
 
     private Invoice IssuedInvoice(string customer, DateTimeOffset dueDate)
-    {
-        Currency usd = Currency.Create("USD").Value;
-        Invoice invoice = Invoice.Create(customer, EmailAddress.Create("billing@ties.test").Value, usd).Value;
-        invoice.AddLine("Line", Money.Create(10m, usd).Value).IsSuccess.ShouldBeTrue();
-        invoice.Issue(dueDate, Time.GetUtcNow()).IsSuccess.ShouldBeTrue();
-        return invoice;
-    }
+        => InvoiceFactory.Issued(dueDate, issuedAt: Time.GetUtcNow(), customerName: customer);
 
     private sealed class FirstThreeById : Specification<Invoice>
     {

@@ -7,11 +7,12 @@ using Shouldly;
 using Trellis.Application.Features.Invoices;
 using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Application.Features.Invoices.GetInvoice;
-using Trellis.Application.UnitTests.Invoices;
+using Trellis.Application.Features.Invoices.PayInvoice;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Messaging;
 using Trellis.SharedKernel.Results;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.Application.UnitTests;
@@ -31,11 +32,9 @@ public sealed class DecoratorPipelineTests : IDisposable
     {
         var handler = _pipeline.Resolve<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
 
-        var result = await handler.Handle(
-            new CreateInvoiceCommand("ACME", "a@b.co", "USD"),
-            TestContext.Current.CancellationToken);
+        var result = await handler.Handle(InvoiceFactory.CreateCommand(), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         _pipeline.Invoices.ReceivedWithAnyArgs(1).Add(default!);
         await _pipeline.UnitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
     }
@@ -115,10 +114,10 @@ public sealed class DecoratorPipelineTests : IDisposable
     public async Task Failed_domain_operation_does_not_commit_unit_of_work()
     {
         _pipeline.Invoices.GetByIdAsync(Arg.Any<InvoiceId>(), Arg.Any<CancellationToken>()).Returns((Invoice?)null);
-        var handler = _pipeline.Resolve<ICommandHandler<Features.Invoices.PayInvoice.PayInvoiceCommand>>();
+        var handler = _pipeline.Resolve<ICommandHandler<PayInvoiceCommand>>();
 
         var result = await handler.Handle(
-            new Features.Invoices.PayInvoice.PayInvoiceCommand(InvoiceId.New()),
+            new PayInvoiceCommand(InvoiceId.New()),
             TestContext.Current.CancellationToken);
 
         result.IsFailure.ShouldBeTrue();
@@ -132,8 +131,7 @@ public sealed class DecoratorPipelineTests : IDisposable
         _pipeline.UnitOfWork.CommitAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure(UnitOfWorkErrors.ConcurrencyConflict));
         var handler = _pipeline.Resolve<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
 
-        Result<InvoiceId> result = await handler.Handle(
-            new CreateInvoiceCommand("ACME", "a@b.co", "USD"), TestContext.Current.CancellationToken);
+        Result<InvoiceId> result = await handler.Handle(InvoiceFactory.CreateCommand(), TestContext.Current.CancellationToken);
 
         // The handler succeeded; the commit did not — the caller sees the commit's failure, not the id.
         result.IsFailure.ShouldBeTrue();
@@ -144,14 +142,14 @@ public sealed class DecoratorPipelineTests : IDisposable
     [Fact]
     public async Task Query_pipeline_never_calls_the_unit_of_work()
     {
-        Invoice invoice = InvoiceTestData.Draft();
+        Invoice invoice = InvoiceFactory.Draft();
         _pipeline.Invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = _pipeline.Resolve<IQueryHandler<GetInvoiceQuery, InvoiceResponse>>();
 
         Result<InvoiceResponse> result = await handler.Handle(new GetInvoiceQuery(invoice.Id), TestContext.Current.CancellationToken);
 
         // A SUCCESSFUL query: the one outcome on which a command would have committed.
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         await _pipeline.UnitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
@@ -204,7 +202,7 @@ public sealed class DecoratorPipelineTests : IDisposable
         var handler = provider.GetRequiredService<ICommandHandler<PingCommand>>();
         PipelineHarness.StagesOf(handler, typeof(ICommandHandler<PingCommand>))
             .ShouldBe([.. PipelineHarness.CommandStages, typeof(PingCommandHandler)]);
-        (await handler.Handle(new PingCommand(), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+        (await handler.Handle(new PingCommand(), TestContext.Current.CancellationToken)).ShouldBeSuccess();
         await _pipeline.UnitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
     }
 

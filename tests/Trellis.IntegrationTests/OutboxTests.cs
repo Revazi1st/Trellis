@@ -2,9 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Shouldly;
-using Trellis.Application.Features.Invoices.AddInvoiceLine;
-using Trellis.Application.Features.Invoices.CreateInvoice;
-using Trellis.Application.Features.Invoices.IssueInvoice;
 using Trellis.Application.Features.Invoices.PayInvoice;
 using Trellis.Domain.Invoices;
 using Trellis.Persistence;
@@ -19,11 +16,11 @@ public sealed class OutboxTests(DatabaseFixture database) : IntegrationTestBase(
     [Fact]
     public async Task Paying_writes_the_event_to_the_outbox_in_the_same_transaction_without_sending_synchronously()
     {
-        InvoiceId id = await IssueInvoiceAsync();
+        InvoiceId id = await Services.IssuedInvoiceAsync();
 
         using var payScope = CreateScope();
         (await payScope.ServiceProvider.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
-            .Handle(new PayInvoiceCommand(id), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+            .Handle(new PayInvoiceCommand(id), TestContext.Current.CancellationToken)).ShouldBeSuccess();
 
         // The receipt email is NOT sent inside the transaction…
         await EmailSender.DidNotReceiveWithAnyArgs().SendAsync(default!, default!, default!, Arg.Any<CancellationToken>());
@@ -45,11 +42,10 @@ public sealed class OutboxTests(DatabaseFixture database) : IntegrationTestBase(
     [Fact]
     public async Task Outbox_processor_dispatches_the_event_and_sends_the_receipt()
     {
-        InvoiceId id = await IssueInvoiceAsync();
+        InvoiceId id = await Services.IssuedInvoiceAsync();
         using (var payScope = CreateScope())
         {
-            await payScope.ServiceProvider.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
-                .Handle(new PayInvoiceCommand(id), TestContext.Current.CancellationToken);
+            await payScope.ServiceProvider.PayInvoiceAsync(id);
         }
 
         (await CreateOutboxProcessor().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(2);
@@ -62,16 +58,5 @@ public sealed class OutboxTests(DatabaseFixture database) : IntegrationTestBase(
         AppDbContext context = readScope.ServiceProvider.GetRequiredService<AppDbContext>();
         (await context.Set<OutboxMessage>().CountAsync(m => m.ProcessedAtUtc == null, TestContext.Current.CancellationToken))
             .ShouldBe(0);
-    }
-
-    private async Task<InvoiceId> IssueInvoiceAsync()
-    {
-        InvoiceId id = (await Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>()
-            .Handle(new CreateInvoiceCommand("ACME", "billing@acme.com", "USD"), TestContext.Current.CancellationToken)).Value;
-        await Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>()
-            .Handle(new AddInvoiceLineCommand(id, "Line", 10m), TestContext.Current.CancellationToken);
-        await Services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
-            .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), TestContext.Current.CancellationToken);
-        return id;
     }
 }

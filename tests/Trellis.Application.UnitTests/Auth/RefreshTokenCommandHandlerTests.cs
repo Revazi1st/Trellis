@@ -41,7 +41,7 @@ public sealed class RefreshTokenCommandHandlerTests
         var result = await CreateHandler().Handle(
             new RefreshTokenCommand("presented"), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.AccessToken.ShouldBe("new-access");
         await _refreshStore.Received(1).ConsumeAsync("hashed", Arg.Any<CancellationToken>());
         await _refreshStore.Received(1).StoreAsync(User.Id, "new-hashed", Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());

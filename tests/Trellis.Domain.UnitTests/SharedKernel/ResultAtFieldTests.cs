@@ -28,7 +28,7 @@ public sealed class ResultAtFieldTests
     public void AtField_SuccessesAndOtherErrorTypes_PassThrough()
     {
         Result.Success(1).AtField("Thing").Value.ShouldBe(1);
-        Result.Success().AtField("Thing").IsSuccess.ShouldBeTrue();
+        Result.Success().AtField("Thing").ShouldBeSuccess();
         Result.Failure<int>(Missing).AtField("Thing").Error.ShouldBeSameAs(Missing);
     }
 

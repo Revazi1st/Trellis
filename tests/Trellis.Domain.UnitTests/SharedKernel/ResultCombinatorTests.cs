@@ -32,7 +32,7 @@ public sealed class ResultCombinatorTests
     public void Tap_runs_side_effects_only_on_success()
     {
         int calls = 0;
-        Result.Success(1).Tap(_ => calls++).IsSuccess.ShouldBeTrue();
+        Result.Success(1).Tap(_ => calls++).ShouldBeSuccess();
         Result.Failure<int>(ErrorA).Tap(_ => calls++).IsFailure.ShouldBeTrue();
         calls.ShouldBe(1);
     }
@@ -40,7 +40,7 @@ public sealed class ResultCombinatorTests
     [Fact]
     public void Ensure_fails_a_success_that_breaks_the_predicate()
     {
-        Result.Success(5).Ensure(static n => n > 0, ErrorA).IsSuccess.ShouldBeTrue();
+        Result.Success(5).Ensure(static n => n > 0, ErrorA).ShouldBeSuccess();
         Result.Success(-5).Ensure(static n => n > 0, ErrorA).Error.ShouldBe(ErrorA);
         Result.Failure<int>(ErrorB).Ensure(static n => n > 0, ErrorA).Error.ShouldBe(ErrorB);
     }
@@ -58,7 +58,7 @@ public sealed class ResultCombinatorTests
 
     [Fact]
     public void Combine_succeeds_when_everything_succeeded()
-        => Result.Combine(Result.Success(), Result.Success(1)).IsSuccess.ShouldBeTrue();
+        => Result.Combine(Result.Success(), Result.Success(1)).ShouldBeSuccess();
 
     [Fact]
     public void Combine_with_one_failure_keeps_the_original_error()

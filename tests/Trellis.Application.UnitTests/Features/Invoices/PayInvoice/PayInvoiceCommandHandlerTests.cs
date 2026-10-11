@@ -3,9 +3,10 @@ using NSubstitute;
 using Shouldly;
 using Trellis.Application.Features.Invoices.PayInvoice;
 using Trellis.Domain.Invoices;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
-namespace Trellis.Application.UnitTests.Invoices;
+namespace Trellis.Application.UnitTests.Features.Invoices.PayInvoice;
 
 public sealed class PayInvoiceCommandHandlerTests
 {
@@ -17,13 +18,13 @@ public sealed class PayInvoiceCommandHandlerTests
     [Fact]
     public async Task Pays_issued_invoice_stamping_current_time()
     {
-        Invoice invoice = InvoiceTestData.Issued();
+        Invoice invoice = InvoiceFactory.Issued();
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = new PayInvoiceCommandHandler(_invoices, _time);
 
         var result = await handler.Handle(new PayInvoiceCommand(invoice.Id), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         invoice.Status.ShouldBe(InvoiceStatus.Paid);
         invoice.PaidAtUtc.ShouldBe(Now);
     }
@@ -43,7 +44,7 @@ public sealed class PayInvoiceCommandHandlerTests
     [Fact]
     public async Task Draft_invoice_cannot_be_paid()
     {
-        Invoice invoice = InvoiceTestData.Draft();
+        Invoice invoice = InvoiceFactory.Draft();
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = new PayInvoiceCommandHandler(_invoices, _time);
 

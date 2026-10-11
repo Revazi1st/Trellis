@@ -109,8 +109,9 @@ dotnet_diagnostic.S1135.severity = suggestion       # TODO tracking — allowed,
 # value objects: Invoice.Issue, Money.Create, EmailAddress.Create, …, and whatever add-feature puts there)
 # and every Result combinator is listed, so a dropped `invoice.Issue(...)` fails the Release build instead
 # of committing a rejected transition. It matches by name, not by type, and never sees `await`: a dropped
-# Task<Result> still compiles. A deliberate discard is `_ = …`. Tests are out of scope for now.
-[{src,tools}/**.cs]
+# Task<Result> still compiles. A deliberate discard is `_ = …` with a one-line reason. Tests are in scope
+# too: an arrange step that drops a Result hides a broken set-up, so it ends in `.ShouldBeSuccess()`.
+[*.cs]
 dotnet_diagnostic.CA1806.severity = warning
 dotnet_code_quality.CA1806.additional_use_results_methods = M:Trellis.Domain.*|M:Trellis.SharedKernel.Results.*
 

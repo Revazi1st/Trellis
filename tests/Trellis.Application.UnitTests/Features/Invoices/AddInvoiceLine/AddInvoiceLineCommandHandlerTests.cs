@@ -3,9 +3,10 @@ using Shouldly;
 using Trellis.Application.Features.Invoices.AddInvoiceLine;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Results;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
-namespace Trellis.Application.UnitTests.Invoices;
+namespace Trellis.Application.UnitTests.Features.Invoices.AddInvoiceLine;
 
 public sealed class AddInvoiceLineCommandHandlerTests
 {
@@ -14,11 +15,11 @@ public sealed class AddInvoiceLineCommandHandlerTests
     [Fact]
     public async Task Handle_ValidLine_AddsItToTheDraft()
     {
-        Invoice invoice = Loaded(InvoiceTestData.Draft());
+        Invoice invoice = Loaded(InvoiceFactory.Draft());
 
         var result = await Handle(new AddInvoiceLineCommand(invoice.Id, "Design", 150.50m));
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         invoice.Lines.ShouldHaveSingleItem().Amount.Amount.ShouldBe(150.50m);
     }
 
@@ -28,7 +29,7 @@ public sealed class AddInvoiceLineCommandHandlerTests
     [InlineData(1_000_000_000_000_000)]
     public async Task Handle_InvalidAmount_FailsAtTheAmountField(decimal amount)
     {
-        Invoice invoice = Loaded(InvoiceTestData.Draft());
+        Invoice invoice = Loaded(InvoiceFactory.Draft());
 
         var result = await Handle(new AddInvoiceLineCommand(invoice.Id, "Design", amount));
 
@@ -40,7 +41,7 @@ public sealed class AddInvoiceLineCommandHandlerTests
     [Fact]
     public async Task Handle_BlankDescription_FailsAtTheDescriptionField()
     {
-        Invoice invoice = Loaded(InvoiceTestData.Draft());
+        Invoice invoice = Loaded(InvoiceFactory.Draft());
 
         var result = await Handle(new AddInvoiceLineCommand(invoice.Id, " ", 10m));
 
@@ -52,7 +53,7 @@ public sealed class AddInvoiceLineCommandHandlerTests
     [Fact]
     public async Task Handle_OverlongDescription_FailsAtTheDescriptionField()
     {
-        Invoice invoice = Loaded(InvoiceTestData.Draft());
+        Invoice invoice = Loaded(InvoiceFactory.Draft());
 
         var result = await Handle(new AddInvoiceLineCommand(invoice.Id, new string('d', InvoiceLine.DescriptionMaxLength + 1), 10m));
 
@@ -64,7 +65,7 @@ public sealed class AddInvoiceLineCommandHandlerTests
     [Fact]
     public async Task Handle_IssuedInvoice_IsAConflictNoFieldOwns()
     {
-        Invoice invoice = Loaded(InvoiceTestData.Issued());
+        Invoice invoice = Loaded(InvoiceFactory.Issued());
 
         var result = await Handle(new AddInvoiceLineCommand(invoice.Id, "Design", 1m));
 

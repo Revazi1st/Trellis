@@ -31,7 +31,7 @@ public sealed class IdempotencyStoreTests(DatabaseFixture database) : Integratio
         // Tracked only: another unit of work sees nothing until this one commits.
         (await FindInNewScopeAsync("key-1")).ShouldBeSameAs(IdempotencyLookup.None);
 
-        (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).IsSuccess.ShouldBeTrue();
+        (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).ShouldBeSuccess();
         var inFlight = (await FindInNewScopeAsync("key-1")).ShouldBeOfType<IdempotencyLookup.InFlight>();
         inFlight.ReservedAtUtc.ShouldBe(Now);
 
@@ -66,7 +66,7 @@ public sealed class IdempotencyStoreTests(DatabaseFixture database) : Integratio
         // The key is free: the client's retry reserves it afresh.
         using IServiceScope retry = CreateScope();
         retry.ServiceProvider.GetRequiredService<IIdempotencyStore>().Reserve("failed", Fingerprint);
-        (await retry.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).IsSuccess.ShouldBeTrue();
+        (await retry.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).ShouldBeSuccess();
         (await FindInNewScopeAsync("failed")).ShouldBeOfType<IdempotencyLookup.InFlight>();
     }
 
@@ -94,7 +94,7 @@ public sealed class IdempotencyStoreTests(DatabaseFixture database) : Integratio
         CancellationToken ct = TestContext.Current.CancellationToken;
         var store = Services.GetRequiredService<IIdempotencyStore>();
         store.Reserve("large", Fingerprint);
-        (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).IsSuccess.ShouldBeTrue();
+        (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).ShouldBeSuccess();
 
         await store.CompleteAsync("large", StoredResponse.Unavailable(200, "application/json; charset=utf-8"), ct);
 
@@ -111,7 +111,7 @@ public sealed class IdempotencyStoreTests(DatabaseFixture database) : Integratio
         var retention = new RetentionOptions();
         var store = Services.GetRequiredService<IIdempotencyStore>();
         store.Reserve("old", Fingerprint);
-        (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).IsSuccess.ShouldBeTrue();
+        (await Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).ShouldBeSuccess();
 
         // Completing later does not renew the key: the window counts from the reservation.
         Time.Advance(retention.IdempotencyKeyAge - TimeSpan.FromMinutes(1));
@@ -121,7 +121,7 @@ public sealed class IdempotencyStoreTests(DatabaseFixture database) : Integratio
         using (IServiceScope recent = CreateScope())
         {
             recent.ServiceProvider.GetRequiredService<IIdempotencyStore>().Reserve("recent", Fingerprint);
-            (await recent.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).IsSuccess.ShouldBeTrue();
+            (await recent.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(ct)).ShouldBeSuccess();
         }
 
         var janitor = new DataRetentionJanitor(

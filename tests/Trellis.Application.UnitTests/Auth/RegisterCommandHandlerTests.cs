@@ -48,7 +48,7 @@ public sealed class RegisterCommandHandlerTests
 
         Result<Guid> result = await handler.Handle(Command, TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.ShouldBe(userId);
         await _identity.Received(1).RegisterAsync(Command.Email, Command.Password, Arg.Any<CancellationToken>());
     }

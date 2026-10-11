@@ -23,9 +23,9 @@ public sealed class ScalarValueObjectConverterTests(DatabaseFixture database) : 
 {
     private const string Schema = "converted_scalar_probe";
 
-    private static readonly EmailAddress Jane = EmailAddress.Create("jane@example.com").Value;
-    private static readonly EmailAddress Omar = EmailAddress.Create("omar@example.com").Value;
-    private static readonly Currency Usd = Currency.Create("USD").Value;
+    private static readonly EmailAddress Jane = EmailAddress.Create("jane@example.com").ShouldBeSuccess();
+    private static readonly EmailAddress Omar = EmailAddress.Create("omar@example.com").ShouldBeSuccess();
+    private static readonly Currency Usd = Currency.Create("USD").ShouldBeSuccess();
 
     public async ValueTask InitializeAsync()
     {
@@ -72,7 +72,7 @@ public sealed class ScalarValueObjectConverterTests(DatabaseFixture database) : 
         }
 
         await using ProbeContext reader = CreateContext();
-        EmailAddress[] wanted = [Jane, EmailAddress.Create("nobody@example.com").Value];
+        EmailAddress[] wanted = [Jane, EmailAddress.Create("nobody@example.com").ShouldBeSuccess()];
         List<Subscriber> found = await reader.Subscribers.Where(s => wanted.Contains(s.Email)).ToListAsync(ct);
         found.ShouldHaveSingleItem().Email.ShouldBe(Jane);
 
