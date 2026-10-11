@@ -14,8 +14,12 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 fail=0
 
 # --- every ADR reference resolves to a file ---
-refs=$(grep -rhoE 'ADR-[0-9]{4}' --include='*.md' --include='*.cs' --include='*.props' . \
-  | grep -v '/.git/' | sed 's/ADR-//' | sort -u)
+# The same prune list as the link check below: a git worktree under .claude/worktrees (an agent
+# working on another branch) or a build folder must not make this checkout's references fail.
+refs=$(grep -rhoE 'ADR-[0-9]{4}' --include='*.md' --include='*.cs' --include='*.props' \
+  --exclude-dir=.git --exclude-dir=worktrees --exclude-dir=artifacts --exclude-dir=bin --exclude-dir=obj \
+  --exclude-dir=node_modules --exclude-dir=TestResults . \
+  | sed 's/ADR-//' | sort -u)
 
 existing=$(find docs/adr -name '*.md' -exec basename {} \; | grep -oE '^[0-9]{4}' | sort -u)
 
