@@ -11,3 +11,4 @@
 - [ ] A line under `## [Unreleased]` in `CHANGELOG.md` (if a consumer would notice the change)
 - [ ] An ADR added under `docs/adr/` (if a load-bearing decision was made)
 - [ ] No commercially-licensed packages added (see `Directory.Packages.props`)
+- [ ] Anything taken from another project is credited, and any notice its license requires comes with it

@@ -198,6 +198,49 @@ index for both humans and agents is [docs/INDEX.md](docs/INDEX.md); what changed
 [CHANGELOG.md](CHANGELOG.md).
 Questions and ideas are welcome in [GitHub Discussions](https://github.com/Revazi1st/Trellis/discussions).
 
+## Credits
+
+Trellis takes ideas from other people's work. Each line names what was taken; nothing below is a
+verbatim copy, so the MIT and BSD notices stay with their projects. Templates we only compared
+against are not listed (ADR-0002 names them).
+
+**Templates and libraries we learned from**
+- [clean-architecture](https://github.com/amantinband/clean-architecture) by Amichai Mantinband (MIT), *when adopted*:
+  - the per-use-case request collection and the Getting Started walkthrough, one request and body per step;
+  - one authorization test per use case, which prompted pinning each endpoint's permission, and the permission-scoped token idiom;
+  - use-case drivers, optional-parameter factories, the paired HTTP test client and the switchable current-user double (rewritten, no MediatR);
+  - the one-test-suite-per-use-case discipline with test folders mirroring the Application slice;
+  - a configuration-gated SMTP sender and the user-secrets setup walkthrough;
+  - the Domain Overview device, plain words before architecture, and the folder map that prompted our slice tree;
+  - the eventual-consistency walkthrough shape, the one-aggregate-per-use-case explanation, and the idea of a reference time-triggered use case;
+  - the Testing section mapping each test type onto the layers it exercises, and where to invest;
+  - the authorization how-to format, one snippet then who passes, and the self-or-admin idea behind our ownership recipe;
+  - the show-the-code README sections, the visual walkthrough-style README, and feature-first folders in the persistence adapter.
+- [Trellis](https://github.com/xavierjohn/Trellis) by Xavier John (MIT; no affiliation, the shared name is a coincidence), *once imported*:
+  - lease-fenced outbox bookkeeping writes, and sibling event handlers run on every attempt with only the failed ones retried;
+  - the build-time analyzer for a discarded `Result`, failing fast when a `Result` reaches JSON, and the guard against a handler invoking another handler;
+  - value-object errors attributed to the request field, a type-aware and tuple `Result.Combine`, and concurrency promotion at the aggregate boundary;
+  - error descriptions redacted from the outcome log line and from every 5xx `detail`, and tracing outside logging;
+  - upstream status mapped by endpoint contract, `Unavailable` as 503, declared unique constraints as 409, and optional `If-Match` on transition POSTs;
+  - the error-code vocabulary fitness test, whole-request validation errors, the value-object constructor test, a failed `Result` that names its code, and compiler-guarded `Error` access.
+- [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
+- [ErrorOr](https://github.com/amantinband/error-or) by Amichai Mantinband (MIT): the `Error`/`ErrorType` vocabulary our hand-rolled `Result` mirrors (ADR-0004).
+- [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
+- [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
+
+**Formats and conventions**
+- [Michael Nygard's ADR format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions): Status, Context, Decision, Consequences (ADR-0001).
+- [AGENTS.md](https://agents.md): the tool-neutral agent instruction file (ADR-0014).
+- [Contributor Covenant 2.1](https://www.contributor-covenant.org) (CC BY 4.0): `CODE_OF_CONDUCT.md`.
+- [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html): `CHANGELOG.md` and the release rules.
+- [Conventional Commits](https://www.conventionalcommits.org): the commit style in `CONTRIBUTING.md`.
+- Martin Fowler's [subcutaneous test](https://martinfowler.com/bliki/SubcutaneousTest.html) term, used for the integration-test host.
+
+**Services**
+- [Frankfurter](https://frankfurter.dev): the free exchange-rate API the reference integration calls by default.
+
+Packages carry their own licenses; see `Directory.Packages.props` and ADR-0011.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). A generated project keeps that notice as `LICENSE`, because the MIT
