@@ -4,6 +4,10 @@ Thanks for helping improve Trellis. This is both a working solution and a
 `dotnet new` template, so changes should keep the reference solution green and
 the template instantiable.
 
+A question, or an idea you want to try out before writing code? Start a thread in
+[GitHub Discussions](https://github.com/Revazi1st/Trellis/discussions) (Q&A or Ideas); issues are for
+bugs and feature requests.
+
 ## Getting started
 
 With a local .NET 10 SDK:

@@ -9,6 +9,7 @@
     <PackageTags>dotnet-new;templates;clean-architecture;ddd;aspire;blazor</PackageTags>
     <Version>0.1.0</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Revazi1st/trellis</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Revazi1st/trellis</RepositoryUrl>
@@ -81,6 +82,8 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- The same file the IDEs show through ide.host.json; its SVG source sits beside it. -->
+    <None Include="..\..\.template.config\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>

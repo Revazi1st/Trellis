@@ -196,6 +196,7 @@ The skills are plain Markdown procedures: an AI agent follows them, and so can y
 See [CONTRIBUTING.md](CONTRIBUTING.md). Architecture decisions live in [docs/adr](docs/adr/); the docs
 index for both humans and agents is [docs/INDEX.md](docs/INDEX.md); what changed in each version is in
 [CHANGELOG.md](CHANGELOG.md).
+Questions and ideas are welcome in [GitHub Discussions](https://github.com/Revazi1st/Trellis/discussions).
 
 ## License
 
