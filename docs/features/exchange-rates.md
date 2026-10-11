@@ -20,7 +20,10 @@ Failures are split by whether waiting helps:
 Nothing the third party does reaches Application code as an exception (ADR-0004) — except the
 caller's own cancellation, which propagates as `OperationCanceledException`. An endpoint that calls
 the port declares the 503 with a bare `.Produces(StatusCodes.Status503ServiceUnavailable)` (ADR-0020,
-amendment of 2026-10-11); none ships today.
+amendment of 2026-10-11); none ships today. An outbox event handler that calls the port cannot
+return the `Result`: it throws on `Unavailable` or `Rejected`, so the outbox retries it with back-off,
+and logs `UnknownCurrency` and returns, since no retry changes the answer
+(`.claude/rules/application.md`).
 
 ## Adapter (`src/Infrastructure/Trellis.Infrastructure/ExternalApis/ExchangeRates/`)
 
