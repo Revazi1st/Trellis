@@ -275,7 +275,7 @@ describes planned work that is not in the template yet; the marker goes when it 
   - error descriptions redacted from every 5xx `detail`;
   - upstream status mapped by endpoint contract, `Unavailable` as 503, and optional `If-Match` on transition POSTs;
   - the error-code vocabulary fitness test and the value-object constructor test;
-  - *once imported*: the build-time analyzer for a discarded `Result`.
+  - the build-time analyzer for a discarded `Result`.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.

@@ -3,7 +3,8 @@
 - **Status**: accepted — the HTTP mapping paragraph is superseded by ADR-0024 (problem shape v2); the Result decision stands
 - **Date**: 2026-07-14
 - **Amended**: 2026-10-08 — the unit of work sits inside the Result boundary; the HTTP shape moved to ADR-0024 (see *Amendment* below)
-- **Amended**: 2026-10-11 — `ErrorType.Unavailable` (503) for a dependency that is down for now, `ErrorType.PreconditionFailed` (412) for a version the caller expected (see *Amendment (2026-10-11)* below); CA1806 in `.editorconfig` fails a Release build that discards a Domain or `Result` value, the partial stand-in for a type-aware analyzer (see *Consequences*)
+- **Amended**: 2026-10-11 — `ErrorType.Unavailable` (503) for a dependency that is down for now, `ErrorType.PreconditionFailed` (412) for a version the caller expected (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-10-11 — a discarded `Result` fails the Release build: RSLT001, the type-aware analyzer of ADR-0030, replaced the CA1806 stand-in of the same day (see *Consequences*)
 
 ## Context
 
@@ -21,12 +22,10 @@ At the HTTP boundary, `Api.Common/Results/CustomResults.Problem(Error)` maps `Er
 ## Consequences
 
 - Failure is part of the type — callers must `Match`/branch; no silent swallow.
-  *(Amended 2026-10-11: the build enforces this only in part. CA1806, configured in `.editorconfig`, fails a
-  Release build that drops the value of any Domain member or `Result` combinator in any `*.cs` file, the tests
-  included (the section was `[{src,tools}/**.cs]` until the ADR-0009 amendment of the same day widened it); it
-  matches by documentation ID, not by type, and cannot see a dropped `await` of a `Task<Result>`. A
-  type-aware analyzer would close both gaps; it needs a new project and the Roslyn packages, so it waits for
-  approval.)*
+  *(Amended 2026-10-11: the build enforces this. RSLT001 (ADR-0030), an analyzer every project loads, fails
+  a Release build on a statement that drops a `Result`, a `Result<T>` or an `IdentityResult`, awaited or not,
+  in every project, the tests included; `_ = …` with a one-line reason drops one on purpose. It replaced the
+  CA1806 stand-in, which matched by name and could not see through `await`.)*
 - One translation seam (`CustomResults.Problem`) owns Result→HTTP; endpoints stay `result.IsSuccess ? TypedResults.X : CustomResults.Problem`.
 - No exceptions-as-flow cost; the global handler surface is small.
 

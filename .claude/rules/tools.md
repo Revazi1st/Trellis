@@ -1,5 +1,5 @@
 ---
-description: Conventions for the Aspire AppHost, the MigrationService and the workflow and compose YAML
+description: Conventions for the Aspire AppHost, the MigrationService, the RSLT001 analyzer and the workflow and compose YAML
 paths: ["tools/**/*.{cs,csproj}", ".github/**/*.{yml,yaml}", "docker-compose.yml"]
 ---
 
@@ -16,6 +16,13 @@ paths: ["tools/**/*.{cs,csproj}", ".github/**/*.{yml,yaml}", "docker-compose.yml
 - **Non-HTTP host**: registers `SystemCurrentUser` for `ICurrentUser` and (with multi-tenancy) `SystemTenantContext` for `ITenantContext` — every new host-scoped port needs a system stand-in here or `AppDbContext` won't resolve.
 - **Seed guards**: sample data (demo invoices) seeds in Development only; the worker **refuses to seed `SeedOptions.DefaultAdminPassword` outside Development** — override via the `Seed` section in real environments. `SeedOptions` is validated at boot (`ValidateDataAnnotations().ValidateOnStart()`; a failure exits 1), and roles and the admin go through `IdentitySeed` (Persistence), which throws on any failed `IdentityResult` — so a rejected password exits 1 instead of logging success. The sample invoices' transitions are checked the same way (`Seeded`): a `Result` the domain refuses throws rather than saving a half-built sample.
 - Permission seeding iterates `Roles.Permissions` (Application) — new permissions/roles flow through automatically; never hard-code them here.
+
+## Analyzer (`tools/Trellis.Analyzers`)
+
+- **RSLT001** (ADR-0030) fails the Release build on a statement that drops a SharedKernel `Result` or `Result<T>` or an `IdentityResult`: a call, an awaited task of one, a conditional access, an object creation, a void expression body. `Directory.Build.props` loads it into every project under `src/`, `tests/` and `tools/` as an Analyzer item (never referenced, never copied), so a new project there gets it with no edit. NSubstitute's `Received()` call checks are exempt.
+- **A deliberate drop** is `_ = …` with a one-line reason. Never a `#pragma`, a `[SuppressMessage]` or a severity line in `.editorconfig` (`ResultDiscardAnalyzerTests` fails when `.editorconfig` lowers it).
+- **Version ceiling**: `Microsoft.CodeAnalysis.CSharp` in `Directory.Packages.props` stays at or below the compiler of the SDK in `global.json` (an older compiler cannot load the analyzer: CS9057) and at or above what `Microsoft.EntityFrameworkCore.Design` requires (NU1109 otherwise). It moves by hand with an SDK bump (`docs/development.md`, *Bumping the SDK*); Dependabot proposes patches only.
+- netstandard2.0 under `EnforceExtendedAnalyzerRules`: no file, network or clock access in the analyzer. A change lands with a fact in `ResultDiscardAnalyzerTests` for a shape it reports and one it leaves alone.
 
 ## CI supply-chain gates
 
