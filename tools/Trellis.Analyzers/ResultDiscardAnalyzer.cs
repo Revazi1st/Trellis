@@ -289,10 +289,13 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     /// An assertion that hands back the value it checked, for chaining: a method of the Shouldly or xUnit
     /// libraries (<c>result.Error.ShouldBeOfType&lt;ValidationError&gt;()</c>, <c>ShouldNotBeNull()</c>,
     /// <c>Assert.IsType&lt;T&gt;</c>) or of a class marked <c>[ShouldlyMethods]</c>, as the tests' own
-    /// <c>ShouldBeSuccess()</c> is. Checking the value is what the test does with it.
+    /// <c>ShouldBeSuccess()</c> is. Checking the value is what the test does with it. An assertion whose
+    /// checked value is a delegate (<c>Should.NotThrow(() =&gt; invoice.Issue(now))</c>) hands back what the
+    /// delegate computed, checked only for not throwing, and stays reported.
     /// </summary>
     private static bool IsAssertion(IOperation dropped)
         => dropped is IInvocationOperation { TargetMethod: { } method }
+           && method.Parameters.FirstOrDefault()?.Type.TypeKind != TypeKind.Delegate
            && (RootNamespaceName(method.ContainingNamespace) is "Shouldly" or "Xunit"
                || method.ContainingType.GetAttributes().Any(static attribute => attribute.AttributeClass is { Name: "ShouldlyMethodsAttribute" }));
 
@@ -428,6 +431,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     /// <summary>The non-generic <c>Task</c>, or an array or sequence of them: a shape that carries no result.</summary>
     private static bool IsPlainTask(ITypeSymbol type) => type switch
     {
+        { SpecialType: not SpecialType.None } => false,
         IArrayTypeSymbol array => IsPlainTask(array.ElementType),
         INamedTypeSymbol { Arity: 0, Name: "Task" } task => IsSystemThreadingTasks(task.ContainingNamespace),
         INamedTypeSymbol named => SequenceElement(named) is { } element && IsPlainTask(element),

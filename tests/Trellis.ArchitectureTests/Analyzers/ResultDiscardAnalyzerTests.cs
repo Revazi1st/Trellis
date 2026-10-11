@@ -368,12 +368,17 @@ public sealed class ResultDiscardAnalyzerTests
     /// xUnit's <c>Assert.IsType&lt;T&gt;</c>, a <c>[ShouldlyMethods]</c> helper of our own): checking the value is
     /// what the test does with it. Stand-ins with the libraries' namespaces keep both out of the snippet.
     /// </summary>
+    /// <remarks>
+    /// An assertion that runs a delegate and hands back what it returned (<c>Should.NotThrow(() =&gt;
+    /// invoice.Issue(now))</c>) checked only that nothing was thrown, so the result is still dropped.
+    /// </remarks>
     [Theory]
-    [InlineData("account.Close().Error.ShouldBeOfType<ValidationError>();")]
-    [InlineData("account.Close().ShouldNotBeNull();")]
-    [InlineData("Assert.IsType<Result>(account.Close());")]
-    [InlineData("account.Close().ShouldBeChecked();")]
-    public async Task An_assertion_that_hands_back_the_checked_value_is_not_reported(string statements)
+    [InlineData("account.Close().Error.ShouldBeOfType<ValidationError>();", 0)]
+    [InlineData("account.Close().ShouldNotBeNull();", 0)]
+    [InlineData("Assert.IsType<Result>(account.Close());", 0)]
+    [InlineData("account.Close().ShouldBeChecked();", 0)]
+    [InlineData("Should.NotThrow(() => account.Close());", 1)]
+    public async Task An_assertion_that_hands_back_the_checked_value_is_not_reported(string statements, int expected)
     {
         const string assertionStandIns = """
             namespace Shouldly
@@ -385,6 +390,11 @@ public sealed class ResultDiscardAnalyzerTests
                 {
                     public static T ShouldBeOfType<T>(this object? actual) => (T)actual!;
                     public static T ShouldNotBeNull<T>(this T? actual) where T : class => actual!;
+                }
+
+                public static class Should
+                {
+                    public static T NotThrow<T>(Func<T> action) => action();
                 }
             }
 
@@ -406,7 +416,7 @@ public sealed class ResultDiscardAnalyzerTests
         ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(
             InRunMethod(statements, "using Shouldly;\nusing Xunit;") + assertionStandIns);
 
-        diagnostics.ShouldBeEmpty(statements);
+        diagnostics.Length.ShouldBe(expected, statements);
     }
 
     /// <summary>
