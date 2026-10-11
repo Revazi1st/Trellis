@@ -80,7 +80,24 @@ dotnet user-secrets set "Authentication:SigningKey" "<random 32+ chars>" \
     --project src/Presentation/Api/Trellis.Api
 ```
 
-Run it where the app runs (dev container or local SDK) — user secrets live under that
+E-mail is logged, not sent, until you point the API at an SMTP relay the same way (port 587 with
+STARTTLS is the default; leave out the last two lines for a relay without authentication):
+
+```bash
+api=src/Presentation/Api/Trellis.Api
+dotnet user-secrets set "Email:Provider" "Smtp" --project $api
+dotnet user-secrets set "Email:Smtp:Host" "smtp.example.com" --project $api
+dotnet user-secrets set "Email:Smtp:FromAddress" "billing@example.com" --project $api
+dotnet user-secrets set "Email:Smtp:UserName" "<relay user>" --project $api
+dotnet user-secrets set "Email:Smtp:Password" "<relay password>" --project $api
+```
+
+To see the mail without a relay, run a local catcher such as Mailpit
+(`docker run --rm -p 1025:1025 -p 8025:8025 axllent/mailpit`) and set `Email:Smtp:Host` to
+`localhost` (`host.docker.internal` from the dev container), `Email:Smtp:Port` to `1025` and
+`Email:Smtp:UseStartTls` to `false`, with no credentials; messages appear at <http://localhost:8025>.
+
+Run these where the app runs (dev container or local SDK) — user secrets live under that
 environment's home directory, so setting them through the ephemeral `./scripts/dotnet.sh`
 container does not persist. Never commit a real key; production takes it from the
 environment/secret store (see [deployment.md](deployment.md)).
