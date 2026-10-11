@@ -30,7 +30,7 @@ Agent entry point — read only what the task needs.
 <!--#endif -->
 
 ## Skills (`.claude/skills/`, step-by-step recipes; invoke one by name, e.g. `/add-feature`)
-- [add-feature](../.claude/skills/add-feature/SKILL.md) — a new aggregate or use case, copied from the Invoices slice from the Domain outward; a checklist that names the test behind each enforced box
+- [add-feature](../.claude/skills/add-feature/SKILL.md) — a new aggregate or use case, copied from the Invoices slice from the Domain outward; a checklist that starts from the feature doc, names the test behind each enforced box, and lists the shapes the slice does not show (ownership, several aggregates, unique keys, timers, keyset paging)
 - [add-integration](../.claude/skills/add-integration/SKILL.md) — a call to a third-party HTTP API, copied from ExchangeRates: port, validated options, typed client, per-client resilience, a cheap cached health probe, tests, docs; and receiving the provider's webhooks (signature, deduplication on its event id)
 - [add-migration](../.claude/skills/add-migration/SKILL.md) — an EF Core migration generated with the containerized `dotnet-ef`, never hand-edited
 <!--#if (TemplateSource) -->

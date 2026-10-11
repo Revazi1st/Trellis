@@ -11,6 +11,25 @@ it lists. This skill is a checklist, and every box below is either enforced by a
 brackets, so you know what fails when you skip it) or by review. Work from the Domain outward; build
 after each layer.
 
+## First: write the feature doc
+
+- [ ] Before any code, draft `docs/features/{feature}.md` from the business description; it becomes
+      the feature doc CI requires anyway [`check-docs-drift.sh`]. Record only the business content,
+      shaped like `invoices.md`:
+      - the domain in plain words, its terms turned into the types you will write (aggregate, child
+        entities, value objects);
+      - the lifecycle: states, transitions, the rule each one checks and the error code each refusal
+        returns, with a `stateDiagram-v2` when there is more than one state;
+      - per operation: the permission, and each error code with its status;
+      - the endpoints table, which reads are cached, the domain events with their wire names and the
+        handlers that react, and the tests per project.
+- [ ] Check the statuses against the template's defaults before you build: 400 for input or a rule
+      the request would break, 404 for what this caller cannot see, 409 for a state that forbids the
+      transition or a concurrent write, 412 for a stale `If-Match`, 422 only for
+      `Idempotency.FingerprintMismatch` (never for validation); the chooser is in
+      `.claude/rules/domain.md`. Permissions, idempotency, paging bounds and the code shape are
+      enforced by tests below, so the doc does not restate them.
+
 ## Domain (`src/Core/Trellis.Domain/{Feature}/`) — new aggregate only
 
 - [ ] Aggregate derives from `AggregateRoot<TId>`: a `static Create(...) → Result<T>` factory, a
@@ -33,7 +52,9 @@ after each layer.
 - [ ] `{UseCase}Command` / `Query` implementing `ICommand`, `ICommand<T>` or `IQuery<T>`.
 - [ ] `{UseCase}CommandHandler` / `QueryHandler`: `internal sealed`, returns `Result`/`Result<T>`,
       orchestrates the aggregate and ports, holds no business rule, logs no outcome (the pipeline
-      writes one line per use case) [`ConventionTests`, `DecoratorPipelineTests`].
+      writes one line per use case) [`ConventionTests`, `DecoratorPipelineTests`]. A value-object or
+      aggregate-rule error is attributed to its request field with `.AtField(nameof(command.X))`,
+      so the 400 names the input (`CreateInvoiceCommandHandler` is the model).
 - [ ] `{UseCase}CommandValidator`: `internal sealed : AbstractValidator<T>`, shape checks only
       (`NotEmpty` and a `MaximumLength` on every string); a `.Must(...)` rule carries
       `.WithErrorCode("Area.Problem")`. A command with a string property must have one
@@ -112,7 +133,10 @@ after each layer.
 
 ## Tests and docs
 
-- [ ] Domain.UnitTests for the invariants, Application.UnitTests for the handlers, IntegrationTests
+- [ ] Domain.UnitTests for the invariants, with the two lifecycle theories `InvoiceTests` gives every
+      transition (`Failed_transitions_raise_no_domain_events`,
+      `Every_transition_on_a_voided_invoice_is_rejected`) copied for a new aggregate;
+      Application.UnitTests for the handlers, IntegrationTests
       against PostgreSQL for persistence and specifications, ApiTests for the HTTP contract of a
       notable flow (the fitness suites above already cover every endpoint). `docs/development.md`
       (*Tests*) maps what each project proves and where to invest.
@@ -125,3 +149,27 @@ after each layer.
       aggregate has a lifecycle, and a *Try it* table matching those requests.
 - [ ] `dotnet build Trellis.slnx -c Release && dotnet test Trellis.slnx` (or `./scripts/dotnet.sh …`
       without a local SDK), then `dotnet format --verify-no-changes`.
+
+## Not shown by the Invoices slice: decide deliberately
+
+The reference slice is one aggregate. These shapes are not in it; each has a home to start from:
+
+- **Records only their owner may see**: `docs/features/auth.md`, *Protecting an endpoint* (a domain
+  `OwnerId`, scoped in the specification, the read cache keyed by owner or skipped).
+- **A command that changes several aggregates**, and reactions in another aggregate:
+  `.claude/rules/application.md` (one aggregate per command; tracked loads, check everything, then
+  mutate).
+- **A business key that must be unique** (a code, an e-mail): a unique index whose constraint name is
+  pinned and registered in `UniqueConstraintErrors`, raced in a test (`.claude/rules/persistence.md`).
+- **Work on a timer**: `docs/architecture.md`, *Scheduled use cases*.
+- **Telling another system**: an integration event from a translate-and-send handler,
+  `docs/architecture.md`; being told by one (a webhook): the `add-integration` skill, step 7.
+- **An external identity provider**: `docs/features/auth.md`, *Adding an external identity provider*.
+- **Keyset paging.** The slice pages by offset (`?page=&pageSize=`, capped at page 10000), which is
+  right for a bounded list a person pages through. A list that grows without bound, or feeds an
+  endless scroll, pages by keyset instead: order by the sort key and then `Id` (the same total order
+  every paged specification ends with), select the rows after the last one the client saw on that
+  pair, take one more than the page size to know whether another page follows, and return the last
+  pair as an opaque cursor the client sends back. There is no total count and no jumping to page 40,
+  and the response is not the `PagedResponse<T>` envelope, so a cursor envelope is a contract
+  decision for an ADR.
