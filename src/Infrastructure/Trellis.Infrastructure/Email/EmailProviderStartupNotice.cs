@@ -13,6 +13,7 @@ namespace Trellis.Infrastructure.Email;
 /// </summary>
 internal sealed partial class EmailProviderStartupNotice(
     IOptions<EmailOptions> options,
+    IOptions<SmtpOptions> smtp,
     IHostEnvironment environment,
     ILogger<EmailProviderStartupNotice> logger) : IHostedService
 {
@@ -24,7 +25,7 @@ internal sealed partial class EmailProviderStartupNotice(
         {
             LoggingStandInActive(logger, environment.EnvironmentName);
         }
-        else if (provider == EmailProvider.Smtp && !options.Value.Smtp.UseStartTls && !environment.IsDevelopment())
+        else if (provider == EmailProvider.Smtp && !smtp.Value.UseStartTls && !environment.IsDevelopment())
         {
             SmtpInClear(logger, environment.EnvironmentName);
         }

@@ -4,8 +4,9 @@ namespace Trellis.Infrastructure.Email;
 
 /// <summary>
 /// The relay <see cref="SmtpEmailSender"/> submits to, bound from "Email:Smtp". Read and checked only when
-/// <c>Email:Provider</c> is <see cref="EmailProvider.Smtp"/> (<see cref="SmtpOptionsValidator"/>): a
-/// deployment that keeps the logging stand-in or discards mail owes this section nothing.
+/// <c>Email:Provider</c> is <see cref="EmailProvider.Smtp"/>: <see cref="SmtpOptionsValidator"/> applies
+/// the annotations below itself, because <c>ValidateDataAnnotations()</c> would apply them whatever the
+/// provider, and a deployment that keeps the logging stand-in or discards mail owes this section nothing.
 /// <para>
 /// What the BCL client speaks, and so what this adapter supports: SMTP submission upgraded with STARTTLS
 /// (port 587) and username/password authentication. Not supported: implicit TLS ("SMTPS", port 465 — the
@@ -16,6 +17,8 @@ namespace Trellis.Infrastructure.Email;
 /// </summary>
 public sealed class SmtpOptions
 {
+    public const string SectionName = "Email:Smtp";
+
     /// <summary>Implicit TLS, which <see cref="System.Net.Mail.SmtpClient"/> never speaks.</summary>
     public const int ImplicitTlsPort = 465;
 

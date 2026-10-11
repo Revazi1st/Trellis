@@ -27,11 +27,11 @@ namespace Trellis.Infrastructure.Email;
 /// and the outbox gives each message's handlers <c>Outbox:DispatchTimeout</c> (30 s).
 /// </para>
 /// </summary>
-internal sealed partial class SmtpEmailSender(IOptions<EmailOptions> options, ILogger<SmtpEmailSender> logger) : IEmailSender
+internal sealed partial class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSender> logger) : IEmailSender
 {
     public async Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken)
     {
-        SmtpOptions smtp = options.Value.Smtp;
+        SmtpOptions smtp = options.Value;
 
         using var message = new MailMessage(new MailAddress(smtp.FromAddress), new MailAddress(to))
         {
