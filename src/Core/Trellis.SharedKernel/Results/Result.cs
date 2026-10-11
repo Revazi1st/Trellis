@@ -1,12 +1,19 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Trellis.SharedKernel.Results;
 
-/// <summary>Outcome of an operation that can fail. Failures carry an <see cref="Error"/>; exceptions are reserved for the truly exceptional (ADR-0004).</summary>
+/// <summary>
+/// Outcome of an operation that can fail. Failures carry an <see cref="Error"/>; exceptions are reserved for the truly
+/// exceptional (ADR-0004). <see cref="Error"/> is null on a success, and the compiler knows it: reading
+/// <c>result.Error.Code</c> warns until an <see cref="IsFailure"/> or <see cref="IsSuccess"/> check proves a failure,
+/// so an unguarded read cannot compile into a 500 with an empty code.
+/// </summary>
 public class Result
 {
-    protected Result(bool isSuccess, Error error)
+    protected Result(bool isSuccess, Error? error)
     {
-        if (isSuccess && error != Error.None ||
-            !isSuccess && error == Error.None)
+        if (isSuccess && error is not null ||
+            !isSuccess && error is null)
         {
             throw new ArgumentException("Invalid combination of success state and error.", nameof(error));
         }
@@ -15,15 +22,18 @@ public class Result
         Error = error;
     }
 
+    [MemberNotNullWhen(false, nameof(Error))]
     public bool IsSuccess { get; }
 
+    [MemberNotNullWhen(true, nameof(Error))]
     public bool IsFailure => !IsSuccess;
 
-    public Error Error { get; }
+    /// <summary>The failure's error; null on a success. Check <see cref="IsFailure"/> first.</summary>
+    public Error? Error { get; }
 
-    public static Result Success() => new(true, Error.None);
+    public static Result Success() => new(true, null);
 
-    public static Result<TValue> Success<TValue>(TValue value) => new(value, true, Error.None);
+    public static Result<TValue> Success<TValue>(TValue value) => new(value, true, null);
 
     public static Result Failure(Error error) => new(false, error);
 
@@ -67,7 +77,7 @@ public class Result
 /// <summary>A <see cref="Result"/> carrying a value when successful. Accessing <see cref="Value"/> on a failure throws.</summary>
 public class Result<TValue> : Result
 {
-    protected internal Result(TValue? value, bool isSuccess, Error error)
+    protected internal Result(TValue? value, bool isSuccess, Error? error)
         : base(isSuccess, error)
         => Value = value!;
 

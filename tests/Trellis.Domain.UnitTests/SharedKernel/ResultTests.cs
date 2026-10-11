@@ -14,7 +14,7 @@ public sealed class ResultTests
         Result result = Result.Success();
 
         result.IsSuccess.ShouldBeTrue();
-        result.Error.ShouldBe(Error.None);
+        result.Error.ShouldBeNull();
     }
 
     [Fact]
