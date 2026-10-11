@@ -112,6 +112,60 @@ Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 prob
 for input that fails a validator. The host's own rejections use the same vocabulary:
 `Auth.Unauthenticated` (the bearer challenge, 401), `Auth.Forbidden` (403), `RateLimit.Exceeded` (429).
 
+## Protecting an endpoint
+
+Every endpoint on the versioned group already requires a signed-in caller; what you add says who else is
+let through. `reports:read` below is a placeholder for a permission of yours: a constant in
+`Permissions`, listed in `Permissions.All` and granted to a role in `Roles.Permissions` (the seeding and
+the test hosts read that map), with its row in `EndpointMetadataTests.ExpectedPermissions`.
+
+1. **One permission, the default.** `.RequirePermission(Permissions.Reports.Read)` admits a caller whose
+   token carries `reports:read`. No token, or one that fails validation: **401** `Auth.Unauthenticated`
+   with `WWW-Authenticate: Bearer` (`error="invalid_token"` when a token was presented). A valid token
+   without the permission: **403** `Auth.Forbidden`.
+2. **Signed in is the whole requirement**, for an action on the caller's own account (`revoke-all`): no
+   permission call, and a row in `EndpointMetadataTests.AuthenticatedOnly`, because the test otherwise
+   reads a missing `RequirePermission` as a mistake. Rejected: the same 401.
+3. **Anonymous**, for an endpoint that must work without a token: `.AllowAnonymous()` and a row in
+   `EndpointMetadataTests.AnonymousAllowlist`, reviewed together. Nobody is refused by authorization; an
+   endpoint that takes a guessable credential adds
+   `.RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)`, and a source past its ten
+   attempts a minute gets **429** `RateLimit.Exceeded` with `Retry-After`.
+4. **A permission plus a further condition** (office hours, a claim from another system): register a
+   named policy in the API host
+   (`builder.Services.AddAuthorizationBuilder().AddPolicy("ReportsDuringOfficeHours", …)`) and stack it
+   beside the permission, `.RequirePermission(Permissions.Reports.Read).RequireAuthorization("ReportsDuringOfficeHours")`.
+   Both must pass; a caller who fails either gets **403** `Auth.Forbidden`. A named policy never stands in
+   for the permission: `EndpointMetadataTests` wants exactly one catalogued permission per endpoint, and a
+   name outside `Permissions.All` is an ordinary policy, not a permission any role is granted.
+5. **This record, not only this kind of record.** A permission says what a caller may do to reports, not
+   to which report; a per-record rule is the recipe below, and a caller who fails it gets **404**, the
+   same answer as for a record that does not exist.
+
+### Ownership: a record only its owner may see
+
+Permissions are per endpoint; a rule per record (the owner, a team) is the feature's own, and it is
+what OWASP lists first among API risks when it is missing.
+
+- **The owner is a domain fact.** The aggregate stores an `OwnerId`, the `ICurrentUser.UserId` the
+  handler passes to `Create`. Never authorize on the audit `CreatedBy`: it is a user name stamped by
+  Persistence (`AuditingInterceptor`), it changes when the user's name does, and the domain never sees it.
+- **Enforce it where rows are found.** A specification (`ReportSpecs.OwnedBy(ownerId, id)`) or the
+  repository's load filters by owner, so a non-owner's read and write both find nothing and answer the
+  aggregate's own `NotFound`, exactly as the `"SoftDeleted"` filter hides a deleted invoice. Answer 403 instead
+  only where the record's existence is not itself sensitive.
+- **Mind the read cache.** The cache-aside endpoint (`GetInvoice` is the model) answers a hit without
+  running the handler, so an owner check inside the handler never runs on a hit. An owner-scoped read
+  puts the owner in its `CacheKeys` key (and its writes evict that key) or is not cached at all.
+- **Seeing everything is its own endpoint**, with its own permission and an unscoped specification, not a
+  flag on the owner-scoped one.
+- **Test it with two users.** Two clients from `ApiFactory.CreateClientWithPermissions(...)` are two
+  users: the second reads and writes the first's record and gets 404, before and after the record is
+  cached.
+
+Invoices are deliberately not owner-scoped: an invoice belongs to the business, every Member may read it,
+and the reference slice keeps it that way.
+
 ## UI
 
 `Login.razor` signs in and `Register.razor` creates a Member account via `IAuthApiClient`;
