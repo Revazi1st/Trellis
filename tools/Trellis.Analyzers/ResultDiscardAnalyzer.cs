@@ -49,9 +49,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeExpressionStatement(OperationAnalysisContext context)
     {
         IOperation statementValue = ((IExpressionStatementOperation)context.Operation).Operation;
-        IOperation? dropped = DroppedValue(statementValue);
-        ITypeSymbol? type = dropped?.Type;
-        if (type is not null && IsResultType(type) && !IsSubstituteCallCheck(dropped!))
+        if (DroppedValue(statementValue) is { Type: { } type } dropped && IsResultType(type) && !IsSubstituteCallCheck(dropped))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Rule,
