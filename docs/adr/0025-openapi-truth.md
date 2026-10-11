@@ -161,11 +161,13 @@ declare `.SupportsConditionalWrite()` and read the header with
 `HttpRequest.TryGetExpectedVersion(out uint?)`: no header or `*` is no precondition; one strong tag is
 the command's `ExpectedVersion`. The handler compares it with the loaded `Version`
 (`InvoicePreconditions.ToWrite`) and returns `Invoice.VersionMismatch`, a `PreconditionFailed` that the
-seam answers with **412** (ADR-0004 amendment); nothing changes. A missing invoice is still a 404
-whatever the header names (RFC 9110 §13.2.1). A header that can never match a current representation
-(a weak tag, since `If-Match` compares strongly; a list, since the client sends the one tag it read; a
-tag this API never issued; an unparsable value) is answered 412 by the endpoint before the handler
-runs. The header stays optional: no 428, so existing clients are unaffected. The Blazor client sends the
+seam answers with **412** (ADR-0004 amendment); nothing changes. A header that can never match a
+current representation (a weak tag, since `If-Match` compares strongly; a list, since the client sends
+the one tag it read; a tag this API never issued, which includes `"042"`, because a tag is its exact
+text and only the form the API emits names a version; an unparsable value) is answered 412 by the
+endpoint before the handler runs. So a missing invoice is a 404 only for a well-formed tag, which waits
+for the lookup as RFC 9110 §13.2.1 asks; for a malformed header it is that same 412, which says nothing
+about whether the invoice exists. The header stays optional: no 428, so existing clients are unaffected. The Blazor client sends the
 version its page loaded on every such write. The transformer declares `If-Match` and the 412 on every
 operation that carries the marker, and `OpenApiDocumentTests` pins it.
 

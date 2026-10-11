@@ -174,8 +174,8 @@ while the 404 and every other API response stay `no-store`.
 passes the version to the command's `ExpectedVersion`, the handler compares it with the loaded invoice
 (`InvoicePreconditions.ToWrite`), and a version the invoice has moved on from is **412**
 `Invoice.VersionMismatch` that changes nothing: a colleague's new line can no longer be issued unseen.
-`*` or no header is unconditional (no 428); a weak tag, a list or a value the API never issued is a 412
-too; a missing invoice stays a 404. xmin still guards the remaining load-to-commit window with a 409.
+`*` or no header is unconditional (no 428); a weak tag, a list or a value the API never issued (`"042"`
+included) is a 412 too, before the lookup; a missing invoice stays a 404 for a well-formed tag. xmin still guards the remaining load-to-commit window with a 409.
 The read cache's 30 s L1 can hand a client that reloads from another replica the same stale ETag, so a
 412 can repeat until the entry expires; and the idempotency fingerprint ignores headers, so a retry with
 the same key and another `If-Match` replays the first answer.
@@ -229,8 +229,10 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
   retry is a 409); `IdempotencyPostCommitTests` (a disconnect after the commit keeps the key and the
   retry replays the 204); `InvoiceReadCacheTests` (every write evicts the cached invoice and retires its
   ETag, a 404 is never cached); `InvoiceContractTests` (304 for every matching `If-None-Match` form,
-  a current `If-Match` applies and a stale, weak, listed or foreign one is a 412 that changes nothing, a
-  missing invoice stays a 404, paging bounds answer 400 naming the field, `Location` resolves); `OpenApiSnapshotTests` +
+  `private, no-cache` on the 200 and the 304 while other reads stay `no-store`, a current `If-Match`
+  applies and a stale, weak, listed, zero-padded or foreign one is a 412 that changes nothing, a missing
+  invoice stays a 404 for a well-formed tag, paging bounds answer 400 naming the field, `Location`
+  resolves); `OpenApiSnapshotTests` +
   `OpenApiDocumentTests` (the committed document is the served one and says all of this); with
   multi-tenancy, `TenantIsolationTests` (cross-tenant read/write 404, scoped overdue list, header
   ignored, cache scoped; the all-options leg runs it). `InvoiceApiFlowTests` is the opt-in Aspire E2E.

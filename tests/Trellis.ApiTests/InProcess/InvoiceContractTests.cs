@@ -112,6 +112,7 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
     [InlineData("W/\"{0}\"")]                 // a weak tag: If-Match compares strongly
     [InlineData("\"{0}\", \"0\"")]           // a list: send the one tag you read
     [InlineData("\"abc\"")]                   // not a tag this API issued
+    [InlineData("\"0{0}\"")]                  // the current version with a leading zero: a tag is its exact text
     [InlineData("not-an-etag")]               // unparsable
     public async Task An_If_Match_that_names_no_single_current_version_is_a_412(string format)
     {
@@ -126,16 +127,22 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
         (await admin.GetFromJsonAsync<InvoiceDto>($"/api/v1/invoices/{id}", ct)).ShouldNotBeNull().Status.ShouldBe(InvoiceStatus.Draft);
     }
 
-    [Fact]
-    public async Task A_missing_invoice_is_a_404_whatever_If_Match_names()
+    [Theory]
+    [InlineData("\"7\"", HttpStatusCode.NotFound)]             // well-formed: the handler looks the invoice up first
+    [InlineData("\"07\"", HttpStatusCode.PreconditionFailed)]  // a leading zero: never issued, refused before the lookup
+    [InlineData("W/\"7\"", HttpStatusCode.PreconditionFailed)] // weak: can never match, refused before the lookup
+    public async Task A_missing_invoice_is_a_404_for_a_well_formed_If_Match_and_a_malformed_one_is_a_412_before_the_lookup(
+        string ifMatch, HttpStatusCode expected)
     {
-        // RFC 9110 §13.2.1: a precondition is ignored when the answer without it would not be a 2xx.
+        // RFC 9110 §13.2.1 ignores a precondition when the answer without it would not be a 2xx, so one strong
+        // tag waits for the lookup. A header that can never match is refused by the endpoint before the handler
+        // runs, and the 412 is the same whether the invoice exists or not.
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
 
-        HttpResponseMessage response = await PostWithIfMatchAsync<object>(admin, $"/api/v1/invoices/{Guid.NewGuid()}/void", body: null, "\"7\"", ct);
+        HttpResponseMessage response = await PostWithIfMatchAsync<object>(admin, $"/api/v1/invoices/{Guid.NewGuid()}/void", body: null, ifMatch, ct);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.StatusCode.ShouldBe(expected);
     }
 
     [Theory]
