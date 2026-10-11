@@ -1,8 +1,11 @@
+using System.Data.Common;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Shouldly;
 using Trellis.Application.Features.Invoices.AddInvoiceLine;
@@ -45,6 +48,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     private readonly FlakyPaidHandler _flaky = new();
     private readonly BlockingPaidHandler _blocking = new();
     private readonly BookkeepingFault _bookkeepingFault = new();
+    private readonly DatabaseOutage _outage = new();
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -57,8 +61,9 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         services.AddSingleton<IDomainEventHandler<InvoicePaidDomainEvent>>(_flaky);
         services.AddSingleton<IDomainEventHandler<InvoicePaidDomainEvent>>(_blocking);
 
-        // Appended after the app's own interceptors; inert until a test names the row whose saves fail.
-        services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(_bookkeepingFault));
+        // Appended after the app's own interceptors; inert until a test names the row whose saves fail, or
+        // takes the whole database away.
+        services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(_bookkeepingFault, _outage));
     }
 
     [Fact]
