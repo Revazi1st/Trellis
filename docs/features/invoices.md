@@ -128,6 +128,54 @@ Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoic
 
 `CreateInvoiceCommandHandler` is the railway reference, one chain: `Result.Combine(EmailAddress.Create(…), Currency.Create(…))` creates both value objects before failing, so an invalid e-mail and an invalid currency come back in one 400, and the deconstructing `Bind((email, currency) => Invoice.Create(…))` hands both values on. `Combine` merges validation errors only; a 404 or a 500 among the failures is returned on its own (ADR-0024 amendment).
 
+## From a payment to its receipt
+
+Paying an invoice is one transaction; e-mailing the receipt is not. The command commits the invoice and
+the event together, answers, and the outbox delivers the event to its handlers afterwards:
+
+```mermaid
+sequenceDiagram
+    participant E as PayInvoice endpoint
+    participant P as Tracing, Logging, Validation, UnitOfWork
+    participant H as PayInvoiceCommandHandler
+    participant DB as PostgreSQL
+    participant O as OutboxProcessor
+    participant R as SendReceiptOnInvoicePaid
+
+    E->>P: Handle(PayInvoiceCommand)
+    P->>H: the command, validated
+    H->>H: invoice.MarkPaid(now) raises InvoicePaidDomainEvent
+    H-->>P: Result.Success
+    P->>DB: one commit: the Invoices row and an OutboxMessages row (OutboxWriteInterceptor)
+    P-->>E: success, the endpoint answers 204
+    O->>DB: claim due rows (FOR UPDATE SKIP LOCKED) and lease them: NextAttemptAtUtc moves past the batch
+    O->>R: Handle(event), in its own scope, within DispatchTimeout
+    alt the handler returns
+        O->>DB: checkpoint: credit invoices.paid.send-receipt with its writes, if the lease still holds
+        O->>DB: every handler credited: Status Processed
+    else the handler throws
+        O->>DB: Attempts plus one, Error, NextAttemptAtUtc after the back-off (30 s doubling to 15 min)
+        Note over O,DB: the eighth failure dead-letters the row (Critical 1302), which docs/deployment.md re-drives
+    end
+```
+
+Every handler of the event (`RecordMetricsOnInvoicePaid` too) runs on each attempt, and only the ones that
+failed are retried; a credited handler never runs again for that row (ADR-0023). Where a new reaction goes:
+
+- **A reaction that must stand or fall with the command** (the caller must hear that it failed, nothing
+  may commit without it) belongs in the command handler, on the same aggregate.
+- **Anything that can happen later** is an event handler in `EventHandlers/`: it runs after the commit,
+  at least once, and possibly twice (a crash between its side effect and its checkpoint repeats it), by
+  which time the command has answered. A reaction that changes another aggregate loads it by id and calls
+  one of its `Result` methods; the checkpoint commits it, never the handler.
+- **A failed `Result` inside a reaction is a handler failure.** `Handle` returns `Task`, so the handler
+  throws: the dispatcher records the failure for that handler alone (Warning 1304), its siblings still run,
+  and the outbox retries it with back-off until it dead-letters, per ADR-0023. Throw when waiting can help
+  (`Failure`, `Unavailable`); when it cannot (`Validation`, `NotFound`, `Conflict`), log the refusal or
+  record it on an aggregate and return, which credits the handler: eight retries of a refusal only fill the
+  dead-letter queue. The throw is the outbox's retry signal, the way `SmtpEmailSender` reports a failed
+  send, so ADR-0004 holds.
+
 ## Persistence (`src/Infrastructure/Trellis.Persistence/`)
 
 `InvoiceConfiguration` / `InvoiceLineConfiguration` (complex-type mapping, `AutoInclude`, `"SoftDeleted"` filter), `InvoiceRepository`, ID conventions in `AppDbContext`. With `UseMultitenancy`, the `TenantId` shadow column, its index and the `"Tenant"` filter come from the aggregate-root convention in `AppDbContext.OnModelCreating` (ADR-0022) — `InvoiceConfiguration` contains no tenant code, and neither should yours.
