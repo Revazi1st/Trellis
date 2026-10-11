@@ -8,12 +8,15 @@ namespace Trellis.Domain.Common;
 /// </summary>
 public sealed record Currency
 {
+    /// <summary>ISO 4217 alphabetic codes are three letters.</summary>
+    public const int CodeLength = 3;
+
     private Currency(string code) => Code = code;
 
     public string Code { get; }
 
     public static Result<Currency> Create(string? code)
-        => string.IsNullOrWhiteSpace(code) || code.Length != 3 || !code.All(char.IsAsciiLetter)
+        => string.IsNullOrWhiteSpace(code) || code.Length != CodeLength || !code.All(char.IsAsciiLetter)
             ? MoneyErrors.InvalidCurrency
             : new Currency(code.ToUpperInvariant());
 

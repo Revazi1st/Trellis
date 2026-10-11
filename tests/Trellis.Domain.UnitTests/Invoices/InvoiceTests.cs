@@ -55,6 +55,29 @@ public sealed class InvoiceTests
             .Error.ShouldBe(InvoiceErrors.EmptyCustomerName);
 
     [Fact]
+    public void Create_bounds_the_customer_name_after_trimming_it()
+    {
+        EmailAddress email = EmailAddress.Create("a@b.co").Value;
+        Currency usd = Currency.Create("USD").Value;
+        string longest = new('n', Invoice.CustomerNameMaxLength);
+
+        Invoice.Create($"  {longest}  ", email, usd).Value.CustomerName.ShouldBe(longest);
+        Invoice.Create(longest + "n", email, usd).Error.ShouldBe(InvoiceErrors.CustomerNameTooLong);
+    }
+
+    [Fact]
+    public void AddLine_bounds_the_description_after_trimming_it()
+    {
+        Invoice invoice = CreateDraft();
+        string longest = new('d', InvoiceLine.DescriptionMaxLength);
+
+        invoice.AddLine($" {longest} ", Money.Create(1m, "USD").Value).IsSuccess.ShouldBeTrue();
+        invoice.Lines.ShouldHaveSingleItem().Description.ShouldBe(longest);
+        invoice.AddLine(longest + "d", Money.Create(1m, "USD").Value).Error.ShouldBe(InvoiceErrors.LineDescriptionTooLong);
+        invoice.Lines.Count.ShouldBe(1);
+    }
+
+    [Fact]
     public void AddLine_accumulates_total()
     {
         Invoice invoice = CreateDraft();

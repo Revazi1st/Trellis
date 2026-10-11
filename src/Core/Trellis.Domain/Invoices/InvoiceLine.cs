@@ -6,6 +6,9 @@ namespace Trellis.Domain.Invoices;
 /// <summary>Child entity of <see cref="Invoice"/>; created only through Invoice.AddLine.</summary>
 public sealed class InvoiceLine : Entity<InvoiceLineId>
 {
+    /// <summary>The longest line description; the validator, the column and the form use the same number.</summary>
+    public const int DescriptionMaxLength = 500;
+
     private InvoiceLine(InvoiceLineId id, string description, Money amount)
         : base(id)
     {

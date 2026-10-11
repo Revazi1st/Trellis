@@ -12,6 +12,9 @@ namespace Trellis.Domain.Invoices;
 /// </summary>
 public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletable
 {
+    /// <summary>The longest customer name the invoice holds; the validator, the column and the form use the same number.</summary>
+    public const int CustomerNameMaxLength = 200;
+
     private readonly List<InvoiceLine> _lines = [];
 
     private Invoice(InvoiceId id, string customerName, EmailAddress customerEmail, string currency)
@@ -70,7 +73,14 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
             return InvoiceErrors.EmptyCustomerName;
         }
 
-        return new Invoice(InvoiceId.New(), customerName.Trim(), customerEmail, currency.Code);
+        // Checked here as well as in the validator: not every caller goes through one (the seeder does not).
+        string name = customerName.Trim();
+        if (name.Length > CustomerNameMaxLength)
+        {
+            return InvoiceErrors.CustomerNameTooLong;
+        }
+
+        return new Invoice(InvoiceId.New(), name, customerEmail, currency.Code);
     }
 
     public Result AddLine(string? description, Money amount)
@@ -85,12 +95,18 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
             return Result.Failure(InvoiceErrors.EmptyLineDescription);
         }
 
+        string lineDescription = description.Trim();
+        if (lineDescription.Length > InvoiceLine.DescriptionMaxLength)
+        {
+            return Result.Failure(InvoiceErrors.LineDescriptionTooLong);
+        }
+
         if (amount.Currency != Currency)
         {
             return Result.Failure(InvoiceErrors.CurrencyMismatch);
         }
 
-        _lines.Add(InvoiceLine.Create(description.Trim(), amount));
+        _lines.Add(InvoiceLine.Create(lineDescription, amount));
         return Result.Success();
     }
 
