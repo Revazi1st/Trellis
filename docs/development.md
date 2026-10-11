@@ -174,6 +174,13 @@ with `ExcludeLaunchProfile = true` and get their endpoints and connection string
 (the comment in `tools/Trellis.AppHost/Program.cs` says why). The AppHost reads its `appsettings.json`
 from the project folder; it only sets log levels, so the dashboard's request logs stay out of the console.
 
+On the first start against an empty database the `migrations` resource logs one red EF Core line,
+`Failed executing DbCommand … SELECT "MigrationId", "ProductVersion" FROM "__EFMigrationsHistory"`,
+and PostgreSQL logs `relation "__EFMigrationsHistory" does not exist`. EF Core probes the history
+table by querying it, then creates it and applies the migrations; the resource still exits with
+code 0 and the API starts, because the API waits for exactly that. A real migration failure leaves
+the API waiting, with the exception in the `migrations` console log.
+
 ### Containerized smoke
 
 See the `run-app` skill — Postgres + migration worker + API (+ web) as sibling containers on one network.
