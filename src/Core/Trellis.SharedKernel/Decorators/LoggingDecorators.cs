@@ -6,8 +6,10 @@ using Trellis.SharedKernel.Results;
 namespace Trellis.SharedKernel.Decorators;
 
 /// <summary>
-/// The outermost stage of the use-case pipeline: every invocation writes exactly one outcome line in a
-/// <c>UseCase</c> scope that correlates everything the inner stages and the handler log. The level
+/// The use-case pipeline's outcome record, just inside <see cref="TracingDecorators"/>: every invocation
+/// writes exactly one outcome line in a <c>UseCase</c> scope that correlates everything the inner stages
+/// and the handler log. Tracing wraps this stage, so the line is written while the use-case span is
+/// current and carries its trace and span ids. The level
 /// follows the outcome class, because the line is a record of one request's story, not an alarm:
 /// <list type="bullet">
 /// <item>success, and a classified expected failure (Validation, NotFound, Conflict, Unauthorized,

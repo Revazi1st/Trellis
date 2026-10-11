@@ -57,11 +57,11 @@ internal sealed class PipelineHarness : IDisposable
 
     /// <summary>The decorator classes, outermost first, every command passes through before its handler.</summary>
     public static IReadOnlyList<Type> CommandStages { get; } =
-        [typeof(LoggingDecorators), typeof(TracingDecorators), typeof(ValidationDecorators), typeof(UnitOfWorkDecorators)];
+        [typeof(TracingDecorators), typeof(LoggingDecorators), typeof(ValidationDecorators), typeof(UnitOfWorkDecorators)];
 
     /// <summary>The query pipeline: the command pipeline without UnitOfWork — queries never commit.</summary>
     public static IReadOnlyList<Type> QueryStages { get; } =
-        [typeof(LoggingDecorators), typeof(TracingDecorators), typeof(ValidationDecorators)];
+        [typeof(TracingDecorators), typeof(LoggingDecorators), typeof(ValidationDecorators)];
 
     public IInvoiceRepository Invoices { get; } = Substitute.For<IInvoiceRepository>();
 
@@ -77,7 +77,7 @@ internal sealed class PipelineHarness : IDisposable
 
     /// <summary>
     /// Walks a resolved handler's decorator chain by reflection, outermost first: each stage is the
-    /// static decorator class it belongs to (<see cref="LoggingDecorators"/>, …), the last one the
+    /// static decorator class it belongs to (<see cref="TracingDecorators"/>, …), the last one the
     /// concrete handler. Each decorator's captured <c>inner</c> field is the next link.
     /// </summary>
     public static IReadOnlyList<Type> StagesOf(object handler, Type handlerService)

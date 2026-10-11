@@ -16,10 +16,10 @@ using Xunit;
 namespace Trellis.Application.UnitTests;
 
 /// <summary>
-/// The pipeline's outcome record: every use-case invocation writes exactly one line from the outermost
-/// stage and one span, and the log level follows the outcome class — Information for success and for
-/// classified expected failures, Warning for an unclassified failure, Error only for an exception that
-/// ends the use case. Driven through the real container with a capturing logger.
+/// The pipeline's outcome record: every use-case invocation writes exactly one line from the logging
+/// stage, inside its one span, and the log level follows the outcome class — Information for success
+/// and for classified expected failures, Warning for an unclassified failure, Error only for an
+/// exception that ends the use case. Driven through the real container with a capturing logger.
 /// </summary>
 public sealed class UseCaseOutcomeTests : IDisposable
 {
@@ -205,6 +205,20 @@ public sealed class UseCaseOutcomeTests : IDisposable
         span.GetTagItem(TracingDecorators.ErrorCodeTag).ShouldBe("Test.Conflict");
         span.GetTagItem(TracingDecorators.ErrorTypeTag).ShouldBe(nameof(ErrorType.Conflict));
         span.Events.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task The_outcome_line_is_written_inside_the_use_case_span()
+    {
+        using var spans = new SpanRecorder();
+
+        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())));
+
+        // Tracing wraps Logging: the line is written while the span is current, so a backend links the
+        // outcome line to the use case's span rather than to the HTTP request around it.
+        Activity span = spans.Of(nameof(ScriptedCommand)).ShouldHaveSingleItem();
+        LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+        line.SpanId.ShouldBe(span.SpanId);
     }
 
     [Fact]

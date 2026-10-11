@@ -32,9 +32,10 @@ public static class DependencyInjection
 
     /// <summary>
     /// Wraps every registered command and query handler in the use-case pipeline:
-    /// <b>Logging → Tracing → Validation → UnitOfWork → handler</b> (queries skip UnitOfWork — they never
-    /// commit). Logging and Tracing are outermost so a rejected request and a failing commit both still
-    /// produce their outcome line and span.
+    /// <b>Tracing → Logging → Validation → UnitOfWork → handler</b> (queries skip UnitOfWork — they never
+    /// commit). Tracing and Logging are outermost so a rejected request and a failing commit both still
+    /// produce their span and outcome line. Tracing wraps Logging, so the outcome line is written while the
+    /// use-case span is still current and carries its trace and span ids.
     /// <para>
     /// <c>TryDecorate</c>, not <c>Decorate</c>: Scrutor's <c>Decorate</c> throws when it finds nothing to
     /// wrap, so a project with no query (the remove-feature path) or no command would not boot.
@@ -50,13 +51,13 @@ public static class DependencyInjection
         services.TryDecorate(typeof(ICommandHandler<,>), typeof(ValidationDecorators.CommandHandler<,>));
         services.TryDecorate(typeof(IQueryHandler<,>), typeof(ValidationDecorators.QueryHandler<,>));
 
-        services.TryDecorate(typeof(ICommandHandler<>), typeof(TracingDecorators.CommandHandler<>));
-        services.TryDecorate(typeof(ICommandHandler<,>), typeof(TracingDecorators.CommandHandler<,>));
-        services.TryDecorate(typeof(IQueryHandler<,>), typeof(TracingDecorators.QueryHandler<,>));
-
         services.TryDecorate(typeof(ICommandHandler<>), typeof(LoggingDecorators.CommandHandler<>));
         services.TryDecorate(typeof(ICommandHandler<,>), typeof(LoggingDecorators.CommandHandler<,>));
         services.TryDecorate(typeof(IQueryHandler<,>), typeof(LoggingDecorators.QueryHandler<,>));
+
+        services.TryDecorate(typeof(ICommandHandler<>), typeof(TracingDecorators.CommandHandler<>));
+        services.TryDecorate(typeof(ICommandHandler<,>), typeof(TracingDecorators.CommandHandler<,>));
+        services.TryDecorate(typeof(IQueryHandler<,>), typeof(TracingDecorators.QueryHandler<,>));
 
         return services;
     }

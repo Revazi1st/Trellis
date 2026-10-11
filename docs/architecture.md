@@ -31,7 +31,7 @@ Rule of thumb: **dependencies point inward.** The Domain knows nothing about EF,
 
 ## Key patterns
 
-- **CQRS without a mediator** — hand-rolled `ICommandHandler`/`IQueryHandler` + a decorator pipeline (logging → tracing → validation → unit-of-work). Endpoints inject handlers directly. (ADR-0003)
+- **CQRS without a mediator** — hand-rolled `ICommandHandler`/`IQueryHandler` + a decorator pipeline (tracing → logging → validation → unit-of-work). Endpoints inject handlers directly. (ADR-0003)
 - **Result over exceptions** — operations return `Result`/`Result<T>`; the API maps errors to RFC 9457 problem details at one seam, every problem carrying a stable `code`. (ADR-0004, ADR-0024)
 - **Secure by default** — every API endpoint requires authorization unless it is on the anonymous allowlist; hardening (forwarded-header trust, security headers, rate limits, request limits) lives in one place. (ADR-0021)
 - **OpenAPI as a contract** — one generated document per API version, committed at `docs/api/openapi.v1.json` and compared with the served one on every test run. (ADR-0025)

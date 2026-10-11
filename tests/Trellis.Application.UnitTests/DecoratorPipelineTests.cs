@@ -18,7 +18,7 @@ namespace Trellis.Application.UnitTests;
 
 /// <summary>
 /// Exercises the real DI container: AddApplication() wiring, Scrutor scanning, and the shape and
-/// behavior of the decorator pipeline (Logging → Tracing → Validation → UnitOfWork → handler) end-to-end.
+/// behavior of the decorator pipeline (Tracing → Logging → Validation → UnitOfWork → handler) end-to-end.
 /// </summary>
 public sealed class DecoratorPipelineTests : IDisposable
 {

@@ -6,8 +6,9 @@ namespace Trellis.SharedKernel.Decorators;
 
 /// <summary>
 /// One <see cref="Activity"/> span per use case, nested inside the HTTP span, so a trace shows which
-/// use case ran and how its time was spent. Register <see cref="ActivitySourceName"/> with
-/// OpenTelemetry in the host. It sits outside Validation, so a rejected request still has its span.
+/// use case ran and how its time was spent. ServiceDefaults exports <see cref="ActivitySourceName"/>
+/// with every other <c>Trellis.*</c> source. It is the outermost stage: outside Validation, so a rejected
+/// request still has its span, and outside Logging, so the outcome line is written inside the span.
 /// Every span carries <see cref="OutcomeTag"/>; an expected failure adds the error code and type but
 /// leaves the status unset, and only an exception that ends the use case marks the span as an error
 /// and records the exception event.
