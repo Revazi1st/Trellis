@@ -17,7 +17,9 @@ var migrations = builder.AddProject<Projects.Trellis_MigrationService>("migratio
     .WaitFor(database);
 
 #if (UseRedis)
-var cache = builder.AddRedis("cache");
+// RedisInsight beside the cache, as pgAdmin sits beside PostgreSQL: a dashboard tile to look at the keys.
+var cache = builder.AddRedis("cache")
+    .WithRedisInsight();
 #endif
 
 var api = builder.AddProject<Projects.Trellis_Api>("api", static options => options.ExcludeLaunchProfile = true)
