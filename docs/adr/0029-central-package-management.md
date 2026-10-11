@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-08
+- **Amended**: 2026-10-11 — Dependabot's patch and minor pull requests merge on their own behind a week of cooldown and the required checks (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -45,3 +46,16 @@ xunit.v3 and Microsoft.Testing.Platform packages share a runtime contract.
 - A new package family that shares floors with an existing group joins that group in
   `dependabot.yml` in the same change that adds it (adding a package is an ask-first change,
   `AGENTS.md`).
+
+## Amendment (2026-10-11): bumps that merge on their own
+
+Routine bumps no longer wait for a person. `.github/workflows/dependabot-auto-merge.yml` enables
+GitHub's auto-merge on Dependabot's patch and minor pull requests once every required check on
+`main` is green; `dependabot.yml` holds each new version back for a week (`cooldown`) so a yanked or
+compromised release is usually gone before a pull request exists. A major, or a group containing
+one, a .NET SDK bump and the GitHub Actions group still wait for review. The workflow acts only
+when the repository allows auto-merge and a ruleset requires status checks on the base branch; the
+one-time setup and the two consequences (no push run for a token-made merge, hence the nightly CI
+and Template CI runs on `main`; each weekly pull request tested against the `main` of its moment) are in
+`docs/releasing.md`. The licence check of ADR-0011 covers the listed package ids only, so the
+release runbook now starts with a read of the bumps that merged since the last tag.

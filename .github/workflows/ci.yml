@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+#if (TemplateSource)
+  # Template source only. Dependabot's auto-merged bumps reach main through the Actions token, which
+  # starts no push run, and each weekly pull request was tested against the main of its own moment.
+  # One run a night tests the combined tree. A generated project decides this for itself.
+  schedule:
+    - cron: "0 4 * * *"
+#endif
 
 permissions:
   contents: read
