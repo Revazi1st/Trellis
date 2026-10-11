@@ -75,8 +75,10 @@ after each layer.
       implementing `IEndpoint` (`Map` returns the `RouteHandlerBuilder`). `MapEndpoints` names the
       route after the class, which is the OpenAPI `operationId`: never call `.WithName` yourself
       [`ConventionTests`, `OpenApiDocumentTests`].
-- [ ] `.RequirePermission(Permissions.X.Y)` on every endpoint; `.AllowAnonymous()` only together with
-      an entry in `EndpointMetadataTests.AnonymousAllowlist` [`EndpointMetadataTests`].
+- [ ] `.RequirePermission(Permissions.X.Y)` on every endpoint, with its row in
+      `EndpointMetadataTests.ExpectedPermissions` (and in the wire-level theory beside it);
+      `.AllowAnonymous()` only together with an entry in `EndpointMetadataTests.AnonymousAllowlist`
+      [`EndpointMetadataTests`].
 - [ ] `.RequireIdempotency()` on every non-GET endpoint outside `auth/` [`EndpointMetadataTests`];
       anything the endpoint does after the handler succeeded uses `CancellationToken.None`.
 - [ ] `.WithTags(...)`, `.WithSummary(...)` **and** `.WithDescription(...)` [`EndpointMetadataTests`,

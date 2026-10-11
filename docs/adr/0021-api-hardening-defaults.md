@@ -2,7 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-07
-- **Amended**: 2026-10-11 — decision 6: `Cache-Control: no-store` on every `/api/` response unless the endpoint sets its own; decision 4 reaches the 401s a Result produces (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-10-11 — decision 6: `Cache-Control: no-store` on every `/api/` response unless the endpoint sets its own; decision 4 reaches the 401s a Result produces; decision 1's test pins each endpoint's permission (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -140,3 +140,15 @@ itself, which is what pollers do; only a browser's automatic revalidation needs 
 refresh's `Auth.InvalidRefreshToken`) had none, although RFC 9110 §15.5.2 requires the header on every
 401. The problem-details enrichment (ADR-0024) now adds `WWW-Authenticate: Bearer` to a 401 whose
 writer set none; the challenge's own value, with `error="invalid_token"`, is kept.
+
+**Decision 1's test pins which permission, not only that there is one.** "A non-anonymous endpoint
+lacks a catalogued permission" passed a write declared with `invoices:read`: everyone allowed to look
+could then pay or void. `EndpointMetadataTests.ExpectedPermissions` names the one permission each
+permissioned endpoint requires, beside `AnonymousAllowlist`, and the test fails when an endpoint
+declares another, more than one, or has no row, and when a row outlives its endpoint. A wire-level
+theory beside it sends each endpoint a client holding only that permission (the endpoint's own answer)
+and one holding every other permission (403). `ApiFactory.CreateClientWithPermissions(...)` mints those
+tokens through the host's `ITokenProvider`, so they are shaped exactly like a sign-in's; the two
+hand-built minters stay, because they build invalid tokens on purpose (a foreign algorithm, a missing
+tenant).
+

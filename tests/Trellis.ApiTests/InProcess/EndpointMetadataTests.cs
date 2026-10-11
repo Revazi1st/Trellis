@@ -55,6 +55,22 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
         "POST auth/revoke-all",
     };
 
+    /// <summary>
+    /// The one permission each remaining endpoint requires. "Has some catalogued permission" would pass
+    /// a write declared with Read (anyone who may look could pay or void); this table is what turns that
+    /// mix-up into a red build. A new endpoint is a new row, reviewed with its <c>RequirePermission</c>.
+    /// </summary>
+    private static readonly Dictionary<string, string> ExpectedPermissions = new(StringComparer.Ordinal)
+    {
+        ["GET invoices/{id}"] = Permissions.Invoices.Read,
+        ["GET invoices/overdue"] = Permissions.Invoices.Read,
+        ["POST invoices"] = Permissions.Invoices.Write,
+        ["POST invoices/{id}/lines"] = Permissions.Invoices.Write,
+        ["POST invoices/{id}/issue"] = Permissions.Invoices.Write,
+        ["POST invoices/{id}/pay"] = Permissions.Invoices.Write,
+        ["POST invoices/{id}/void"] = Permissions.Invoices.Write,
+    };
+
     /// <summary>Endpoints that accept a guessable credential carry the strict auth limiter; token endpoints must not.</summary>
     private static readonly HashSet<string> CredentialEndpoints = new(StringComparer.Ordinal)
     {
@@ -113,6 +129,91 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
             .Select(static e => e.Key)];
 
         missing.ShouldBeEmpty("declare the permission with .RequirePermission(Permissions.X.Y)");
+    }
+
+    [Fact]
+    public void Every_permissioned_endpoint_requires_exactly_its_expected_permission()
+    {
+        List<string> violations = [];
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        foreach (ApiEndpoint endpoint in ApiEndpoints()
+                     .Where(static e => !e.Metadata.OfType<IAllowAnonymous>().Any() && !AuthenticatedOnly.Contains(e.Key)))
+        {
+            seen.Add(endpoint.Key);
+            string[] declared = [.. endpoint.Metadata.OfType<IAuthorizeData>()
+                .Select(static data => data.Policy)
+                .OfType<string>()
+                .Where(static policy => Permissions.All.Contains(policy, StringComparer.Ordinal))
+                .Distinct(StringComparer.Ordinal)];
+
+            if (!ExpectedPermissions.TryGetValue(endpoint.Key, out string? expected))
+            {
+                violations.Add($"{endpoint.Key}: no row in ExpectedPermissions (declares {string.Join(", ", declared)})");
+            }
+            else if (declared.Length != 1 || !string.Equals(declared[0], expected, StringComparison.Ordinal))
+            {
+                violations.Add($"{endpoint.Key}: requires [{string.Join(", ", declared)}], expected exactly {expected}");
+            }
+        }
+
+        violations.AddRange(ExpectedPermissions.Keys.Where(key => !seen.Contains(key)).Select(static key => $"{key}: a row for an endpoint that no longer exists"));
+        violations.ShouldBeEmpty("each permissioned endpoint declares exactly one .RequirePermission(...), the one ExpectedPermissions names");
+    }
+
+    [Theory]
+    [InlineData("GET", "invoices/{id}", HttpStatusCode.NotFound)]
+    [InlineData("GET", "invoices/overdue", HttpStatusCode.OK)]
+    [InlineData("POST", "invoices", HttpStatusCode.Created)]
+    [InlineData("POST", "invoices/{id}/lines", HttpStatusCode.NotFound)]
+    [InlineData("POST", "invoices/{id}/issue", HttpStatusCode.NotFound)]
+    [InlineData("POST", "invoices/{id}/pay", HttpStatusCode.NotFound)]
+    [InlineData("POST", "invoices/{id}/void", HttpStatusCode.NotFound)]
+    public async Task Each_endpoint_admits_its_one_permission_and_refuses_every_other(string method, string route, HttpStatusCode admitted)
+    {
+        // Wire-level, beside the table above: the permission alone gets the endpoint's own answer (a 404
+        // for an id that does not exist proves authorization passed), and every OTHER permission, all of
+        // them together, is a 403 problem. Exact statuses, never "not 401/403".
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string required = ExpectedPermissions[$"{method} {route}"];
+        string[] others = [.. Permissions.All.Where(permission => !string.Equals(permission, required, StringComparison.Ordinal))];
+
+        HttpResponseMessage withIt = await SendAsync(factory.CreateClientWithPermissions(required), method, route, ct);
+        HttpResponseMessage withEverythingElse = await SendAsync(factory.CreateClientWithPermissions(others), method, route, ct);
+
+        withIt.StatusCode.ShouldBe(admitted, await withIt.Content.ReadAsStringAsync(ct));
+        withEverythingElse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await withEverythingElse.Content.ReadFromJsonAsync<Trellis.Api.Contracts.Common.ProblemResponse>(ct)).ShouldNotBeNull().Code.ShouldBe("Auth.Forbidden");
+    }
+
+    [Fact]
+    public async Task A_token_without_permissions_is_authenticated_but_forbidden()
+    {
+        HttpResponseMessage response = await factory.CreateClientWithPermissions()
+            .GetAsync("/api/v1/invoices/overdue", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>A request to <paramref name="route"/> with a fresh id and a body that would pass validation, so only authorization can stop it.</summary>
+    private static async Task<HttpResponseMessage> SendAsync(HttpClient client, string method, string route, CancellationToken ct)
+    {
+        string path = "/api/v1/" + route.Replace("{id}", Guid.NewGuid().ToString(), StringComparison.Ordinal);
+        if (string.Equals(method, HttpMethods.Get, StringComparison.Ordinal))
+        {
+            return await client.GetAsync(path, ct);
+        }
+
+        object? body = route switch
+        {
+            "invoices" => new CreateInvoiceRequest("Scoped Co", "s@s.co", "USD"),
+            "invoices/{id}/lines" => new AddInvoiceLineRequest("Line", 10m),
+            "invoices/{id}/issue" => new IssueInvoiceRequest(DateTimeOffset.UtcNow.AddDays(7)),
+            _ => null,
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = body is null ? null : JsonContent.Create(body) };
+        request.Headers.Add(Trellis.Api.Contracts.Common.ApiHeaders.IdempotencyKey, Guid.NewGuid().ToString());
+        return await client.SendAsync(request, ct);
     }
 
     [Fact]

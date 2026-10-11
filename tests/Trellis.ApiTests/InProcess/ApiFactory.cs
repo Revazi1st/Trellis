@@ -15,8 +15,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Shouldly;
 using Testcontainers.PostgreSql;
 using Trellis.Api.Contracts.Auth;
+using Trellis.Application.Abstractions;
 using Trellis.Application.Authorization;
 using Trellis.Persistence;
 using Trellis.Persistence.Identity;
@@ -151,6 +153,40 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
         (await anonymous.PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest(email, AdminPassword), cancellationToken))
             .EnsureSuccessStatusCode();
         return await CreateAuthenticatedClientAsync(email, AdminPassword, cancellationToken);
+    }
+
+    /// <summary>
+    /// A client holding exactly <paramref name="permissions"/> (none at all when empty), for pinning what
+    /// each endpoint requires. The token is minted by the host's own <see cref="ITokenProvider"/>, so it is
+    /// the token a real sign-in would carry, signed, scoped and shaped the same, for a user who exists only
+    /// in the token: no role, no Identity row, no login request spent against the rate limit.
+    /// </summary>
+    public HttpClient CreateClientWithPermissions(params string[] permissions)
+    {
+        foreach (string permission in permissions)
+        {
+            Permissions.All.Contains(permission, StringComparer.Ordinal).ShouldBeTrue($"'{permission}' is not in the permission catalogue");
+        }
+
+        Guid userId = Guid.CreateVersion7();
+        var user = new AuthenticatedUser(
+            userId,
+            $"scoped-{userId:N}@inprocess.test",
+            permissions
+#if (UseMultitenancy)
+            , TenantA
+#endif
+            );
+
+        string token;
+        using (IServiceScope scope = Services.CreateScope())
+        {
+            token = scope.ServiceProvider.GetRequiredService<ITokenProvider>().CreateAccessToken(user);
+        }
+
+        HttpClient client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
     }
 
     /// <summary>

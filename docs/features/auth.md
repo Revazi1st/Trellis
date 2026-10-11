@@ -93,7 +93,11 @@ The strict `auth` policy guards the endpoints that take a guessable credential (
 refresh and logout take an unguessable token and sit under the global per-client limiter only, so a
 shared source such as the Blazor Server host never turns silent refreshes into 429s (ADR-0021).
 Every other endpoint on the versioned group requires authentication by default; these four are the
-whole anonymous allowlist (`EndpointMetadataTests`). In the OpenAPI document each operation's
+whole anonymous allowlist (`EndpointMetadataTests`). Each remaining endpoint but `revoke-all` requires
+exactly one permission, pinned row by row in `EndpointMetadataTests.ExpectedPermissions` (a write
+declared with `invoices:read` fails the build), and proved on the wire with clients that
+`ApiFactory.CreateClientWithPermissions(...)` mints through the host's own `ITokenProvider`: the one
+permission gets the endpoint's own answer, every other permission a 403. In the OpenAPI document each operation's
 `operationId` is its endpoint class (`Register`, `Login`, `Refresh`, `Logout`, `RevokeSessions`), the
 400/429/500 problem responses (401/403 on `revoke-all`) are declared by shape, and the Result statuses
 an anonymous operation's shape cannot imply are declared on the endpoint with a bare `.Produces(status)`:
@@ -148,7 +152,8 @@ the validators, and the convention that every command with string input has a va
 `IntegrationTests/AuthSecurityTests` (lockout thresholds + reset, replay revocation, revoke
 idempotency — real Identity + PostgreSQL) · `ApiTests/InProcess/AuthRateLimitTests` (login 429 with
 `Retry-After`, refresh chains and twelve sessions through one host never throttled) ·
-`EndpointMetadataTests` (anonymous allowlist, permissions, challenge header, algorithm pin) ·
+`EndpointMetadataTests` (anonymous allowlist, each endpoint's one permission and its wire-level 403,
+challenge header, algorithm pin) ·
 `ApiTests/InProcess/AuthFlowTests` (open and closed registration, an unknown mode failing the
 boot; rotation, replay killing the family, logout twice, revoke-all; lockout 4×401 → 403 → 403
 with its security events; equal hash work for an unknown e-mail; refresh-token expiry on an
