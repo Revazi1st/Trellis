@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using Trellis.SharedKernel.Results;
 
 namespace Trellis.Domain.Common;
@@ -13,36 +12,30 @@ public sealed record Currency
     /// <summary>ISO 4217 alphabetic codes are three letters.</summary>
     public const int CodeLength = 3;
 
-    /// <summary>ISO 4217's minor unit for most currencies: cents, pence, øre.</summary>
-    private const int DefaultMinorUnits = 2;
-
-    /// <summary>
-    /// The ISO 4217 currencies whose minor unit is not two decimal places. Any other code — including one
-    /// ISO does not list, since <see cref="Create"/> checks the shape, not membership — carries two.
-    /// </summary>
-    private static readonly FrozenDictionary<string, int> MinorUnitExceptions = new (string[] Codes, int MinorUnits)[]
-    {
-        // No minor unit: amounts are whole numbers.
-        (["BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG", "RWF", "UGX", "UYI", "VND", "VUV", "XAF", "XOF", "XPF"], 0),
-
-        // Thousandths.
-        (["BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"], 3),
-
-        // Units of account with four decimal places (Money stores at most three; see Money.AmountScale).
-        (["CLF", "UYW"], 4),
-    }
-    .SelectMany(static group => group.Codes.Select(code => KeyValuePair.Create(code, group.MinorUnits)))
-    .ToFrozenDictionary(StringComparer.Ordinal);
-
     private Currency(string code) => Code = code;
 
     public string Code { get; }
 
     /// <summary>
     /// The decimal places an amount in this currency carries (ISO 4217): 0 for JPY, 3 for KWD, 2 for most.
-    /// <see cref="Money"/> refuses an amount finer than this rather than rounding it.
+    /// <see cref="Money"/> refuses an amount finer than this rather than rounding it. Only the exceptions
+    /// are listed; any other code (including one ISO does not list, since <see cref="Create"/> checks the
+    /// shape, not membership) carries two, ISO's minor unit for most currencies.
     /// </summary>
-    public int MinorUnits => MinorUnitExceptions.GetValueOrDefault(Code, DefaultMinorUnits);
+    public int MinorUnits => Code switch
+    {
+        // No minor unit: amounts are whole numbers.
+        "BIF" or "CLP" or "DJF" or "GNF" or "ISK" or "JPY" or "KMF" or "KRW" or "PYG"
+            or "RWF" or "UGX" or "UYI" or "VND" or "VUV" or "XAF" or "XOF" or "XPF" => 0,
+
+        // Thousandths.
+        "BHD" or "IQD" or "JOD" or "KWD" or "LYD" or "OMR" or "TND" => 3,
+
+        // Units of account with four decimal places (Money stores at most three; see Money.AmountScale).
+        "CLF" or "UYW" => 4,
+
+        _ => 2,
+    };
 
     public static Result<Currency> Create(string? code)
         => string.IsNullOrWhiteSpace(code) || code.Length != CodeLength || !code.All(char.IsAsciiLetter)
