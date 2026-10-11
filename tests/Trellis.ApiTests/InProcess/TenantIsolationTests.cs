@@ -40,7 +40,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
 
         HttpResponseMessage read = await tenantB.GetAsync($"/api/v1/invoices/{id}", ct);
         read.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        read.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        read.ShouldBeProblemJson();
 
         // Writes are isolated too: the handler loads through the filtered repository, so the other
         // tenant's row does not exist as far as the command is concerned.
@@ -154,7 +154,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
         HttpResponseMessage response = await CallWithMintedTokenAsync(tenant: null, ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         response.Headers.WwwAuthenticate.ToString().ShouldContain("invalid_token");
     }
 

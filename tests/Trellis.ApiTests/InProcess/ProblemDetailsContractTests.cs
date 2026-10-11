@@ -395,7 +395,7 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         HttpResponseMessage response, HttpStatusCode status, string code, string instance, CancellationToken ct)
     {
         response.StatusCode.ShouldBe(status);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
 
         string body = await response.Content.ReadAsStringAsync(ct);
         ProblemResponse problem = JsonSerializer.Deserialize<ProblemResponse>(body, JsonSerializerOptions.Web).ShouldNotBeNull(body);

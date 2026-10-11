@@ -26,7 +26,7 @@ public sealed class WebHostTests(WebHostTests.ProductionWebHost host) : IClassFi
         using HttpResponseMessage response = await client.GetAsync(new Uri("/Error", UriKind.Relative), TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
+        response.ShouldHaveMediaType("text/html");
         string html = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         html.ShouldContain("Something went wrong");
         html.ShouldContain("role=\"alert\"");

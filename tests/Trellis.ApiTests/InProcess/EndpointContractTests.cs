@@ -48,7 +48,7 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
         HttpResponseMessage response = await admin.GetAsync($"/api/v1/invoices/{Guid.NewGuid()}", ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         string body = await response.Content.ReadAsStringAsync(ct);
         body.ShouldContain("\"title\"");
         body.ShouldContain("\"status\"");
@@ -109,7 +109,7 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
 
         // The caller asked for the guarantee; running the command without it would be the silent failure.
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         ProblemResponse problem = (await response.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();
         problem.Code.ShouldBe("Idempotency.InvalidKey");
         problem.Detail.ShouldNotBeNull().ShouldContain("blank");
