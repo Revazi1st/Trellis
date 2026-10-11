@@ -11,8 +11,8 @@ namespace Trellis.Infrastructure.Email;
 /// <c>Email:Provider=Smtp</c>: submits each message to the relay in <see cref="SmtpOptions"/> with the
 /// BCL's <see cref="SmtpClient"/>, upgraded with STARTTLS unless a local catcher was configured.
 /// <para>
-/// One client per message: <see cref="SmtpClient"/> cannot run two sends at once and pools nothing worth
-/// keeping, and a fresh connection per message is what a relay expects from an application anyway.
+/// One client per message: an <see cref="SmtpClient"/> runs one send at a time (a second concurrent call
+/// throws), so a shared one would fail overlapping handlers; disposing it closes the connection.
 /// </para>
 /// <para>
 /// A failure is thrown, not returned. The port returns <see cref="Task"/>, so a throw is its only failure
