@@ -226,6 +226,17 @@ If you generated a project from 0.1.0, read these before adopting this version w
   a .NET SDK bump and the GitHub Actions group wait for you. `dependabot.yml` holds new versions back
   for a week (`cooldown`; security updates arrive at once). The workflow acts only when the repository
   allows auto-merge and a ruleset on `main` requires status checks, and leaves a notice otherwise.
+- **`GET /api/v1/invoices` lists every invoice**, newest first, from the moment it is created: an
+  invoice you create and issue is due in the future, so until now it appeared in no list (the overdue
+  list was the only one). Paged like the overdue list (`page`, `pageSize`, the `PagedResponse`
+  envelope), with an optional `?status=Draft|Issued|Paid|Voided`; `invoices:read`, so members see it
+  too. `InvoiceDto` gains `createdAtUtc`, the key the list orders by: code that constructs it
+  positionally passes the new member after `Status`. The `ListInvoices` use case, its specification
+  (`InvoiceSpecs.All`) and its tests are in the reference slice to copy.
+- **The web UI's Invoices page lists every invoice** (it was "Overdue invoices") with a Created
+  column and a filter row, All, Draft, Issued, Paid, Voided and Overdue, kept in the address
+  (`invoices?status=Draft`) so the browser's Back returns to the previous filter. The invoice and
+  new-invoice pages open with a "Back to invoices" link.
 
 ### Changed
 

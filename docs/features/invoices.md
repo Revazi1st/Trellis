@@ -5,10 +5,12 @@ The **reference vertical slice** — the canonical shape to copy for new feature
 ## The domain in plain words
 
 An invoice bills one customer, in one currency, for one or more lines of work. It starts as a
-**draft**, the only state in which lines can be added. **Issuing** it freezes the lines and sets a
-due date that may not lie in the past; an issued invoice whose due date then passes appears in the
-overdue list. **Paying** an issued invoice closes it and e-mails the customer a receipt, **voiding**
-cancels a draft or an issued one, and a paid or voided invoice never changes again.
+**draft**, the only state in which lines can be added. Every invoice is in the invoice list from the
+moment it is created, newest first, and the list can be narrowed to one state. **Issuing** it freezes
+the lines and sets a due date that may not lie in the past; an issued invoice whose due date then
+passes also appears in the overdue list. **Paying** an issued invoice closes it and e-mails the
+customer a receipt, **voiding** cancels a draft or an issued one, and a paid or voided invoice never
+changes again.
 Administrators may do all of this; members may only read.
 
 ```mermaid
@@ -43,26 +45,37 @@ placeholder variables at the top of the file name the response each value comes 
 |---|---|---|---|
 | 1 | `POST /api/v1/auth/login` | `{"email": "admin@example.com", "password": "Admin123!"}` | 200 with an `accessToken`: paste it into `@token` |
 | 2 | `POST /api/v1/invoices` with `Idempotency-Key: try-it-1` | `{"customerName": "Ada Lovelace", "customerEmail": "ada@example.com", "currency": "EUR"}` | 201, a `Location` header and the new `id`: paste it into `@invoiceId` |
-| 3 | `POST /api/v1/invoices/{id}/lines` | `{"description": "Analytical engine consulting", "amount": 1200.00}` | 204 |
-| 4 | `POST /api/v1/invoices/{id}/issue` | `{"dueDate": "2099-12-31T00:00:00Z"}` | 204; a past date answers 400 `Invoice.DueDateInPast` |
-| 5 | `GET /api/v1/invoices/{id}` | | 200: status `Issued`, total 1200.00, and an `ETag` header to paste into `@etag` |
-| 6 | the same GET with `If-None-Match: {etag}` | | 304 and no body, until the invoice changes |
-| 7 | `POST /api/v1/invoices/{id}/pay` | | 204; seconds later the api logs `E-mail not sent (Email:Provider=Logging) …`: the outbox handed `invoices.paid.v1` to `SendReceiptOnInvoicePaid` after the commit |
-| 8 | step 4 again with `If-Match: {etag}` | same as step 4 | 412 `Invoice.VersionMismatch`: paying moved the version past the ETag you read in step 5, so nothing changes (without the header: 409 `Invoice.AlreadyFinalized`) |
-| 9 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
-| 10 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
-| 11 | `POST /api/v1/auth/login` as the member | as in step 10 | 200: paste its `accessToken` into `@memberToken` |
-| 12 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
+| 3 | `GET /api/v1/invoices` | | 200: a `PagedResponse` whose first item is the draft from step 2; `?status=Draft` (or `Issued`, `Paid`, `Voided`) narrows it, and `GET /api/v1/invoices/overdue` lists only the issued invoices past their due date |
+| 4 | `POST /api/v1/invoices/{id}/lines` | `{"description": "Analytical engine consulting", "amount": 1200.00}` | 204 |
+| 5 | `POST /api/v1/invoices/{id}/issue` | `{"dueDate": "2099-12-31T00:00:00Z"}` | 204; a past date answers 400 `Invoice.DueDateInPast`. Step 3 again now shows it `Issued`, still first; the overdue list does not have it until 2099 |
+| 6 | `GET /api/v1/invoices/{id}` | | 200: status `Issued`, total 1200.00, and an `ETag` header to paste into `@etag` |
+| 7 | the same GET with `If-None-Match: {etag}` | | 304 and no body, until the invoice changes |
+| 8 | `POST /api/v1/invoices/{id}/pay` | | 204; seconds later the api logs `E-mail not sent (Email:Provider=Logging) …`: the outbox handed `invoices.paid.v1` to `SendReceiptOnInvoicePaid` after the commit |
+| 9 | step 5 again with `If-Match: {etag}` | same as step 5 | 412 `Invoice.VersionMismatch`: paying moved the version past the ETag you read in step 6, so nothing changes (without the header: 409 `Invoice.AlreadyFinalized`) |
+| 10 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
+| 11 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
+| 12 | `POST /api/v1/auth/login` as the member | as in step 11 | 200: paste its `accessToken` into `@memberToken` |
+| 13 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
 
 To walk through again, change `@createKey` first: the same key keeps answering with the first
-invoice, paid by then, so steps 3, 4 and 7 would answer 409 (`Invoice.NotDraft`,
+invoice, paid by then, so steps 4, 5 and 8 would answer 409 (`Invoice.NotDraft`,
 `Invoice.AlreadyFinalized`, `Invoice.NotIssued`). Tokens expire after 15 minutes, so send step 1
 again when a request answers 401. Visual Studio and VS Code can chain the values instead of pasting
 them, Rider through a response handler script; the file's header shows both.
 
+<!--#if (!UseMultitenancy) -->
+Step 3 sent with `@memberToken` lists the same invoices: a member may read every one, only not change it.
+<!--#endif -->
+<!--#if (UseMultitenancy) -->
+Step 3 sent with `@memberToken` lists none of the admin's invoices: registering provisions a fresh
+tenant (ADR-0022), and every list is scoped to the caller's tenant.
+<!--#endif -->
+
 <!--#if (IncludeUI) -->
 The web UI (the `web` resource) walks the same lifecycle with clicks: sign in as the admin, create
-an invoice, then add a line, issue and pay it from its detail page.
+an invoice, then add a line, issue and pay it from its detail page. The Invoices page lists every
+invoice, newest first, filtered by state or to the overdue ones, and the detail and create pages
+lead back to it.
 
 <!--#endif -->
 ## Where the code lives
@@ -301,8 +314,10 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
   filter (`InvoiceApiClientTests`); `InvoicePagesTests` renders the pages: the API call and the current
   link for every filter in the address, the empty state and pager naming the filter, the Created column,
   and the back link on the detail (loaded or not) and create pages.
+<!--#if (IncludeUiTests && IncludeUI) -->
 - `UiTests` (Playwright, opt-in): sign in, create, issue due in 30 days, return through the back link
   and find the invoice heading the list under All and absent under Overdue.
+<!--#endif -->
 
 ## Endpoints
 
