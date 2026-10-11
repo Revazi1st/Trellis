@@ -159,12 +159,12 @@ a time, by deserialising each response into `ProblemResponse`.
 
 ## Amendment (2026-10-11): `Result.Combine` merges only validation failures; value-object errors name their field; a `Result` never reaches JSON
 
-**`Combine` is type-aware.** As first written, `Result.Combine` flattened any two failures into one `Validation.General`, so two
-NotFounds, or a NotFound beside a Failure, answered 400 and logged at Information. It now merges into a
-`ValidationError` only when every failure is `ErrorType.Validation` (nested ones still flattened);
-otherwise it returns one error unmerged: the first `Failure`, else the first non-validation failure.
-The validation errors beside it are dropped, because the 404 or the 500 is the answer that matters. A
-single failure is returned as it is. `Combine<T1, T2>` and `Combine<T1, T2, T3>` apply the same rule
+**`Combine` is type-aware.** As first written, `Result.Combine` flattened any two failures into one
+`Validation.General`, so two NotFounds, or a NotFound beside a Failure, answered 400 and logged at
+Information. It now merges into a `ValidationError` only when every failure is `ErrorType.Validation`
+(nested ones still flattened); otherwise it returns one error unmerged: the first `Failure`, else the
+first non-validation failure. The validation errors beside it are dropped, because the 404 or the 500 is
+the answer that matters. A single failure is returned as it is. `Combine<T1, T2>` and `Combine<T1, T2, T3>` apply the same rule
 and keep the values as a tuple, which the deconstructing `Bind`/`Map` overloads unpack, so
 `CreateInvoiceCommandHandler` is one chain. The wire contract above is unchanged.
 
