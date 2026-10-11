@@ -46,7 +46,8 @@ With a local SDK you can also `aspire run` the full app. See
 The repository builds and tests itself, but a change can still break the projects the template
 generates: a conditional block, a renamed file, a toggle's off-branch. Template CI
 (`.github/workflows/template-ci.yml`) instantiates every toggle leg, gates the generated content and
-builds and tests the generated solutions. Before pushing a change to `.template.config/`, a
+builds and tests the generated solutions, and repeats the default leg on Windows (build and the tests
+that need no Docker). Before pushing a change to `.template.config/`, a
 conditional block, or anything a toggle touches:
 
 ```bash

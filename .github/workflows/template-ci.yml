@@ -207,6 +207,45 @@ jobs:
         # including the Testcontainers integration tests.
         run: dotnet test ./*.slnx -c Release --no-build
 
+  # The default options on Windows: the template installs and instantiates there, the generated
+  # solution builds, and the test projects that need no Docker pass (Windows runners cannot run the
+  # Linux containers the integration and API tests start). Every step is PowerShell or a plain
+  # command, nothing that needs bash.
+  instantiate-windows:
+    name: Instantiate & build (windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Install template from source
+        run: dotnet new install .
+
+      - name: Instantiate
+        run: dotnet new trellis -n Acme.Shop -o ../generated
+
+      - name: Build generated solution
+        working-directory: ../generated
+        run: dotnet build Acme.Shop.slnx -c Release
+
+      # One project at a time: PowerShell reports only the last command's exit code, so each one is
+      # checked before the next runs.
+      - name: Test generated solution (the projects that need no Docker)
+        working-directory: ../generated
+        run: |
+          foreach ($project in 'Domain.UnitTests', 'Application.UnitTests', 'ArchitectureTests') {
+            dotnet test "tests/Acme.Shop.$project" -c Release --no-build
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
   pack:
     name: Pack & verify package
     runs-on: ubuntu-latest
