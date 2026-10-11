@@ -25,4 +25,13 @@ internal static class PlantedViolations
                 await later().Handle(command, cancellationToken),
                 await unitOfWork.CommitAsync(cancellationToken));
     }
+
+    /// <summary>A value object whose factory a positional constructor and init accessors let callers bypass.</summary>
+    internal sealed record PositionalValueObject(string Value)
+    {
+        public static Result<PositionalValueObject> Create(string value)
+            => string.IsNullOrWhiteSpace(value)
+                ? Error.Validation("Planted.Empty", "A value is required.")
+                : new PositionalValueObject(value);
+    }
 }

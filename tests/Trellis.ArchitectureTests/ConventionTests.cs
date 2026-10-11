@@ -109,7 +109,24 @@ public sealed partial class ConventionTests
             create.ReturnType.IsGenericType.ShouldBeTrue($"{valueObject.Name}.Create must return Result<T>");
             create.ReturnType.GetGenericTypeDefinition().ShouldBe(typeof(Result<>),
                 $"{valueObject.Name}.Create must return Result<T>, not throw");
+
+            // Create is the only way in: a public constructor (a positional record's, say) or a public
+            // set/init accessor (which `with` and object initialisers use) builds an unvalidated value.
+            valueObject.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+                .ShouldBeEmpty($"{valueObject.Name} must be created through its static Create factory, not a public constructor");
+
+            PublicSettersOf(valueObject).ShouldBeEmpty(
+                $"{valueObject.Name} exposes public set or init accessors — `with` and initialisers would skip Create's checks");
         }
+    }
+
+    [Fact]
+    public void The_value_object_rule_refuses_a_positional_record()
+    {
+        Type planted = typeof(PlantedViolations.PositionalValueObject);
+
+        planted.GetConstructors(BindingFlags.Public | BindingFlags.Instance).ShouldNotBeEmpty();
+        PublicSettersOf(planted).ShouldNotBeEmpty("a positional record's members carry public init accessors");
     }
 
     [Fact]
@@ -166,9 +183,8 @@ public sealed partial class ConventionTests
             entity.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
                 .ShouldBeEmpty($"{entity.Name} must be created through its static Create factory, not a public constructor");
 
-            IEnumerable<PropertyInfo> publicSetters = entity
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.SetMethod is { IsPublic: true } && !interceptorProperties.Contains(p.Name));
+            IEnumerable<PropertyInfo> publicSetters = PublicSettersOf(entity)
+                .Where(p => !interceptorProperties.Contains(p.Name));
 
             publicSetters.ShouldBeEmpty(
                 $"{entity.Name} exposes public setters — mutate through intention-revealing methods instead");
@@ -216,6 +232,11 @@ public sealed partial class ConventionTests
 
     private static bool IsRecord(Type type)
         => type.GetProperty("EqualityContract", BindingFlags.NonPublic | BindingFlags.Instance) is not null;
+
+    /// <summary>The public instance properties with a public <c>set</c> or <c>init</c> accessor (to reflection an init accessor is a setter).</summary>
+    private static IEnumerable<PropertyInfo> PublicSettersOf(Type type)
+        => type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(static p => p.SetMethod is { IsPublic: true });
 
     /// <summary>The concrete classes in <paramref name="assembly"/> implementing any of the open generic <paramref name="contracts"/>.</summary>
     private static IEnumerable<Type> ImplementationsOf(Assembly assembly, Type[] contracts)
