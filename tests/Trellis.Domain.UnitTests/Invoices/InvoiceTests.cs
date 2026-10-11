@@ -135,8 +135,12 @@ public sealed class InvoiceTests
     }
 
     [Fact]
-    public void Issue_twice_is_rejected()
-        => CreateIssued().Issue(DueDate, IssuedAt).Error.ShouldBe(InvoiceErrors.AlreadyFinalized);
+    public void Issue_twice_is_rejected_as_already_issued()
+        => CreateIssued().Issue(DueDate, IssuedAt).Error.ShouldBe(InvoiceErrors.AlreadyIssued);
+
+    [Fact]
+    public void Issue_on_a_paid_invoice_is_rejected_as_finalized()
+        => CreatePaid().Issue(DueDate, IssuedAt).Error.ShouldBe(InvoiceErrors.AlreadyFinalized);
 
     [Fact]
     public void MarkPaid_requires_issued_status()

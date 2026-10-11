@@ -19,6 +19,9 @@ public static class InvoiceErrors
     public static readonly Error NotIssued =
         Error.Conflict("Invoice.NotIssued", "Only an issued invoice can be paid.");
 
+    public static readonly Error AlreadyIssued =
+        Error.Conflict("Invoice.AlreadyIssued", "The invoice has already been issued.");
+
     public static readonly Error AlreadyFinalized =
         Error.Conflict("Invoice.AlreadyFinalized", "A paid or voided invoice cannot be changed.");
 

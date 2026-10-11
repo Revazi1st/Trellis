@@ -103,7 +103,8 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
     {
         if (Status != InvoiceStatus.Draft)
         {
-            return Result.Failure(InvoiceErrors.AlreadyFinalized);
+            // Name the state the invoice is in: an issued one is not "paid or voided".
+            return Result.Failure(Status == InvoiceStatus.Issued ? InvoiceErrors.AlreadyIssued : InvoiceErrors.AlreadyFinalized);
         }
 
         if (_lines.Count == 0)
