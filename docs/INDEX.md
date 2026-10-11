@@ -18,12 +18,12 @@ Agent entry point — read only what the task needs.
 
 ## Layer rules (`.claude/rules/`, loaded when you touch a file their glob matches)
 - [api.md](../.claude/rules/api.md) — `src/Presentation/Api/**/*.cs`: one endpoint per use case, problem details, secure by default, rate limits, idempotency, caching, paging, OpenAPI
-- [application.md](../.claude/rules/application.md) — `src/Core/Trellis.Application/**/*.cs`: slices, handlers, validators, ports, event handlers, telemetry names, the pipeline
-- [domain.md](../.claude/rules/domain.md) — `src/Core/Trellis.Domain/**/*.cs`: aggregates, value objects, IDs, events, specifications
+- [application.md](../.claude/rules/application.md) — `src/Core/Trellis.Application/**/*.cs`: slices, handlers, validators, ports, event handlers, one aggregate per command, multi-aggregate commands, handler failures and idempotency keys, per-record authorization, telemetry names, the pipeline
+- [domain.md](../.claude/rules/domain.md) — `src/Core/Trellis.Domain/**/*.cs`: aggregates, lifecycle rules, value objects and what they guarantee, IDs, events, specifications, choosing an `ErrorType`
 - [infrastructure.md](../.claude/rules/infrastructure.md) — `src/Infrastructure/Trellis.Infrastructure/**/*.cs`: adapters, options, outbound HTTP, e-mail
 - [persistence.md](../.claude/rules/persistence.md) — `src/Infrastructure/Trellis.Persistence/**/*.cs`: EF configurations, interceptors, tenancy, outbox, retention, options, migrations, Identity
 - [sharedkernel.md](../.claude/rules/sharedkernel.md) — `src/Core/Trellis.SharedKernel/**/*.cs`: Result and errors, CQRS contracts, the decorator pipeline, cancellation filters, the unit of work
-- [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, each test project's job, the fitness suites, the OpenAPI snapshot
+- [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, test names, each test project's conventions, the fitness suites and their positive controls, the fixture contract and helpers, the OpenAPI snapshot
 - [tools.md](../.claude/rules/tools.md) — `tools/**/*.{cs,csproj}`, `.github/**/*.{yml,yaml}`, `docker-compose.yml`: AppHost, MigrationService, CI supply-chain gates
 <!--#if (IncludeUI) -->
 - [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the host shell

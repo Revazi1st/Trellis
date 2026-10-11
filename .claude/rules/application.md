@@ -7,7 +7,7 @@ paths: ["src/Core/Trellis.Application/**/*.cs"]
 
 Depends on Domain + SharedKernel only — never Infrastructure, Persistence, EF, or ASP.NET (arch-test enforced).
 
-- **Vertical slices**: `Features/{Feature}/{UseCase}/` holds the command/query + its handler + its FluentValidation validator, co-located.
+- **Vertical slices**: `Features/{Feature}/{UseCase}/` holds the command/query + its handler + its FluentValidation validator, co-located (a use case whose only input is the route's id has nothing to validate and no validator: `PayInvoice`, `VoidInvoice`, `GetInvoice`).
 - **Commands/queries** implement `ICommand` / `ICommand<TResponse>` / `IQuery<TResponse>` (SharedKernel). **No mediator** — endpoints inject the handler interface directly.
 - **Handlers** are `internal sealed`, implement `ICommandHandler<>` / `IQueryHandler<>`, and return `Result`/`Result<T>`. They orchestrate the domain + ports; they contain no business rules (those live in the aggregate).
 - **A handler never runs another use case**: share logic through the aggregate, a domain service or a port. An injected `ICommandHandler` is that command's whole pipeline, whose UnitOfWork stage commits mid-command, and an injected `IUnitOfWork` commits by hand; `ConventionTests` refuses both in any handler's constructor.
