@@ -351,6 +351,28 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     }
 
     [Fact]
+    public async Task A_failure_result_is_a_500_that_keeps_its_code_and_says_nothing_specific()
+    {
+        // A Failure's description can carry what a connection or a third party said; the 500 keeps the
+        // code, so the failure stays identifiable, and gives the catalogue sentence instead (ADR-0024 rule 4).
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using var failing = factory.WithTestServices(static services => services.AddScoped<IUnitOfWork>(
+            static _ => new FailingUnitOfWork(Error.Failure("Storage.Unreachable", ExceptionSecret))));
+        HttpClient admin = await factory.CreateAdminClientOnAsync(failing, ct);
+
+        HttpResponseMessage response = await admin.PostAsJsonAsync(
+            "/api/v1/invoices", new CreateInvoiceRequest("Leaky Co", "l@l.co", "USD"), ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.InternalServerError, "Storage.Unreachable", "/api/v1/invoices", ct);
+        problem.Title.ShouldBe("Server failure");
+        problem.Detail.ShouldBe(ProblemCatalog.ServerFailure.Detail);
+        problem.Errors.ShouldBeNull();
+        string body = await response.Content.ReadAsStringAsync(ct);
+        body.ShouldNotContain("boom");
+        body.ShouldNotContain("hunter2");
+    }
+
+    [Fact]
     public async Task An_endpoint_returning_a_result_unmapped_fails_fast_instead_of_answering_200()
     {
         // Without the guard this successful Result answered 200 with {"isSuccess":true,…,"value":42} and a
@@ -416,6 +438,12 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     {
         public Task<Result> CommitAsync(CancellationToken cancellationToken)
             => throw new InvalidOperationException(ExceptionSecret);
+    }
+
+    /// <summary>A commit that reports <paramref name="error"/> as its Result: the path a Result-produced 5xx takes.</summary>
+    private sealed class FailingUnitOfWork(Error error) : IUnitOfWork
+    {
+        public Task<Result> CommitAsync(CancellationToken cancellationToken) => Task.FromResult(Result.Failure(error));
     }
 
     /// <summary>

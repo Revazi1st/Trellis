@@ -5,6 +5,7 @@
 - **Supersedes**: the "At the HTTP boundary…" paragraph of ADR-0004 (the Result decision itself stands).
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
 - **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`); a `Result` never reaches JSON (see *Amendment* below)
+- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence (see *Second amendment* below)
 
 ## Context
 
@@ -61,6 +62,8 @@ Every response with status ≥ 400 is `application/problem+json` with this shape
 4. **`detail`** is `Error.Description` or the catalogue sentence. Exception messages never reach `detail`
    except the framework's own `BadHttpRequestException.Message`, which names a parameter or a limit, not
    a stack. The 500's detail is always "An unexpected error occurred."
+   *(Reworded by the second 2026-10-11 amendment below: a 4xx carries `Error.Description`; every 5xx,
+   a Result-produced one included, carries the catalogue sentence and keeps its `code`.)*
 5. **`errors[]`** appears on every 400 produced from a `Result` (`CustomResults.Problem` with
    `ErrorType.Validation`), never elsewhere:
    - `field` is the **JSON path of the offending request member** (`customerName`, `lines[0].amount`:
@@ -191,3 +194,15 @@ answered 200 with the Result's own members on success and a 500 on failure. Both
 naming `TypedResults` and `CustomResults.Problem` instead of serialising. Minimal APIs resolve the
 response contract when they build the endpoint, so such an endpoint stops the host at boot, and every
 in-process test with it; `ProblemDetailsContractTests` proves it with a throwaway endpoint.
+
+## Second amendment (2026-10-11): the HTTP contract, second pass
+
+**Every 5xx `detail` is the catalogue sentence.** Rule 4 promised that the 500's detail is always "An
+unexpected error occurred.", but `CustomResults.Problem` copied `Error.Description` whatever the
+status, so a `Failure` Result put its own text on the wire: the place a third party's answer or a
+connection's complaint would land. The seam now computes the status first and, for any status of 500
+or more, writes `ProblemCatalog.ServerFailure.Detail` instead of the description. The `code` stays, so
+the failure is still identifiable from the body, the logs (ADR-0028) and the span. Rule 4 therefore
+reads: a 4xx carries `Error.Description` or the catalogue sentence; a 5xx carries nothing specific,
+whichever writer produced it. `ProblemDetailsContractTests` pins it with a Result-produced 500 whose
+description is a secret.

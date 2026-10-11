@@ -9,7 +9,9 @@ namespace Trellis.Api.Common.Results;
 /// <summary>
 /// Maps SharedKernel errors onto RFC 9457 problem details — the single translation point from Result to
 /// HTTP (ADR-0004, shape in ADR-0024). The document carries a human <c>title</c> per error class, the
-/// error's description as <c>detail</c>, its code as the <c>code</c> extension and, for a 400, an
+/// error's description as <c>detail</c> on a 4xx (a 5xx says nothing specific: its description can carry
+/// what a third party or a connection said, so the client gets the catalogue sentence), its code as the
+/// <c>code</c> extension on every status and, for a 400, an
 /// <c>errors[]</c> of <c>{ field, code, description }</c>: one entry per <see cref="FieldError"/> (field =
 /// the request's JSON path) or per whole-request error (field = null) — a single plain validation error
 /// included, so clients can always render <c>errors[]</c> on a 400. <c>type</c>, <c>instance</c>,
@@ -36,10 +38,11 @@ public static class CustomResults
                 .ToArray();
         }
 
+        int status = StatusCodeFor(error.Type);
         return TypedResults.Problem(
             title: ProblemTitles.For(error.Type),
-            detail: error.Description,
-            statusCode: StatusCodeFor(error.Type),
+            detail: status >= StatusCodes.Status500InternalServerError ? ProblemCatalog.ServerFailure.Detail : error.Description,
+            statusCode: status,
             extensions: extensions);
     }
 
