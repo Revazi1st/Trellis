@@ -36,7 +36,7 @@ Agent entry point — read only what the task needs.
 <!--#if (TemplateSource) -->
 - [add-toggle](../.claude/skills/add-toggle/SKILL.md) — a new template toggle wired through template config, slnx/csproj conditionals, C# blocks, CI and docs (maintainers only)
 <!--#endif -->
-- [new-adr](../.claude/skills/new-adr/SKILL.md) — record an architecture decision: the next number in the right range (0100 and up for the project's own), the index line, dated amendments instead of edits
+- [new-adr](../.claude/skills/new-adr/SKILL.md) — record an architecture decision: the next number in the right range (0100 and up for the project's own), the index line, an optional *Alternatives / Revisit when* section, dated amendments instead of edits
 - [remove-feature](../.claude/skills/remove-feature/SKILL.md) — delete the Invoices reference slice from the Domain outward once your own first feature exists
 - [run-app](../.claude/skills/run-app/SKILL.md) — run the full stack with `aspire run` (needs a local SDK) or as sibling containers without one, and verify it end to end
 
