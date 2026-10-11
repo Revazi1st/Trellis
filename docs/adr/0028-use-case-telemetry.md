@@ -2,7 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-08
-- **Amended**: 2026-10-11 — the span wraps the line, descriptions leave the line, stable event ids (see *Amendment* below)
+- **Amended**: 2026-10-11 — the span wraps the line, descriptions leave the line, stable event ids, final span attribute names, a validation-failure counter (see *Amendment* below)
 
 ## Context
 
@@ -52,7 +52,7 @@ a contract with every dashboard and alert built on them.
   `TelemetryNamingTests` (prefixes, units, resolvable names, the pending renames still pending),
   `ServiceDefaultsTests` (a prefixed meter and source are exported and an unprefixed one is not; the resource and the `OTEL_*` overrides).
 
-## Amendment (2026-10-11): the span wraps the line; the line names the error, not its text
+## Amendment (2026-10-11): the span wraps the line; the line names the error, not its text; final names
 
 - **The span wraps the line.** `TracingDecorators` now runs outside `LoggingDecorators` (ADR-0003's
   second amendment), so the outcome line is written while the use-case span is current: an OTLP log
@@ -69,5 +69,18 @@ a contract with every dashboard and alert built on them.
   failed validation (with the pairs), 1004 failed with the description (written instead of 1002 while
   the opt-in is on), 1005 cancelled by the caller, 1006 threw. An alert or a query matches the id, not
   the message text. Renumbering one is a breaking change, like renaming an instrument.
+- **Final span attribute names.** The three tags are `trellis.usecase.outcome`,
+  `trellis.usecase.error_code` and `trellis.usecase.error_type`. The third is not `error.type`, as the
+  decision above planned: backends count a span carrying `error.type` as an error, so every 404 and
+  rejected form would read as a fault. `error.type` is set only when the use case throws, to the
+  exception's full type name, beside status Error (the exception's message as its description) and the
+  exception event. `TelemetryNamingTests`' pending-rename list is empty.
+- **`trellis.validation.failures`** (`{failure}`, on the `Trellis.UseCases` meter) counts every failure of
+  a Validation-typed result, each entry of a `ValidationError` or the single error a handler returned,
+  tagged `trellis.usecase.name` and `trellis.validation.code` (never the field or the value). It is
+  counted at the outcome site, in `TracingDecorators`, so a domain rule's code (`Invoice.DueDateInPast`)
+  counts beside FluentValidation's: the rules that reject the most requests, by use case.
 - Fitness: `UseCaseOutcomeTests` asserts the event id per outcome, that a failure line omits the
-  description unless the opt-in is set, and that the line carries the use-case span's id.
+  description unless the opt-in is set, that the line carries the use-case span's id, the span
+  attribute names as literals, `error.type` on a crash only, and the counter for a FluentValidation and
+  a domain code.

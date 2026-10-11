@@ -39,14 +39,10 @@ public sealed partial class TelemetryNamingTests
     /// <summary>
     /// Names that break the rules today and are renamed by another change, each with its owner. Every entry
     /// must still occur: once the rename lands, the stale entry fails <see cref="Pending_renames_still_exist"/>
-    /// and is deleted, so this list only ever shrinks.
+    /// and is deleted, so this list only ever shrinks. Empty since the use-case span attributes took the
+    /// <c>trellis.usecase.</c> prefix (ADR-0028's 2026-10-11 amendment); keep it that way.
     /// </summary>
-    private static readonly Dictionary<string, string> PendingRenames = new(StringComparer.Ordinal)
-    {
-        ["usecase.outcome"] = "use-case span attribute (SharedKernel TracingDecorators): becomes trellis.usecase.outcome",
-        ["usecase.error_code"] = "use-case span attribute (SharedKernel TracingDecorators): becomes trellis.usecase.error_code",
-        ["usecase.error_type"] = "use-case span attribute (SharedKernel TracingDecorators): becomes error.type or trellis.usecase.error_type",
-    };
+    private static readonly Dictionary<string, string> PendingRenames = new(StringComparer.Ordinal);
 
     private static readonly string Prefix = ServiceDefaults.Extensions.TelemetryPrefix;
 

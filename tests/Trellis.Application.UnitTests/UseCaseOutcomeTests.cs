@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -209,7 +210,10 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         Activity span = spans.Of(nameof(ScriptedCommand)).ShouldHaveSingleItem();
         span.Status.ShouldBe(ActivityStatusCode.Error);
+        span.StatusDescription.ShouldBe("boom");
         span.GetTagItem(TracingDecorators.OutcomeTag).ShouldBe("exception");
+        span.GetTagItem("error.type").ShouldBe(typeof(InvalidOperationException).FullName);
+        span.GetTagItem(TracingDecorators.ErrorTypeTag).ShouldBeNull();
         ActivityEvent exceptionEvent = span.Events.ShouldHaveSingleItem();
         exceptionEvent.Name.ShouldBe("exception");
         exceptionEvent.Tags.ShouldContain(static t => t.Key == "exception.type" && Equals(t.Value, typeof(InvalidOperationException).FullName));
@@ -242,6 +246,30 @@ public sealed class UseCaseOutcomeTests : IDisposable
         span.GetTagItem(TracingDecorators.ErrorCodeTag).ShouldBe("Test.Conflict");
         span.GetTagItem(TracingDecorators.ErrorTypeTag).ShouldBe(nameof(ErrorType.Conflict));
         span.Events.ShouldBeEmpty();
+
+        // The names are a contract with every dashboard (ADR-0028), so they are pinned as literals; and an
+        // expected failure never carries error.type, which backends would count as an error.
+        span.TagObjects.Select(static t => t.Key).ShouldBe(
+            ["trellis.usecase.outcome", "trellis.usecase.error_code", "trellis.usecase.error_type"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task Every_validation_failure_is_counted_by_use_case_and_code_including_domain_codes()
+    {
+        using var counted = new ValidationFailureRecorder();
+
+        // A FluentValidation failure, rejected by the validation stage...
+        await _pipeline.Resolve<ICommandHandler<GuardedCommand>>().Handle(new GuardedCommand(""), TestContext.Current.CancellationToken);
+
+        // ...and a domain rule's, returned by the handler: both reach the outcome site, where they are counted.
+        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.Validation("Test.DomainRule", "A domain rule failed.")))));
+
+        // Neither a success nor a failure of another type counts.
+        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())));
+        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.NotFound("Test.Missing", "Gone.")))));
+
+        counted.Of(nameof(GuardedCommand)).ShouldBe(["Validation.NotEmpty"]);
+        counted.Of(nameof(ScriptedCommand)).ShouldBe(["Test.DomainRule"]);
     }
 
     [Fact]
@@ -291,6 +319,53 @@ public sealed class UseCaseOutcomeTests : IDisposable
     private sealed class GuardedCommandHandler : ICommandHandler<GuardedCommand>
     {
         public Task<Result> Handle(GuardedCommand command, CancellationToken cancellationToken) => Task.FromResult(Result.Success());
+    }
+
+    /// <summary>
+    /// Records the <see cref="UseCaseMetrics.ValidationFailuresInstrument"/> measurements made while it is
+    /// alive, one code per unit counted. The meter is process-wide, so callers filter by use case.
+    /// </summary>
+    private sealed class ValidationFailureRecorder : IDisposable
+    {
+        private readonly List<(string? UseCase, string? Code)> _counted = [];
+        private readonly MeterListener _listener = new();
+
+        public ValidationFailureRecorder()
+        {
+            _listener.InstrumentPublished = static (instrument, listener) =>
+            {
+                if (instrument.Meter.Name == UseCaseMetrics.MeterName && instrument.Name == UseCaseMetrics.ValidationFailuresInstrument)
+                {
+                    listener.EnableMeasurementEvents(instrument);
+                }
+            };
+            _listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
+            {
+                string? useCase = null;
+                string? code = null;
+                foreach (KeyValuePair<string, object?> tag in tags)
+                {
+                    useCase = tag.Key == UseCaseMetrics.UseCaseAttribute ? tag.Value as string : useCase;
+                    code = tag.Key == UseCaseMetrics.ValidationCodeAttribute ? tag.Value as string : code;
+                }
+
+                lock (_counted)
+                {
+                    _counted.AddRange(Enumerable.Repeat((useCase, code), (int)value));
+                }
+            });
+            _listener.Start();
+        }
+
+        public IReadOnlyList<string?> Of(string useCase)
+        {
+            lock (_counted)
+            {
+                return [.. _counted.Where(c => c.UseCase == useCase).Select(static c => c.Code)];
+            }
+        }
+
+        public void Dispose() => _listener.Dispose();
     }
 
     /// <summary>
