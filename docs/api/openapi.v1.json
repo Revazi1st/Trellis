@@ -25,7 +25,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency. A blank value, a repeated header or a comma-separated list is a 400 (Idempotency.InvalidKey).",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -148,13 +148,14 @@
           "Invoices"
         ],
         "summary": "Create a draft invoice",
-        "description": "Creates an invoice in Draft state with no lines. The currency is fixed at creation and every line added later must match it. Send an Idempotency-Key header so a retried request cannot create a second invoice.",
+        "description": "Creates an invoice in Draft state with no lines. The currency is fixed at creation and every line added later must match it. An Idempotency-Key header is required, so a retried request cannot create a second invoice.",
         "operationId": "CreateInvoice",
         "parameters": [
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. This endpoint requires the header: a request without it is a 400 (Idempotency.KeyRequired). A blank value, a repeated header or a comma-separated list is a 400 (Idempotency.InvalidKey).",
+            "required": true,
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -411,7 +412,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency. A blank value, a repeated header or a comma-separated list is a 400 (Idempotency.InvalidKey).",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -657,7 +658,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency. A blank value, a repeated header or a comma-separated list is a 400 (Idempotency.InvalidKey).",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -784,7 +785,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency; a blank value is a 400.",
+            "description": "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. A failed request leaves no reservation, so its key may be retried as is. Responses larger than 65536 bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. Omit the header to send the request without idempotency. A blank value, a repeated header or a comma-separated list is a 400 (Idempotency.InvalidKey).",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -1321,7 +1322,7 @@
             "description": "Human sentence describing the failure; safe to show to the user."
           }
         },
-        "description": "One validation failure inside a 400 ProblemResponse."
+        "description": "One failure inside a 400 ProblemResponse: a validation failure, or a body value of the wrong type (`Request.InvalidValue`)."
       },
       "InvoiceDto": {
         "required": [
@@ -1601,10 +1602,10 @@
             "items": {
               "$ref": "#/components/schemas/FieldError"
             },
-            "description": "The individual validation failures of a 400."
+            "description": "The individual failures of a 400: each validation failure, or the body member whose value had the wrong type."
           }
         },
-        "description": "RFC 9457 problem document (ADR-0024): every 4xx/5xx response. Branch on `code` (`type` is `urn:problem-type:{code}`); `title` and `detail` are for people; `errors[]` is present on a 400 produced from a Result, absent otherwise; `correlationId` equals the X-Correlation-ID response header."
+        "description": "RFC 9457 problem document (ADR-0024): every 4xx/5xx response. Branch on `code` (`type` is `urn:problem-type:{code}`); `title` and `detail` are for people; `errors[]` is present on a 400 produced from a Result and on a 400 whose body held a value of the wrong type (`Request.InvalidValue`), absent otherwise; `correlationId` equals the X-Correlation-ID response header."
       },
       "RefreshRequest": {
         "required": [

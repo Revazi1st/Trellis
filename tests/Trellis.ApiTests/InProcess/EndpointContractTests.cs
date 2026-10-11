@@ -30,7 +30,7 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient member = await factory.CreateMemberClientAsync(ct);
 
-        HttpResponseMessage response = await member.PostAsJsonAsync(
+        HttpResponseMessage response = await member.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("ACME", "a@b.co", "USD"), ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -113,6 +113,47 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
         ProblemResponse problem = (await response.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();
         problem.Code.ShouldBe("Idempotency.InvalidKey");
         problem.Detail.ShouldNotBeNull().ShouldContain("blank");
+    }
+
+    [Theory]
+    [InlineData("two headers")]
+    [InlineData("one list")]
+    public async Task More_than_one_idempotency_key_is_a_400_never_two_keys_joined_into_one(string shape)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/v1/invoices")
+        {
+            Content = JsonContent.Create(new CreateInvoiceRequest("Two Keys Co", "t@k.co", "USD")),
+        };
+        string[] values = shape == "two headers" ? ["first-key", "second-key"] : ["first-key,second-key"];
+        message.Headers.TryAddWithoutValidation(ApiHeaders.IdempotencyKey, values).ShouldBeTrue();
+        HttpResponseMessage response = await admin.SendAsync(message, ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        ProblemResponse problem = (await response.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();
+        problem.Code.ShouldBe("Idempotency.InvalidKey");
+        problem.Detail.ShouldBe(IdempotencyHeaderErrors.MultipleKeys.Description);
+    }
+
+    [Fact]
+    public async Task Create_requires_an_idempotency_key_while_writes_to_an_existing_invoice_stay_opt_in()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+
+        HttpResponseMessage withoutKey = await admin.PostAsJsonAsync(
+            "/api/v1/invoices", new CreateInvoiceRequest("No Key Co", "n@k.co", "USD"), ct);
+
+        withoutKey.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await withoutKey.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull().Code.ShouldBe("Idempotency.KeyRequired");
+
+        HttpResponseMessage created = await admin.PostWithIdempotencyKeyAsync(
+            "/api/v1/invoices", new CreateInvoiceRequest("No Key Co", "n@k.co", "USD"), ct);
+        Guid id = (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;
+        (await admin.PostAsJsonAsync($"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Line", 10m), ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent, "only CreateInvoice declares keyRequired");
     }
 
     [Fact]

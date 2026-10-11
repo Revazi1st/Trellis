@@ -5,7 +5,7 @@
 - **Supersedes**: the "At the HTTP boundary…" paragraph of ADR-0004 (the Result decision itself stands).
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
 - **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`); a `Result` never reaches JSON (see *Amendment* below)
-- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence; the 503 title (see *Second amendment* below)
+- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence; the 503 title; the field of a body value of the wrong type; `WWW-Authenticate` on every 401; two more idempotency outcomes (see *Second amendment* below)
 
 ## Context
 
@@ -66,7 +66,8 @@ Every response with status ≥ 400 is `application/problem+json` with this shape
    *(Reworded by the second 2026-10-11 amendment below: a 4xx carries `Error.Description`; every 5xx,
    a Result-produced one included, carries the catalogue sentence and keeps its `code`.)*
 5. **`errors[]`** appears on every 400 produced from a `Result` (`CustomResults.Problem` with
-   `ErrorType.Validation`), never elsewhere:
+   `ErrorType.Validation`), never elsewhere *(amended 2026-10-11: and on a 400 whose body held a value
+   of the wrong type; see the second amendment below)*:
    - `field` is the **JSON path of the offending request member** (`customerName`, `lines[0].amount`:
      camelCase per segment, computed at the API seam from FluentValidation's `PropertyName`), or `null`
      when the error is about the request as a whole (every domain value-object error). *(Superseded by
@@ -215,3 +216,29 @@ request depends on is unavailable right now. Retry later." (`CustomResults.Unava
 every 5xx it never carries the description, and the `code` names the dependency
 (`ExchangeRate.Unavailable`). `ProblemDetailsContractTests` has the 503 row.
 
+**A body value of the wrong type names its field.** A body that parsed as JSON but did not bind
+(`"amount": "abc"`, `"dueDate": "tomorrow"`) was a 400 `Request.Malformed` with the framework's
+parameter-level sentence and no field, so neither a form nor an API client could point at the input.
+`ProblemCatalog.Malformed` now reads the serializer's `JsonException.Path` (`$.lines[1].amount`) and,
+for a conversion failure, adds `errors: [{ field: "lines[1].amount", code: "Request.InvalidValue",
+description: "The value is not of the type this field expects." }]`. The field is camel-cased like
+every other (the binder matches names case-insensitively); the description is fixed, because the
+serializer's own message names CLR types and is never echoed; the top-level `code` stays
+`Request.Malformed`. A syntax error (`{ not json`, a stray comma) names no field: the serializer
+reports where it stopped reading, often a parent, so the inner reader exception rules it out. Rule 5
+and *What consumers may rely on* therefore read: `errors[]` is on every Result-produced 400 and on a
+400 naming a body value of the wrong type. `ProblemDescriptor` gained an optional `Errors`, which
+`WriteProblemAsync` writes as the same extension.
+
+**Every 401 carries `WWW-Authenticate`.** The enrichment adds `WWW-Authenticate: Bearer` to a 401
+whose writer set none, so the 401s a Result produces (login's `Auth.InvalidCredentials`, refresh's
+`Auth.InvalidRefreshToken`) name the scheme as the challenge's always did (ADR-0021 decision 4).
+
+**Two idempotency outcomes.** A repeated `Idempotency-Key` header or a comma-separated list used to be
+joined into one key the caller never sent; it is now a 400 `Idempotency.InvalidKey` (the code the blank
+and the too-long key share, since the remedy is the same). An endpoint that declares
+`RequireIdempotency(keyRequired: true)` answers a request without the header with a 400
+`Idempotency.KeyRequired`; `CreateInvoice` is the one that does, because an accidental repeat of a
+create cannot be told from a second intent. Both are Results (`IdempotencyHeaderErrors`, beside the
+filter, since nothing below the API produces them) written through `CustomResults` like the rest of
+the filter's outcomes. `ProblemDetailsContractTests` has a row for each new code.

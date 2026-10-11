@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 using Trellis.SharedKernel.Results;
+using WireFieldError = Trellis.Api.Contracts.Common.FieldError;
 
 namespace Trellis.Api.Common.Http;
 
@@ -23,7 +25,7 @@ public static class ProblemExtensions
     /// <summary>The stable machine discriminator, <c>Area.Problem</c>: what clients branch on.</summary>
     public const string Code = "code";
 
-    /// <summary>The per-field failures of a 400 produced from a <see cref="Result"/>: <c>[{ field, code, description }]</c>.</summary>
+    /// <summary>The per-field failures of a 400 produced from a <see cref="Result"/>, or of a body value of the wrong type: <c>[{ field, code, description }]</c>.</summary>
     public const string Errors = "errors";
 
     /// <summary>The same value as the <c>X-Correlation-ID</c> response header.</summary>
@@ -65,8 +67,11 @@ public static class ProblemTitles
     };
 }
 
-/// <summary>One situation the API reports that does not originate from a <see cref="Result"/>: its status, code, title and detail.</summary>
-public sealed record ProblemDescriptor(int Status, string Code, string Title, string? Detail);
+/// <summary>
+/// One situation the API reports that does not originate from a <see cref="Result"/>: its status, code,
+/// title and detail, and the <c>errors[]</c> of a 400 that can name the offending field.
+/// </summary>
+public sealed record ProblemDescriptor(int Status, string Code, string Title, string? Detail, IReadOnlyList<WireFieldError>? Errors = null);
 
 /// <summary>
 /// Everything the API says that does not come through <c>CustomResults.Problem(Error)</c>: one row per
@@ -117,16 +122,35 @@ public static class ProblemCatalog
             : "Rate limit exceeded. Retry after the interval in the Retry-After header.");
 
     /// <summary>
+    /// The <c>errors[]</c> entry of a body that parsed as JSON but holds a value of the wrong type for a
+    /// member: <c>"amount": "abc"</c>, <c>"dueDate": "tomorrow"</c>, a string where a number belongs.
+    /// </summary>
+    public const string InvalidValueCode = "Request.InvalidValue";
+
+    /// <summary>
     /// A request the framework could not bind: malformed or missing JSON, an unparsable route or query value,
     /// an oversized body, a non-JSON content type. The exception's message names a parameter or a limit,
-    /// never a stack, so it is the <c>detail</c>.
+    /// never a stack, so it is the <c>detail</c>. When the body was valid JSON with a value of the wrong type,
+    /// <c>errors[]</c> names the member by the path the serializer reported (<c>lines[1].amount</c>) with a
+    /// fixed sentence: the serializer's own message names CLR types and is never echoed.
     /// </summary>
     public static ProblemDescriptor Malformed(BadHttpRequestException exception) => exception.StatusCode switch
     {
         StatusCodes.Status413PayloadTooLarge => RequestTooLarge with { Detail = exception.Message },
         StatusCodes.Status415UnsupportedMediaType => UnsupportedMediaType with { Detail = exception.Message },
-        var status => new(status, "Request.Malformed", "Malformed request", exception.Message),
+        var status => new(status, "Request.Malformed", "Malformed request", exception.Message, InvalidValueOf(exception)),
     };
+
+    /// <summary>
+    /// The offending member of a body that parsed but did not bind, or null. A syntax error is not a
+    /// field's fault (the serializer then reports where it stopped reading, often a parent), so only a
+    /// conversion failure, whose inner exception is not the reader's own <see cref="JsonException"/>, names one.
+    /// </summary>
+    private static WireFieldError[]? InvalidValueOf(BadHttpRequestException exception)
+        => exception.InnerException is JsonException { InnerException: not JsonException } json
+           && JsonFieldPath.FromSerializerPath(json.Path) is { } field
+            ? [new WireFieldError(field, InvalidValueCode, "The value is not of the type this field expects.")]
+            : null;
 
     /// <summary>
     /// The code and title for a response that reached the client with a status but no body (an unknown

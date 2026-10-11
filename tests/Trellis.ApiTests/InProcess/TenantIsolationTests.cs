@@ -98,6 +98,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
             Content = JsonContent.Create(new CreateInvoiceRequest("Header Corp", "h@h.co", "USD")),
         };
         createAsB.Headers.Add(TenantHeader, ApiFactory.TenantB);
+        createAsB.Headers.Add(ApiHeaders.IdempotencyKey, Guid.NewGuid().ToString());
         HttpResponseMessage created = await tenantA.SendAsync(createAsB, ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         Guid id = (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
@@ -163,7 +164,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
 
     private static async Task<Guid> CreateInvoiceAsync(HttpClient client, CancellationToken ct)
     {
-        HttpResponseMessage created = await client.PostAsJsonAsync(
+        HttpResponseMessage created = await client.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("Tenant Corp", "t@t.co", "USD"), ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;

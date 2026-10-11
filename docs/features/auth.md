@@ -136,8 +136,10 @@ Auth rejections are RFC 9457 everywhere: JwtBearer challenges (401) and forbidde
 carry problem-details bodies, and rate-limited requests get a 429 problem with `Retry-After` — all
 written by `IProblemDetailsService` (`ProblemCatalog` + `WriteProblemAsync`), so they carry `code`,
 `type`, `traceId` and `correlationId` like every other problem (ADR-0024).
-A 401 also carries `WWW-Authenticate: Bearer` (`error="invalid_token"` when a presented token was
-rejected), and every `/auth/` response is `Cache-Control: no-store`.
+Every 401 carries `WWW-Authenticate: Bearer`: the challenge's (`error="invalid_token"` when a presented
+token was rejected) and the ones a Result produces, a wrong password or a rejected refresh token (the
+problem-details enrichment adds it). Every `/auth/` response is `Cache-Control: no-store`, whatever the
+endpoint sets, as is every other `/api/` response unless its endpoint chose its own (ADR-0021 amendment).
 
 ## Tests
 

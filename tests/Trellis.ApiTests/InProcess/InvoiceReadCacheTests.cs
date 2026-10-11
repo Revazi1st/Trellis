@@ -106,7 +106,7 @@ public sealed class InvoiceReadCacheTests(ApiFactory factory) : IClassFixture<Ap
 
     private static async Task<Guid> CreateAsync(HttpClient client, CancellationToken ct)
     {
-        HttpResponseMessage created = await client.PostAsJsonAsync(
+        HttpResponseMessage created = await client.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("Read Cache Ltd", "cache@example.com", "USD"), ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;

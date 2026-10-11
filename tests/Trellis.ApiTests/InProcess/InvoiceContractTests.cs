@@ -92,7 +92,7 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
 
-        HttpResponseMessage created = await admin.PostAsJsonAsync(
+        HttpResponseMessage created = await admin.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("Location Ltd", "l@l.co", "USD"), ct);
 
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -104,7 +104,7 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
 
     private static async Task<(Guid Id, long Version)> CreateAndReadAsync(HttpClient client, CancellationToken ct)
     {
-        HttpResponseMessage created = await client.PostAsJsonAsync(
+        HttpResponseMessage created = await client.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("Conditional Co", "c@c.co", "USD"), ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         Guid id = (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;

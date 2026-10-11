@@ -54,7 +54,7 @@ public sealed class IdempotencyPostCommitTests(ApiFactory factory) : IClassFixtu
 
     private static async Task<Guid> CreateInvoiceAsync(HttpClient client, CancellationToken ct)
     {
-        HttpResponseMessage created = await client.PostAsJsonAsync(
+        HttpResponseMessage created = await client.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("Post Commit Ltd", "p@c.io", "USD"), ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;

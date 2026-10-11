@@ -28,7 +28,11 @@ namespace Trellis.Api.Common.Idempotency;
 /// key was reused, which is a client bug, not a retry.</item>
 /// <item>In flight: 409 <see cref="IdempotencyErrors.InFlight"/> with <c>Retry-After</c>.</item>
 /// </list>
-/// A missing header means "no idempotency"; a blank one is a 400, never a silent opt-out. Everything an
+/// A missing header means "no idempotency", unless the endpoint declared
+/// <c>RequireIdempotency(keyRequired: true)</c>, which answers it with a 400
+/// <see cref="IdempotencyHeaderErrors.KeyRequired"/>. A blank key, a key over
+/// <see cref="MaxKeyLength"/>, a repeated header and a comma-separated list are each a 400
+/// <c>Idempotency.InvalidKey</c>, never a silent opt-out and never two keys joined into one. Everything an
 /// endpoint does after its command succeeded is post-commit work and takes
 /// <see cref="CancellationToken.None"/>: a fault there ends the request with a 500 but the reservation
 /// is already committed, so the retry is a 409, never a second apply. The filter's own outcomes are
@@ -49,10 +53,20 @@ public sealed class IdempotencyFilter : IEndpointFilter
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         HttpContext http = context.HttpContext;
+        IdempotencyMetadata? metadata = http.GetEndpoint()?.Metadata.GetMetadata<IdempotencyMetadata>();
 
         if (!http.Request.Headers.TryGetValue(HeaderName, out var header))
         {
-            return await next(context);
+            return metadata is { KeyRequired: true }
+                ? CustomResults.Problem(IdempotencyHeaderErrors.KeyRequired)
+                : await next(context);
+        }
+
+        // Two headers (or one list) would otherwise be joined with a comma into a key the caller never
+        // sent, and a retry that sends them in another order would be a different request.
+        if (header.Count > 1 || header.ToString().Contains(',', StringComparison.Ordinal))
+        {
+            return CustomResults.Problem(IdempotencyHeaderErrors.MultipleKeys);
         }
 
         string clientKey = header.ToString();
@@ -92,8 +106,7 @@ public sealed class IdempotencyFilter : IEndpointFilter
             throw;
         }
 
-        int maxReplayBodyBytes = http.GetEndpoint()?.Metadata.GetMetadata<IdempotencyMetadata>()?.MaxReplayBodyBytes
-            ?? DefaultMaxReplayBodyBytes;
+        int maxReplayBodyBytes = metadata?.MaxReplayBodyBytes ?? DefaultMaxReplayBodyBytes;
         return new CompletingResult(result, key, store, maxReplayBodyBytes);
     }
 
@@ -130,11 +143,14 @@ public sealed class IdempotencyFilter : IEndpointFilter
     }
 }
 
-/// <summary>Endpoint marker: the OpenAPI transformer documents the header and the outcomes from it, and the filter reads the endpoint's replay cap.</summary>
-public sealed class IdempotencyMetadata(int maxReplayBodyBytes)
+/// <summary>Endpoint marker: the OpenAPI transformer documents the header and the outcomes from it, and the filter reads the endpoint's replay cap and whether a key is required.</summary>
+public sealed class IdempotencyMetadata(int maxReplayBodyBytes, bool keyRequired = false)
 {
     /// <summary>The largest response body this endpoint stores for replay; a larger response completes but a retry gets a 409.</summary>
     public int MaxReplayBodyBytes { get; } = maxReplayBodyBytes;
+
+    /// <summary>A request without an <c>Idempotency-Key</c> is a 400 <c>Idempotency.KeyRequired</c> instead of running unguarded.</summary>
+    public bool KeyRequired { get; } = keyRequired;
 }
 
 public static class IdempotencyExtensions
@@ -142,14 +158,18 @@ public static class IdempotencyExtensions
     /// <summary>
     /// Applies opt-in idempotency to a state-changing endpoint. Raise <paramref name="maxReplayBodyBytes"/>
     /// only on the endpoint whose response needs it, the way the request-body cap is raised per endpoint.
+    /// <paramref name="keyRequired"/> makes the key mandatory: for a write whose accidental repeat cannot be
+    /// told from a second intent (creating a resource), so a client that forgot the header learns it on its
+    /// first request instead of on its first lost response.
     /// </summary>
     public static RouteHandlerBuilder RequireIdempotency(
         this RouteHandlerBuilder builder,
-        int maxReplayBodyBytes = IdempotencyFilter.DefaultMaxReplayBodyBytes)
+        int maxReplayBodyBytes = IdempotencyFilter.DefaultMaxReplayBodyBytes,
+        bool keyRequired = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(maxReplayBodyBytes);
         return builder
             .AddEndpointFilter<IdempotencyFilter>()
-            .WithMetadata(new IdempotencyMetadata(maxReplayBodyBytes));
+            .WithMetadata(new IdempotencyMetadata(maxReplayBodyBytes, keyRequired));
     }
 }

@@ -6,6 +6,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.RateLimiting;
@@ -19,6 +20,7 @@ using Trellis.Api.Common.Authentication;
 using Trellis.Api.Common.Hardening;
 using Trellis.Api.Common.Idempotency;
 using Trellis.Api.Contracts.Auth;
+using Trellis.Api.Contracts.Invoices;
 using Trellis.Application.Authorization;
 using Trellis.Application.Options;
 using Xunit;
@@ -229,6 +231,43 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
+    public async Task Api_responses_are_not_stored_by_a_cache_unless_the_endpoint_says_otherwise()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        HttpResponseMessage created = await admin.PostWithIdempotencyKeyAsync(
+            "/api/v1/invoices", new CreateInvoiceRequest("Cache Co", "c@c.co", "USD"), ct);
+        Guid id = (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;
+
+        // Per-user data, its 404 and a 201 alike: no-store unless the endpoint chose its own.
+        HttpResponseMessage read = await admin.GetAsync($"/api/v1/invoices/{id}", ct);
+        HttpResponseMessage missing = await admin.GetAsync($"/api/v1/invoices/{Guid.NewGuid()}", ct);
+        read.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+        missing.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+        created.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+
+        // An endpoint that sets its own keeps it (here a stand-in sets it before the endpoint runs).
+        using var host = factory.WithTestServices(static services => services.AddTransient<IStartupFilter, OwnCacheControlStartupFilter>());
+        HttpClient chosen = await factory.CreateAdminClientOnAsync(host, ct);
+        HttpResponseMessage own = await chosen.GetAsync($"/api/v1/invoices/{id}", ct);
+        System.Net.Http.Headers.CacheControlHeaderValue kept = own.Headers.CacheControl.ShouldNotBeNull();
+        kept.Private.ShouldBeTrue();
+        kept.MaxAge.ShouldBe(TimeSpan.FromSeconds(60));
+        kept.NoStore.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Responses_outside_the_api_keep_their_own_caching()
+    {
+        // The health-check middleware writes its own "no-store, no-cache"; the API default (a bare no-store)
+        // must not be what decides a probe's header.
+        HttpResponseMessage alive = await factory.CreateClient().GetAsync("/alive", TestContext.Current.CancellationToken);
+
+        alive.StatusCode.ShouldBe(HttpStatusCode.OK);
+        alive.Headers.CacheControl.ShouldNotBeNull().NoCache.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task A_401_without_a_token_names_the_bearer_scheme()
     {
         HttpResponseMessage response = await factory.CreateClient()
@@ -315,6 +354,23 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
     {
         public string Key => $"{Method} {Route}";
     }
+}
+
+/// <summary>Stands in for an endpoint that chose its own caching: the header is on the response before the endpoint runs.</summary>
+internal sealed class OwnCacheControlStartupFilter : IStartupFilter
+{
+    public const string Value = "private, max-age=60";
+
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+    {
+        app.Use(static (context, nextMiddleware) =>
+        {
+            context.Response.Headers.CacheControl = Value;
+            return nextMiddleware(context);
+        });
+
+        next(app);
+    };
 }
 
 /// <summary>
