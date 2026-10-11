@@ -136,8 +136,8 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
             if (await userManager.FindByEmailAsync(email) is null)
             {
                 var admin = new ApplicationUser { Id = Guid.CreateVersion7(), UserName = email, Email = email, EmailConfirmed = true, TenantId = tenantId };
-                await userManager.CreateAsync(admin, AdminPassword);
-                await userManager.AddToRoleAsync(admin, Roles.Administrator);
+                IdentitySeed.EnsureSucceeded(await userManager.CreateAsync(admin, AdminPassword), $"Creating the administrator '{email}'");
+                IdentitySeed.EnsureSucceeded(await userManager.AddToRoleAsync(admin, Roles.Administrator), $"Adding '{email}' to role '{Roles.Administrator}'");
             }
         }
 
