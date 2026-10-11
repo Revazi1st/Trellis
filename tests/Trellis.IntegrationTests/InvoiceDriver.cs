@@ -72,9 +72,12 @@ internal static class InvoiceDriver
 
     /// <summary>A draft with one line, issued: the state most outbox and listing tests start from.</summary>
     public static async Task<InvoiceId> IssuedInvoiceAsync(
-        this IServiceProvider services, DateTimeOffset? dueDate = null, string customerName = InvoiceFactory.Customer)
+        this IServiceProvider services,
+        DateTimeOffset? dueDate = null,
+        string customerName = InvoiceFactory.Customer,
+        string customerEmail = InvoiceFactory.Email)
     {
-        InvoiceId id = await services.CreateInvoiceAsync(customerName);
+        InvoiceId id = await services.CreateInvoiceAsync(customerName, customerEmail);
         await services.AddInvoiceLineAsync(id);
         return await services.IssueInvoiceAsync(id, dueDate);
     }

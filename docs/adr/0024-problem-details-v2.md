@@ -244,8 +244,9 @@ and the too-long key share, since the remedy is the same). An endpoint that decl
 `RequireIdempotency(keyRequired: true)` answers a request without the header with a 400
 `Idempotency.KeyRequired`; `CreateInvoice` is the one that does, because an accidental repeat of a
 create cannot be told from a second intent. Both are Results (`IdempotencyHeaderErrors`, beside the
-filter, since nothing below the API produces them) written through `CustomResults` like the rest of
-the filter's outcomes. `ProblemDetailsContractTests` has a row for each new code.
+filter, since nothing below the API produces them; *amended 2026-10-11: folded into Application's
+`IdempotencyErrors`, one owner per code, see ADR-0018's second amendment*) written through `CustomResults`
+like the rest of the filter's outcomes. `ProblemDetailsContractTests` has a row for each new code.
 
 **A 412 for a stale `If-Match`.** ADR-0004's amendment adds `ErrorType.PreconditionFailed`;
 `CustomResults.Problem` maps it to 412 with the title "Precondition failed" and, as a 4xx, the error's

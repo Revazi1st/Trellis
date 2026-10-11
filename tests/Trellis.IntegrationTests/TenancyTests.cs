@@ -20,7 +20,6 @@ using Trellis.Persistence.Interceptors;
 using Trellis.Persistence.Outbox;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Results;
-using Trellis.TestSupport.Invoices;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
@@ -39,6 +38,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     private const string TenantB = "tenant-b";
     private const string Password = "Sup3r-secret!";
     private const string TenantACustomer = "Tenant A Corp";
+    private const string TenantACustomerEmail = "billing@tenant-a.example";
     private static readonly DateTimeOffset Now = new(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
 
     private readonly IEmailSender _emailSender = Substitute.For<IEmailSender>();
@@ -220,7 +220,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         InvoiceId id;
         using (IServiceScope scope = _tenantA!.CreateScope())
         {
-            id = await scope.ServiceProvider.IssuedInvoiceAsync(customerName: TenantACustomer);
+            id = await scope.ServiceProvider.IssuedInvoiceAsync(customerName: TenantACustomer, customerEmail: TenantACustomerEmail);
         }
 
         using (IServiceScope scope = _tenantA!.CreateScope())
@@ -239,7 +239,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         // …and the processor (a system flow with no request) restores it around the handlers.
         await NewProcessor(_system!).ProcessBatchAsync(ct);
 
-        await _emailSender.Received(1).SendAsync(InvoiceFactory.Email, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _emailSender.Received(1).SendAsync(TenantACustomerEmail, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         tenantSeenByHandler.ShouldBe(TenantA);
         AmbientTenant.CurrentTenantId.ShouldBeNull();
     }

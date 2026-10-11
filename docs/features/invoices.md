@@ -86,6 +86,7 @@ src/Core/Trellis.Application/Features/Invoices/
     │                           an id, so they carry no validator
     ├── GetInvoice/             query + handler; no validator, it takes only the route's id
     ├── ListOverdueInvoices/    query + handler + validator (the paging bounds)
+    ├── InvoicePreconditions.cs the shared If-Match check: NotFound first, then Invoice.VersionMismatch
     ├── EventHandlers/          SendReceiptOnInvoicePaid, RecordInvoiceMetrics
     └── InvoiceResponse.cs      the read model the queries return
 src/Infrastructure/Trellis.Persistence/
@@ -254,8 +255,9 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
 ## Tests
 
 - `Domain.UnitTests/Invoices`: invariants, events, the overdue specification, ID parsing.
-- `Application.UnitTests/Features/Invoices/<UseCase>` (one folder per slice folder): the handlers, and the
-  validators' bounds at the Domain constants; every use case through the real pipeline.
+- `Application.UnitTests/Features/Invoices/<UseCase>` (one folder per use case, the event handlers under
+  `EventHandlers/`): the handlers, and the validators' bounds at the Domain constants; every use case
+  through the real pipeline.
 - `IntegrationTests` against PostgreSQL: roundtrip, spec→SQL, interceptors, soft-delete, concurrency.
   The outbox suites: `OutboxTests` (paying writes the event in the same transaction and the processor
   sends the receipt after commit), `OutboxRetryTests` (back-off and the per-handler checkpoint, a failing
