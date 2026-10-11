@@ -45,6 +45,9 @@ public sealed class ResultDiscardAnalyzerTests
 
     private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);
 
+    private static readonly CSharpCompilationOptions DefaultOptions =
+        new(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable);
+
     private static readonly Lazy<ImmutableArray<MetadataReference>> References = new(LoadReferences);
 
     /// <summary>The folders whose projects must all load the analyzer; eng/ has its own empty props on purpose.</summary>
@@ -256,16 +259,15 @@ public sealed class ResultDiscardAnalyzerTests
             .WithGeneralDiagnosticOption(ReportDiagnostic.Error)
             .WithSyntaxTreeOptionsProvider(new EditorConfigTreeOptions(editorConfig));
 
+        string plantedPath = Path.Combine(root, plantedAt.Replace('/', Path.DirectorySeparatorChar));
+
         ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(
-            planted, Path.Combine(root, plantedAt), release, new AnalyzerOptions([], new EditorConfigAnalyzerOptions(editorConfig)));
+            planted, plantedPath, release, new AnalyzerOptions([], new EditorConfigAnalyzerOptions(editorConfig)));
 
         diagnostics.Count(static d => d.Id == ResultDiscardAnalyzer.DiagnosticId && d.Severity == DiagnosticSeverity.Error)
             .ShouldBe(expectedErrors, $"RSLT001 errors in {plantedAt}");
         diagnostics.ShouldAllBe(static d => d.Severity == DiagnosticSeverity.Error);
     }
-
-    private static CSharpCompilationOptions DefaultOptions { get; } =
-        new(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable);
 
     private static string InRunMethod(string statements, string extraUsings = "") => $$"""
         {{Usings}}
