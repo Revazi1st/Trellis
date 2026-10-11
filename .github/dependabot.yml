@@ -4,9 +4,9 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-    # A new version waits a week before Dependabot proposes it: a yanked or compromised release is
-    # usually gone by then. The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml)
-    # counts on this; majors are never merged on their own.
+    # A new version waits a week before Dependabot proposes it (version updates only: a security
+    # update still arrives at once), so a yanked or compromised release is usually gone by then.
+    # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
     cooldown:
       default-days: 7
     open-pull-requests-limit: 10
@@ -63,9 +63,9 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-    # A new version waits a week before Dependabot proposes it: a yanked or compromised release is
-    # usually gone by then. The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml)
-    # counts on this; majors are never merged on their own.
+    # A new version waits a week before Dependabot proposes it (version updates only: a security
+    # update still arrives at once), so a yanked or compromised release is usually gone by then.
+    # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
     cooldown:
       default-days: 7
     groups:
@@ -79,6 +79,8 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
@@ -88,9 +90,9 @@ updates:
     directory: "/scripts/sdk-image"
     schedule:
       interval: weekly
-    # A new version waits a week before Dependabot proposes it: a yanked or compromised release is
-    # usually gone by then. The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml)
-    # counts on this; majors are never merged on their own.
+    # A new version waits a week before Dependabot proposes it (version updates only: a security
+    # update still arrives at once), so a yanked or compromised release is usually gone by then.
+    # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
     cooldown:
       default-days: 7
 
@@ -99,9 +101,13 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
 
   # Dev container Features (.devcontainer/devcontainer.json is found from the repo root).
   - package-ecosystem: devcontainers
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7

@@ -67,10 +67,13 @@ SDK-container build; its docs-drift job honours a `docs-not-needed` pull-request
 repository. `.github/workflows/codeql.yml` runs on a public repository, and on a private one only once
 GitHub Advanced Security code scanning is enabled and the `CODEQL_ENABLED` repository variable
 (Settings → Secrets and variables → Actions → Variables) is `true`. Dependabot is configured in
-`.github/dependabot.yml`, with a one-week cooldown on new versions.
-`.github/workflows/dependabot-auto-merge.yml` lets its patch and minor pull requests merge on their own
-once the checks pass; that needs *Allow auto-merge* in the repository settings and a ruleset on `main`
-that requires the CI jobs. Until both exist the workflow only leaves a notice. Majors always wait for you.
+`.github/dependabot.yml`; new versions wait a week before a pull request opens (security updates
+arrive at once). `.github/workflows/dependabot-auto-merge.yml` lets Dependabot's patch and minor
+pull requests merge on their own once the checks pass. It acts only when the repository allows
+auto-merge (Settings → General) and a ruleset on `main` requires status checks; name only jobs that
+exist in your repository, and prefer a ruleset over classic branch protection, which the workflow
+cannot see. Until both exist it leaves a notice. Majors, .NET SDK bumps and the GitHub Actions
+group always wait for you.
 
 ## Where to look next
 

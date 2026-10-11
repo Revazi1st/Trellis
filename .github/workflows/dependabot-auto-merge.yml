@@ -1,18 +1,25 @@
 name: Dependabot auto-merge
 
-# Patch and minor dependency updates merge on their own once every required check is green; a
-# major (or a group that contains one) waits for a person. Three things make this safe enough:
-#   - dependabot.yml holds new versions back for a week (cooldown), so a yanked or compromised
-#     release is usually gone before a pull request exists;
-#   - the pull request has to pass the same checks as any other: the Release build and every
-#     test, the API contract, the container smoke, CodeQL, the secret scan and the package audit;
-#   - this job runs no code from the pull request. It reads Dependabot's metadata and asks
-#     GitHub to merge when the checks pass; GitHub does the merging.
-# Auto-merge only works when the repository allows it (Settings → General → Allow auto-merge) and a
-# ruleset on the default branch requires the checks. Without those GitHub refuses to enable it and
-# the job ends with a notice instead of a failure, so the workflow can ship before the settings do.
-# A merge made this way is attributed to the Actions token, so it does not start the push workflows
-# on main; the pull request already built and tested the merged tree.
+# Dependabot's patch and minor bumps of NuGet packages, images and dev-container features merge on
+# their own once every required check is green. Everything else waits for a person: a major, or a
+# group that contains one; a .NET SDK bump (Dependabot calls a feature-band jump a patch, yet it
+# raises the SDK every contributor and generated project needs); and the GitHub Actions group,
+# whose pull request edits workflow files, which the Actions token is never allowed to merge.
+#
+# What makes this safe enough:
+#   - dependabot.yml holds new versions back for a week (cooldown: version updates only, a security
+#     update still arrives at once), so a yanked or compromised release is usually gone before a
+#     pull request exists;
+#   - the pull request has to pass the same checks as any other, and this job acts only when the
+#     repository allows auto-merge AND a ruleset on the base branch requires status checks. Without
+#     both it leaves a notice and does nothing: on an unprotected branch `gh pr merge --auto` would
+#     merge at once, before CI has finished;
+#   - it runs no code from the pull request. It reads Dependabot's metadata and asks GitHub to merge
+#     when the checks pass; GitHub does the merging.
+#
+# A merge made this way is attributed to the Actions token, so it starts no push workflow on the base
+# branch, and each weekly pull request was tested against the main of its own moment. In the template
+# repository a nightly CI run on main tests the combined tree (ci.yml, TemplateSource block).
 
 on: pull_request
 
@@ -21,12 +28,17 @@ permissions: {}
 jobs:
   enable:
     name: Enable auto-merge
+    # Both halves matter: a fork's own Dependabot can push to a fork's pull request, which makes the
+    # actor Dependabot but never the author.
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: write        # enabling auto-merge on the pull request
+      contents: write        # enabling (or, with every required check already green, performing) the merge
       pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
     steps:
       - name: Read the update type
         id: metadata
@@ -34,20 +46,46 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge for a patch or minor update
-        if: >-
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+      - name: Is the repository set up for auto-merge?
+        id: setup
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          BASE: ${{ github.base_ref }}
         run: |
-          if gh pr merge --auto --squash "$PR_URL" 2> error.txt; then
-            echo "Auto-merge enabled: GitHub merges this pull request once every required check passes."
+          allowed=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.allow_auto_merge')
+          required=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE" --jq 'any(.[]; .type == "required_status_checks")')
+          echo "allow_auto_merge=$allowed required_status_checks_on_$BASE=$required"
+          if [ "$allowed" = true ] && [ "$required" = true ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice title=Auto-merge not enabled::$(tr '\n' ' ' < error.txt) Enable 'Allow auto-merge' in the repository settings and add a ruleset on the default branch that requires the CI checks; until then Dependabot pull requests are merged by hand."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Auto-merge not enabled::Dependabot pull requests merge by hand until this repository has 'Allow auto-merge' (Settings → General) and a ruleset on '$BASE' that requires the CI checks (rulesets, not classic branch protection)."
           fi
 
-      - name: A major update waits for a person
-        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
-        run: echo "::notice title=Major update::${{ steps.metadata.outputs.dependency-names }} moves a major version; review and merge it by hand."
+      - name: Enable auto-merge for a patch or minor update
+        if: >-
+          steps.setup.outputs.ready == 'true' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-minor') &&
+          steps.metadata.outputs.package-ecosystem != 'dotnet_sdk' &&
+          steps.metadata.outputs.package-ecosystem != 'github_actions'
+        run: |
+          # With required checks on the base branch, gh either enables auto-merge (checks still
+          # running) or, when every required check has already passed, merges now. Any other
+          # outcome is an error worth seeing, so it fails the job instead of hiding behind a notice.
+          gh pr merge --auto --squash "$PR_URL"
+          echo "GitHub merges this pull request once every required check passes."
+
+      - name: This update waits for a person
+        if: >-
+          steps.setup.outputs.ready == 'true' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-major' ||
+           steps.metadata.outputs.package-ecosystem == 'dotnet_sdk' ||
+           steps.metadata.outputs.package-ecosystem == 'github_actions')
+        env:
+          NAMES: ${{ steps.metadata.outputs.dependency-names }}
+          KIND: ${{ steps.metadata.outputs.update-type }}
+          ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+        run: |
+          # An earlier run may have enabled auto-merge; a recreate can change the versions in place.
+          gh pr merge --disable-auto "$PR_URL" 2>/dev/null || true
+          echo "::notice title=Review this update::$NAMES ($ECOSYSTEM, $KIND) is merged by hand: a major version, a .NET SDK bump, or the GitHub Actions group."

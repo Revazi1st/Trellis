@@ -46,15 +46,20 @@ next, and the GitHub release is published only after the push succeeded.
    behaviour. Create it once:
    `gh label create docs-not-needed --description "No feature or threat-model doc change needed"`.
 7. **Dependency bumps merge on their own.** `.github/workflows/dependabot-auto-merge.yml` enables
-   GitHub's auto-merge on Dependabot's patch and minor pull requests; a major, or a group that
-   contains one, waits for a person. `dependabot.yml` holds every new version back for a week
-   (`cooldown`) so a yanked or compromised release is usually gone before a pull request exists.
-   Two repository settings make it work, both set once: *Settings → General → Allow auto-merge*
-   (and *Automatically delete head branches*), and a ruleset on `main` that requires the CI,
-   Template CI and CodeQL jobs and forbids force-pushes and deletion. The ruleset is what
-   auto-merge waits for; without it GitHub refuses to enable auto-merge and the workflow leaves a
-   notice. A merge made by the Actions token does not start the push workflows on `main`; the pull
-   request already built and tested the merged tree, and a release runs the whole gate again.
+   GitHub's auto-merge on Dependabot's patch and minor pull requests for NuGet packages, images and
+   dev-container features. Three kinds wait for a person: a major, or a group that contains one; a
+   .NET SDK bump (Dependabot calls a feature-band jump a patch, yet it raises the SDK everyone
+   needs); and the weekly GitHub Actions group, whose pull request edits workflow files, which the
+   Actions token may never merge. `dependabot.yml` holds every new version back for a week
+   (`cooldown`; version updates only, a security update still arrives at once). Two repository
+   settings make it work, both set once: *Settings → General → Allow auto-merge* (with
+   *Automatically delete head branches*), and a ruleset on `main` that requires the CI, Template CI
+   and CodeQL jobs, requires a pull request, gates on CodeQL alerts and forbids force-pushes and
+   deletion. The workflow checks for both before it acts and only leaves a notice without them,
+   because `gh pr merge --auto` on an unprotected branch would merge at once. Two consequences to
+   know: a merge made by the Actions token starts no push workflow on `main`, and each weekly pull
+   request was tested against the `main` of its own moment, so `ci.yml` also runs once a night on
+   `main` (template source only) to test the combined tree.
 
 ## Before a minor release: an agent dry run
 
@@ -72,7 +77,8 @@ and results vary between models and attempts: it is a smoke test of the guidance
 
 ## Cutting a release
 
-1. **Pick the version.** SemVer: a breaking change to generated output or to a toggle's meaning
+1. **Pick the version.** First read the dependency bumps that merged on their own since the last
+   tag (`git log vPREV..main --oneline --author=dependabot`); they are part of what ships. SemVer: a breaking change to generated output or to a toggle's meaning
    is a major bump (a minor bump while below 1.0), a new toggle or feature a minor bump, a fix a
    patch. A pre-release (`X.Y.Z-rc.1`) is published as a GitHub pre-release.
 2. **Write the release notes.** In a pull request to `main`, move the entries under
