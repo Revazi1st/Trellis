@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-07
+- **Amended**: 2026-10-11 — decision 6: `Cache-Control: no-store` on every `/api/` response unless the endpoint sets its own; decision 4 reaches the 401s a Result produces; decision 1's test pins each endpoint's permission (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -83,7 +84,8 @@ with the right key.
 `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY` and
 `Content-Security-Policy: frame-ancestors 'none'` on every response, including problem documents, and
 `Cache-Control: no-store` on every `/api/{version}/auth/` response. The CSP is limited to
-`frame-ancestors` so the development-only Scalar page keeps working.
+`frame-ancestors` so the development-only Scalar page keeps working. *(Amended 2026-10-11: every
+`/api/` response is `no-store` unless its endpoint set its own; see below.)*
 
 **7. Request-size limits.** `AddApiHardening` sets Kestrel's `MaxRequestBodySize` to 1 MB and
 `MaxRequestHeadersTotalSize` to 32 KB, configurable through Kestrel's own keys
@@ -117,3 +119,39 @@ bucket and tests can model "many users behind one host" explicitly (`CreateClien
 - A new permission is a new constant in `Permissions` (and a role grant); a misspelt one stops the boot.
 - The committed OpenAPI document does not change for the shipped endpoints (ADR-0013): the transformer
   reasons from declarations now, and the declarations already matched.
+
+## Amendment (2026-10-11): `no-store` on every API response by default; every 401 names its scheme
+
+**Decision 6 widens from the auth endpoints to the whole API.** `no-store` covered only
+`/api/{version}/auth/`, so an invoice, the list of overdue invoices, and the 403 or 404 that says
+whether an id exists could sit in a browser's disk cache or a shared proxy, which is what OWASP's
+REST cheat sheet and ASVS ask an API serving per-user data to prevent. `SecurityHeadersMiddleware` now
+sets `Cache-Control: no-store` on every response under `/api/`, problem documents included (it writes
+when the response starts, so the exception handler's 500 and the challenge 401 are covered too),
+**unless the endpoint already set a `Cache-Control` of its own**: an endpoint that wants a browser to
+keep and revalidate its representation says so (`private, no-cache` with its `ETag`, say). The auth
+endpoints stay `no-store` whatever they set, because a token pair must never be cached. Responses
+outside `/api/` (the probes, which write their own `no-cache`; the development-only OpenAPI document
+and Scalar page) are left alone. A conditional GET still works for a client that keeps the `ETag`
+itself, which is what pollers do; only a browser's automatic revalidation needs the endpoint to opt in.
+The reference conditional GET, `GET /invoices/{id}`, is the endpoint that does: its 200 and its 304 set
+`private, no-cache` (the browser may keep the invoice, a shared cache may not, and every use is
+revalidated with the `ETag`), and its 404 sets nothing, so it stays `no-store`.
+
+**Decision 4 reaches the 401s a Result produces.** The JWT challenge always carried
+`WWW-Authenticate`, but a 401 written through `CustomResults` (login's `Auth.InvalidCredentials`,
+refresh's `Auth.InvalidRefreshToken`) had none, although RFC 9110 §15.5.2 requires the header on every
+401. The problem-details enrichment (ADR-0024) now adds `WWW-Authenticate: Bearer` to a 401 whose
+writer set none; the challenge's own value, with `error="invalid_token"`, is kept.
+
+**Decision 1's test pins which permission, not only that there is one.** "A non-anonymous endpoint
+lacks a catalogued permission" passed a write declared with `invoices:read`: everyone allowed to look
+could then pay or void. `EndpointMetadataTests.ExpectedPermissions` names the one permission each
+permissioned endpoint requires, beside `AnonymousAllowlist`, and the test fails when an endpoint
+declares another, more than one, or has no row, and when a row outlives its endpoint. A wire-level
+theory beside it sends each endpoint a client holding only that permission (the endpoint's own answer)
+and one holding every other permission (403). `ApiFactory.CreateClientWithPermissions(...)` mints those
+tokens through the host's `ITokenProvider`, so they are shaped exactly like a sign-in's; the two
+hand-built minters stay, because they build invalid tokens on purpose (a foreign algorithm, a missing
+tenant).
+

@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Question
+    url: https://github.com/Revazi1st/Trellis/discussions/categories/q-a
+    about: Ask how to use the template in the Q&A category of GitHub Discussions (ideas have a category there too); issues are for bugs and feature requests.
   - name: Security vulnerability
-    url: https://github.com/Revazi1st/trellis/security/advisories/new
+    url: https://github.com/Revazi1st/Trellis/security/advisories/new
     about: Please report security issues privately (see SECURITY.md), not as public issues.

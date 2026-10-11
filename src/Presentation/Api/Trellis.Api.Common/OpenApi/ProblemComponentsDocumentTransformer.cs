@@ -30,7 +30,8 @@ internal sealed class ProblemComponentsDocumentTransformer : IOpenApiDocumentTra
             // The XML summary is written for a C# reader (cref links, history); the document gets the contract sentence.
             problemSchema.Description = "RFC 9457 problem document (ADR-0024): every 4xx/5xx response. Branch on `code` "
                 + "(`type` is `urn:problem-type:{code}`); `title` and `detail` are for people; `errors[]` is present on a 400 produced "
-                + "from a Result, absent otherwise; `correlationId` equals the X-Correlation-ID response header.";
+                + "from a Result and on a 400 whose body held a value of the wrong type (`Request.InvalidValue`), absent otherwise; "
+                + "`correlationId` equals the X-Correlation-ID response header.";
 
             if (problemSchema.Properties?.TryGetValue("errors", out IOpenApiSchema? errors) == true && errors is OpenApiSchema errorsSchema)
             {

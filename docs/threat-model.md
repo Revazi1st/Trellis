@@ -23,25 +23,26 @@ you build on top.
 | Password guessing against one account | Account lockout: 5 failed passwords lock the account for 15 minutes (403 `Auth.AccountLockedOut`); lockout is checked before the password, so a 403 never confirms a password; a successful sign-in resets the counter | `IdentityService.ValidateCredentialsAsync`, Identity options in `AddPersistence` |
 | Account enumeration through login timing | An unknown e-mail costs the same password-hash verification as a wrong password, and both answer 401 `Auth.InvalidCredentials` | `IdentityService`, `DummyPasswordHash` |
 | Anyone on the internet self-registering into read access | Registration is closed unless configured (`Registration:Mode`, default `Closed`; Development opts in); closed answers 403 `Auth.RegistrationClosed` and creates nothing | `RegistrationOptions`, `RegisterCommandHandler` |
-| Missing or oversized auth input reaching Identity or the hasher | Validators bound e-mail (320), password (128) and refresh token (512) and reject missing fields with 400 before any lookup, hash or token hash runs | `Features/Auth/*/*Validator` |
-| Brute force going unnoticed | Structured security events with stable ids: 1101 sign-in failed, 1102 no such account (masked e-mail), 1103 account locked out (Warning), 1104 rejected while locked. User id or masked e-mail only, never a password | `SecurityEventLog` |
+| Missing or oversized auth input reaching Identity or the hasher | Validators bound e-mail (254, the Domain's `EmailAddress.MaxLength`, which also fits Identity's 256-character columns), password (128) and refresh token (512) and reject missing fields with 400 before any lookup, hash or token hash runs | `Features/Auth/*/*Validator` |
+| Brute force going unnoticed | Structured security events with stable ids: 1101 sign-in failed, 1102 no such account (masked e-mail), 1103 account locked out (Warning), 1104 rejected while locked, 1105 a failed sign-in the lockout could not count and 1106 a count not reset after a good sign-in (both Warning, Identity error codes only). User id or masked e-mail only, never a password | `SecurityEventLog` |
 | A development signing key shared by every project | `dotnet new` writes a fresh random Development key into each generated project (`dev-only-` + 64 hex characters); no other environment has a committed key, and the API refuses to boot without one | `appsettings.Development.json`, `RequireValidTokenOptions` |
-| Stolen refresh token replayed | Refresh tokens are single-use; presenting a consumed one revokes every outstanding token for that user (OAuth security BCP) | `IRefreshTokenStore.ConsumeAsync` |
+| Stolen refresh token replayed | Refresh tokens are single-use; presenting a consumed one revokes every outstanding token for that user (OAuth security BCP); every rejection is the same 401 `Auth.InvalidRefreshToken` (one `AuthErrors` member, returned by the store and the handler alike), whether the token was unknown, consumed or its user deleted | `IRefreshTokenStore.ConsumeAsync`, `RefreshTokenCommandHandler` |
+| SMTP relay credentials leaked from configuration or logs (mail sent as your domain: phishing, a burnt sender reputation) | User-secrets in Development, the platform's secret store in production (`Email__Smtp__UserName` / `__Password`), never appsettings: the shipped `appsettings.json` has no `UserName` or `Password` key to fill in. While `Email:Provider` is `Smtp`, boot refuses half a credential pair and credentials without STARTTLS; the sender logs neither them nor the relay's reply | `SmtpOptions`, `SmtpOptionsValidator`, `SmtpEmailSender` |
 | Tokens forged with a weak or absent key | Signing key must be ≥ 32 chars; the API refuses to boot otherwise | `RequireValidTokenOptions`, `AuthTokenOptions` |
 | Refresh tokens readable from a database dump | Only SHA-256 hashes are persisted | `JwtTokenProvider.HashRefreshToken` |
-| Privilege escalation between roles | Permission-based authorization, policies resolved per permission claim; endpoints declare `.RequirePermission(...)` | `PermissionPolicyProvider` |
+| Privilege escalation between roles | Permission-based authorization, policies resolved per permission claim; endpoints declare `.RequirePermission(...)`, and each endpoint's one permission is pinned in the `ExpectedPermissions` table, so a write declared with a read permission fails the test run, and checked on the wire (only that permission is admitted, every other is a 403) | `PermissionPolicyProvider`, `EndpointMetadataTests` |
 | An endpoint shipped without authorization | Deny-by-default on the versioned API group; permissions per endpoint (unknown names fail the boot); the anonymous set is an allowlist test | `MapVersionedApiGroup`, `EndpointMetadataTests` |
 | Token forged by algorithm confusion | Validation accepts HS256 only (`ValidAlgorithms`) | `AddApiAuthentication` |
 | Cross-tenant data access (`--use-multitenancy`) | The tenant comes only from the signed `tenant` claim, minted from the user's persisted membership (`AspNetUsers.TenantId`); request headers are ignored; every aggregate root is filtered and stamped by convention; cache keys carry the tenant; a valid token without the claim is rejected 401 (ADR-0022) | `TenantContext`, `AuthenticationExtensions`, `AppDbContext`, `CacheKeys` |
 | Client-supplied identifiers poisoning logs or response headers | The inbound correlation id is accepted only if short and restricted to an id-shaped charset; otherwise a server id is used | `CorrelationIdMiddleware` |
 | Rate-limit evasion behind a proxy | `X-Forwarded-For` honoured only from explicitly configured trusted proxies/networks; the publish-mode `ASPNETCORE_FORWARDEDHEADERS_ENABLED` switch cannot widen it (loopback-only restored, startup warning) | `ApiHardeningExtensions` |
-| Duplicate submission of a write (double charge, double invoice) | `Idempotency-Key` reserved per (user, method, route, key) inside the command's unit of work — a concurrent duplicate loses at the primary key, a failed command leaves no reservation; a retry gets the stored response replayed, a reused key with a different body a 422 (ADR-0018) | `IdempotencyFilter`, `AppDbContext.CommitAsync` |
+| Duplicate submission of a write (double charge, double invoice) | `Idempotency-Key` reserved per (user, method, route, key) inside the command's unit of work — a concurrent duplicate loses at the primary key, a failed command leaves no reservation; a retry gets the stored response replayed, a reused key with a different body a 422 (ADR-0018); a repeated header or a list is a 400, never two keys joined into one, and `POST /invoices` requires a key (`RequireIdempotency(keyRequired: true)`) | `IdempotencyFilter`, `AppDbContext.CommitAsync` |
 | Lost update on concurrent edits | `xmin` concurrency token; a stale write is returned as `Concurrency.Conflict` and becomes 409 | `IUnitOfWork.CommitAsync`, `CustomResults` |
 | A third party being down taking us down | Per-client resilience pipeline; health check reports Degraded, not Unhealthy | ADR-0020 |
 | `/health` used as a load lever against a dependency | The external check caches its verdict and probes with a bare TCP connect | `ExchangeRateHealthCheck` |
 | Slow-loris / hung requests | Default 30s request timeout returning 504 | `ApiHardeningExtensions` |
 | Oversized requests | 1 MB body (413) and 32 KB header caps on Kestrel, configurable | `ApiHardeningExtensions` |
-| MIME sniffing, framing, token responses cached | `nosniff`, `Referrer-Policy`, `X-Frame-Options`/`frame-ancestors 'none'` on every response; `Cache-Control: no-store` on `/auth/` | `SecurityHeadersMiddleware` |
+| MIME sniffing, framing, token or per-user responses cached | `nosniff`, `Referrer-Policy`, `X-Frame-Options`/`frame-ancestors 'none'` on every response; `Cache-Control: no-store` on every `/api/` response (problems included) unless its endpoint sets its own, and always on `/auth/` (ADR-0021 amendment) | `SecurityHeadersMiddleware` |
 | Clickjacking or injected script in the web UI | CSP `script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin` on every UI.Web response | UI.Web `Program.cs` |
 | A web session's refresh token used after the user left | Sign-out revokes it at the API (`/auth/logout`, best-effort), and so does a closing circuit | `TokenAuthenticationStateProvider.SignOutAsync`, UI.Web `RevokeSessionOnCircuitClose` |
 | Open redirect through the sign-in `returnUrl` | Only a plain relative path inside the app is followed; schemes, rooted or protocol-relative paths, backslashes, control characters and dot segments are refused | `LoginRedirect` |
@@ -69,6 +70,13 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   is never confirmed and invoices are not owner-scoped: every registrant can read all business
   data. Before opening it, add e-mail confirmation or give Member no data permissions until an
   administrator grants a role.
+- **Permissions are per endpoint, never per record** — *open*. A permission lets its holder act on
+  every record its endpoints can address (OWASP's broken object-level authorization when that is
+  wrong). A rule about which records (the owner, a team) is each feature's own: a domain `OwnerId`,
+  enforced in the specification or repository so a non-owner gets the same 404 as for a missing
+  record, with owner-scoped reads keyed by owner or left uncached, because a read-cache hit never runs
+  the handler (`docs/features/auth.md`, *Protecting an endpoint*). The reference invoices are
+  business-wide on purpose.
 - **The tenant chosen by a request header (`--use-multitenancy`)** — *addressed* (ADR-0022). The
   `X-Tenant-Id` header used to select the tenant for authenticated callers; the tenant now comes
   only from the signed `tenant` claim minted from the user's persisted membership, and the header
@@ -95,7 +103,7 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
 - **`/health` and `/alive` are anonymous** so orchestrators can reach them — *open*. Readiness
   reveals dependency names and status — keep both off the public ingress.
 - **The security-event log is partial** — *open*. Sign-in failures and lockouts are structured
-  events (1101–1104); registration, revocation, refresh-token replay (an unstructured warning) and
+  events (1101–1106); registration, revocation, refresh-token replay (an unstructured warning) and
   role or permission changes are ordinary application logs, and nothing ships them to a
   tamper-evident store.
 - **The seeded Development admin password is the same in every project** — *closed by default*.
@@ -105,6 +113,11 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
 - **A half-created account** — *addressed*. Registration creates the user and assigns its role in
   one transaction, so a failed role assignment cannot leave an account that authenticates with no
   permissions and blocks its e-mail; the seed repairs an administrator left without its role.
+- **Registration racing itself, or echoing what was typed** — *addressed*. Two registrations of one
+  e-mail that pass every check together are decided by the unique user-name index, and the loser gets
+  the same 409 `Auth.EmailAlreadyInUse` as a sequential duplicate, not a 500. A registration Identity
+  refuses answers 400 `Auth.RegistrationRejected` built from fixed sentences per Identity error code;
+  Identity's own descriptions, which repeat the e-mail, never reach the response or the outcome log.
 - **CORS is deny-by-default** — *open*, which means it is only as good as the origins you add.
 
 ## Out of scope

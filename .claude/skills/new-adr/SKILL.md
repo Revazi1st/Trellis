@@ -26,6 +26,7 @@ ADRs are short, dated, immutable records of load-bearing decisions (ADR-0001). O
 
 - **Status**: accepted
 - **Date**: <YYYY-MM-DD>
+- **Prior art**: <optional: the project, author and license this decision takes an idea from, and what>
 
 ## Context
 <the forces: what problem, what constraints>
@@ -35,8 +36,19 @@ ADRs are short, dated, immutable records of load-bearing decisions (ADR-0001). O
 
 ## Consequences
 <what this makes easy/hard; follow-ups; who must know>
+
+## Alternatives / Revisit when
+<optional: each alternative you rejected and why, one line each; the concrete, checkable condition that would reopen the decision>
 ```
 
+   Keep the **Prior art** line only when the decision adopts an idea, pattern or text from someone
+   else's project, and delete it otherwise; a verbatim copy also needs the notice its license
+   requires. In the template's own repository the same line goes into the README's Credits.
+
+   Keep **Alternatives / Revisit when** short, three to five lines, or delete it. Name what was rejected
+   and the reason, so the next reader does not reopen it from scratch. Write a revisit trigger as a fact
+   someone can check ("the package is relicensed under MIT", "a second process has to dispatch the same
+   events"), never "if this stops fitting": a vague trigger reads as permission to undo the decision.
 3. Add a one-line pointer to `docs/INDEX.md`: under **Project decisions** for 0100 and up, under
    **Template decisions** for the template's own.
 4. If the decision creates a rule agents must follow, restate the rule (not the rationale) in the

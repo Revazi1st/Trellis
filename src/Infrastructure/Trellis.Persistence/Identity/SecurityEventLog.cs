@@ -37,6 +37,19 @@ internal static partial class SecurityEventLog
     public static partial void LoginRejectedLockedOut(ILogger logger, Guid userId);
 
     /// <summary>
+    /// Identity could not save a failed sign-in's count (usually a concurrent update of the same account),
+    /// so the lockout did not see this attempt. Repeated, it is someone racing sign-ins to stay under the
+    /// threshold.
+    /// </summary>
+    [LoggerMessage(EventId = 1105, EventName = "FailedSignInNotCounted", Level = LogLevel.Warning,
+        Message = "A failed sign-in for user {UserId} was not counted toward lockout ({IdentityErrorCodes})")]
+    public static partial void FailedSignInNotCounted(ILogger logger, Guid userId, string identityErrorCodes);
+
+    [LoggerMessage(EventId = 1106, EventName = "FailedSignInCountNotReset", Level = LogLevel.Warning,
+        Message = "The failed sign-in count for user {UserId} was not reset after a successful sign-in ({IdentityErrorCodes})")]
+    public static partial void FailedSignInCountNotReset(ILogger logger, Guid userId, string identityErrorCodes);
+
+    /// <summary>
     /// <c>jane.doe@example.com</c> → <c>j***@example.com</c>: enough to spot a run against one domain,
     /// not enough to read back the address someone typed.
     /// </summary>

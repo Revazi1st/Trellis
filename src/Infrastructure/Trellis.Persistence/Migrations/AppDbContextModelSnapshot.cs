@@ -165,11 +165,6 @@ namespace Trellis.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)");
-
                     b.Property<string>("CustomerName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -201,6 +196,17 @@ namespace Trellis.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Currency", "Trellis.Domain.Invoices.Invoice.Currency#Currency", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<string>("Code")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("Currency");
+                        });
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "CustomerEmail", "Trellis.Domain.Invoices.Invoice.CustomerEmail#EmailAddress", b1 =>
                         {
@@ -238,15 +244,20 @@ namespace Trellis.Persistence.Migrations
                             b1.IsRequired();
 
                             b1.Property<decimal>("Amount")
-                                .HasPrecision(18, 2)
-                                .HasColumnType("numeric(18,2)")
+                                .HasPrecision(18, 3)
+                                .HasColumnType("numeric(18,3)")
                                 .HasColumnName("Amount");
 
-                            b1.Property<string>("Currency")
-                                .IsRequired()
-                                .HasMaxLength(3)
-                                .HasColumnType("character varying(3)")
-                                .HasColumnName("Currency");
+                            b1.ComplexProperty(typeof(Dictionary<string, object>), "Currency", "Trellis.Domain.Invoices.InvoiceLine.Amount#Money.Currency#Currency", b2 =>
+                                {
+                                    b2.IsRequired();
+
+                                    b2.Property<string>("Code")
+                                        .IsRequired()
+                                        .HasMaxLength(3)
+                                        .HasColumnType("character varying(3)")
+                                        .HasColumnName("Currency");
+                                });
                         });
 
                     b.HasKey("Id");
@@ -408,6 +419,7 @@ namespace Trellis.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("OccurredAtUtc")

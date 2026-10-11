@@ -73,7 +73,7 @@ internal static class RepositorySource
     /// String and char literals are skipped over (a URL's <c>//</c> is not a comment); this is a scanner
     /// for fitness rules, not a C# lexer — raw and interpolated strings are treated as plain strings.
     /// </summary>
-    private static string StripComments(string source)
+    internal static string StripComments(string source)
     {
         var code = new StringBuilder(source.Length);
         int i = 0;

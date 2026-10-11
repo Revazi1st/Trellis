@@ -37,7 +37,7 @@ public sealed class AuthRateLimitTests(ApiFactory factory) : IClassFixture<ApiFa
         HttpResponseMessage throttled = responses.Skip(10).First();
         throttled.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
         throttled.Headers.RetryAfter.ShouldNotBeNull().Delta.ShouldNotBeNull().ShouldBeGreaterThan(TimeSpan.Zero);
-        throttled.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        throttled.ShouldBeProblemJson();
 
         // The limiter's rejection is written through IProblemDetailsService like every other problem (ADR-0024).
         ProblemResponse problem = (await throttled.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();

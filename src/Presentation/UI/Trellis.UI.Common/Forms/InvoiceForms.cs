@@ -7,7 +7,10 @@ namespace Trellis.UI.Common.Forms;
 // The invoice forms' models. Their DataAnnotations mirror the API's validators (CreateInvoiceCommandValidator,
 // AddInvoiceLineCommandValidator, IssueInvoiceCommandValidator and the domain rules a user can trip) so the
 // common mistakes are caught before a round trip; the API stays the authority, and what it still rejects
-// comes back through ServerValidation. Change a validator, change its mirror here.
+// comes back through ServerValidation. Change a validator, change its mirror here. The lengths are the Domain's
+// constants (Invoice.CustomerNameMaxLength, EmailAddress.MaxLength, Currency.CodeLength,
+// InvoiceLine.DescriptionMaxLength), restated because UI.Common references only the contracts;
+// InvoiceFormMirrorTests (ApiTests/Ui) fails when a constant and its restatement part.
 
 /// <summary>The new-invoice form (<c>POST /invoices</c>).</summary>
 public sealed class CreateInvoiceForm
@@ -18,7 +21,7 @@ public sealed class CreateInvoiceForm
     public string CustomerName { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(320)]
+    [MaxLength(254)]
     [EmailAddress]
     [Display(Name = "Customer email")]
     public string CustomerEmail { get; set; } = string.Empty;

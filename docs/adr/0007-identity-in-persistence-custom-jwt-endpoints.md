@@ -3,6 +3,7 @@
 - **Status**: accepted
 - **Date**: 2026-07-15
 - **Amended**: 2026-10-08 — account lockout, and why it stays visible (see *Amendment* below)
+- **Amended**: 2026-10-11 — adding or swapping the token issuer is not a contained change (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -24,6 +25,7 @@ The template needs authentication and authorization that is self-contained (no e
 - The permission catalogue (`Permissions`) is the single authorization vocabulary shared by endpoints, seeding, and tokens.
 - Bootstrap admin credentials come from the `Seed` configuration section (dev defaults documented, overridable per environment).
 - Keycloak/OIDC remains a future toggle (its Aspire integration is still preview) — the `CurrentUser`/permission seam makes swapping the issuer a contained change.
+  *(Corrected 2026-10-11: it is not contained; see the amendment below.)*
 - Blazor circuit auth is demo-grade (a bearer token held per circuit); production guidance is BFF/cookies (ADR-0015).
 
 ## Amendment (2026-10-08): account lockout
@@ -48,3 +50,24 @@ instead of "wrong password".
 - Per-source throttling stays the API's `auth` rate-limit policy (ADR-0021); lockout is the
   per-account layer. Fitness: `AuthSecurityTests` (thresholds, reset), `AuthFlowTests` (4 × 401 →
   403 → 403, the timing oracle through a counting hasher, the events through a capturing logger).
+
+## Amendment (2026-10-11): an external issuer is not a contained change
+
+The consequence above called swapping the issuer "a contained change" behind the `CurrentUser` and
+permission seam. Tracing what a second bearer scheme touches shows it is not:
+
+- the permission policies name no scheme, so tokens from two issuers need a policy scheme that forwards by
+  issuer before any policy can see them;
+- the problem-details challenge, the forbidden body and, with multi-tenancy, the fail-closed tenant check
+  are events of the local scheme only, and each scheme needs them;
+- the HS256 algorithm pin belongs to the tokens this API mints, and a provider's scheme validates its own
+  asymmetric keys;
+- `ICurrentUser.UserId` is a `Guid` read from `NameIdentifier`, which a provider's `sub` rarely is, so
+  external principals need a claims transformation to a local user, or auditing, ownership and the
+  idempotency key's per-user scope all break;
+- the Blazor UI signs in by posting a password, so external users need an authorization-code flow or a
+  backend-for-frontend, which is a new package.
+
+The decision stands: the template stays self-contained, with no external IdP. `docs/features/auth.md`
+(*Adding an external identity provider*) is the checklist for a project that adds one, and a toggle that
+did it for every generated project would be a new ADR.

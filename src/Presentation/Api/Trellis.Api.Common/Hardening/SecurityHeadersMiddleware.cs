@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Net.Http.Headers;
 
 namespace Trellis.Api.Common.Hardening;
 
@@ -11,8 +12,12 @@ namespace Trellis.Api.Common.Hardening;
 /// <item><c>Referrer-Policy: no-referrer</c>: URLs (which carry ids) never leak to a third party.</item>
 /// <item><c>X-Frame-Options: DENY</c> + <c>Content-Security-Policy: frame-ancestors 'none'</c>: no API response
 /// (nor the development-only Scalar page) can be framed. Only <c>frame-ancestors</c> is set, so Scalar still loads.</item>
-/// <item><c>Cache-Control: no-store</c> on the auth endpoints: token pairs must never sit in a browser or proxy cache.</item>
+/// <item><c>Cache-Control: no-store</c> on every <c>/api/</c> response, problems included, unless the endpoint set
+/// its own: per-user data (an invoice, a 403 that says it exists) must not sit in a browser or proxy cache by
+/// default, and an endpoint that wants caching says so. The auth endpoints are <c>no-store</c> whatever they
+/// set: token pairs must never be cached.</item>
 /// </list>
+/// The probes, the OpenAPI document and the Scalar page sit outside <c>/api/</c> and keep their own caching.
 /// </summary>
 internal sealed class SecurityHeadersMiddleware(RequestDelegate next)
 {
@@ -28,7 +33,10 @@ internal sealed class SecurityHeadersMiddleware(RequestDelegate next)
             headers.XFrameOptions = "DENY";
             headers.ContentSecurityPolicy = "frame-ancestors 'none'";
 
-            if (IsAuthEndpoint(httpContext.Request.Path))
+            // Auth: always, whatever the endpoint set. Any other API response: unless the endpoint chose its own.
+            PathString path = httpContext.Request.Path;
+            if (IsAuthEndpoint(path)
+                || (path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) && !headers.ContainsKey(HeaderNames.CacheControl)))
             {
                 headers.CacheControl = "no-store";
             }

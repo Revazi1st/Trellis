@@ -60,6 +60,10 @@ public sealed class ApiResponsesTests
     private const string FieldAndWholeRequestErrorsCoded =
         """{"type":"urn:problem-type:Validation.General","title":"Validation failed","status":400,"detail":"One or more validation errors occurred.","code":"Validation.General","errors":[{"field":"customerName","code":"Validation.NotEmpty","description":"'Customer Name' must not be empty."},{"field":"currency","code":"Validation.ExactLength","description":"'Currency' must be 3 characters in length."},{"field":null,"code":"EmailAddress.Invalid","description":"The email address is not in a valid format."}]}""";
 
+    // A write that named a version the invoice has moved on from.
+    private const string VersionMismatchCoded =
+        """{"type":"urn:problem-type:Invoice.VersionMismatch","title":"Precondition failed","status":412,"detail":"The invoice has changed since the version you expected. Reload it and try again.","code":"Invoice.VersionMismatch"}""";
+
     private const string ForbiddenCoded =
         """{"title":"Forbidden","status":403,"detail":"The authenticated user lacks the permission this endpoint requires.","code":"Auth.Forbidden"}""";
 
@@ -89,6 +93,8 @@ public sealed class ApiResponsesTests
     // A code beats the detail.
     [InlineData(403, ForbiddenCoded, null, "You do not have permission to do that.")]
     [InlineData(403, null, null, "You do not have permission to do that.")]
+    // A stale If-Match: the page reloads after every action, so the sentence describes what it now shows.
+    [InlineData(412, VersionMismatchCoded, null, "Someone else changed this in the meantime. The latest version is shown now; check it and try again.")]
     public async Task Describe_turns_the_response_into_the_sentence_the_user_reads(
         int status, string? problemJson, int? retryAfterSeconds, string expected)
     {

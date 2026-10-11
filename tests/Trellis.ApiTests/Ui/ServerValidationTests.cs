@@ -87,16 +87,35 @@ public sealed class ServerValidationTests
     [Fact]
     public void Whole_request_errors_beside_placed_ones_are_the_alert()
     {
-        var model = new CreateInvoiceForm();
+        var model = new InvoiceLineForm();
         var editContext = new EditContext(model);
         using var server = new ServerValidationMessages(editContext);
 
         string? alert = server.Show(ValidationFailure(
-            new FieldError("currency", "Validation.ExactLength", "'Currency' must be 3 characters in length."),
-            new FieldError(null, "EmailAddress.Invalid", "The email address is not in a valid format.")));
+            new FieldError("amount", "Money.TooManyDecimalPlaces", "Amounts carry at most two decimal places."),
+            new FieldError(null, "Invoice.CurrencyMismatch", "The line currency must match the invoice currency.")));
 
-        alert.ShouldBe("The email address is not in a valid format.");
-        editContext.GetValidationMessages(() => model.Currency).ShouldHaveSingleItem();
+        alert.ShouldBe("The line currency must match the invoice currency.");
+        editContext.GetValidationMessages(() => model.Amount).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void A_value_object_error_the_api_attributed_lands_under_its_input()
+    {
+        // POST /invoices with "a@b": the UI's [EmailAddress] lets it through, the API's EmailAddress value
+        // object rejects it and the handler names the field (ADR-0024 amendment), so it sits under the input.
+        var model = new CreateInvoiceForm { CustomerName = "ACME", CustomerEmail = "a@b" };
+        var editContext = new EditContext(model);
+        using var server = new ServerValidationMessages(editContext);
+
+        string? alert = server.Show(ApiResult.Failure<bool>(
+            "The email address is not in a valid format.",
+            400,
+            Problem("EmailAddress.Invalid", new FieldError("customerEmail", "EmailAddress.Invalid", "The email address is not in a valid format."))));
+
+        alert.ShouldBe(InvalidInput);
+        editContext.GetValidationMessages(() => model.CustomerEmail).ShouldBe(["The email address is not in a valid format."]);
+        editContext.GetValidationMessages(() => model.CustomerName).ShouldBeEmpty();
     }
 
     [Fact]
@@ -106,14 +125,14 @@ public sealed class ServerValidationTests
         var editContext = new EditContext(model);
         using var server = new ServerValidationMessages(editContext);
 
-        string? dueDateInPast = server.Show(ApiResult.Failure<bool>(
-            "The due date is required and cannot be in the past.",
+        string? noLines = server.Show(ApiResult.Failure<bool>(
+            "An invoice needs at least one line before it can be issued.",
             400,
-            Problem("Invoice.DueDateInPast", new FieldError(null, "Invoice.DueDateInPast", "The due date is required and cannot be in the past."))));
+            Problem("Invoice.NoLines", new FieldError(null, "Invoice.NoLines", "An invoice needs at least one line before it can be issued."))));
         string? conflict = server.Show(ApiResult.Failure<bool>(
             "Lines can only be changed while the invoice is a draft.", 409, Problem("Invoice.NotDraft")));
 
-        dueDateInPast.ShouldBe("The due date is required and cannot be in the past.");
+        noLines.ShouldBe("An invoice needs at least one line before it can be issued.");
         conflict.ShouldBe("Lines can only be changed while the invoice is a draft.");
         editContext.GetValidationMessages().ShouldBeEmpty();
     }

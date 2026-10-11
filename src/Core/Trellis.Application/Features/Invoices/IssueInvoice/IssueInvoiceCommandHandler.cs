@@ -9,10 +9,10 @@ internal sealed class IssueInvoiceCommandHandler(IInvoiceRepository invoices, Ti
 {
     public async Task<Result> Handle(IssueInvoiceCommand command, CancellationToken cancellationToken)
     {
-        Invoice? invoice = await invoices.GetByIdAsync(command.InvoiceId, cancellationToken);
+        Invoice? loaded = await invoices.GetByIdAsync(command.InvoiceId, cancellationToken);
 
-        return invoice is null
-            ? Result.Failure(InvoiceErrors.NotFound(command.InvoiceId))
-            : invoice.Issue(command.DueDate, timeProvider.GetUtcNow());
+        return loaded.ToWrite(command.InvoiceId, command.ExpectedVersion)
+            .Bind(invoice => invoice.Issue(command.DueDate, timeProvider.GetUtcNow())
+                .AtField(nameof(command.DueDate), InvoiceErrors.DueDateInPast));
     }
 }

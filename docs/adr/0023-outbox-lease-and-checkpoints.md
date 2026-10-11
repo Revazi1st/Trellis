@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-08
+- **Amended**: 2026-10-11 — the lease is also the fence on every bookkeeping write, and every sibling handler runs on each attempt (see *Amendment* below)
 - **Refines**: ADR-0018 (the transactional outbox stays; this decides how the processor dispatches,
   retries and fails). It does not supersede it.
 
@@ -91,7 +92,7 @@ no new package; the `OutboxMessages` schema does not change (the shipped `Initia
 
 ## Consequences
 
-- **No migration.** The lease reuses `NextAttemptAtUtc`; only its documentation changed.
+- **No migration.**[^1] The lease reuses `NextAttemptAtUtc`; only its documentation changed.
 - **Delivery stays at-least-once, now with a tighter bound.** The residual duplicate-dispatch risks are a
   process that crashes after a handler's side effect and before its checkpoint, and a handler that
   ignores its token past the lease. After a crash, in-flight rows reappear within `LeaseDuration`
@@ -111,3 +112,61 @@ no new package; the `OutboxMessages` schema does not change (the shipped `Initia
 - **Tests**: `OutboxRetryTests` (throwing, timing out, writing and unreadable messages; two concurrent
   processors; a stopping host; the gauges and the spans), `OutboxBackoffTests`, `OutboxOptionsTests`,
   the dispatcher checkpoint tests, and the writing-handler case in `TenancyTests` on the all-options leg.
+
+
+## Amendment (2026-10-11): the lease is also the fence; siblings run on every attempt
+
+Decision 1 made a claimed row invisible to the other processors by stamping `NextAttemptAtUtc`, and
+the consequences admitted the residue: a processor that outlived its lease — a handler ignoring its
+token, a database slower than the budget — kept writing. Its failure path ran `context.Update(message)`
+and rewrote every column, so a stale processor could set a row the next claimant had finished back to
+Pending, or dead-letter the new owner's row. The fix reuses the same column once more:
+
+- **`NextAttemptAtUtc` is the `OutboxMessage` concurrency token.** Every bookkeeping save of the
+  message scope — each checkpoint, Processed, the back-off, the dead letter — is an
+  `UPDATE … WHERE "Id" = … AND "NextAttemptAtUtc" = <the lease this processor stamped>`. A re-claim
+  stamps a later lease, a finished row keeps the new owner's, a re-drive stamps `now()`: none equals the
+  stale lease, so the save affects no row and EF raises `DbUpdateConcurrencyException` for the outbox
+  entry. The processor books that as **`lease_lost`** (the span's outcome and Error status, the
+  `trellis.outbox.dispatch.duration` outcome, Warning 1303), drops its tracker and writes nothing; the
+  credits it checkpointed before losing the lease were saved under it and stand. A handler's own stale
+  row at a checkpoint is not a lost lease — only an exception entry of type `OutboxMessage` counts;
+  anything else is that attempt's ordinary, retryable failure.
+- **A batch stops short of its lease.** Before each message the processor checks that a whole
+  `DispatchTimeout` still fits before `leaseUntil`; if not, the rest of the batch is handed back
+  (Warning 1306, the same release a stopping host does) instead of being dispatched into a certain
+  `lease_lost`.
+- **Signals follow the save.** The `trellis.outbox.retries` and `trellis.outbox.dead_lettered`
+  increments and the retry (Warning 1301) and dead-letter (Critical 1302) lines are emitted after the
+  row was written, not before: a save that fails — the database gone, the lease lost — announces
+  nothing. Every outbox line carries an event id in the 1300 range (`OutboxLog`), and the span's
+  `error.type` is the failing exception's full type name, or the `Outbox.*` code of an unreadable row.
+- **Claim order is `ORDER BY "OccurredAtUtc", "Id"`**, and the rows of one save are written one
+  microsecond apart, so an Issued event is claimed before the Paid event of the same save and two
+  replicas see one order.
+- **The model snapshot changed; the table did not.** See the footnote under *Consequences*.
+
+The residual duplicate-dispatch window is as before (a crash between a side effect and its checkpoint,
+a handler past the lease); what changed is that the stale processor can no longer corrupt the row.
+`OutboxRetryTests` proves it: a processor that wakes up after its lease was taken over fails to book
+either a back-off or a dead letter over the Processed row.
+
+**Decision 3, refined: every sibling handler runs on each attempt; only the failed ones are retried.**
+The dispatcher used to stop at the first handler that threw, so an SMTP outage behind
+`SendReceiptOnInvoicePaid` held `RecordMetricsOnInvoicePaid` hostage through 45 minutes of back-off.
+`IDomainEventDispatcher.Dispatch(event, completed, checkpoint, onHandlerFailed, ct)` now catches each
+handler's own exception — keyed on the token, `when (e is not OperationCanceledException ||
+!cancellationToken.IsCancellationRequested)` — reports it through `onHandlerFailed`, leaves the handler
+uncredited and goes on to the next one. The outbox's hook clears the message scope's tracker and
+re-attaches the message, so the next checkpoint commits its own handler's writes alone (nothing of the
+failed handler rides along), and logs the handler by name (Warning 1304). After the last handler a single
+failure is rethrown as it was (`error.type` and the retry line keep their meaning) and several are one
+`AggregateException` naming the handlers, which the row's `Error` then shows. What is not isolated: a
+checkpoint failure (nothing after it could be committed either) and a cancellation of the dispatch token
+(a budget expiry or a stopping host), which ends the dispatch at once — a handler that times out still
+consumes the shared budget. `Attempts` still counts one per claim, however many handlers failed in it.
+
+[^1]: Amended 2026-10-11: the concurrency-token annotation of the amendment below changed the EF model
+    snapshot, so the shipped `InitialCreate` was regenerated (pre-release convention) with the
+    `OutboxMessages` DDL unchanged. A database already migrated with the earlier `InitialCreate` adds a
+    migration instead (`migrations add OutboxLeaseFence`), which comes out empty apart from the snapshot.

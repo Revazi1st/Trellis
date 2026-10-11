@@ -4,6 +4,7 @@ using Shouldly;
 using Trellis.Application.Features.Auth.Login;
 using Trellis.Application.Features.Auth.Logout;
 using Trellis.Application.Features.Auth.RefreshToken;
+using Trellis.Domain.Common;
 using Xunit;
 
 namespace Trellis.Application.UnitTests.Auth;
@@ -14,7 +15,9 @@ namespace Trellis.Application.UnitTests.Auth;
 /// </summary>
 public sealed class AuthCommandValidatorTests
 {
-    private static readonly string LongestEmail = new string('a', 320 - "@acme.com".Length) + "@acme.com";
+    // The validators share the Domain's bound (EmailAddress.MaxLength, 254), which also fits Identity's
+    // 256-character columns; a longer accepted address used to fail the INSERT with a 500.
+    private static readonly string LongestEmail = new string('a', EmailAddress.MaxLength - "@acme.com".Length) + "@acme.com";
 
     // The issued format (JwtTokenProvider.CreateRefreshToken): 32 random bytes, base64url without padding.
     private static readonly string IssuedRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))

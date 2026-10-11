@@ -38,6 +38,14 @@ Sign in as `admin@example.com` / `Admin123!`; that account and the demo data are
 Development only (production seeding wants your own password, see
 [docs/deployment.md](docs/deployment.md)). In Development the API serves its reference at `/scalar/v1`.
 
+The demo data belongs to the sample invoicing feature;
+[docs/features/invoices.md](docs/features/invoices.md) explains it in plain words: an invoice's
+states, the rules between them and where each file lives. Its *Try it* section walks the lifecycle
+one request at a time from `src/Presentation/Api/Trellis.Api/Trellis.Api.http`.
+<!--#if (IncludeUI) -->
+The web UI clicks through the same steps once you sign in.
+<!--#endif -->
+
 No .NET SDK on the host? Build and test through the SDK container (`scripts/dotnet.sh`) or open the
 folder in the dev container: [docs/development.md](docs/development.md).
 
@@ -53,8 +61,9 @@ dotnet test Trellis.slnx                     # integration and API tests start P
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs the secret scan, the format check, the Release build, every test with
-coverage, the API contract (the OpenAPI document diffed against the running app) and the SDK-container
-build; its docs-drift job honours a `docs-not-needed` pull-request label, which you create in your
+coverage, the API contract (the OpenAPI document diffed against the running app), the container smoke
+(the production images published and booted with only the documented configuration) and the
+SDK-container build; its docs-drift job honours a `docs-not-needed` pull-request label, which you create in your
 repository. `.github/workflows/codeql.yml` runs on a public repository, and on a private one only once
 GitHub Advanced Security code scanning is enabled and the `CODEQL_ENABLED` repository variable
 (Settings → Secrets and variables → Actions → Variables) is `true`. Dependabot is configured in

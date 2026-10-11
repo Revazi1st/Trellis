@@ -4,6 +4,8 @@
 - **Date**: 2026-10-08
 - **Supersedes**: the "At the HTTP boundary…" paragraph of ADR-0004 (the Result decision itself stands).
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
+- **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`); a `Result` never reaches JSON (see *Amendment* below)
+- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence; the 503 and 412 titles; the field of a body value of the wrong type; `WWW-Authenticate` on every 401; two more idempotency outcomes (see *Second amendment* below); and a correction to rule 5: an uncoded `Must` arrives as `Validation.Predicate`, not `Validation.Invalid`, so the validator convention test refuses it
 
 ## Context
 
@@ -57,18 +59,28 @@ Every response with status ≥ 400 is `application/problem+json` with this shape
    failed", NotFound → "Not found", Conflict → "Conflict", Unauthorized → "Unauthorized", Forbidden →
    "Forbidden", Failure → "Server failure"; the non-Result rows use the catalogue titles below. Titles are
    for people, not for branching.
+   *(Amended 2026-10-11: Unavailable → "Service unavailable", PreconditionFailed → "Precondition failed"; see the second amendment below.)*
 4. **`detail`** is `Error.Description` or the catalogue sentence. Exception messages never reach `detail`
    except the framework's own `BadHttpRequestException.Message`, which names a parameter or a limit, not
    a stack. The 500's detail is always "An unexpected error occurred."
+   *(Reworded by the second 2026-10-11 amendment below: a 4xx carries `Error.Description`; every 5xx,
+   a Result-produced one included, carries the catalogue sentence and keeps its `code`.)*
 5. **`errors[]`** appears on every 400 produced from a `Result` (`CustomResults.Problem` with
-   `ErrorType.Validation`), never elsewhere:
+   `ErrorType.Validation`), never elsewhere *(amended 2026-10-11: and on a 400 whose body held a value
+   of the wrong type; see the second amendment below)*:
    - `field` is the **JSON path of the offending request member** (`customerName`, `lines[0].amount`:
      camelCase per segment, computed at the API seam from FluentValidation's `PropertyName`), or `null`
-     when the error is about the request as a whole (every domain value-object error).
+     when the error is about the request as a whole (every domain value-object error). *(Superseded by
+     the 2026-10-11 amendment below: a handler names the field of a value-object or aggregate-rule error
+     with `AtField`; `null` remains for an error about the request as a whole, such as `Invoice.NoLines`.)*
    - `code` per entry: a FluentValidation failure is `Validation.` + the validator name without its
      `Validator` suffix (`Validation.NotEmpty`, `Validation.MaximumLength`, `Validation.Email`); a rule with
      `.WithErrorCode("Invoice.DueDateInPast")` passes its code through; a failure with no code is
-     `Validation.Invalid`. A domain error keeps its own code.
+     `Validation.Invalid`. A domain error keeps its own code. *(Corrected 2026-10-11: an uncoded `Must` is
+     not a failure with no code. FluentValidation names it after its predicate validator, so it arrives as
+     `Validation.Predicate`, or `Validation.AsyncPredicate` for `MustAsync`, a code no client can branch on;
+     `CommandValidatorConventionTests` therefore fails any `Must` or `MustAsync` without `.WithErrorCode(...)`.
+     `Validation.Invalid` is what a failure with an empty code gets, such as a `Custom` rule's `AddFailure`.)*
    - A 400 from a **single** plain validation error (`Invoice.NoLines`) still carries
      `errors: [{ field: null, code: "Invoice.NoLines", … }]` with top-level `code: "Invoice.NoLines"`; a
      `ValidationError` carries top-level `code: "Validation.General"` and the list. Clients can therefore
@@ -88,7 +100,8 @@ explicitly in the OpenAPI document (ADR-0025), so generators do not guess.
 `FieldError(Field, Code, Description) : Error` is what `ValidationDecorators` emits per FluentValidation
 failure (it replaces the internal `FieldValidationFailure` of the pipeline-v2 pass); domain errors stay
 plain `Error`s; `ValidationError` aggregates both and `Result.Combine` flattens nested ones unchanged.
-The outcome log line's `field:code` pairs read the same record.
+The outcome log line's `field:code` pairs read the same record. *(Refined by the 2026-10-11 amendment
+below: `Combine` merges only when every failure is a validation error.)*
 
 ### One writer, one catalogue (Api.Common)
 
@@ -152,3 +165,90 @@ a time, by deserialising each response into `ProblemResponse`.
   identical in Development and Production — the in-process tests prove what production does.
 - The `type` URN is not dereferenceable. A product that wants documentation links changes
   `ProblemTypes.Prefix` once; every consumer that branched on `code` is unaffected.
+
+## Amendment (2026-10-11): `Result.Combine` merges only validation failures; value-object errors name their field; a `Result` never reaches JSON
+
+**`Combine` is type-aware.** As first written, `Result.Combine` flattened any two failures into one
+`Validation.General`, so two NotFounds, or a NotFound beside a Failure, answered 400 and logged at
+Information. It now merges into a `ValidationError` only when every failure is `ErrorType.Validation`
+(nested ones still flattened); otherwise it returns one error unmerged: the first `Failure`, else the
+first non-validation failure. The validation errors beside it are dropped, because the 404 or the 500 is
+the answer that matters. A single failure is returned as it is. `Combine<T1, T2>` and `Combine<T1, T2, T3>` apply the same rule
+and keep the values as a tuple, which the deconstructing `Bind`/`Map` overloads unpack, so
+`CreateInvoiceCommandHandler` is one chain. The wire contract above is unchanged.
+
+**Value-object and aggregate-rule errors name the request field.** Rule 5 made every domain
+value-object error a whole-request error, so an API client or the Blazor form could not put
+"The email address is not in a valid format." under the e-mail input when `"a@b"` passed every shape
+check and only `EmailAddress.Create` rejected it. The Domain stays transport-free: factories and
+aggregate methods still return plain `Error`s. The handler, which knows which request member it passed,
+attributes the failure with `Result.AtField(member)` (in `ResultExtensions`):
+`EmailAddress.Create(command.CustomerEmail).AtField(nameof(command.CustomerEmail))`. `AtField` rewraps
+a plain `ErrorType.Validation` error as `FieldError(member, code, description)`. It passes through every
+other type, an existing `FieldError` and an aggregated `ValidationError`, so each value object is
+attributed before `Combine`. The code-selective overload, `AtField(member, params Error[] only)`, serves a
+value object spanning two inputs or an aggregate method with several rules: `Invoice.Issue` attributes
+`Invoice.DueDateInPast` to `dueDate` while `Invoice.NoLines` stays `field: null`. The shape of `errors[]`
+is unchanged and so is every `code`; only which entries carry a path changed. A client that read
+`field: null` as "a domain error" branches on `code` instead, as "What consumers may rely on" already says.
+`ProblemDetailsContractTests` pins both kinds.
+
+**A `Result` never reaches JSON.** `CustomResults.Problem` is the only translation, but nothing enforced
+it: an endpoint that returned `Task<Result<T>>` instead of mapping it compiled, passed every gate and
+answered 200 with the Result's own members on success and a 500 on failure. Both Result types now carry
+`[JsonConverter(typeof(ResultJsonGuard))]`, a converter factory that throws `NotSupportedException`
+naming `TypedResults` and `CustomResults.Problem` instead of serialising. Minimal APIs resolve the
+response contract when they build the endpoint, so such an endpoint stops the host at boot, and every
+in-process test with it; `ProblemDetailsContractTests` proves it with a throwaway endpoint.
+
+## Second amendment (2026-10-11): the HTTP contract, second pass
+
+**Every 5xx `detail` is the catalogue sentence.** Rule 4 promised that the 500's detail is always "An
+unexpected error occurred.", but `CustomResults.Problem` copied `Error.Description` whatever the
+status, so a `Failure` Result put its own text on the wire: the place a third party's answer or a
+connection's complaint would land. The seam now computes the status first and, for any status of 500
+or more, writes `ProblemCatalog.ServerFailure.Detail` instead of the description. The `code` stays, so
+the failure is still identifiable from the body, the logs (ADR-0028) and the span. Rule 4 therefore
+reads: a 4xx carries `Error.Description` or the catalogue sentence; a 5xx carries nothing specific,
+whichever writer produced it. `ProblemDetailsContractTests` pins it with a Result-produced 500 whose
+description is a secret.
+
+**A 503 for a dependency that is down.** ADR-0004's amendment adds `ErrorType.Unavailable`;
+`CustomResults.Problem` maps it to 503 with the title "Service unavailable" (`ProblemTitles`, and the
+same title for a bodyless 503 the status-code pages complete) and the fixed `detail` "A service this
+request depends on is unavailable right now. Retry later." (`CustomResults.UnavailableDetail`): like
+every 5xx it never carries the description, and the `code` names the dependency
+(`ExchangeRate.Unavailable`). `ProblemDetailsContractTests` has the 503 row.
+
+**A body value of the wrong type names its field.** A body that parsed as JSON but did not bind
+(`"amount": "abc"`, `"dueDate": "tomorrow"`) was a 400 `Request.Malformed` with the framework's
+parameter-level sentence and no field, so neither a form nor an API client could point at the input.
+`ProblemCatalog.Malformed` now reads the serializer's `JsonException.Path` (`$.lines[1].amount`) and,
+for a conversion failure, adds `errors: [{ field: "lines[1].amount", code: "Request.InvalidValue",
+description: "The value is not of the type this field expects." }]`. The field is camel-cased like
+every other (the binder matches names case-insensitively); the description is fixed, because the
+serializer's own message names CLR types and is never echoed; the top-level `code` stays
+`Request.Malformed`. A syntax error (`{ not json`, a stray comma) names no field: the serializer
+reports where it stopped reading, often a parent, so the inner reader exception rules it out. Rule 5
+and *What consumers may rely on* therefore read: `errors[]` is on every Result-produced 400 and on a
+400 naming a body value of the wrong type. `ProblemDescriptor` gained an optional `Errors`, which
+`WriteProblemAsync` writes as the same extension.
+
+**Every 401 carries `WWW-Authenticate`.** The enrichment adds `WWW-Authenticate: Bearer` to a 401
+whose writer set none, so the 401s a Result produces (login's `Auth.InvalidCredentials`, refresh's
+`Auth.InvalidRefreshToken`) name the scheme as the challenge's always did (ADR-0021 decision 4).
+
+**Two idempotency outcomes.** A repeated `Idempotency-Key` header or a comma-separated list used to be
+joined into one key the caller never sent; it is now a 400 `Idempotency.InvalidKey` (the code the blank
+and the too-long key share, since the remedy is the same). An endpoint that declares
+`RequireIdempotency(keyRequired: true)` answers a request without the header with a 400
+`Idempotency.KeyRequired`; `CreateInvoice` is the one that does, because an accidental repeat of a
+create cannot be told from a second intent. Both are Results (`IdempotencyHeaderErrors`, beside the
+filter, since nothing below the API produces them; *amended 2026-10-11: folded into Application's
+`IdempotencyErrors`, one owner per code, see ADR-0018's second amendment*) written through `CustomResults`
+like the rest of the filter's outcomes. `ProblemDetailsContractTests` has a row for each new code.
+
+**A 412 for a stale `If-Match`.** ADR-0004's amendment adds `ErrorType.PreconditionFailed`;
+`CustomResults.Problem` maps it to 412 with the title "Precondition failed" and, as a 4xx, the error's
+own description (`Invoice.VersionMismatch`: reload and try again). `ProblemDetailsContractTests` has the
+412 row.

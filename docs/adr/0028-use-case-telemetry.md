@@ -2,6 +2,8 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-08
+- **Amended**: 2026-10-11 — the span wraps the line, descriptions leave the line, stable event ids, final span attribute names, a validation-failure counter (see *Amendment* below)
+- **Amended**: 2026-10-11 — `ErrorType.PreconditionFailed` is a classified expected failure at Information; `ErrorType.Unavailable` stays at Warning (see *Second amendment* below)
 
 ## Context
 
@@ -21,6 +23,7 @@ a contract with every dashboard and alert built on them.
   line lists its `field:code` pairs), Warning for an unclassified `ErrorType.Failure`, Error only for
   an exception that ends the use case, Information for the caller's own cancellation. Each line carries
   the elapsed milliseconds. Handlers do not log their own outcomes.
+  *(Amended 2026-10-11: `PreconditionFailed` is in the Information set, `Unavailable` logs at Warning; see the second amendment.)*
 - **One span per invocation**, started by `TracingDecorators` on the `Trellis.UseCases` source and named
   after the use case, tagged with the outcome (`success`, `failure`, `cancelled`, `exception`), the
   error's code and type on a failure, and the exception itself (`AddException`, status Error) on a crash.
@@ -50,3 +53,48 @@ a contract with every dashboard and alert built on them.
   tags and exception), `DecoratorPipelineTests` (the exact chain for every use case),
   `TelemetryNamingTests` (prefixes, units, resolvable names, the pending renames still pending),
   `ServiceDefaultsTests` (a prefixed meter and source are exported and an unprefixed one is not; the resource and the `OTEL_*` overrides).
+
+## Amendment (2026-10-11): the span wraps the line; the line names the error, not its text; final names
+
+- **The span wraps the line.** `TracingDecorators` now runs outside `LoggingDecorators` (ADR-0003's
+  second amendment), so the outcome line is written while the use-case span is current: an OTLP log
+  record carries that span's trace and span ids, and a trace view shows the line under its use case.
+- **No descriptions by default.** A failure line reads `failed in {ElapsedMilliseconds}ms with
+  {ErrorType} ({ErrorCode})`; a `ValidationError` adds its `field:code` pairs. `Error.Description` is
+  left out: it can carry what a user typed or a library wrote (Identity's duplicate-account text names
+  the address), and the line is written at Information for every request. The type and code identify
+  the failure; the response carries the text. `UseCaseLoggingOptions.IncludeErrorDetail` (default
+  false) appends the description; a host binds it from `Telemetry:IncludeErrorDetail`, and only
+  Development turns it on.
+- **Stable event ids.** The outcome lines are `[LoggerMessage]` methods in the use-case range 1001–1099,
+  beside the security events' 11xx and the e-mail sender's 12xx: 1001 succeeded, 1002 failed, 1003
+  failed validation (with the pairs), 1004 failed with the description (written instead of 1002 while
+  the opt-in is on), 1005 cancelled by the caller, 1006 threw. An alert or a query matches the id, not
+  the message text. Renumbering one is a breaking change, like renaming an instrument.
+- **Final span attribute names.** The three tags are `trellis.usecase.outcome`,
+  `trellis.usecase.error_code` and `trellis.usecase.error_type`. The third is not `error.type`, as the
+  decision above planned: backends count a span carrying `error.type` as an error, so every 404 and
+  rejected form would read as a fault. `error.type` is set only when the use case throws, to the
+  exception's full type name, beside status Error (the exception's message as its description) and the
+  exception event. `TelemetryNamingTests`' pending-rename list is empty.
+- **`trellis.validation.failures`** (`{failure}`, on the `Trellis.UseCases` meter) counts every failure of
+  a Validation-typed result, each entry of a `ValidationError` or the single error a handler returned,
+  tagged `trellis.usecase.name` and `trellis.validation.code` (never the field or the value). It is
+  counted at the outcome site, in `TracingDecorators`, so a domain rule's code (`Invoice.DueDateInPast`)
+  counts beside FluentValidation's: the rules that reject the most requests, by use case.
+- Fitness: `UseCaseOutcomeTests` asserts the event id per outcome, that a failure line omits the
+  description unless the opt-in is set, that the line carries the use-case span's id, the span
+  attribute names as literals, `error.type` on a crash only, and the counter for a FluentValidation and
+  a domain code.
+
+## Second amendment (2026-10-11): the levels of `PreconditionFailed` and `Unavailable`
+
+ADR-0004's amendment added `ErrorType.Unavailable` (503) and `ErrorType.PreconditionFailed` (412) after
+the decision above fixed the Information set, and `LoggingDecorators` logged both at Warning as
+unclassified types. `PreconditionFailed` is now a classified expected failure: a stale `If-Match` is the
+concurrency contract working, as routine as a 404, and a page that retries with the fresh ETag would
+otherwise fill the Warning channel with its own users' edits. It logs at Information. `Unavailable` stays
+at Warning beside an unclassified `Failure`: the request did nothing wrong, but a dependency being down
+is what the Warning channel is for, and the first line written after the retries, the circuit breaker and
+the limiter have given up should reach whoever is on call. `UseCaseOutcomeTests.Every_error_type_logs_one_line_at_its_level`
+pins both rows; `.claude/rules/application.md`'s pipeline line names both levels.

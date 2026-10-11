@@ -28,7 +28,7 @@ public sealed class ResultConversionTests
         }
 
         (await Handle(fail: true)).Error.ShouldBe(Conflict);
-        (await Handle(fail: false)).IsSuccess.ShouldBeTrue();
+        (await Handle(fail: false)).ShouldBeSuccess();
     }
 
     [Fact]

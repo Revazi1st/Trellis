@@ -24,7 +24,7 @@ public sealed class IdempotencyPostCommitTests(ApiFactory factory) : IClassFixtu
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient healthy = await factory.CreateAdminClientAsync(ct);
-        Guid invoiceId = await CreateInvoiceAsync(healthy, ct);
+        Guid invoiceId = await healthy.CreateInvoiceAsync();
 
         var cancelling = factory.WithTestServices(WrapCacheInCancellingCache);
         HttpClient aborting = await factory.CreateAdminClientOnAsync(cancelling, ct);
@@ -50,14 +50,6 @@ public sealed class IdempotencyPostCommitTests(ApiFactory factory) : IClassFixtu
         services.AddSingleton<HybridCache>(provider => new CancellingHybridCache((HybridCache)(original.ImplementationInstance
             ?? original.ImplementationFactory?.Invoke(provider)
             ?? ActivatorUtilities.CreateInstance(provider, original.ImplementationType!))));
-    }
-
-    private static async Task<Guid> CreateInvoiceAsync(HttpClient client, CancellationToken ct)
-    {
-        HttpResponseMessage created = await client.PostAsJsonAsync(
-            "/api/v1/invoices", new CreateInvoiceRequest("Post Commit Ltd", "p@c.io", "USD"), ct);
-        created.StatusCode.ShouldBe(HttpStatusCode.Created);
-        return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;
     }
 
     private static async Task<HttpResponseMessage> AddLineAsync(HttpClient client, Guid invoiceId, string idempotencyKey, CancellationToken ct)

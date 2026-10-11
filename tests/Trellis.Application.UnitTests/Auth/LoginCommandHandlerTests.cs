@@ -40,7 +40,7 @@ public sealed class LoginCommandHandlerTests
         var result = await CreateHandler().Handle(
             new LoginCommand("member@acme.com", "pw"), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.AccessToken.ShouldBe("access-token");
         result.Value.RefreshToken.ShouldBe("refresh-token");
         result.Value.ExpiresInSeconds.ShouldBe(15 * 60);

@@ -1,12 +1,14 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Trellis.SharedKernel.Domain;
 
 /// <summary>
 /// Resolves all IDomainEventHandler&lt;TEvent&gt; registrations for each event's runtime type and invokes
-/// them sequentially, crediting each one under its stable <see cref="DomainEventHandlerNameAttribute"/>.
+/// them sequentially, crediting each one under its stable <see cref="DomainEventHandlerNameAttribute"/>
+/// and isolating each one's failure from its siblings.
 /// </summary>
 public sealed class DomainEventDispatcher(IServiceProvider serviceProvider) : IDomainEventDispatcher
 {
@@ -17,6 +19,7 @@ public sealed class DomainEventDispatcher(IServiceProvider serviceProvider) : ID
         IDomainEvent domainEvent,
         ISet<string> completedHandlers,
         Func<string, Task>? checkpoint,
+        Func<string, Exception, Task>? onHandlerFailed,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
@@ -26,7 +29,7 @@ public sealed class DomainEventDispatcher(IServiceProvider serviceProvider) : ID
             .GetOrAdd(
                 domainEvent.GetType(),
                 static eventType => (IHandlerInvoker)Activator.CreateInstance(typeof(TypedHandlerInvoker<>).MakeGenericType(eventType))!)
-            .Invoke(domainEvent, serviceProvider, completedHandlers, checkpoint, cancellationToken);
+            .Invoke(domainEvent, serviceProvider, completedHandlers, checkpoint, onHandlerFailed, cancellationToken);
     }
 
     /// <summary>
@@ -53,6 +56,7 @@ public sealed class DomainEventDispatcher(IServiceProvider serviceProvider) : ID
             IServiceProvider serviceProvider,
             ISet<string> completedHandlers,
             Func<string, Task>? checkpoint,
+            Func<string, Exception, Task>? onHandlerFailed,
             CancellationToken cancellationToken);
     }
 
@@ -64,7 +68,53 @@ public sealed class DomainEventDispatcher(IServiceProvider serviceProvider) : ID
             IServiceProvider serviceProvider,
             ISet<string> completedHandlers,
             Func<string, Task>? checkpoint,
+            Func<string, Exception, Task>? onHandlerFailed,
             CancellationToken cancellationToken)
+        {
+            (IDomainEventHandler<TEvent> Handler, string Name)[] handlers = ResolveHandlers(serviceProvider);
+            List<(string Name, Exception Exception)>? failures = null;
+
+            foreach ((IDomainEventHandler<TEvent> handler, string name) in handlers)
+            {
+                if (completedHandlers.Contains(name))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    await handler.Handle((TEvent)domainEvent, cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                {
+                    // This handler's failure alone: it stays uncredited, so it alone is retried, and its
+                    // siblings still get their turn — an outage behind one of them must not delay the others.
+                    // A cancellation of the token handed in (the host stopping, the caller's budget spent) is
+                    // nobody's failure in particular: it propagates and ends the dispatch here, because every
+                    // handler after it would only fail the same way.
+                    (failures ??= []).Add((name, exception));
+                    if (onHandlerFailed is not null)
+                    {
+                        await onHandlerFailed(name, exception);
+                    }
+
+                    continue;
+                }
+
+                // Never isolated: a checkpoint that cannot commit leaves this handler uncredited AND ends the
+                // dispatch — nothing after it could be committed either.
+                if (checkpoint is not null)
+                {
+                    await checkpoint(name);
+                }
+
+                completedHandlers.Add(name);
+            }
+
+            ThrowIfAnyFailed(failures, handlers.Length);
+        }
+
+        private static (IDomainEventHandler<TEvent> Handler, string Name)[] ResolveHandlers(IServiceProvider serviceProvider)
         {
             // Every name is resolved before anything runs: a missing or shared key fails the whole
             // dispatch up front instead of after some handlers already had their side effects (a shared
@@ -80,22 +130,26 @@ public sealed class DomainEventDispatcher(IServiceProvider serviceProvider) : ID
                     + string.Join(", ", handlers.Select(static h => $"{h.Handler.GetType().FullName} = \"{h.Name}\"")));
             }
 
-            foreach ((IDomainEventHandler<TEvent> handler, string name) in handlers)
+            return handlers;
+        }
+
+        private static void ThrowIfAnyFailed(List<(string Name, Exception Exception)>? failures, int handlerCount)
+        {
+            if (failures is null)
             {
-                if (completedHandlers.Contains(name))
-                {
-                    continue;
-                }
-
-                await handler.Handle((TEvent)domainEvent, cancellationToken);
-
-                if (checkpoint is not null)
-                {
-                    await checkpoint(name);
-                }
-
-                completedHandlers.Add(name);
+                return;
             }
+
+            if (failures.Count == 1)
+            {
+                // As it was thrown, stack intact: the retry's error.type and log line keep their meaning.
+                ExceptionDispatchInfo.Throw(failures[0].Exception);
+            }
+
+            throw new AggregateException(
+                $"{failures.Count} of the {handlerCount} handlers of '{typeof(TEvent).FullName}' failed: "
+                + string.Join(", ", failures.Select(static f => f.Name)),
+                failures.Select(static f => f.Exception));
         }
     }
 }

@@ -3,6 +3,7 @@
 - **Status**: accepted
 - **Date**: 2026-09-25
 - **Amended**: 2026-10-08 — replace (not add) the blanket pipeline, the real exception set, API-only registration, back-off-aware budget, Frankfurter (see *Amendment* below)
+- **Amended**: 2026-10-11 — an outage is `Unavailable` (503), a refusal stays `Failure`, statuses mapped by endpoint contract (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -46,3 +47,30 @@ The default provider then moved once more, to Frankfurter's v2 API (`https://api
 `rates?base=&quotes=`, an array per quote): v1 answers with a `Deprecation` header and a successor
 link. The adapter reads the array, an object with `success:false` stays `Unavailable`, any other shape
 is `MalformedResponse` (`docs/features/exchange-rates.md`).
+
+## Amendment (2026-10-11): an outage is `Unavailable`, a refusal stays a `Failure`
+
+`ExchangeRateErrors.Unavailable` was a deliberate `Failure` (500), and it covered two different
+situations: the provider being down, and the provider refusing us. ADR-0004 now has
+`ErrorType.Unavailable` (503), so the reference port splits them by whether waiting helps:
+
+- **`ExchangeRate.Unavailable`** is an `Unavailable`: a transport failure, an attempt or total timeout,
+  an open circuit, a concurrency-limiter rejection, and a 5xx, 408 or 429 still failing after the
+  pipeline's retries. A client may retry later.
+- **`ExchangeRate.Rejected`** is a `Failure`: the provider answered and refused our credentials or plan
+  (401/403), a route it does not serve, meaning a wrong `BaseUrl` or a retired API version (404), or
+  said `success:false` in a 200. No wait cures our configuration, so a 503 would mislead.
+- `ExchangeRate.MalformedResponse` stays a `Failure`, and `ExchangeRate.UnknownCurrency` a `Validation`.
+
+The status mapping follows what each status means for the endpoint called, probed against the
+provider, not the status class: Frankfurter answers an unknown currency with a 422, which is the
+caller's input (`UnknownCurrency`, a 400 at our API), while a 404 on its `rates` collection route can
+only be our wrong URL. An upstream 401/403/404 is never forwarded as our own. The table is in
+`docs/features/exchange-rates.md`.
+
+An endpoint that calls an integration declares the 503 explicitly with a bare
+`.Produces(StatusCodes.Status503ServiceUnavailable)`, which the OpenAPI transformer fills with the
+`ProblemResponse` body like any other declared status (ADR-0025): the shape of an operation cannot show
+that it depends on a third party. No shipped endpoint calls the port yet, so the committed document has
+no 503. `Retry-After` is deferred for the reason ADR-0004's amendment gives.
+

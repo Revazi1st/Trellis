@@ -9,4 +9,11 @@
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 
+  <!-- Shared test support (tests/TestSupport): one source file compiled into each test project that sees the
+       SharedKernel, no project of its own. ShouldBeSuccess() comes with the global using. -->
+  <ItemGroup>
+    <Compile Include="..\TestSupport\ResultAssertions.cs" Link="TestSupport\ResultAssertions.cs" />
+    <Using Include="Trellis.TestSupport" />
+  </ItemGroup>
+
 </Project>

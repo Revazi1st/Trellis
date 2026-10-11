@@ -193,6 +193,22 @@ public sealed class OpenApiDocumentTests
         notModified.TryGetProperty("content", out _).ShouldBeFalse("a 304 has no body");
     }
 
+    [Theory]
+    [InlineData("/api/v1/invoices/{id}/lines")]
+    [InlineData("/api/v1/invoices/{id}/issue")]
+    [InlineData("/api/v1/invoices/{id}/pay")]
+    [InlineData("/api/v1/invoices/{id}/void")]
+    public void Conditional_writes_document_an_optional_If_Match_and_412(string path)
+    {
+        JsonElement write = Operation("post", path);
+
+        JsonElement ifMatch = Parameters(write).Where(static p => p.GetProperty("name").GetString() == "If-Match").ShouldHaveSingleItem();
+        ifMatch.GetProperty("in").GetString().ShouldBe("header");
+        (ifMatch.TryGetProperty("required", out JsonElement required) && required.GetBoolean()).ShouldBeFalse("If-Match is optional: no 428");
+        write.GetProperty("responses").GetProperty("412").GetProperty("content").GetProperty(ProblemMediaType)
+            .GetProperty("schema").GetProperty("$ref").GetString().ShouldBe(ProblemSchemaRef);
+    }
+
     [Fact]
     public void Paging_parameters_are_camel_case_with_bounds()
     {

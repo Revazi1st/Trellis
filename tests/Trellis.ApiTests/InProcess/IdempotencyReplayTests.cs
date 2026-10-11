@@ -44,7 +44,9 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         retry.StatusCode.ShouldBe(HttpStatusCode.Created);
         retry.Headers.GetValues(IdempotencyFilter.ReplayedHeaderName).ShouldHaveSingleItem().ShouldBe("true");
         retry.Headers.Location.ShouldNotBeNull().ShouldBe(first.Headers.Location);
-        retry.Content.Headers.ContentType?.ToString().ShouldBe(first.Content.Headers.ContentType?.ToString());
+        // Both sides present and equal: a replay that dropped the header must not pass because the first lacked it too.
+        string firstContentType = first.ShouldHaveMediaType("application/json").ToString();
+        retry.ShouldHaveMediaType("application/json").ToString().ShouldBe(firstContentType);
         (await retry.Content.ReadAsByteArrayAsync(ct)).ShouldBe(firstBody);
 
         // The replayed id is the first one, and it is a real invoice: one command ran, not two.
@@ -57,7 +59,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
-        Guid invoiceId = await CreateInvoiceAsync(admin, ct);
+        Guid invoiceId = await admin.CreateInvoiceAsync();
         string key = Guid.NewGuid().ToString();
 
         (await AddLineAsync(admin, invoiceId, key, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -123,7 +125,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient healthy = await factory.CreateAdminClientAsync(ct);
-        Guid invoiceId = await CreateInvoiceAsync(healthy, ct);
+        Guid invoiceId = await healthy.CreateInvoiceAsync();
 
         // The gate opens after the command committed and before the response goes out: the exact window
         // in which a second request finds the reservation but no response.
@@ -200,7 +202,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         HttpResponseMessage response, HttpStatusCode status, string code, string instance, CancellationToken ct)
     {
         response.StatusCode.ShouldBe(status);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         string body = await response.Content.ReadAsStringAsync(ct);
         ProblemResponse problem = JsonSerializer.Deserialize<ProblemResponse>(body, JsonSerializerOptions.Web).ShouldNotBeNull(body);
         problem.Status.ShouldBe((int)status, body);
@@ -209,14 +211,6 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         problem.Instance.ShouldBe(instance, body);
         problem.CorrelationId.ShouldBe(response.Headers.GetValues(CorrelationIdMiddleware.HeaderName).Single(), body);
         return problem;
-    }
-
-    private static async Task<Guid> CreateInvoiceAsync(HttpClient client, CancellationToken ct)
-    {
-        HttpResponseMessage created = await client.PostAsJsonAsync(
-            "/api/v1/invoices", new CreateInvoiceRequest("Replay Ltd", "lines@replay.io", "USD"), ct);
-        created.StatusCode.ShouldBe(HttpStatusCode.Created);
-        return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;
     }
 
     private static Task<HttpResponseMessage> PostCreateAsync(HttpClient client, string key, CreateInvoiceRequest request, CancellationToken ct)
@@ -334,8 +328,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
                 branch.UseEndpoints(static endpoints => endpoints
                     .MapPost("/capped", static async Task<Ok<CappedResponse>> (CappedRequest request, IUnitOfWork unitOfWork, CancellationToken ct) =>
                     {
-                        Result commit = await unitOfWork.CommitAsync(ct);
-                        commit.IsSuccess.ShouldBeTrue(commit.Error.Description);
+                        (await unitOfWork.CommitAsync(ct)).ShouldBeSuccess();
                         return TypedResults.Ok(new CappedResponse(new string('x', request.Size)));
                     })
                     .RequireIdempotency(maxReplayBodyBytes: Cap));

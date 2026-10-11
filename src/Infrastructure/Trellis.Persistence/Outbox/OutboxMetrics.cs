@@ -27,13 +27,20 @@ public sealed class OutboxMetrics : IDisposable
     /// <summary>1-based attempt the span records.</summary>
     public const string AttemptAttribute = "trellis.outbox.attempt";
 
-    /// <summary><c>processed</c>, <c>retry_scheduled</c> or <c>dead_lettered</c>.</summary>
+    /// <summary>
+    /// <c>processed</c>, <c>retry_scheduled</c>, <c>dead_lettered</c> or <c>lease_lost</c> (the row was
+    /// claimed by another processor while this one worked on it; nothing of this attempt was written).
+    /// </summary>
     public const string OutcomeAttribute = "trellis.outbox.outcome";
 
     /// <summary>Why a message was dead-lettered: <c>exhausted</c>, <c>unknown_type</c> or <c>poison</c>.</summary>
     public const string ReasonAttribute = "trellis.outbox.reason";
 
-    /// <summary>The semantic-convention attribute for the failing exception's type name.</summary>
+    /// <summary>
+    /// The semantic-convention attribute for what went wrong: on the span the failing exception's full
+    /// type name, or the <c>Outbox.*</c> error code of an unreadable row; on the retries counter the
+    /// exception's short type name (a low-cardinality dimension).
+    /// </summary>
     public const string ErrorTypeAttribute = "error.type";
 
     internal static readonly ActivitySource ActivitySource = new(ActivitySourceName);

@@ -1,12 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Trellis.Application.Features.Invoices;
-using Trellis.Application.Features.Invoices.AddInvoiceLine;
-using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Application.Features.Invoices.GetInvoice;
-using Trellis.Application.Features.Invoices.IssueInvoice;
 using Trellis.Application.Features.Invoices.ListOverdueInvoices;
-using Trellis.Application.Features.Invoices.PayInvoice;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Messaging;
 using Trellis.SharedKernel.Results;
@@ -19,24 +15,16 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
     [Fact]
     public async Task Full_aggregate_roundtrips_through_postgres()
     {
-        var create = Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
-        var addLine = Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>();
-
-        Result<InvoiceId> created = await create.Handle(
-            new CreateInvoiceCommand("ACME Corp", "billing@acme.com", "usd"), TestContext.Current.CancellationToken);
-        created.IsSuccess.ShouldBeTrue();
-
-        (await addLine.Handle(new AddInvoiceLineCommand(created.Value, "Design", 150.50m), TestContext.Current.CancellationToken))
-            .IsSuccess.ShouldBeTrue();
-        (await addLine.Handle(new AddInvoiceLineCommand(created.Value, "Build", 349.50m), TestContext.Current.CancellationToken))
-            .IsSuccess.ShouldBeTrue();
+        // A lower-case currency: stored as the normalised code.
+        InvoiceId id = await Services.CreateInvoiceAsync("ACME Corp", "billing@acme.com", currency: "usd");
+        await Services.AddInvoiceLineAsync(id, "Design", 150.50m);
+        await Services.AddInvoiceLineAsync(id, "Build", 349.50m);
 
         using var readScope = CreateScope();
         var get = readScope.ServiceProvider.GetRequiredService<IQueryHandler<GetInvoiceQuery, InvoiceResponse>>();
-        Result<InvoiceResponse> fetched = await get.Handle(new GetInvoiceQuery(created.Value), TestContext.Current.CancellationToken);
+        Result<InvoiceResponse> fetched = await get.Handle(new GetInvoiceQuery(id), TestContext.Current.CancellationToken);
 
-        fetched.IsSuccess.ShouldBeTrue();
-        InvoiceResponse invoice = fetched.Value;
+        InvoiceResponse invoice = fetched.ShouldBeSuccess();
         invoice.CustomerName.ShouldBe("ACME Corp");
         invoice.CustomerEmail.ShouldBe("billing@acme.com");
         invoice.Currency.ShouldBe("USD");
@@ -49,24 +37,19 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
     [Fact]
     public async Task Overdue_specification_translates_to_sql_and_orders_by_due_date()
     {
-        var create = Services.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>();
-        var addLine = Services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>();
-        var issue = Services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>();
-        var pay = Services.GetRequiredService<ICommandHandler<PayInvoiceCommand>>();
-
-        async Task<InvoiceId> Seed(string name, DateTimeOffset? dueDate, bool paid = false)
+        async Task Seed(string name, DateTimeOffset? dueDate, bool paid = false)
         {
-            InvoiceId id = (await create.Handle(new CreateInvoiceCommand(name, "a@b.co", "USD"), TestContext.Current.CancellationToken)).Value;
-            await addLine.Handle(new AddInvoiceLineCommand(id, "Line", 10m), TestContext.Current.CancellationToken);
+            InvoiceId id = await Services.CreateInvoiceAsync(name);
+            await Services.AddInvoiceLineAsync(id);
             if (dueDate is { } due)
             {
-                (await issue.Handle(new IssueInvoiceCommand(id, due), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+                await Services.IssueInvoiceAsync(id, due);
             }
+
             if (paid)
             {
-                (await pay.Handle(new PayInvoiceCommand(id), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+                await Services.PayInvoiceAsync(id);
             }
-            return id;
         }
 
         // Issued at the fixture clock's 2026-07-20 (a due date is never past when issued)...
@@ -85,8 +68,7 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
 
         var overdue = await list.Handle(new ListOverdueInvoicesQuery(Page: 1, PageSize: 20), TestContext.Current.CancellationToken);
 
-        overdue.IsSuccess.ShouldBeTrue();
-        overdue.Value.TotalCount.ShouldBe(2);
+        overdue.ShouldBeSuccess().TotalCount.ShouldBe(2);
         overdue.Value.Items.Select(static i => i.CustomerName).ShouldBe(["overdue-august", "overdue-september"]);
     }
 }

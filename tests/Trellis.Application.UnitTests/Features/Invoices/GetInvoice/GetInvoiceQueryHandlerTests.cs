@@ -1,11 +1,11 @@
 using NSubstitute;
 using Shouldly;
 using Trellis.Application.Features.Invoices.GetInvoice;
-using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
+using Trellis.TestSupport.Invoices;
 using Xunit;
 
-namespace Trellis.Application.UnitTests.Invoices;
+namespace Trellis.Application.UnitTests.Features.Invoices.GetInvoice;
 
 public sealed class GetInvoiceQueryHandlerTests
 {
@@ -14,14 +14,13 @@ public sealed class GetInvoiceQueryHandlerTests
     [Fact]
     public async Task Maps_aggregate_to_response()
     {
-        Invoice invoice = InvoiceTestData.Draft();
-        invoice.AddLine("Design", Money.Create(150.50m, "USD").Value);
+        Invoice invoice = InvoiceFactory.DraftWithLine("Design", 150.50m);
         _invoices.GetByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
         var handler = new GetInvoiceQueryHandler(_invoices);
 
         var result = await handler.Handle(new GetInvoiceQuery(invoice.Id), TestContext.Current.CancellationToken);
 
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.Id.ShouldBe(invoice.Id.Value);
         result.Value.CustomerEmail.ShouldBe("billing@acme.com");
         result.Value.Status.ShouldBe("Draft");

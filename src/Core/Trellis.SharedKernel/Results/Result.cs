@@ -1,12 +1,22 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
+
 namespace Trellis.SharedKernel.Results;
 
-/// <summary>Outcome of an operation that can fail. Failures carry an <see cref="Error"/>; exceptions are reserved for the truly exceptional (ADR-0004).</summary>
+/// <summary>
+/// Outcome of an operation that can fail. Failures carry an <see cref="Error"/>; exceptions are reserved for the truly
+/// exceptional (ADR-0004). <see cref="Error"/> is null on a success, and the compiler knows it: reading
+/// <c>result.Error.Code</c> warns until an <see cref="IsFailure"/> or <see cref="IsSuccess"/> check proves a failure,
+/// so an unguarded read cannot compile into a 500 with an empty code. A Result is never serialised
+/// (<see cref="ResultJsonGuard"/>): the endpoint maps it.
+/// </summary>
+[JsonConverter(typeof(ResultJsonGuard))]
 public class Result
 {
-    protected Result(bool isSuccess, Error error)
+    protected Result(bool isSuccess, Error? error)
     {
-        if (isSuccess && error != Error.None ||
-            !isSuccess && error == Error.None)
+        if (isSuccess && error is not null ||
+            !isSuccess && error is null)
         {
             throw new ArgumentException("Invalid combination of success state and error.", nameof(error));
         }
@@ -15,15 +25,18 @@ public class Result
         Error = error;
     }
 
+    [MemberNotNullWhen(false, nameof(Error))]
     public bool IsSuccess { get; }
 
+    [MemberNotNullWhen(true, nameof(Error))]
     public bool IsFailure => !IsSuccess;
 
-    public Error Error { get; }
+    /// <summary>The failure's error; null on a success. Check <see cref="IsFailure"/> first.</summary>
+    public Error? Error { get; }
 
-    public static Result Success() => new(true, Error.None);
+    public static Result Success() => new(true, null);
 
-    public static Result<TValue> Success<TValue>(TValue value) => new(value, true, Error.None);
+    public static Result<TValue> Success<TValue>(TValue value) => new(value, true, null);
 
     public static Result Failure(Error error) => new(false, error);
 
@@ -33,41 +46,82 @@ public class Result
     public static implicit operator Result(Error error) => Failure(error);
 
     /// <summary>
-    /// Success when every result succeeded; otherwise a single error carrying ALL the failures
-    /// (nested <see cref="ValidationError"/>s are flattened) — so a caller creating several value
-    /// objects reports every problem at once instead of one 400 at a time.
+    /// Success when every result succeeded; otherwise ONE error, chosen by type. When every failure is a
+    /// validation error they are merged into a <see cref="ValidationError"/> (nested ones flattened), so a
+    /// caller creating several value objects reports every problem in one 400 instead of one at a time.
+    /// When any failure is of another type, merging would turn a 404 or a 500 into a 400, so the first
+    /// <see cref="ErrorType.Failure"/> wins, else the first non-validation failure; the validation errors
+    /// beside it are dropped. A single failure is returned as it is.
     /// </summary>
     public static Result Combine(params Result[] results)
+        => MergeFailures(results) is { } error ? Failure(error) : Success();
+
+    /// <summary>
+    /// <see cref="Combine(Result[])"/> that keeps the values: both on success, as a tuple the
+    /// deconstructing <c>Bind</c>/<c>Map</c> overloads (<c>(a, b) =&gt; …</c>) unpack.
+    /// </summary>
+    public static Result<(T1, T2)> Combine<T1, T2>(Result<T1> first, Result<T2> second)
+        => MergeFailures([first, second]) is { } error
+            ? Failure<(T1, T2)>(error)
+            : Success((first.Value, second.Value));
+
+    /// <inheritdoc cref="Combine{T1, T2}(Result{T1}, Result{T2})"/>
+    public static Result<(T1, T2, T3)> Combine<T1, T2, T3>(Result<T1> first, Result<T2> second, Result<T3> third)
+        => MergeFailures([first, second, third]) is { } error
+            ? Failure<(T1, T2, T3)>(error)
+            : Success((first.Value, second.Value, third.Value));
+
+    private static Error? MergeFailures(ReadOnlySpan<Result> results)
     {
-        List<Error> errors = [];
+        List<Error> validation = [];
+        Error? first = null;
+        Error? decisive = null;
+        int failures = 0;
+
         foreach (Result result in results)
         {
-            if (result.IsFailure)
+            if (result.IsSuccess)
             {
-                if (result.Error is ValidationError validation)
+                continue;
+            }
+
+            failures++;
+            first ??= result.Error;
+            if (result.Error.Type != ErrorType.Validation)
+            {
+                if (decisive is null || (decisive.Type != ErrorType.Failure && result.Error.Type == ErrorType.Failure))
                 {
-                    errors.AddRange(validation.Errors);
+                    decisive = result.Error;
                 }
-                else
-                {
-                    errors.Add(result.Error);
-                }
+            }
+            else if (result.Error is ValidationError nested)
+            {
+                validation.AddRange(nested.Errors);
+            }
+            else
+            {
+                validation.Add(result.Error);
             }
         }
 
-        return errors.Count switch
+        return failures switch
         {
-            0 => Success(),
-            1 => Failure(errors[0]),
-            _ => Failure(new ValidationError(errors)),
+            0 => null,
+            1 => first,
+            _ => decisive ?? new ValidationError(validation),
         };
     }
 }
 
-/// <summary>A <see cref="Result"/> carrying a value when successful. Accessing <see cref="Value"/> on a failure throws.</summary>
+/// <summary>
+/// A <see cref="Result"/> carrying a value when successful. Accessing <see cref="Value"/> on a failure throws,
+/// and the exception names the error's code (and each aggregated <c>field:code</c>), so a failing test or a
+/// crash log says why without a debugger; descriptions stay out, as they may carry user input.
+/// </summary>
+[JsonConverter(typeof(ResultJsonGuard))]
 public class Result<TValue> : Result
 {
-    protected internal Result(TValue? value, bool isSuccess, Error error)
+    protected internal Result(TValue? value, bool isSuccess, Error? error)
         : base(isSuccess, error)
         => Value = value!;
 
@@ -75,9 +129,17 @@ public class Result<TValue> : Result
     {
         get => IsSuccess
             ? field
-            : throw new InvalidOperationException("The value of a failure result cannot be accessed.");
+            : throw new InvalidOperationException(
+                $"The value of a failure result cannot be accessed: it failed with {Codes(Error)}.");
         private init;
     }
+
+    private static string Codes(Error error) => error switch
+    {
+        ValidationError validation => $"{validation.Code} [{string.Join(", ", validation.Errors.Select(Codes))}]",
+        FieldError field => $"{field.Field}:{field.Code}",
+        _ => error.Code,
+    };
 
     public static implicit operator Result<TValue>(TValue value) => Success(value);
 

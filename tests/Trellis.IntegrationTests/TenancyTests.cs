@@ -11,10 +11,6 @@ using Shouldly;
 using Trellis.Application;
 using Trellis.Application.Abstractions;
 using Trellis.Application.Authorization;
-using Trellis.Application.Features.Invoices.AddInvoiceLine;
-using Trellis.Application.Features.Invoices.CreateInvoice;
-using Trellis.Application.Features.Invoices.IssueInvoice;
-using Trellis.Application.Features.Invoices.PayInvoice;
 using Trellis.Domain.Invoices;
 using Trellis.Domain.Invoices.Events;
 using Trellis.IntegrationTests.Telemetry;
@@ -23,7 +19,6 @@ using Trellis.Persistence.Identity;
 using Trellis.Persistence.Interceptors;
 using Trellis.Persistence.Outbox;
 using Trellis.SharedKernel.Domain;
-using Trellis.SharedKernel.Messaging;
 using Trellis.SharedKernel.Results;
 using Xunit;
 
@@ -42,6 +37,8 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     private const string TenantA = "tenant-a";
     private const string TenantB = "tenant-b";
     private const string Password = "Sup3r-secret!";
+    private const string TenantACustomer = "Tenant A Corp";
+    private const string TenantACustomerEmail = "billing@tenant-a.example";
     private static readonly DateTimeOffset Now = new(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
 
     private readonly IEmailSender _emailSender = Substitute.For<IEmailSender>();
@@ -73,7 +70,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     public async Task Rows_are_stamped_with_the_tenant_and_hidden_from_other_tenants()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
-        InvoiceId id = await CreateInvoiceAsAsync(_tenantA!, ct);
+        InvoiceId id = await CreateInvoiceAsAsync(_tenantA!);
 
         using IServiceScope again = _tenantA!.CreateScope();
         (await again.ServiceProvider.GetRequiredService<IInvoiceRepository>().GetByIdAsync(id, ct)).ShouldNotBeNull();
@@ -86,7 +83,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     public async Task Ambient_tenant_restores_isolation_for_non_request_flows()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
-        InvoiceId id = await CreateInvoiceAsAsync(_tenantA!, ct);
+        InvoiceId id = await CreateInvoiceAsAsync(_tenantA!);
 
         // No ambient tenant: system flows see nothing tenant-scoped.
         using (IServiceScope blank = _system!.CreateScope())
@@ -165,14 +162,14 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         }
 
         var identity = scope.ServiceProvider.GetRequiredService<IIdentityService>();
-        (await identity.RegisterAsync("first@test.dev", Password, ct)).IsSuccess.ShouldBeTrue();
-        (await identity.RegisterAsync("second@test.dev", Password, ct)).IsSuccess.ShouldBeTrue();
+        (await identity.RegisterAsync("first@test.dev", Password, ct)).ShouldBeSuccess();
+        (await identity.RegisterAsync("second@test.dev", Password, ct)).ShouldBeSuccess();
 
         Result<AuthenticatedUser> first = await identity.ValidateCredentialsAsync("first@test.dev", Password, ct);
         Result<AuthenticatedUser> second = await identity.ValidateCredentialsAsync("second@test.dev", Password, ct);
 
-        first.IsSuccess.ShouldBeTrue();
-        second.IsSuccess.ShouldBeTrue();
+        first.ShouldBeSuccess();
+        second.ShouldBeSuccess();
         first.Value.TenantId.ShouldNotBeNullOrWhiteSpace();
         first.Value.TenantId.Length.ShouldBeLessThanOrEqualTo(64);
         second.Value.TenantId.ShouldNotBeNullOrWhiteSpace();
@@ -220,20 +217,15 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
             .When(static sender => sender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()))
             .Do(_ => tenantSeenByHandler = AmbientTenant.CurrentTenantId);
 
-        InvoiceId id = await CreateInvoiceAsAsync(_tenantA!, ct);
+        InvoiceId id;
         using (IServiceScope scope = _tenantA!.CreateScope())
         {
-            IServiceProvider services = scope.ServiceProvider;
-            (await services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>()
-                .Handle(new AddInvoiceLineCommand(id, "Line", 10m), ct)).IsSuccess.ShouldBeTrue();
-            (await services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
-                .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), ct)).IsSuccess.ShouldBeTrue();
+            id = await scope.ServiceProvider.IssuedInvoiceAsync(customerName: TenantACustomer, customerEmail: TenantACustomerEmail);
         }
 
         using (IServiceScope scope = _tenantA!.CreateScope())
         {
-            (await scope.ServiceProvider.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
-                .Handle(new PayInvoiceCommand(id), ct)).IsSuccess.ShouldBeTrue();
+            await scope.ServiceProvider.PayInvoiceAsync(id);
         }
 
         // The row remembers who raised the event…
@@ -247,7 +239,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         // …and the processor (a system flow with no request) restores it around the handlers.
         await NewProcessor(_system!).ProcessBatchAsync(ct);
 
-        await _emailSender.Received(1).SendAsync("a@a.dev", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _emailSender.Received(1).SendAsync(TenantACustomerEmail, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         tenantSeenByHandler.ShouldBe(TenantA);
         AmbientTenant.CurrentTenantId.ShouldBeNull();
     }
@@ -261,16 +253,10 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     public async Task Handler_writes_are_stamped_with_the_originating_tenant()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
-        InvoiceId id = await CreateInvoiceAsAsync(_tenantA!, ct);
         using (IServiceScope scope = _tenantA!.CreateScope())
         {
-            IServiceProvider services = scope.ServiceProvider;
-            (await services.GetRequiredService<ICommandHandler<AddInvoiceLineCommand>>()
-                .Handle(new AddInvoiceLineCommand(id, "Line", 10m), ct)).IsSuccess.ShouldBeTrue();
-            (await services.GetRequiredService<ICommandHandler<IssueInvoiceCommand>>()
-                .Handle(new IssueInvoiceCommand(id, Now.AddDays(14)), ct)).IsSuccess.ShouldBeTrue();
-            (await services.GetRequiredService<ICommandHandler<PayInvoiceCommand>>()
-                .Handle(new PayInvoiceCommand(id), ct)).IsSuccess.ShouldBeTrue();
+            InvoiceId id = await scope.ServiceProvider.IssuedInvoiceAsync(customerName: TenantACustomer);
+            await scope.ServiceProvider.PayInvoiceAsync(id);
         }
 
         // A system host (no request, no tenant of its own) with a writing handler for the paid event.
@@ -314,13 +300,10 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
             new OutboxMetrics(new TestMeterFactory()),
             NullLogger<OutboxProcessor>.Instance);
 
-    private static async Task<InvoiceId> CreateInvoiceAsAsync(ServiceProvider provider, CancellationToken ct)
+    private static async Task<InvoiceId> CreateInvoiceAsAsync(ServiceProvider provider)
     {
         using IServiceScope scope = provider.CreateScope();
-        var result = await scope.ServiceProvider.GetRequiredService<ICommandHandler<CreateInvoiceCommand, InvoiceId>>()
-            .Handle(new CreateInvoiceCommand("Tenant A Corp", "a@a.dev", "USD"), ct);
-        result.IsSuccess.ShouldBeTrue();
-        return result.Value;
+        return await scope.ServiceProvider.CreateInvoiceAsync(TenantACustomer);
     }
 
     private ServiceProvider BuildProvider(ITenantContext tenantContext, Action<IServiceCollection>? configure = null)
@@ -329,7 +312,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         services.AddSingleton(_emailSender);
-        services.AddSingleton<ICurrentUser>(new TenantTestUser());
+        services.AddSingleton<ICurrentUser>(new TestCurrentUser { UserName = "tenancy-tests" });
         services.AddSingleton(tenantContext);
         services.AddApplication();
         services.AddPersistence(database.ConnectionString);
@@ -340,13 +323,6 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     private sealed class FixedTenantContext(string tenantId) : ITenantContext
     {
         public string? TenantId => AmbientTenant.CurrentTenantId ?? tenantId;
-    }
-
-    private sealed class TenantTestUser : ICurrentUser
-    {
-        public Guid? UserId { get; } = Guid.CreateVersion7();
-
-        public string? UserName => "tenancy-tests";
     }
 }
 #endif

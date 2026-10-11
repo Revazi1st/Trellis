@@ -80,7 +80,7 @@ public sealed class ExchangeRateResilienceTests
         Result<decimal> result = await provider.GetRateAsync("EUR", "USD", TestContext.Current.CancellationToken);
 
         elapsed.Stop();
-        result.IsSuccess.ShouldBeTrue();
+        result.ShouldBeSuccess();
         result.Value.ShouldBe(1.0825m);
         handler.Calls.ShouldBe(2);
         elapsed.Elapsed.ShouldBeGreaterThan(TimeSpan.FromSeconds(3), "the retry must really have waited past an attempts-only budget");

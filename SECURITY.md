@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please **do not** open a public issue for security vulnerabilities. Instead, use
-[GitHub's private vulnerability reporting](https://github.com/Revazi1st/trellis/security/advisories/new)
+[GitHub's private vulnerability reporting](https://github.com/Revazi1st/Trellis/security/advisories/new)
 (Security → Report a vulnerability). That is the only channel: it keeps the report private between
 you and the maintainers until a fix ships.
 

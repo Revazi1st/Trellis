@@ -36,11 +36,11 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient tenantA = await factory.CreateAdminClientAsync(ApiFactory.TenantA, ct);
         HttpClient tenantB = await factory.CreateAdminClientAsync(ApiFactory.TenantB, ct);
-        Guid id = await CreateInvoiceAsync(tenantA, ct);
+        Guid id = await tenantA.CreateInvoiceAsync();
 
         HttpResponseMessage read = await tenantB.GetAsync($"/api/v1/invoices/{id}", ct);
         read.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        read.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        read.ShouldBeProblemJson();
 
         // Writes are isolated too: the handler loads through the filtered repository, so the other
         // tenant's row does not exist as far as the command is concerned.
@@ -59,15 +59,12 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient tenantA = await factory.CreateAdminClientAsync(ApiFactory.TenantA, ct);
         HttpClient tenantB = await factory.CreateAdminClientAsync(ApiFactory.TenantB, ct);
-        Guid id = await CreateInvoiceAsync(tenantA, ct);
+        Guid id = await tenantA.CreateInvoiceAsync();
 
-        (await tenantA.PostAsJsonAsync($"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Consulting", 100m), ct))
-            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await tenantA.AddInvoiceLineAsync(id);
         // A due date is never past when issued: issue it due a minute from now on the host's clock, then
         // move that clock past it instead of sleeping until the invoice is genuinely overdue.
-        DateTimeOffset dueDate = factory.Time.GetUtcNow().AddMinutes(1);
-        (await tenantA.PostAsJsonAsync($"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(dueDate), ct))
-            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await tenantA.IssueInvoiceAsync(id, dueDate: factory.Time.GetUtcNow().AddMinutes(1));
         factory.Time.Advance(TimeSpan.FromMinutes(2));
 
         try
@@ -98,6 +95,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
             Content = JsonContent.Create(new CreateInvoiceRequest("Header Corp", "h@h.co", "USD")),
         };
         createAsB.Headers.Add(TenantHeader, ApiFactory.TenantB);
+        createAsB.Headers.Add(ApiHeaders.IdempotencyKey, Guid.NewGuid().ToString());
         HttpResponseMessage created = await tenantA.SendAsync(createAsB, ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         Guid id = (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
@@ -121,7 +119,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient tenantA = await factory.CreateAdminClientAsync(ApiFactory.TenantA, ct);
         HttpClient tenantB = await factory.CreateAdminClientAsync(ApiFactory.TenantB, ct);
-        Guid id = await CreateInvoiceAsync(tenantA, ct);
+        Guid id = await tenantA.CreateInvoiceAsync();
 
         // A cache hit bypasses the EF filter, which is why CacheKeys carries the tenant: warm the
         // entry as A, then prove B still misses, and that B's negative lookup did not evict A's entry.
@@ -154,20 +152,12 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
         HttpResponseMessage response = await CallWithMintedTokenAsync(tenant: null, ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         response.Headers.WwwAuthenticate.ToString().ShouldContain("invalid_token");
     }
 
     private static string? TenantClaimOf(string accessToken)
         => new JsonWebToken(accessToken).TryGetClaim(ITenantContext.ClaimType, out Claim? claim) ? claim.Value : null;
-
-    private static async Task<Guid> CreateInvoiceAsync(HttpClient client, CancellationToken ct)
-    {
-        HttpResponseMessage created = await client.PostAsJsonAsync(
-            "/api/v1/invoices", new CreateInvoiceRequest("Tenant Corp", "t@t.co", "USD"), ct);
-        created.StatusCode.ShouldBe(HttpStatusCode.Created);
-        return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
-    }
 
     private static async Task<PagedResponse<InvoiceDto>> ListOverdueAsync(HttpClient client, CancellationToken ct)
     {

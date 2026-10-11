@@ -15,26 +15,29 @@ public sealed class InvoiceTests
     private static readonly DateTimeOffset PaidAt = new(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
 
     private static Invoice CreateDraft()
-        => Invoice.Create("ACME Corp", EmailAddress.Create("billing@acme.com").Value, Currency.Create("USD").Value).Value;
+        => Invoice.Create(
+            "ACME Corp",
+            EmailAddress.Create("billing@acme.com").ShouldBeSuccess(),
+            Currency.Create("USD").ShouldBeSuccess()).ShouldBeSuccess();
 
     private static Invoice CreateDraftWithLine()
     {
         Invoice invoice = CreateDraft();
-        invoice.AddLine("Consulting", Money.Create(100m, "USD").Value);
+        invoice.AddLine("Consulting", Money.Create(100m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
         return invoice;
     }
 
     private static Invoice CreateIssued()
     {
         Invoice invoice = CreateDraftWithLine();
-        invoice.Issue(DueDate, IssuedAt);
+        invoice.Issue(DueDate, IssuedAt).ShouldBeSuccess();
         return invoice;
     }
 
     private static Invoice CreatePaid()
     {
         Invoice invoice = CreateIssued();
-        invoice.MarkPaid(PaidAt);
+        invoice.MarkPaid(PaidAt).ShouldBeSuccess();
         return invoice;
     }
 
@@ -46,21 +49,44 @@ public sealed class InvoiceTests
         invoice.Status.ShouldBe(InvoiceStatus.Draft);
         invoice.Lines.ShouldBeEmpty();
         invoice.Id.Value.ShouldNotBe(Guid.Empty);
-        invoice.Total.ShouldBe(Money.Zero("USD"));
+        invoice.Total.ShouldBe(Money.Zero(Currency.Create("USD").ShouldBeSuccess()));
     }
 
     [Fact]
     public void Create_rejects_blank_customer_name()
-        => Invoice.Create("  ", EmailAddress.Create("a@b.co").Value, Currency.Create("USD").Value)
+        => Invoice.Create("  ", EmailAddress.Create("a@b.co").ShouldBeSuccess(), Currency.Create("USD").ShouldBeSuccess())
             .Error.ShouldBe(InvoiceErrors.EmptyCustomerName);
+
+    [Fact]
+    public void Create_bounds_the_customer_name_after_trimming_it()
+    {
+        EmailAddress email = EmailAddress.Create("a@b.co").ShouldBeSuccess();
+        Currency usd = Currency.Create("USD").ShouldBeSuccess();
+        string longest = new('n', Invoice.CustomerNameMaxLength);
+
+        Invoice.Create($"  {longest}  ", email, usd).ShouldBeSuccess().CustomerName.ShouldBe(longest);
+        Invoice.Create(longest + "n", email, usd).Error.ShouldBe(InvoiceErrors.CustomerNameTooLong);
+    }
+
+    [Fact]
+    public void AddLine_bounds_the_description_after_trimming_it()
+    {
+        Invoice invoice = CreateDraft();
+        string longest = new('d', InvoiceLine.DescriptionMaxLength);
+
+        invoice.AddLine($" {longest} ", Money.Create(1m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
+        invoice.Lines.ShouldHaveSingleItem().Description.ShouldBe(longest);
+        invoice.AddLine(longest + "d", Money.Create(1m, "USD").ShouldBeSuccess()).Error.ShouldBe(InvoiceErrors.LineDescriptionTooLong);
+        invoice.Lines.Count.ShouldBe(1);
+    }
 
     [Fact]
     public void AddLine_accumulates_total()
     {
         Invoice invoice = CreateDraft();
 
-        invoice.AddLine("Design", Money.Create(150m, "USD").Value).IsSuccess.ShouldBeTrue();
-        invoice.AddLine("Build", Money.Create(350.25m, "USD").Value).IsSuccess.ShouldBeTrue();
+        invoice.AddLine("Design", Money.Create(150m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
+        invoice.AddLine("Build", Money.Create(350.25m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
 
         invoice.Lines.Count.ShouldBe(2);
         invoice.Total.Amount.ShouldBe(500.25m);
@@ -68,17 +94,17 @@ public sealed class InvoiceTests
 
     [Fact]
     public void AddLine_rejects_currency_mismatch()
-        => CreateDraft().AddLine("Design", Money.Create(1m, "EUR").Value)
+        => CreateDraft().AddLine("Design", Money.Create(1m, "EUR").ShouldBeSuccess())
             .Error.ShouldBe(InvoiceErrors.CurrencyMismatch);
 
     [Fact]
     public void AddLine_rejects_blank_description()
-        => CreateDraft().AddLine(" ", Money.Create(1m, "USD").Value)
+        => CreateDraft().AddLine(" ", Money.Create(1m, "USD").ShouldBeSuccess())
             .Error.ShouldBe(InvoiceErrors.EmptyLineDescription);
 
     [Fact]
     public void AddLine_after_issue_is_rejected()
-        => CreateIssued().AddLine("Late line", Money.Create(1m, "USD").Value)
+        => CreateIssued().AddLine("Late line", Money.Create(1m, "USD").ShouldBeSuccess())
             .Error.ShouldBe(InvoiceErrors.NotDraft);
 
     [Fact]
@@ -90,7 +116,7 @@ public sealed class InvoiceTests
     {
         Invoice invoice = CreateDraftWithLine();
 
-        invoice.Issue(DueDate, IssuedAt).IsSuccess.ShouldBeTrue();
+        invoice.Issue(DueDate, IssuedAt).ShouldBeSuccess();
 
         invoice.Status.ShouldBe(InvoiceStatus.Issued);
         invoice.DueDate.ShouldBe(DueDate);
@@ -123,7 +149,7 @@ public sealed class InvoiceTests
 
     [Fact]
     public void Issue_accepts_a_due_date_equal_to_now()
-        => CreateDraftWithLine().Issue(IssuedAt, IssuedAt).IsSuccess.ShouldBeTrue();
+        => CreateDraftWithLine().Issue(IssuedAt, IssuedAt).ShouldBeSuccess();
 
     [Fact]
     public void Issue_compares_instants_not_offsets()
@@ -135,8 +161,12 @@ public sealed class InvoiceTests
     }
 
     [Fact]
-    public void Issue_twice_is_rejected()
-        => CreateIssued().Issue(DueDate, IssuedAt).Error.ShouldBe(InvoiceErrors.AlreadyFinalized);
+    public void Issue_twice_is_rejected_as_already_issued()
+        => CreateIssued().Issue(DueDate, IssuedAt).Error.ShouldBe(InvoiceErrors.AlreadyIssued);
+
+    [Fact]
+    public void Issue_on_a_paid_invoice_is_rejected_as_finalized()
+        => CreatePaid().Issue(DueDate, IssuedAt).Error.ShouldBe(InvoiceErrors.AlreadyFinalized);
 
     [Fact]
     public void MarkPaid_requires_issued_status()
@@ -148,7 +178,7 @@ public sealed class InvoiceTests
         Invoice invoice = CreateIssued();
         invoice.ClearDomainEvents();
 
-        invoice.MarkPaid(PaidAt).IsSuccess.ShouldBeTrue();
+        invoice.MarkPaid(PaidAt).ShouldBeSuccess();
 
         invoice.Status.ShouldBe(InvoiceStatus.Paid);
         invoice.PaidAtUtc.ShouldBe(PaidAt);
@@ -168,7 +198,7 @@ public sealed class InvoiceTests
         Invoice invoice = from == InvoiceStatus.Draft ? CreateDraft() : CreateIssued();
         invoice.ClearDomainEvents();
 
-        invoice.Void().IsSuccess.ShouldBeTrue();
+        invoice.Void().ShouldBeSuccess();
 
         invoice.Status.ShouldBe(InvoiceStatus.Voided);
         invoice.DomainEvents.ShouldHaveSingleItem()
@@ -184,7 +214,7 @@ public sealed class InvoiceTests
     public void Void_twice_is_rejected()
     {
         Invoice invoice = CreateIssued();
-        invoice.Void();
+        invoice.Void().ShouldBeSuccess();
 
         invoice.Void().Error.ShouldBe(InvoiceErrors.AlreadyFinalized);
     }
@@ -210,7 +240,7 @@ public sealed class InvoiceTests
     {
         // A line is added up front so a rejected Issue is about the state, never about NoLines.
         Invoice invoice = voidedFrom == InvoiceStatus.Draft ? CreateDraftWithLine() : CreateIssued();
-        invoice.Void().IsSuccess.ShouldBeTrue();
+        invoice.Void().ShouldBeSuccess();
         invoice.ClearDomainEvents();
 
         Result result = Attempt(invoice, transition);
@@ -242,7 +272,7 @@ public sealed class InvoiceTests
             "issue a draft without lines" => (CreateDraft(), static i => i.Issue(DueDate, IssuedAt)),
             "issue with a past due date" => (CreateDraftWithLine(), static i => i.Issue(IssuedAt.AddDays(-1), IssuedAt)),
             "issue an issued invoice" => (CreateIssued(), static i => i.Issue(DueDate, IssuedAt)),
-            "add a line to an issued invoice" => (CreateIssued(), static i => i.AddLine("Late", Money.Create(1m, "USD").Value)),
+            "add a line to an issued invoice" => (CreateIssued(), static i => i.AddLine("Late", Money.Create(1m, "USD").ShouldBeSuccess())),
             "pay a draft" => (CreateDraftWithLine(), static i => i.MarkPaid(PaidAt)),
             "pay a paid invoice" => (CreatePaid(), static i => i.MarkPaid(PaidAt)),
             "void a paid invoice" => (CreatePaid(), static i => i.Void()),
@@ -261,7 +291,7 @@ public sealed class InvoiceTests
         static Invoice VoidedDraft()
         {
             Invoice voided = CreateDraft();
-            voided.Void();
+            voided.Void().ShouldBeSuccess();
             return voided;
         }
     }
@@ -280,7 +310,7 @@ public sealed class InvoiceTests
 
     private static Result Attempt(Invoice invoice, string transition) => transition switch
     {
-        nameof(Invoice.AddLine) => invoice.AddLine("Late line", Money.Create(1m, "USD").Value),
+        nameof(Invoice.AddLine) => invoice.AddLine("Late line", Money.Create(1m, "USD").ShouldBeSuccess()),
         nameof(Invoice.Issue) => invoice.Issue(DueDate, IssuedAt),
         nameof(Invoice.MarkPaid) => invoice.MarkPaid(PaidAt),
         nameof(Invoice.Void) => invoice.Void(),

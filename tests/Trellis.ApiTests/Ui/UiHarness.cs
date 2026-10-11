@@ -103,7 +103,8 @@ internal sealed class ScriptedApi : HttpMessageHandler
                 request.Method.Method,
                 request.RequestUri!.AbsolutePath,
                 request.Headers.Authorization?.ToString(),
-                body));
+                body,
+                request.Headers.IfMatch.Count == 0 ? null : request.Headers.IfMatch.ToString()));
         }
 
         HttpResponseMessage response = await Respond(request, cancellationToken);
@@ -113,7 +114,7 @@ internal sealed class ScriptedApi : HttpMessageHandler
 }
 
 /// <summary>What a request looked like when it left the client (the client disposes the message itself).</summary>
-internal sealed record RecordedRequest(string Method, string Path, string? Authorization, string? Body);
+internal sealed record RecordedRequest(string Method, string Path, string? Authorization, string? Body, string? IfMatch = null);
 
 /// <summary>Canned API answers in the shapes the API writes.</summary>
 internal static class Responses

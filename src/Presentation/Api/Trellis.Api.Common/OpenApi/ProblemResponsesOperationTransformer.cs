@@ -15,7 +15,8 @@ namespace Trellis.Api.Common.OpenApi;
 /// endpoint declares with a bare <c>.Produces(status)</c> because its shape cannot imply it — carries the
 /// <c>application/problem+json</c> body: a reference to the <c>ProblemResponse</c> component generated
 /// from the Contracts record the clients deserialise into. A 201 declares its <c>Location</c>; an endpoint marked
-/// <c>SupportsConditionalGet()</c> declares <c>If-None-Match</c>, the <c>ETag</c> on its 200 and the 304.
+/// <c>SupportsConditionalGet()</c> declares <c>If-None-Match</c>, the <c>ETag</c> on its 200 and the 304, and one
+/// marked <c>SupportsConditionalWrite()</c> declares <c>If-Match</c> and the 412.
 /// Runs last, after the security and idempotency transformers, because it completes their entries.
 /// </summary>
 internal sealed class ProblemResponsesOperationTransformer : IOpenApiOperationTransformer
@@ -48,6 +49,11 @@ internal sealed class ProblemResponsesOperationTransformer : IOpenApiOperationTr
         if (context.Description.ActionDescriptor.EndpointMetadata.OfType<ConditionalGetMetadata>().Any())
         {
             DocumentConditionalGet(operation);
+        }
+
+        if (context.Description.ActionDescriptor.EndpointMetadata.OfType<ConditionalWriteMetadata>().Any())
+        {
+            DocumentConditionalWrite(operation, problem);
         }
 
         operation.Responses = Sorted(responses);
@@ -96,10 +102,26 @@ internal sealed class ProblemResponsesOperationTransformer : IOpenApiOperationTr
         OpenApiResponses responses = operation.Responses!;
         if (responses.TryGetValue("200", out IOpenApiResponse? ok) && ok is OpenApiResponse okResponse)
         {
-            Header(okResponse, "ETag", "Weak validator derived from the row version; send it back as `If-None-Match`.", format: null);
+            Header(okResponse, "ETag", "Strong validator derived from the row version; send it back as `If-None-Match`, or as `If-Match` on a write to this resource.", format: null);
         }
 
         responses.TryAdd("304", new OpenApiResponse { Description = "Not modified: an `If-None-Match` value matched the current ETag." });
+    }
+
+    private static void DocumentConditionalWrite(OpenApiOperation operation, IOpenApiSchema problem)
+    {
+        operation.Parameters ??= [];
+        operation.Parameters.Add(new OpenApiParameter
+        {
+            Name = "If-Match",
+            In = ParameterLocation.Header,
+            Required = false,
+            Description = "The `ETag` from `GET` of the version this write may act on: one strong tag, or `*` for any. Omitted, the write is unconditional. "
+                + "A version that is no longer current, a weak tag, a list or a value this API never issued answers 412 and changes nothing.",
+            Schema = new OpenApiSchema { Type = JsonSchemaType.String },
+        });
+
+        Add(operation.Responses!, "412", "Precondition failed: the resource changed since the `If-Match` version; reload it and decide again.", problem);
     }
 
     /// <summary>Adds a problem response, or appends the sentence to one an earlier transformer created (the idempotency 409 keeps its own).</summary>

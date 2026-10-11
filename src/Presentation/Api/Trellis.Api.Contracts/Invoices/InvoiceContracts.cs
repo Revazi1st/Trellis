@@ -25,7 +25,7 @@ public enum InvoiceStatus
     Voided = 3,
 }
 
-/// <summary>One invoice with its lines. <c>Version</c> is the row version behind the weak <c>ETag</c> of <c>GET /invoices/{id}</c>: opaque, monotonic per invoice.</summary>
+/// <summary>One invoice with its lines. <c>Version</c> is the row version behind the strong <c>ETag</c> of <c>GET /invoices/{id}</c>, which a write may send back as <c>If-Match</c>: opaque, monotonic per invoice.</summary>
 public sealed record InvoiceDto(
     Guid Id,
     string CustomerName,

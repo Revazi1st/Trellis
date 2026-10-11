@@ -23,13 +23,17 @@ public static class ConditionalGetExtensions
     public static RouteHandlerBuilder SupportsConditionalGet(this RouteHandlerBuilder builder)
         => builder.WithMetadata(ConditionalGetMetadata.Instance);
 
-    /// <summary>A weak validator over a row version: <c>W/"42"</c>.</summary>
-    public static EntityTagHeaderValue WeakETag(long version)
-        => new(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"\"{version}\""), isWeak: true);
+    /// <summary>
+    /// A strong validator over a row version: <c>"42"</c>. Strong because the version moves with every
+    /// change to the aggregate (a child's included), so equal tags mean byte-identical state, and because
+    /// <c>If-Match</c> on a write compares strongly (<see cref="ConditionalWriteExtensions"/>).
+    /// </summary>
+    public static EntityTagHeaderValue ETag(long version)
+        => new(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"\"{version}\""));
 
     /// <summary>
     /// True when the request's <c>If-None-Match</c> names <paramref name="current"/> (RFC 9110 §13.1.2):
-    /// the comparison is weak, so <c>W/"42"</c> and <c>"42"</c> both match a weak <c>W/"42"</c>; a list
+    /// the comparison is weak, so <c>"42"</c> and <c>W/"42"</c> both match <c>"42"</c>; a list
     /// matches when any member does; <c>*</c> matches any existing representation. An absent or
     /// unparsable header never matches, so the caller serves the full response.
     /// </summary>

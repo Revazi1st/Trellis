@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
@@ -104,8 +105,10 @@ public static class DependencyInjection
     {
         // The sender itself is registered by AddInfrastructure in every host — Application's event
         // handlers must be constructible anywhere — but only this host sends, so only it checks the
-        // section at boot and says so when the configured provider sends nothing.
+        // section at boot (the relay only while SMTP is selected) and says so when the configured
+        // provider sends nothing, or sends in clear.
         services.AddOptions<EmailOptions>().ValidateOnStart();
+        services.AddOptions<SmtpOptions>().ValidateOnStart();
         services.AddHostedService<EmailProviderStartupNotice>();
 
         return services.AddExchangeRateProvider(configuration);
@@ -113,8 +116,8 @@ public static class DependencyInjection
 
     /// <summary>
     /// The <see cref="IEmailSender"/> adapter named by <c>Email:Provider</c>, resolved per scope. The
-    /// options are validated when the sender is first built; a host that sends promotes that to boot
-    /// (<see cref="AddOutboundIntegrations"/>).
+    /// options are validated when the sender is first built — the "Email:Smtp" relay only while SMTP is
+    /// the one selected — and a host that sends promotes that to boot (<see cref="AddOutboundIntegrations"/>).
     /// </summary>
     private static void AddEmailSender(this IServiceCollection services, IConfiguration configuration)
     {
@@ -123,14 +126,21 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .Validate(
                 static options => Enum.IsDefined(options.Provider),
-                "Email:Provider must be Logging (development stand-in: logs a masked line, sends nothing) or None "
-                + "(discard). A real provider is a new adapter in Infrastructure/Email.");
+                "Email:Provider must be Smtp (the relay under Email:Smtp), Logging (development stand-in: logs a masked "
+                + "line, sends nothing) or None (discard). Another provider is a new adapter in Infrastructure/Email.");
 
+        // No ValidateDataAnnotations() here: it would check the relay whatever the provider. The validator
+        // applies SmtpOptions' annotations itself, and only while Email:Provider is Smtp.
+        services.AddOptions<SmtpOptions>().Bind(configuration.GetSection(SmtpOptions.SectionName));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<SmtpOptions>, SmtpOptionsValidator>());
+
+        services.AddScoped<SmtpEmailSender>();
         services.AddScoped<LoggingEmailSender>();
         services.AddScoped<DiscardingEmailSender>();
         services.AddScoped<IEmailSender>(static provider =>
             provider.GetRequiredService<IOptions<EmailOptions>>().Value.Provider switch
             {
+                EmailProvider.Smtp => provider.GetRequiredService<SmtpEmailSender>(),
                 EmailProvider.Logging => provider.GetRequiredService<LoggingEmailSender>(),
                 EmailProvider.None => provider.GetRequiredService<DiscardingEmailSender>(),
                 // Unreachable: the validation above rejects any other value before this runs.
