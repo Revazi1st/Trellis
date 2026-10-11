@@ -111,5 +111,8 @@ after each layer.
       like `invoices.md`, plus a line in `docs/INDEX.md` [`check-docs-drift.sh`: a change under the
       feature's folders without its doc fails CI]. A load-bearing decision gets an ADR (the `new-adr`
       skill).
+- [ ] The new endpoints' requests in `src/Presentation/Api/Trellis.Api/Trellis.Api.http`, and the
+      feature doc opening like `invoices.md`: the domain in plain words, a state diagram when the
+      aggregate has a lifecycle, and a *Try it* table matching those requests.
 - [ ] `dotnet build Trellis.slnx -c Release && dotnet test Trellis.slnx` (or `./scripts/dotnet.sh …`
       without a local SDK), then `dotnet format --verify-no-changes`.

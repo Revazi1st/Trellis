@@ -1,0 +1,116 @@
+# The Invoice lifecycle, one request at a time: the "Try it" walkthrough in docs/features/invoices.md.
+# Works in Rider, Visual Studio and VS Code (REST Client extension). Send the requests in order.
+#
+# Before the first request:
+#   - host: under 'aspire run', copy the api resource's URL from the dashboard; the IDE launch
+#     profiles and the dev container serve http://localhost:5171.
+#   - credentials: choose the 'dev' environment. Rider and Visual Studio find it in
+#     ../http-client.env.json, one folder up so that no build or container image ever copies it.
+#     VS Code's REST Client reads environments from its settings instead: copy the 'dev' block there.
+#   - tokens and ids: each placeholder below names the response it comes from; paste the value in.
+#     Nothing secret is committed: the env file holds the Development seed account, and every token
+#     here is minted by your own API and expires after 15 minutes. To chain values instead of
+#     pasting them, name a request with '# @name login' and use {{login.response.body.$.accessToken}}
+#     (Visual Studio, VS Code), or set a global from a response handler script (Rider).
+
+@host = http://localhost:5171
+@token = paste-accessToken-from-step-1
+@invoiceId = paste-id-from-step-2
+@etag = paste-ETag-header-from-step-5
+@memberToken = paste-accessToken-from-step-10
+# The same key replays the first response (step 8); a new value starts a fresh invoice.
+@createKey = try-it-1
+
+### 1. Sign in as the seeded admin (200: accessToken, refreshToken, expiresInSeconds)
+POST {{host}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### 2. Create a draft invoice (201: Location header and the new id)
+POST {{host}}/api/v1/invoices
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: {{createKey}}
+
+{
+  "customerName": "Ada Lovelace",
+  "customerEmail": "ada@example.com",
+  "currency": "EUR"
+}
+
+### 3. Add a line; only a draft accepts one (204)
+POST {{host}}/api/v1/invoices/{{invoiceId}}/lines
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "description": "Analytical engine consulting",
+  "amount": 1200.00
+}
+
+### 4. Issue it; the due date may not lie in the past (204)
+POST {{host}}/api/v1/invoices/{{invoiceId}}/issue
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "dueDate": "2099-12-31T00:00:00Z"
+}
+
+### 5. Read it (200: status Issued, total 1200.00, and an ETag header such as W/"812")
+GET {{host}}/api/v1/invoices/{{invoiceId}}
+Authorization: Bearer {{token}}
+
+### 6. Read it again with that ETag (304, no body: nothing changed)
+GET {{host}}/api/v1/invoices/{{invoiceId}}
+Authorization: Bearer {{token}}
+If-None-Match: {{etag}}
+
+### 7. Pay it (204); within seconds the outbox delivers the receipt: watch the api's log
+POST {{host}}/api/v1/invoices/{{invoiceId}}/pay
+Authorization: Bearer {{token}}
+
+### 8. Replay step 2: same key, same body (201 again, same Location, Idempotency-Replayed: true)
+POST {{host}}/api/v1/invoices
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: {{createKey}}
+
+{
+  "customerName": "Ada Lovelace",
+  "customerEmail": "ada@example.com",
+  "currency": "EUR"
+}
+
+### 9. Register a member; Development opens self-registration (200; 409 once the account exists)
+POST {{host}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{memberEmail}}",
+  "password": "{{memberPassword}}"
+}
+
+### 10. Sign in as the member (200: accessToken)
+POST {{host}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{memberEmail}}",
+  "password": "{{memberPassword}}"
+}
+
+### 11. Try to create an invoice as the member (403 Auth.Forbidden: members hold invoices:read only)
+POST {{host}}/api/v1/invoices
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "customerName": "Charles Babbage",
+  "customerEmail": "charles@example.com",
+  "currency": "EUR"
+}

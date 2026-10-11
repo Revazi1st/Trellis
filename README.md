@@ -113,7 +113,10 @@ Seeded admin: `admin@example.com` / `Admin123!`. Full detail in [docs/developmen
 
 The app ships one sample feature, invoicing, and
 [docs/features/invoices.md](docs/features/invoices.md) explains it in plain words before any
-architecture: an invoice's states, the rules between them and where each file lives.
+architecture: an invoice's states, the rules between them and where each file lives. Its
+[*Try it*](docs/features/invoices.md#try-it) section then walks the lifecycle one request at a time
+from `src/Presentation/Api/Trellis.Api/Trellis.Api.http` (sign in, create, add a line, issue, a
+304, pay, an idempotent replay and a member's 403), and the web UI clicks through the same steps.
 
 ## Architecture
 
