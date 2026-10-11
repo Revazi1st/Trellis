@@ -56,6 +56,10 @@ after each layer.
 - [ ] `Configurations/{Aggregate}Configuration`: value objects as `ComplexProperty`, children
       `AutoInclude()` + field access. With multi-tenancy, add **no** tenant column or filter: every
       `AggregateRoot<>` gets them by convention [`TenancyTests`, all-options leg].
+- [ ] A concurrency token on the root: map `xmin` as `InvoiceConfiguration` does (a `uint Version`
+      with a private setter). A change to children alone still writes the root row and bumps it
+      (`AggregateConcurrencyInterceptor`), so the token guards the whole aggregate
+      [`AggregateConcurrencyTests`].
 - [ ] One line in `AppDbContext.ConfigureConventions` per new ID; a `DbSet`; the repository in
       `Repositories/` registered in `DependencyInjection.cs` [`NamingConventionTests` (the
       `Repository` suffix)].

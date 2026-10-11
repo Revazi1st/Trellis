@@ -16,7 +16,7 @@ internal sealed class IdentityService(
     RoleManager<IdentityRole<Guid>> roleManager,
     ILogger<IdentityService> logger) : IIdentityService
 {
-    /// <summary>The account was created but could not be given its role; both were rolled back.</summary>
+    /// <summary>The account was created but could not be given its role; both were rolled back. A fault on our side: 500.</summary>
     private static readonly Error RoleAssignmentFailed = Error.Failure(
         "Auth.RegistrationFailed",
         "The account could not be set up, so nothing was created. Try again later.");
@@ -28,6 +28,11 @@ internal sealed class IdentityService(
     /// <see cref="IdentityResult"/> or an exception — rolls the account back with it. The transaction
     /// runs inside the execution strategy because the retrying strategy refuses a user-initiated one
     /// otherwise; a retried attempt starts from a clean change tracker.
+    /// <para>
+    /// Two registrations of one e-mail can both pass the lookup below and Identity's own uniqueness check;
+    /// the second INSERT then loses at the unique user-name index, which <see cref="UniqueConstraintErrors"/>
+    /// turns into the same 409 <see cref="AuthErrors.EmailAlreadyInUse"/> a sequential duplicate gets.
+    /// </para>
     /// </summary>
     public async Task<Result<Guid>> RegisterAsync(string email, string password, CancellationToken cancellationToken)
     {
@@ -66,13 +71,24 @@ internal sealed class IdentityService(
             TenantId = Guid.CreateVersion7().ToString(),
 #endif
         };
-        IdentityResult created = await userManager.CreateAsync(user, password);
+        IdentityResult created;
+        try
+        {
+            created = await userManager.CreateAsync(user, password);
+        }
+        catch (DbUpdateException exception) when (UniqueConstraintErrors.TryMap(exception, out Error? expected))
+        {
+            // A concurrent registration committed this e-mail between our checks and this INSERT. The
+            // aborted transaction goes, and so does the tracked user, so nothing later in this scope
+            // mistakes it for a persisted one.
+            await transaction.RollbackAsync(CancellationToken.None);
+            context.ChangeTracker.Clear();
+            return Result.Failure<Guid>(expected);
+        }
 
         if (!created.Succeeded)
         {
-            return Result.Failure<Guid>(Error.Validation(
-                "Auth.RegistrationFailed",
-                string.Join(" ", created.Errors.Select(static e => e.Description))));
+            return Result.Failure<Guid>(RegistrationErrors.From(created, userManager.Options.Password));
         }
 
         IdentityResult assigned = await userManager.AddToRoleAsync(user, Roles.Member);
@@ -87,7 +103,7 @@ internal sealed class IdentityService(
             logger.LogWarning(
                 "Registration rolled back: assigning the {Role} role failed ({Errors})",
                 Roles.Member,
-                string.Join(", ", assigned.Errors.Select(static e => e.Code)));
+                CodesOf(assigned));
             return Result.Failure<Guid>(RoleAssignmentFailed);
         }
 
@@ -120,8 +136,14 @@ internal sealed class IdentityService(
 
         if (!await userManager.CheckPasswordAsync(user, password))
         {
-            // Counts toward lockout; Identity locks the account at the configured threshold.
-            await userManager.AccessFailedAsync(user);
+            // Counts toward lockout; Identity locks the account at the configured threshold. A count that
+            // could not be saved (a concurrent sign-in updated the account first) is a failed sign-in the
+            // lockout never saw, so it is a security event, not silence; the caller still gets its 401.
+            IdentityResult counted = await userManager.AccessFailedAsync(user);
+            if (!counted.Succeeded)
+            {
+                SecurityEventLog.FailedSignInNotCounted(logger, user.Id, CodesOf(counted));
+            }
 
             if (await userManager.IsLockedOutAsync(user))
             {
@@ -133,7 +155,13 @@ internal sealed class IdentityService(
             return Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials);
         }
 
-        await userManager.ResetAccessFailedCountAsync(user);
+        // The sign-in stands either way; a count left in place only brings a later lockout closer.
+        IdentityResult reset = await userManager.ResetAccessFailedCountAsync(user);
+        if (!reset.Succeeded)
+        {
+            SecurityEventLog.FailedSignInCountNotReset(logger, user.Id, CodesOf(reset));
+        }
+
         return await BuildAuthenticatedUserAsync(user);
     }
 
@@ -145,6 +173,9 @@ internal sealed class IdentityService(
             ? Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials)
             : await BuildAuthenticatedUserAsync(user);
     }
+
+    /// <summary>Identity's error codes only: its descriptions can repeat what the user typed.</summary>
+    private static string CodesOf(IdentityResult result) => string.Join(", ", result.Errors.Select(static error => error.Code));
 
     /// <summary>Effective permissions = the union of the "permission" claims across all the user's roles.</summary>
     private async Task<AuthenticatedUser> BuildAuthenticatedUserAsync(ApplicationUser user)

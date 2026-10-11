@@ -3,45 +3,69 @@ using Trellis.SharedKernel.Results;
 namespace Trellis.Domain.Common;
 
 /// <summary>
-/// Amount + ISO-4217 currency. Mapped as an EF complex type (ADR-0006). Expected-invalid input
+/// Amount + <see cref="Common.Currency"/>. Mapped as an EF complex type (ADR-0006). Expected-invalid input
 /// flows back as a <see cref="Result"/>; cross-currency arithmetic and negative differences are
-/// programmer errors and throw. Persisted with two decimal places, so <see cref="Create(decimal, string)"/>
-/// rejects finer scale instead of letting the database truncate it silently.
+/// programmer errors and throw. An amount carries at most its currency's minor units
+/// (<see cref="Common.Currency.MinorUnits"/>) and never more than <see cref="AmountScale"/> decimal places,
+/// the scale it is persisted with: <see cref="Create(decimal, Common.Currency)"/> refuses finer input
+/// instead of rounding it, and refuses an amount the column cannot hold.
 /// </summary>
 public sealed record Money
 {
-    private Money(decimal amount, string currency)
+    /// <summary>Significant digits persisted (<c>numeric(18,3)</c>).</summary>
+    public const int AmountPrecision = 18;
+
+    /// <summary>Decimal places persisted (<c>numeric(18,3)</c>): enough for the three-decimal dinars.</summary>
+    public const int AmountScale = 3;
+
+    /// <summary>The largest amount <c>numeric(18,3)</c> holds: fifteen digits before the point, three after.</summary>
+    public const decimal MaxAmount = 999_999_999_999_999.999m;
+
+    private Money(decimal amount, Currency currency)
     {
         Amount = amount;
         Currency = currency;
     }
 
+    /// <summary>EF Core materialization only: a nested complex property cannot be bound through a constructor.</summary>
+    private Money()
+    {
+        Currency = null!;
+    }
+
     public decimal Amount { get; }
 
-    public string Currency { get; }
+    public Currency Currency { get; }
 
     public static Result<Money> Create(decimal amount, string currency)
-        => Domain.Common.Currency.Create(currency).Bind(code => Create(amount, code));
+        => Common.Currency.Create(currency).Bind(code => Create(amount, code));
 
     public static Result<Money> Create(decimal amount, Currency currency)
     {
+        ArgumentNullException.ThrowIfNull(currency);
+
         if (amount < 0)
         {
             return MoneyErrors.NegativeAmount;
         }
 
-        return decimal.Round(amount, 2) != amount
-            ? MoneyErrors.TooManyDecimalPlaces
-            : new Money(amount, currency.Code);
+        if (amount > MaxAmount)
+        {
+            return MoneyErrors.AmountTooLarge;
+        }
+
+        int decimalPlaces = Math.Min(currency.MinorUnits, AmountScale);
+        return decimal.Round(amount, decimalPlaces) != amount
+            ? MoneyErrors.TooManyDecimalPlaces(currency, decimalPlaces)
+            : new Money(amount, currency);
     }
 
-    /// <summary>Zero in a known-valid currency (e.g. aggregate state). Invalid input here is a programming error.</summary>
-    public static Money Zero(string currency)
-        => Domain.Common.Currency.Create(currency) is { IsSuccess: true } valid
-            ? new Money(0m, valid.Value.Code)
-            : throw new ArgumentException($"'{currency}' is not a valid ISO 4217 currency code.", nameof(currency));
-
-    public static Money Zero(Currency currency) => new(0m, currency.Code);
+    /// <summary>Zero in a known-valid currency (e.g. aggregate state).</summary>
+    public static Money Zero(Currency currency)
+    {
+        ArgumentNullException.ThrowIfNull(currency);
+        return new Money(0m, currency);
+    }
 
     public static Money operator +(Money left, Money right)
     {

@@ -17,19 +17,13 @@ internal sealed class RefreshTokenCommandHandler(
         string tokenHash = tokenProvider.HashRefreshToken(command.RefreshToken);
 
         // Single-use rotation: consuming invalidates the presented token before a new pair is minted.
-        Result<Guid> userId = await refreshTokenStore.ConsumeAsync(tokenHash, cancellationToken);
-        if (userId.IsFailure)
-        {
-            return Result.Failure<AuthTokens>(AuthErrors.InvalidRefreshToken);
-        }
-
-        Result<AuthenticatedUser> user = await identityService.GetUserAsync(userId.Value, cancellationToken);
-        if (user.IsFailure)
-        {
-            return Result.Failure<AuthTokens>(AuthErrors.InvalidRefreshToken);
-        }
-
-        return await TokenIssuer.IssueAsync(
-            user.Value, tokenProvider, refreshTokenStore, timeProvider, options, cancellationToken);
+        // Every failure before minting (an unknown, expired or consumed token, a user deleted since) is
+        // the same opaque Auth.InvalidRefreshToken; MapOnFailure sits before the issuing step so a
+        // failure while minting keeps its own error.
+        return await refreshTokenStore.ConsumeAsync(tokenHash, cancellationToken)
+            .Bind(userId => identityService.GetUserAsync(userId, cancellationToken))
+            .MapOnFailure(static _ => AuthErrors.InvalidRefreshToken)
+            .Bind(user => TokenIssuer.IssueAsync(
+                user, tokenProvider, refreshTokenStore, timeProvider, options, cancellationToken));
     }
 }

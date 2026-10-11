@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -53,18 +54,53 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     }
 
     [Fact]
-    public async Task Whole_request_errors_are_listed_with_a_null_field()
+    public async Task Value_object_errors_name_the_request_field_they_came_from()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
 
-        // Passes the shape validator; the value objects reject both, combined into one 400.
+        // Passes the shape validator; the value objects reject both, combined into one 400, each under its input.
         HttpResponseMessage response = await admin.PostAsJsonAsync(
-            "/api/v1/invoices", new CreateInvoiceRequest("ACME", "not-an-email", "123"), ct);
+            "/api/v1/invoices", new CreateInvoiceRequest("ACME", "a@b", "123"), ct);
 
         ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.BadRequest, "Validation.General", "/api/v1/invoices", ct);
         problem.Errors.ShouldNotBeNull().Select(static e => (e.Field, e.Code)).ShouldBe(
-            [(null, "EmailAddress.Invalid"), (null, "Money.InvalidCurrency")], ignoreOrder: true);
+            [("customerEmail", "EmailAddress.Invalid"), ("currency", "Money.InvalidCurrency")], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task A_single_value_object_error_keeps_its_own_code_and_names_its_field()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+
+        // "a@b" passes the shape validator and the UI's [EmailAddress]; only the value object rejects it.
+        HttpResponseMessage response = await admin.PostAsJsonAsync(
+            "/api/v1/invoices", new CreateInvoiceRequest("ACME", "a@b", "USD"), ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.BadRequest, "EmailAddress.Invalid", "/api/v1/invoices", ct);
+        WireFieldError only = problem.Errors.ShouldNotBeNull().ShouldHaveSingleItem();
+        only.Field.ShouldBe("customerEmail");
+        only.Code.ShouldBe("EmailAddress.Invalid");
+        only.Description.ShouldBe(problem.Detail);
+    }
+
+    [Fact]
+    public async Task An_aggregate_rule_a_handler_attributes_names_its_field()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        Guid id = await CreateInvoiceAsync(admin, ct);
+        (await admin.PostAsJsonAsync($"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Design", 10m), ct))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        HttpResponseMessage response = await admin.PostAsJsonAsync(
+            $"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(factory.Time.GetUtcNow().AddDays(-1)), ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.BadRequest, InvoiceErrors.DueDateInPast.Code, $"/api/v1/invoices/{id}/issue", ct);
+        WireFieldError only = problem.Errors.ShouldNotBeNull().ShouldHaveSingleItem();
+        only.Field.ShouldBe("dueDate");
+        only.Code.ShouldBe(InvoiceErrors.DueDateInPast.Code);
     }
 
     [Fact]
@@ -74,7 +110,8 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
         Guid id = await CreateInvoiceAsync(admin, ct);
 
-        // A draft with no lines cannot be issued: one plain Error.Validation from the aggregate.
+        // A draft with no lines cannot be issued: one plain Error.Validation from the aggregate, about the
+        // request as a whole, so the handler attributes it to no field.
         HttpResponseMessage response = await admin.PostAsJsonAsync(
             $"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(DateTimeOffset.UtcNow.AddDays(7)), ct);
 
@@ -313,6 +350,24 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         body.ShouldNotContain(nameof(InvalidOperationException));
     }
 
+    [Fact]
+    public async Task An_endpoint_returning_a_result_unmapped_fails_fast_instead_of_answering_200()
+    {
+        // Without the guard this successful Result answered 200 with {"isSuccess":true,…,"value":42} and a
+        // failed one a 500: the endpoint must map it (TypedResults / CustomResults.Problem), never return it.
+        // With it the host refuses to start, because minimal APIs resolve the response's JSON contract when
+        // they build the endpoint; the request is there in case a future framework defers that to the call.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using var host = factory.WithTestServices(static services => services.AddTransient<IStartupFilter, UnmappedResultEndpoint>());
+
+        Exception thrown = await Should.ThrowAsync<Exception>(async () => await host.CreateClient().GetAsync(UnmappedResultEndpoint.Route, ct));
+
+        // ToString carries every inner exception: the guard's NotSupportedException names the fix.
+        string report = thrown.ToString();
+        report.ShouldContain(nameof(NotSupportedException));
+        report.ShouldContain("CustomResults.Problem");
+    }
+
     /// <summary>The contract every problem honours, whichever writer produced it.</summary>
     private static async Task<ProblemResponse> ShouldBeProblemAsync(
         HttpResponseMessage response, HttpStatusCode status, string code, string instance, CancellationToken ct)
@@ -361,5 +416,31 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     {
         public Task<Result> CommitAsync(CancellationToken cancellationToken)
             => throw new InvalidOperationException(ExceptionSecret);
+    }
+
+    /// <summary>
+    /// A throwaway endpoint that makes the mistake the JSON guard exists for: it returns
+    /// <c>Task&lt;Result&lt;int&gt;&gt;</c> instead of mapping it. Mapped in a branch of its own ahead of the
+    /// app's pipeline, so the guard's exception reaches the test instead of the exception handler.
+    /// </summary>
+    private sealed class UnmappedResultEndpoint : IStartupFilter
+    {
+        public const string Route = "/__test/unmapped-result/value";
+
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Map("/__test/unmapped-result", static branch =>
+            {
+                branch.UseRouting();
+                branch.UseEndpoints(static endpoints => endpoints
+                    .MapGet("/value", static async Task<Result<int>> () =>
+                    {
+                        await Task.Yield();
+                        return Result.Success(42);
+                    }));
+            });
+
+            next(app);
+        };
     }
 }

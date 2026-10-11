@@ -24,9 +24,9 @@ you build on top.
 | Account enumeration through login timing | An unknown e-mail costs the same password-hash verification as a wrong password, and both answer 401 `Auth.InvalidCredentials` | `IdentityService`, `DummyPasswordHash` |
 | Anyone on the internet self-registering into read access | Registration is closed unless configured (`Registration:Mode`, default `Closed`; Development opts in); closed answers 403 `Auth.RegistrationClosed` and creates nothing | `RegistrationOptions`, `RegisterCommandHandler` |
 | Missing or oversized auth input reaching Identity or the hasher | Validators bound e-mail (320), password (128) and refresh token (512) and reject missing fields with 400 before any lookup, hash or token hash runs | `Features/Auth/*/*Validator` |
-| Brute force going unnoticed | Structured security events with stable ids: 1101 sign-in failed, 1102 no such account (masked e-mail), 1103 account locked out (Warning), 1104 rejected while locked. User id or masked e-mail only, never a password | `SecurityEventLog` |
+| Brute force going unnoticed | Structured security events with stable ids: 1101 sign-in failed, 1102 no such account (masked e-mail), 1103 account locked out (Warning), 1104 rejected while locked, 1105 a failed sign-in the lockout could not count and 1106 a count not reset after a good sign-in (both Warning, Identity error codes only). User id or masked e-mail only, never a password | `SecurityEventLog` |
 | A development signing key shared by every project | `dotnet new` writes a fresh random Development key into each generated project (`dev-only-` + 64 hex characters); no other environment has a committed key, and the API refuses to boot without one | `appsettings.Development.json`, `RequireValidTokenOptions` |
-| Stolen refresh token replayed | Refresh tokens are single-use; presenting a consumed one revokes every outstanding token for that user (OAuth security BCP) | `IRefreshTokenStore.ConsumeAsync` |
+| Stolen refresh token replayed | Refresh tokens are single-use; presenting a consumed one revokes every outstanding token for that user (OAuth security BCP); every rejection is the same 401 `Auth.InvalidRefreshToken`, whether the token was unknown, consumed or its user deleted | `IRefreshTokenStore.ConsumeAsync`, `RefreshTokenCommandHandler` |
 | Tokens forged with a weak or absent key | Signing key must be ≥ 32 chars; the API refuses to boot otherwise | `RequireValidTokenOptions`, `AuthTokenOptions` |
 | Refresh tokens readable from a database dump | Only SHA-256 hashes are persisted | `JwtTokenProvider.HashRefreshToken` |
 | Privilege escalation between roles | Permission-based authorization, policies resolved per permission claim; endpoints declare `.RequirePermission(...)` | `PermissionPolicyProvider` |
@@ -95,7 +95,7 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
 - **`/health` and `/alive` are anonymous** so orchestrators can reach them — *open*. Readiness
   reveals dependency names and status — keep both off the public ingress.
 - **The security-event log is partial** — *open*. Sign-in failures and lockouts are structured
-  events (1101–1104); registration, revocation, refresh-token replay (an unstructured warning) and
+  events (1101–1106); registration, revocation, refresh-token replay (an unstructured warning) and
   role or permission changes are ordinary application logs, and nothing ships them to a
   tamper-evident store.
 - **The seeded Development admin password is the same in every project** — *closed by default*.
@@ -105,6 +105,11 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
 - **A half-created account** — *addressed*. Registration creates the user and assigns its role in
   one transaction, so a failed role assignment cannot leave an account that authenticates with no
   permissions and blocks its e-mail; the seed repairs an administrator left without its role.
+- **Registration racing itself, or echoing what was typed** — *addressed*. Two registrations of one
+  e-mail that pass every check together are decided by the unique user-name index, and the loser gets
+  the same 409 `Auth.EmailAlreadyInUse` as a sequential duplicate, not a 500. A registration Identity
+  refuses answers 400 `Auth.RegistrationRejected` built from fixed sentences per Identity error code;
+  Identity's own descriptions, which repeat the e-mail, never reach the response or the outcome log.
 - **CORS is deny-by-default** — *open*, which means it is only as good as the origins you add.
 
 ## Out of scope

@@ -24,6 +24,9 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   already-consumed token revokes *all* of that user's outstanding tokens (OAuth security BCP) and
   logs a warning. A newly minted token is saved by the login/refresh command's unit of work — the
   store never commits on its own — so a command that fails after minting leaves no orphan row.
+  Every refresh failure before minting (an unknown, expired or consumed token, or a user deleted
+  since) answers the same 401 `Auth.InvalidRefreshToken`, so the answer never says which
+  (`MapOnFailure` ahead of the issuing step in `RefreshTokenCommandHandler`).
 - **Account lockout**: 5 failed password attempts lock the account for 15 minutes
   (`Auth.AccountLockedOut` → 403). A successful login resets the counter. This is per-account
   defense; the `auth` rate-limit policy (10/min per user/IP) is the per-source layer.
@@ -44,7 +47,9 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 - **Security events** (`SecurityEventLog`, `[LoggerMessage]`, written by `IdentityService`): 1101
   `LoginFailed` (Information, user id), 1102 `LoginFailedUnknownAccount` (Information, masked
   e-mail such as `j***@example.com`), 1103 `AccountLockedOut` (Warning, user id — the counter just
-  tripped), 1104 `LoginRejectedLockedOut` (Information, user id). Never the password, never the
+  tripped), 1104 `LoginRejectedLockedOut` (Information, user id), 1105 `FailedSignInNotCounted` and
+  1106 `FailedSignInCountNotReset` (Warning, user id and Identity error codes — the lockout counter's
+  writes report failure as an `IdentityResult`, never discarded). Never the password, never the
   e-mail as typed.
 - **Logout** revokes the presented refresh token (idempotent, anonymous — possession of the token is
   the authorization; never trips replay detection). **Revoke-all** signs the caller out everywhere.
@@ -66,7 +71,11 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 - **Registration is one transaction**: the account and its Member role are created together inside
   the execution strategy's transaction. If the role cannot be assigned the account is rolled back —
   a reported failure answers 500 `Auth.RegistrationFailed`, nothing is created, and the e-mail can
-  register again (no role-less account that signs in with no permissions).
+  register again (no role-less account that signs in with no permissions). Two registrations of one
+  e-mail racing each other are decided by the unique user-name index: the loser gets the same 409
+  `Auth.EmailAlreadyInUse` as a sequential duplicate (ADR-0018, amendment of 2026-10-11). A password or
+  e-mail Identity refuses answers 400 `Auth.RegistrationRejected` with one fixed sentence per Identity
+  error code — never Identity's own text, which repeats the e-mail.
 
 ## API (`src/Presentation/Api/Trellis.Api/Features/Auth/`)
 
@@ -91,7 +100,8 @@ login 401/403, register 403/409, refresh 401 — each with the `ProblemResponse`
 
 Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 problem details whose
 `code` is the identifier below (ADR-0024): `Auth.InvalidCredentials` 401, `Auth.AccountLockedOut` 403,
-`Auth.InvalidRefreshToken` 401, `Auth.EmailAlreadyInUse` 409, `Auth.RegistrationClosed` 403, and 400
+`Auth.InvalidRefreshToken` 401, `Auth.EmailAlreadyInUse` 409, `Auth.RegistrationClosed` 403,
+`Auth.RegistrationRejected` 400, `Auth.RegistrationFailed` 500, and 400
 `Validation.General` with `errors[]` (`{field, code, description}`, e.g. `email` / `Validation.NotEmpty`)
 for input that fails a validator. The host's own rejections use the same vocabulary:
 `Auth.Unauthenticated` (the bearer challenge, 401), `Auth.Forbidden` (403), `RateLimit.Exceeded` (429).

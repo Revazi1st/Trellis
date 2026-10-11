@@ -51,7 +51,7 @@ public sealed class ConcurrencyTests(DatabaseFixture database) : IntegrationTest
 
         committedA.IsSuccess.ShouldBeTrue();
         committedB.Error.ShouldBe(UnitOfWorkErrors.ConcurrencyConflict);
-        committedB.Error.Type.ShouldBe(ErrorType.Conflict);
+        committedB.Error.ShouldNotBeNull().Type.ShouldBe(ErrorType.Conflict);
 
         // The rejected entries are dropped, so the stale change cannot fail the next commit in this scope.
         scopeB.ServiceProvider.GetRequiredService<AppDbContext>().ChangeTracker.Entries().ShouldBeEmpty();

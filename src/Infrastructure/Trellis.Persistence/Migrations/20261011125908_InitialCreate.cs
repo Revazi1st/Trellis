@@ -75,7 +75,6 @@ namespace Trellis.Persistence.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     CustomerName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    Currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
                     Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
                     DueDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     PaidAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
@@ -85,6 +84,7 @@ namespace Trellis.Persistence.Migrations
                     ModifiedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     ModifiedBy = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     DeletedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    Currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
                     CustomerEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false)
                 },
                 constraints: table =>
@@ -247,7 +247,7 @@ namespace Trellis.Persistence.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     InvoiceId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,3)", precision: 18, scale: 3, nullable: false),
                     Currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false)
                 },
                 constraints: table =>

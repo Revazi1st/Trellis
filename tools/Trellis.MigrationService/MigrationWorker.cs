@@ -8,6 +8,7 @@ using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
 using Trellis.Persistence;
 using Trellis.Persistence.Identity;
+using Trellis.SharedKernel.Results;
 
 namespace Trellis.MigrationService;
 
@@ -128,19 +129,37 @@ internal sealed class MigrationWorker(
         // Demo history: each invoice is issued "as of" a date before its due date, since Issue rejects a
         // due date that is already past at the moment of issuing.
         Invoice overdue = Invoice.Create("Overdue Industries", email, usd).Value;
-        overdue.AddLine("Consulting", Money.Create(1200m, usd).Value);
-        overdue.Issue(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero), now: new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero));
+        Seeded(overdue.AddLine("Consulting", Money.Create(1200m, usd).Value), "adding the overdue invoice's line");
+        Seeded(
+            overdue.Issue(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero), now: new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero)),
+            "issuing the overdue invoice");
 
         Invoice paid = Invoice.Create("Prompt Payers Ltd", email, eur).Value;
-        paid.AddLine("Design sprint", Money.Create(4800m, eur).Value);
-        paid.Issue(new DateTimeOffset(2026, 6, 15, 0, 0, 0, TimeSpan.Zero), now: new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
-        paid.MarkPaid(new DateTimeOffset(2026, 6, 20, 9, 30, 0, TimeSpan.Zero));
+        Seeded(paid.AddLine("Design sprint", Money.Create(4800m, eur).Value), "adding the paid invoice's line");
+        Seeded(
+            paid.Issue(new DateTimeOffset(2026, 6, 15, 0, 0, 0, TimeSpan.Zero), now: new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero)),
+            "issuing the paid invoice");
+        Seeded(paid.MarkPaid(new DateTimeOffset(2026, 6, 20, 9, 30, 0, TimeSpan.Zero)), "paying the paid invoice");
         paid.ClearDomainEvents();   // seeding is not a business payment — no receipt email
 
         Invoice draft = Invoice.Create("Draft & Co", email, usd).Value;
-        draft.AddLine("Discovery workshop", Money.Create(950m, usd).Value);
+        Seeded(draft.AddLine("Discovery workshop", Money.Create(950m, usd).Value), "adding the draft invoice's line");
 
         context.Invoices.AddRange(overdue, paid, draft);
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// A transition the domain refuses fails the run — ExecuteAsync turns the exception into exit code 1 —
+    /// instead of saving a half-built sample (an "overdue" invoice still in Draft). Seeding is a one-shot
+    /// deployment step with no caller a <see cref="Result"/> could inform, as in <c>IdentitySeed</c>.
+    /// </summary>
+    private static void Seeded(Result transition, string step)
+    {
+        if (transition.IsFailure)
+        {
+            throw new InvalidOperationException(
+                $"Seeding the sample invoices failed while {step}: [{transition.Error.Code}] {transition.Error.Description}");
+        }
     }
 }

@@ -12,9 +12,12 @@ namespace Trellis.Domain.Invoices;
 /// </summary>
 public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletable
 {
+    /// <summary>The longest customer name the invoice holds; the validator, the column and the form use the same number.</summary>
+    public const int CustomerNameMaxLength = 200;
+
     private readonly List<InvoiceLine> _lines = [];
 
-    private Invoice(InvoiceId id, string customerName, EmailAddress customerEmail, string currency)
+    private Invoice(InvoiceId id, string customerName, EmailAddress customerEmail, Currency currency)
         : base(id)
     {
         CustomerName = customerName;
@@ -32,8 +35,8 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
     public EmailAddress CustomerEmail { get; private set; } = null!;
 
-    /// <summary>ISO-4217 currency every line must match.</summary>
-    public string Currency { get; private set; } = null!;
+    /// <summary>The currency every line must match; validated once, when the invoice was created.</summary>
+    public Currency Currency { get; private set; } = null!;
 
     public InvoiceStatus Status { get; private set; }
 
@@ -63,14 +66,21 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
     public DateTimeOffset? DeletedAtUtc { get; set; }
 
-    public static Result<Invoice> Create(string? customerName, EmailAddress customerEmail, Common.Currency currency)
+    public static Result<Invoice> Create(string? customerName, EmailAddress customerEmail, Currency currency)
     {
         if (string.IsNullOrWhiteSpace(customerName))
         {
             return InvoiceErrors.EmptyCustomerName;
         }
 
-        return new Invoice(InvoiceId.New(), customerName.Trim(), customerEmail, currency.Code);
+        // Checked here as well as in the validator: not every caller goes through one (the seeder does not).
+        string name = customerName.Trim();
+        if (name.Length > CustomerNameMaxLength)
+        {
+            return InvoiceErrors.CustomerNameTooLong;
+        }
+
+        return new Invoice(InvoiceId.New(), name, customerEmail, currency);
     }
 
     public Result AddLine(string? description, Money amount)
@@ -85,12 +95,18 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
             return Result.Failure(InvoiceErrors.EmptyLineDescription);
         }
 
+        string lineDescription = description.Trim();
+        if (lineDescription.Length > InvoiceLine.DescriptionMaxLength)
+        {
+            return Result.Failure(InvoiceErrors.LineDescriptionTooLong);
+        }
+
         if (amount.Currency != Currency)
         {
             return Result.Failure(InvoiceErrors.CurrencyMismatch);
         }
 
-        _lines.Add(InvoiceLine.Create(description.Trim(), amount));
+        _lines.Add(InvoiceLine.Create(lineDescription, amount));
         return Result.Success();
     }
 
@@ -103,7 +119,8 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
     {
         if (Status != InvoiceStatus.Draft)
         {
-            return Result.Failure(InvoiceErrors.AlreadyFinalized);
+            // Name the state the invoice is in: an issued one is not "paid or voided".
+            return Result.Failure(Status == InvoiceStatus.Issued ? InvoiceErrors.AlreadyIssued : InvoiceErrors.AlreadyFinalized);
         }
 
         if (_lines.Count == 0)
@@ -118,7 +135,7 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
 
         Status = InvoiceStatus.Issued;
         DueDate = dueDate;
-        Raise(new InvoiceIssuedDomainEvent(Id, Currency));
+        Raise(new InvoiceIssuedDomainEvent(Id, Currency.Code));
         return Result.Success();
     }
 

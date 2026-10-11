@@ -23,7 +23,7 @@ public sealed class RegisterCommandHandlerTests
         Result<Guid> result = await handler.Handle(Command, TestContext.Current.CancellationToken);
 
         result.Error.ShouldBe(AuthErrors.RegistrationClosed);
-        result.Error.Type.ShouldBe(ErrorType.Forbidden);
+        result.Error.ShouldNotBeNull().Type.ShouldBe(ErrorType.Forbidden);
         await _identity.DidNotReceiveWithAnyArgs().RegisterAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 

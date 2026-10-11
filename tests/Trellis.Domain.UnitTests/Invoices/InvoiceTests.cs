@@ -46,13 +46,36 @@ public sealed class InvoiceTests
         invoice.Status.ShouldBe(InvoiceStatus.Draft);
         invoice.Lines.ShouldBeEmpty();
         invoice.Id.Value.ShouldNotBe(Guid.Empty);
-        invoice.Total.ShouldBe(Money.Zero("USD"));
+        invoice.Total.ShouldBe(Money.Zero(Currency.Create("USD").Value));
     }
 
     [Fact]
     public void Create_rejects_blank_customer_name()
         => Invoice.Create("  ", EmailAddress.Create("a@b.co").Value, Currency.Create("USD").Value)
             .Error.ShouldBe(InvoiceErrors.EmptyCustomerName);
+
+    [Fact]
+    public void Create_bounds_the_customer_name_after_trimming_it()
+    {
+        EmailAddress email = EmailAddress.Create("a@b.co").Value;
+        Currency usd = Currency.Create("USD").Value;
+        string longest = new('n', Invoice.CustomerNameMaxLength);
+
+        Invoice.Create($"  {longest}  ", email, usd).Value.CustomerName.ShouldBe(longest);
+        Invoice.Create(longest + "n", email, usd).Error.ShouldBe(InvoiceErrors.CustomerNameTooLong);
+    }
+
+    [Fact]
+    public void AddLine_bounds_the_description_after_trimming_it()
+    {
+        Invoice invoice = CreateDraft();
+        string longest = new('d', InvoiceLine.DescriptionMaxLength);
+
+        invoice.AddLine($" {longest} ", Money.Create(1m, "USD").Value).IsSuccess.ShouldBeTrue();
+        invoice.Lines.ShouldHaveSingleItem().Description.ShouldBe(longest);
+        invoice.AddLine(longest + "d", Money.Create(1m, "USD").Value).Error.ShouldBe(InvoiceErrors.LineDescriptionTooLong);
+        invoice.Lines.Count.ShouldBe(1);
+    }
 
     [Fact]
     public void AddLine_accumulates_total()
@@ -135,8 +158,12 @@ public sealed class InvoiceTests
     }
 
     [Fact]
-    public void Issue_twice_is_rejected()
-        => CreateIssued().Issue(DueDate, IssuedAt).Error.ShouldBe(InvoiceErrors.AlreadyFinalized);
+    public void Issue_twice_is_rejected_as_already_issued()
+        => CreateIssued().Issue(DueDate, IssuedAt).Error.ShouldBe(InvoiceErrors.AlreadyIssued);
+
+    [Fact]
+    public void Issue_on_a_paid_invoice_is_rejected_as_finalized()
+        => CreatePaid().Issue(DueDate, IssuedAt).Error.ShouldBe(InvoiceErrors.AlreadyFinalized);
 
     [Fact]
     public void MarkPaid_requires_issued_status()
