@@ -113,7 +113,11 @@ public class Result
     }
 }
 
-/// <summary>A <see cref="Result"/> carrying a value when successful. Accessing <see cref="Value"/> on a failure throws.</summary>
+/// <summary>
+/// A <see cref="Result"/> carrying a value when successful. Accessing <see cref="Value"/> on a failure throws,
+/// and the exception names the error's code (and each aggregated <c>field:code</c>), so a failing test or a
+/// crash log says why without a debugger; descriptions stay out, as they may carry user input.
+/// </summary>
 [JsonConverter(typeof(ResultJsonGuard))]
 public class Result<TValue> : Result
 {
@@ -125,9 +129,17 @@ public class Result<TValue> : Result
     {
         get => IsSuccess
             ? field
-            : throw new InvalidOperationException("The value of a failure result cannot be accessed.");
+            : throw new InvalidOperationException(
+                $"The value of a failure result cannot be accessed: it failed with {Codes(Error)}.");
         private init;
     }
+
+    private static string Codes(Error error) => error switch
+    {
+        ValidationError validation => $"{validation.Code} [{string.Join(", ", validation.Errors.Select(Codes))}]",
+        FieldError field => $"{field.Field}:{field.Code}",
+        _ => error.Code,
+    };
 
     public static implicit operator Result<TValue>(TValue value) => Success(value);
 

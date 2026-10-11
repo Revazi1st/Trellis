@@ -28,11 +28,26 @@ public sealed class ResultTests
     }
 
     [Fact]
-    public void Value_on_failure_throws()
+    public void Value_on_failure_throws_naming_the_error_code()
     {
         Result<int> result = Result.Failure<int>(TestError);
 
-        Should.Throw<InvalidOperationException>(() => result.Value);
+        Should.Throw<InvalidOperationException>(() => result.Value).Message.ShouldContain("Test.NotFound");
+    }
+
+    [Fact]
+    public void Value_on_an_aggregated_failure_names_every_child_code_and_no_description()
+    {
+        Result<int> result = Result.Failure<int>(new ValidationError(
+        [
+            new FieldError("CustomerEmail", "EmailAddress.Invalid", "'a@b' is not an e-mail address."),
+            Error.Validation("Invoice.NoLines", "No lines."),
+        ]));
+
+        string message = Should.Throw<InvalidOperationException>(() => result.Value).Message;
+
+        message.ShouldContain("Validation.General [CustomerEmail:EmailAddress.Invalid, Invoice.NoLines]");
+        message.ShouldNotContain("a@b");
     }
 
     [Fact]
