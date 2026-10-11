@@ -4,6 +4,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # A new version waits a week before Dependabot proposes it: a yanked or compromised release is
+    # usually gone by then. The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml)
+    # counts on this; majors are never merged on their own.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       # ONE group for the whole Microsoft/Aspire graph — deliberately coarse.
@@ -58,6 +63,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # A new version waits a week before Dependabot proposes it: a yanked or compromised release is
+    # usually gone by then. The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml)
+    # counts on this; majors are never merged on their own.
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -78,6 +88,11 @@ updates:
     directory: "/scripts/sdk-image"
     schedule:
       interval: weekly
+    # A new version waits a week before Dependabot proposes it: a yanked or compromised release is
+    # usually gone by then. The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml)
+    # counts on this; majors are never merged on their own.
+    cooldown:
+      default-days: 7
 
   # Dev-dependency images (postgres, redis) in docker-compose.yml.
   - package-ecosystem: docker-compose

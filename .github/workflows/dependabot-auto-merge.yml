@@ -1,0 +1,53 @@
+name: Dependabot auto-merge
+
+# Patch and minor dependency updates merge on their own once every required check is green; a
+# major (or a group that contains one) waits for a person. Three things make this safe enough:
+#   - dependabot.yml holds new versions back for a week (cooldown), so a yanked or compromised
+#     release is usually gone before a pull request exists;
+#   - the pull request has to pass the same checks as any other: the Release build and every
+#     test, the API contract, the container smoke, CodeQL, the secret scan and the package audit;
+#   - this job runs no code from the pull request. It reads Dependabot's metadata and asks
+#     GitHub to merge when the checks pass; GitHub does the merging.
+# Auto-merge only works when the repository allows it (Settings → General → Allow auto-merge) and a
+# ruleset on the default branch requires the checks. Without those GitHub refuses to enable it and
+# the job ends with a notice instead of a failure, so the workflow can ship before the settings do.
+# A merge made this way is attributed to the Actions token, so it does not start the push workflows
+# on main; the pull request already built and tested the merged tree.
+
+on: pull_request
+
+permissions: {}
+
+jobs:
+  enable:
+    name: Enable auto-merge
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write        # enabling auto-merge on the pull request
+      pull-requests: write
+    steps:
+      - name: Read the update type
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for a patch or minor update
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if gh pr merge --auto --squash "$PR_URL" 2> error.txt; then
+            echo "Auto-merge enabled: GitHub merges this pull request once every required check passes."
+          else
+            echo "::notice title=Auto-merge not enabled::$(tr '\n' ' ' < error.txt) Enable 'Allow auto-merge' in the repository settings and add a ruleset on the default branch that requires the CI checks; until then Dependabot pull requests are merged by hand."
+          fi
+
+      - name: A major update waits for a person
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        run: echo "::notice title=Major update::${{ steps.metadata.outputs.dependency-names }} moves a major version; review and merge it by hand."

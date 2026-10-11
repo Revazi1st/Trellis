@@ -67,7 +67,10 @@ SDK-container build; its docs-drift job honours a `docs-not-needed` pull-request
 repository. `.github/workflows/codeql.yml` runs on a public repository, and on a private one only once
 GitHub Advanced Security code scanning is enabled and the `CODEQL_ENABLED` repository variable
 (Settings → Secrets and variables → Actions → Variables) is `true`. Dependabot is configured in
-`.github/dependabot.yml`.
+`.github/dependabot.yml`, with a one-week cooldown on new versions.
+`.github/workflows/dependabot-auto-merge.yml` lets its patch and minor pull requests merge on their own
+once the checks pass; that needs *Allow auto-merge* in the repository settings and a ruleset on `main`
+that requires the CI jobs. Until both exist the workflow only leaves a notice. Majors always wait for you.
 
 ## Where to look next
 

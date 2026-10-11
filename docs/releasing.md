@@ -45,6 +45,16 @@ next, and the GitHub release is published only after the push succeeded.
    skips itself on a pull request carrying it — the escape hatch for refactors that change no
    behaviour. Create it once:
    `gh label create docs-not-needed --description "No feature or threat-model doc change needed"`.
+7. **Dependency bumps merge on their own.** `.github/workflows/dependabot-auto-merge.yml` enables
+   GitHub's auto-merge on Dependabot's patch and minor pull requests; a major, or a group that
+   contains one, waits for a person. `dependabot.yml` holds every new version back for a week
+   (`cooldown`) so a yanked or compromised release is usually gone before a pull request exists.
+   Two repository settings make it work, both set once: *Settings → General → Allow auto-merge*
+   (and *Automatically delete head branches*), and a ruleset on `main` that requires the CI,
+   Template CI and CodeQL jobs and forbids force-pushes and deletion. The ruleset is what
+   auto-merge waits for; without it GitHub refuses to enable auto-merge and the workflow leaves a
+   notice. A merge made by the Actions token does not start the push workflows on `main`; the pull
+   request already built and tested the merged tree, and a release runs the whole gate again.
 
 ## Before a minor release: an agent dry run
 
