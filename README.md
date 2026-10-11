@@ -1,8 +1,15 @@
 # Trellis
 
-[![CI](https://github.com/Revazi1st/trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/Revazi1st/trellis/actions/workflows/ci.yml)
+[![CI](https://github.com/Revazi1st/Trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/Revazi1st/Trellis/actions/workflows/ci.yml)
+[![Template CI](https://github.com/Revazi1st/Trellis/actions/workflows/template-ci.yml/badge.svg)](https://github.com/Revazi1st/Trellis/actions/workflows/template-ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/Trellis.Templates?logo=nuget)](https://www.nuget.org/packages/Trellis.Templates)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+
+```bash
+dotnet new install Trellis.Templates
+dotnet new trellis -n Your.Project
+```
 
 A best-practices .NET 10 **solution template**: rich DDD, Clean Architecture with vertical-slice features, feature-based Minimal APIs, separate Infrastructure and Persistence, ASP.NET Identity + JWT, Aspire orchestration, a Blazor UI, and a deeply **AI-friendly** repository (dual human/AI docs, Claude Code rules/agents/skills/hooks). Every major feature is a toggle, so you scaffold only what you need.
 
@@ -14,19 +21,13 @@ A best-practices .NET 10 **solution template**: rich DDD, Clean Architecture wit
 
 ## Use the template
 
-From nuget.org, once a version is published there (see [CHANGELOG.md](CHANGELOG.md) for what each
-version contains):
+The two lines above install the latest release from nuget.org and generate a solution;
+[CHANGELOG.md](CHANGELOG.md) says what each version contains. To try `main` instead, install from a
+clone of this repository:
 
 ```bash
-dotnet new install Trellis.Templates
-dotnet new trellis -n Your.Project
-```
-
-From a clone of this repository, which is what to do before the first release or to try `main`:
-
-```bash
-git clone https://github.com/Revazi1st/trellis.git
-dotnet new install ./trellis                   # a folder install; `dotnet new uninstall ./trellis` removes it
+git clone https://github.com/Revazi1st/Trellis.git
+dotnet new install ./Trellis                   # a folder install; `dotnet new uninstall ./Trellis` removes it
 dotnet new trellis -n Your.Project -o Your.Project
 ```
 
