@@ -7,9 +7,10 @@ namespace Trellis.Domain.Common;
 /// real deliverability is proven by sending mail, not by a regex. The checks are the ones a mail system
 /// would refuse outright — the length limits, one <c>@</c>, no whitespace, no empty or hyphen-edged
 /// domain label, no leading, trailing or doubled dot — and any other character is allowed, so an
-/// internationalized address (<c>dörte@exämple.de</c>) is accepted as typed.
+/// internationalized address (<c>dörte@exämple.de</c>) is accepted as typed. A single scalar, so it can be
+/// mapped as a converted column where one needs an index (<see cref="IScalarValueObject{TSelf, TValue}"/>).
 /// </summary>
-public sealed record EmailAddress
+public sealed record EmailAddress : IScalarValueObject<EmailAddress, string>
 {
     /// <summary>RFC 5321 bounds a forward path at 256 octets including its angle brackets, which leaves 254 for the address.</summary>
     public const int MaxLength = 254;
@@ -52,6 +53,8 @@ public sealed record EmailAddress
             ? new EmailAddress(trimmed)
             : EmailAddressErrors.Invalid;
     }
+
+    static EmailAddress IScalarValueObject<EmailAddress, string>.Restore(string value) => new(value);
 
     public override string ToString() => Value;
 

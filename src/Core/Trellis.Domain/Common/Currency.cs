@@ -5,9 +5,10 @@ namespace Trellis.Domain.Common;
 /// <summary>
 /// An ISO-4217 currency code as a value object — validated once at the boundary, then carried as a
 /// known-good value instead of re-checking three-letter strings everywhere. Mapped as an EF complex
-/// type, on its own (<c>Invoice.Currency</c>) and inside <see cref="Money"/>.
+/// type, on its own (<c>Invoice.Currency</c>) and inside <see cref="Money"/>; a single scalar, so it can be
+/// mapped as a converted column instead where one needs an index (<see cref="IScalarValueObject{TSelf, TValue}"/>).
 /// </summary>
-public sealed record Currency
+public sealed record Currency : IScalarValueObject<Currency, string>
 {
     /// <summary>ISO 4217 alphabetic codes are three letters.</summary>
     public const int CodeLength = 3;
@@ -41,6 +42,10 @@ public sealed record Currency
         => string.IsNullOrWhiteSpace(code) || code.Length != CodeLength || !code.All(char.IsAsciiLetter)
             ? MoneyErrors.InvalidCurrency
             : new Currency(code.ToUpperInvariant());
+
+    string IScalarValueObject<Currency, string>.Value => Code;
+
+    static Currency IScalarValueObject<Currency, string>.Restore(string value) => new(value);
 
     public override string ToString() => Code;
 }

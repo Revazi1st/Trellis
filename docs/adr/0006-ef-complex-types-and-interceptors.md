@@ -2,7 +2,7 @@
 
 - **Status**: accepted — the in-transaction domain-event dispatch (interceptor 1 below) is superseded by ADR-0018 (transactional outbox); the value-object mapping, soft-delete and auditing stand
 - **Date**: 2026-07-14
-- **Amended**: 2026-10-11 — concurrency at the aggregate boundary by convention, and value objects nesting value objects (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-10-11 — concurrency at the aggregate boundary by convention, value objects nesting value objects, and converted columns for a single-value value object that needs an index (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -10,7 +10,7 @@ The persistence layer must map rich-DDD building blocks — value objects, domai
 
 ## Decision
 
-- **Value objects as EF complex types** (`ComplexProperty`), the EF 10-recommended mapping (value semantics; not owned-entity identity). `Money`/`EmailAddress` map this way in `Configurations/`.
+- **Value objects as EF complex types** (`ComplexProperty`), the EF 10-recommended mapping (value semantics; not owned-entity identity). `Money`/`EmailAddress` map this way in `Configurations/`. *(Amended 2026-10-11: still the default; a single-value value object that needs an index, a key or `Contains` becomes a converted column instead.)*
 - **Aggregates load whole**: child navigations use `AutoInclude()` + field access; there are no partial-aggregate loads.
 - **Three `ISaveChangesInterceptor`s**, order fixed in `Persistence/DependencyInjection.cs` *(amended 2026-10-11: a fourth, `AggregateConcurrencyInterceptor`, is attached by `AppDbContext.OnConfiguring` after these)*:
   1. A domain-event dispatch interceptor — dispatched aggregate events inside `SaveChanges` (draining to quiescence). *(Superseded by ADR-0018: `OutboxWriteInterceptor` now takes this slot and writes each event to `OutboxMessages` in the same transaction; handlers run after commit, never during `SaveChanges`.)*
@@ -50,6 +50,16 @@ edits of one aggregate both commit, silently.
   such a value object keeps a private parameterless constructor, because EF cannot bind a nested
   complex property through a constructor. Columns do not change: the nested property keeps its column
   name.
+- **A single-value value object that needs an index, a key or `Contains` is a converted column** — a
+  rule, not a new default. EF Core 10 cannot index a complex-type member (neither `HasIndex(u => u.Email.Value)`
+  nor the column name builds the model), so such a value object implements
+  `IScalarValueObject<TSelf, TValue>` (`Value`, and an explicitly implemented `Restore` that skips
+  `Create`'s checks, as the complex-type materializer does) and is mapped through the one generic
+  `ScalarValueObjectConverter<TValueObject, TValue>`, modelled on `StronglyTypedIdValueConverter`: one
+  line per type in `AppDbContext.ConfigureConventions`. The line makes every member of that type a
+  converted column, so a type is complex or converted throughout the model, never both. `EmailAddress`
+  and `Currency` implement the interface but stay complex types until an application needs the index;
+  `ScalarValueObjectConverterTests` maps them the converted way in a probe model.
 
 ### Consequences
 
@@ -57,4 +67,8 @@ edits of one aggregate both commit, silently.
   implements; the auditing stamp is no longer load-bearing for concurrency.
 - One extra UPDATE of the root per save that changes only children of a non-auditable aggregate — the
   write that carries the token.
+- A converted value object is compared whole in a query (`==`, `Contains`, ordering) but no longer
+  reached into: `s.Email.Value.StartsWith(…)` stops translating to SQL. Converting a type that is
+  already a complex type renames nothing (the column keeps its name) but is a model change, so it comes
+  with a migration.
 
