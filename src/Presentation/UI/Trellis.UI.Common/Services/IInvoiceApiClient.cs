@@ -5,6 +5,10 @@ namespace Trellis.UI.Common.Services;
 
 public interface IInvoiceApiClient
 {
+    /// <summary>Every invoice, newest first; <paramref name="status"/> narrows the list to one state.</summary>
+    Task<ApiResult<PagedResponse<InvoiceDto>>> ListAsync(
+        InvoiceStatus? status = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+
     Task<ApiResult<PagedResponse<InvoiceDto>>> GetOverdueAsync(
         int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
 

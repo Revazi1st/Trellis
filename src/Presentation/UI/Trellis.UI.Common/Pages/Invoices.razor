@@ -5,7 +5,17 @@
 
 <PageTitle>Invoices — Trellis</PageTitle>
 
-<h1>Overdue invoices</h1>
+<h1>Invoices</h1>
+
+@* The filter lives in the address (?status=Draft), so Back returns to the previous filter and a filtered
+   list can be bookmarked; links, so the row is keyboard-usable and the current one is aria-current. *@
+<div class="filters" role="group" aria-labelledby="invoice-filter-label">
+    <span id="invoice-filter-label" class="filters-label">Show</span>
+    @foreach (InvoiceFilter filter in InvoiceFilter.Choices)
+    {
+        <a href="@filter.Href" class="filter" aria-current="@(filter == Requested ? "page" : null)">@filter.Label</a>
+    }
+</div>
 
 @if (_error is not null)
 {
@@ -17,13 +27,13 @@ else if (_page is null)
 }
 else if (_page.TotalCount == 0)
 {
-    <p>No overdue invoices. <span aria-hidden="true">🎉</span></p>
+    <p>@_filter.Empty</p>
 }
 else
 {
     <table class="grid">
         <thead>
-            <tr><th>Customer</th><th>Status</th><th class="num">Total</th><th>Due</th><th><span class="visually-hidden">Actions</span></th></tr>
+            <tr><th>Customer</th><th>Status</th><th class="num">Total</th><th>Due</th><th>Created</th><th><span class="visually-hidden">Actions</span></th></tr>
         </thead>
         <tbody>
             @foreach (InvoiceDto invoice in _page.Items)
@@ -33,6 +43,7 @@ else
                     <td>@invoice.Status</td>
                     <td class="num">@invoice.Total.ToString("N2") @invoice.Currency</td>
                     <td>@invoice.DueDate?.ToString("yyyy-MM-dd")</td>
+                    <td>@invoice.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
                     <td><NavLink href="@($"invoices/{invoice.Id}")" aria-label="@($"View the invoice for {invoice.CustomerName}")">View</NavLink></td>
                 </tr>
             }
@@ -40,28 +51,101 @@ else
     </table>
 
     <nav class="pager" aria-label="Pagination">
-        <button @onclick="() => LoadAsync(_page!.Page - 1)" disabled="@(!_page.HasPreviousPage)">Previous</button>
-        <span aria-live="polite">Page @_page.Page of @_page.TotalPages (@_page.TotalCount overdue)</span>
-        <button @onclick="() => LoadAsync(_page!.Page + 1)" disabled="@(!_page.HasNextPage)">Next</button>
+        <button @onclick="() => LoadAsync(_filter, _page!.Page - 1)" disabled="@(!_page.HasPreviousPage)">Previous</button>
+        <span aria-live="polite">Page @_page.Page of @_page.TotalPages (@_filter.Count(_page.TotalCount))</span>
+        <button @onclick="() => LoadAsync(_filter, _page!.Page + 1)" disabled="@(!_page.HasNextPage)">Next</button>
     </nav>
 }
 
 @code {
+    /// <summary>The <c>?status=</c> of the address: a status name, <c>Overdue</c>, or nothing for every invoice.</summary>
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? StatusQuery { get; set; }
+
+    /// <summary>The filter <see cref="_page"/> was loaded for (it is null while another one loads).</summary>
+    private InvoiceFilter _filter = InvoiceFilter.Every;
     private PagedResponse<InvoiceDto>? _page;
     private string? _error;
+    private bool _authorized;
 
-    protected override Task OnAuthorizedAsync() => LoadAsync(1);
+    private InvoiceFilter Requested => InvoiceFilter.From(StatusQuery);
 
-    private async Task LoadAsync(int page)
+    protected override Task OnAuthorizedAsync()
     {
-        ApiResult<PagedResponse<InvoiceDto>> result = await InvoiceApi.GetOverdueAsync(page);
+        _authorized = true;
+        return LoadAsync(Requested, 1);
+    }
+
+    // A link to another filter keeps this component and sets its query parameter: load that filter's
+    // first page. ProtectedPage's override re-runs the guard when the auth state changed; call it first.
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        if (_authorized && Requested != _filter)
+        {
+            await LoadAsync(Requested, 1);
+        }
+    }
+
+    private async Task LoadAsync(InvoiceFilter filter, int page)
+    {
+        if (filter != _filter)
+        {
+            _page = null;   // another filter's rows never show under this one's name
+        }
+
+        _filter = filter;
+        ApiResult<PagedResponse<InvoiceDto>> result = filter.IsOverdue
+            ? await InvoiceApi.GetOverdueAsync(page)
+            : await InvoiceApi.ListAsync(filter.Status, page);
+
+        if (filter != _filter)
+        {
+            return;   // the user chose another filter while this one loaded; its own load answers
+        }
+
         if (result.IsSuccess)
         {
             _page = result.Value;
+            _error = null;
         }
         else
         {
             _error = result.Error;
+        }
+    }
+
+    /// <summary>One choice of the filter row: what it lists, its address, and how the page names it.</summary>
+    private sealed record InvoiceFilter(string Label, string? Query, InvoiceStatus? Status, string Noun, string Empty)
+    {
+        public static readonly InvoiceFilter Every = new("All", null, null, "invoice", "No invoices yet.");
+        public static readonly InvoiceFilter Overdue = new("Overdue", "Overdue", null, "overdue invoice", "No overdue invoices.");
+
+        public static readonly IReadOnlyList<InvoiceFilter> Choices =
+        [
+            Every,
+            OfStatus(InvoiceStatus.Draft),
+            OfStatus(InvoiceStatus.Issued),
+            OfStatus(InvoiceStatus.Paid),
+            OfStatus(InvoiceStatus.Voided),
+            Overdue,
+        ];
+
+        public bool IsOverdue => this == Overdue;
+
+        public string Href => Query is null ? "invoices" : $"invoices?status={Query}";
+
+        /// <summary>The filter an address names; one it does not know lists every invoice.</summary>
+        public static InvoiceFilter From(string? query)
+            => Choices.FirstOrDefault(filter => string.Equals(filter.Query, query, StringComparison.OrdinalIgnoreCase)) ?? Every;
+
+        public string Count(int total) => $"{total} {Noun}{(total == 1 ? string.Empty : "s")}";
+
+        private static InvoiceFilter OfStatus(InvoiceStatus status)
+        {
+            string name = status.ToString();
+            string lower = name.ToLowerInvariant();
+            return new(name, name, status, $"{lower} invoice", $"No {lower} invoices.");
         }
     }
 }

@@ -120,6 +120,59 @@ public sealed class LoginFlowTests
             new() { Timeout = 15_000 });
         await page.Locator("h1", new() { HasText = customer }).WaitForAsync(new() { Timeout = 15_000 });
     }
+
+    [Fact]
+    public async Task An_issued_invoice_heads_the_list_the_back_link_returns_to_and_is_not_overdue()
+    {
+        Assert.SkipUnless(UiTestEnvironment.Enabled,
+            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+
+        using IPlaywright playwright = await Playwright.CreateAsync();
+        await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
+        IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
+
+        await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/login");
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await page.FillAsync("input[autocomplete='username']", UiTestEnvironment.SeededAdminEmail);
+        await page.FillAsync("input[autocomplete='current-password']", UiTestEnvironment.SeededAdminPassword);
+        await page.ClickAsync("button[type='submit']");
+        await page.WaitForURLAsync("**/invoices", new() { Timeout = 15_000 });
+
+        // Create, add a line, issue due in 30 days: never overdue today. In-app navigation only (ADR-0007).
+        await page.ClickAsync("a.nav-link:has-text('New')");
+        await page.WaitForURLAsync("**/invoices/new", new() { Timeout = 15_000 });
+        string customer = $"Listed {Guid.NewGuid():N}";
+        await page.FillAsync("label:has-text('Customer name') input", customer);
+        await page.FillAsync("label:has-text('Customer email') input", "listed@test.dev");
+        await page.FillAsync("label:has-text('Currency') input", "USD");
+        await page.ClickAsync("button[type='submit']");
+        await page.Locator("h1", new() { HasText = customer }).WaitForAsync(new() { Timeout = 15_000 });
+
+        await page.FillAsync("label:has-text('Description') input", "Listing check");
+        await page.FillAsync("label:has-text('Amount') input", "120");
+        await page.ClickAsync("button:has-text('Add line')");
+        await page.Locator("td", new() { HasText = "Listing check" }).WaitForAsync(new() { Timeout = 15_000 });
+        string dueDate = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        await page.FillAsync("label:has-text('Due date') input", dueDate);
+        await page.ClickAsync("button:has-text('Issue invoice')");
+        await Assertions.Expect(page.Locator("dl.summary dd").First).ToHaveTextAsync("Issued", new() { Timeout = 15_000 });
+
+        // Back to the list through the page's own link: the newest invoice heads it under All.
+        await page.ClickAsync("a.back:has-text('Back to invoices')");
+        await page.WaitForURLAsync(
+            new Regex("/invoices$", RegexOptions.None, TimeSpan.FromSeconds(5)), new() { Timeout = 15_000 });
+        await Assertions.Expect(page.Locator("a.filter[aria-current='page']")).ToHaveTextAsync("All", new() { Timeout = 15_000 });
+        ILocator firstRow = page.Locator("table.grid tbody tr").First;
+        await Assertions.Expect(firstRow.Locator("td").First).ToHaveTextAsync(customer, new() { Timeout = 15_000 });
+        await Assertions.Expect(firstRow.Locator("td").Nth(1)).ToHaveTextAsync("Issued");
+
+        // Not under Overdue: wait for that list to finish loading, then look for the customer.
+        await page.ClickAsync("a.filter:has-text('Overdue')");
+        await page.WaitForURLAsync("**/invoices?status=Overdue", new() { Timeout = 15_000 });
+        await Assertions.Expect(page.Locator("a.filter[aria-current='page']")).ToHaveTextAsync("Overdue", new() { Timeout = 15_000 });
+        await Assertions.Expect(page.Locator("p[role='status']")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+        await Assertions.Expect(page.Locator("td", new() { HasText = customer })).ToHaveCountAsync(0);
+    }
 }
 
 /// <summary>
