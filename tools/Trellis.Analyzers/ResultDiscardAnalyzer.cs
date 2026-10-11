@@ -476,17 +476,13 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     /// <summary>The <c>T</c> of a type that is or implements <c>IEnumerable&lt;T&gt;</c> or <c>IAsyncEnumerable&lt;T&gt;</c>.</summary>
     private static ITypeSymbol? SequenceElement(INamedTypeSymbol type)
     {
-        foreach (INamedTypeSymbol candidate in type.AllInterfaces.Insert(0, type))
-        {
-            if (candidate.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
-                || candidate is { Arity: 1, Name: "IAsyncEnumerable", ContainingNamespace: { Name: "Generic", ContainingNamespace: { Name: "Collections", ContainingNamespace.Name: "System" } } })
-            {
-                return candidate.TypeArguments[0];
-            }
-        }
-
-        return null;
+        INamedTypeSymbol? sequence = IsSequenceInterface(type) ? type : type.AllInterfaces.FirstOrDefault(IsSequenceInterface);
+        return sequence?.TypeArguments[0];
     }
+
+    private static bool IsSequenceInterface(INamedTypeSymbol type)
+        => type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
+           || type is { Arity: 1, Name: "IAsyncEnumerable", ContainingNamespace: { Name: "Generic", ContainingNamespace: { Name: "Collections", ContainingNamespace.Name: "System" } } };
 
     private static bool IsSystemThreadingTasks(INamespaceSymbol? ns)
         => ns is { Name: "Tasks", ContainingNamespace: { Name: "Threading", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } };
