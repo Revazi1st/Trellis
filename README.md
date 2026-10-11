@@ -258,12 +258,13 @@ describes planned work that is not in the template yet; the marker goes when it 
   - a configuration-gated SMTP sender and the user-secrets setup walkthrough;
   - the Domain Overview device, plain words before architecture, and the folder map that prompted our slice tree;
   - one authorization test per use case, which prompted pinning each endpoint's permission, and the permission-scoped token idiom;
-  - *when adopted*: use-case drivers, optional-parameter factories, the paired HTTP test client and the switchable current-user double (rewritten, no MediatR);
-  - *when adopted*: the one-test-suite-per-use-case discipline with test folders mirroring the Application slice;
-  - *when adopted*: the eventual-consistency walkthrough shape, the one-aggregate-per-use-case explanation, and the idea of a reference time-triggered use case;
-  - *when adopted*: the Testing section mapping each test type onto the layers it exercises, and where to invest;
-  - *when adopted*: the authorization how-to format, one snippet then who passes, and the self-or-admin idea behind our ownership recipe;
-  - *when adopted*: the show-the-code README sections, the visual walkthrough-style README, and feature-first folders in the persistence adapter.
+  - use-case drivers, optional-parameter factories, the paired HTTP test client and the switchable current-user double (rewritten, no MediatR);
+  - the one-test-suite-per-use-case discipline with test folders mirroring the Application slice;
+  - the eventual-consistency walkthrough shape, the one-aggregate-per-use-case explanation, and the idea of a reference time-triggered use case;
+  - the Testing section mapping each test type onto the layers it exercises, and where to invest;
+  - the authorization how-to format, one snippet then who passes, and the self-or-admin idea behind our ownership recipe;
+  - the show-the-code README sections;
+  - *when adopted*: the visual walkthrough-style README, and feature-first folders in the persistence adapter.
 - [Trellis](https://github.com/xavierjohn/Trellis) by Xavier John (MIT; no affiliation, the shared name is a coincidence):
   - lease-fenced outbox bookkeeping writes, and sibling event handlers run on every attempt with only the failed ones retried;
   - failing fast when a `Result` reaches JSON, a failed `Result` that names its code, and compiler-guarded `Error` access;
