@@ -72,4 +72,12 @@ internal static class InvoiceFactory
         invoice.MarkPaid(paidAt ?? PaidAt).ShouldBeSuccess();
         return invoice;
     }
+
+    /// <summary>A draft voided before it was issued: the shortest path to the terminal state.</summary>
+    public static Invoice Voided(string customerName = Customer)
+    {
+        Invoice invoice = Draft(customerName);
+        invoice.Void().ShouldBeSuccess();
+        return invoice;
+    }
 }

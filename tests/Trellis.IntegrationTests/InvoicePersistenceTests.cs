@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Trellis.Application.Features.Invoices;
 using Trellis.Application.Features.Invoices.GetInvoice;
+using Trellis.Application.Features.Invoices.ListInvoices;
 using Trellis.Application.Features.Invoices.ListOverdueInvoices;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Messaging;
@@ -70,5 +71,45 @@ public sealed class InvoicePersistenceTests(DatabaseFixture database) : Integrat
 
         overdue.ShouldBeSuccess().TotalCount.ShouldBe(2);
         overdue.Value.Items.Select(static i => i.CustomerName).ShouldBe(["overdue-august", "overdue-september"]);
+    }
+
+    [Fact]
+    public async Task List_specification_translates_to_sql_newest_first_and_filters_by_status()
+    {
+        // One invoice per state, each created an hour after the last: CreatedAtUtc comes from the auditing
+        // interceptor's clock, so the creation order is the order the list must answer in, reversed.
+        async Task<InvoiceId> CreateAnHourLater(string name)
+        {
+            Time.Advance(TimeSpan.FromHours(1));
+            return await Services.CreateInvoiceAsync(name);
+        }
+
+        InvoiceId draft = await CreateAnHourLater("draft");
+        InvoiceId issued = await CreateAnHourLater("issued");
+        await Services.AddInvoiceLineAsync(issued);
+        await Services.IssueInvoiceAsync(issued);
+        InvoiceId paid = await CreateAnHourLater("paid");
+        await Services.AddInvoiceLineAsync(paid);
+        await Services.IssueInvoiceAsync(paid);
+        await Services.PayInvoiceAsync(paid);
+        InvoiceId voided = await CreateAnHourLater("voided");
+        await Services.VoidInvoiceAsync(voided);
+
+        using var readScope = CreateScope();
+        var list = readScope.ServiceProvider
+            .GetRequiredService<IQueryHandler<ListInvoicesQuery, Trellis.SharedKernel.Specifications.PagedList<InvoiceResponse>>>();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+
+        var all = (await list.Handle(new ListInvoicesQuery(), ct)).ShouldBeSuccess();
+        all.TotalCount.ShouldBe(4);
+        all.Items.Select(static i => i.Id).ShouldBe([voided.Value, paid.Value, issued.Value, draft.Value]);
+
+        var onlyIssued = (await list.Handle(new ListInvoicesQuery(InvoiceStatus.Issued), ct)).ShouldBeSuccess();
+        onlyIssued.TotalCount.ShouldBe(1);
+        onlyIssued.Items.ShouldHaveSingleItem().Id.ShouldBe(issued.Value);
+
+        var secondPage = (await list.Handle(new ListInvoicesQuery(Page: 2, PageSize: 3), ct)).ShouldBeSuccess();
+        secondPage.TotalCount.ShouldBe(4);
+        secondPage.Items.ShouldHaveSingleItem().Id.ShouldBe(draft.Value, "the oldest invoice is the last row of the last page");
     }
 }

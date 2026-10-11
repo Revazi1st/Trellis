@@ -85,6 +85,7 @@ src/Core/Trellis.Application/Features/Invoices/
     ├── AddInvoiceLine/         IssueInvoice/ alike; PayInvoice/ and VoidInvoice/ take only
     │                           an id, so they carry no validator
     ├── GetInvoice/             query + handler; no validator, it takes only the route's id
+    ├── ListInvoices/           query + handler + validator (the status and the paging bounds)
     ├── ListOverdueInvoices/    query + handler + validator (the paging bounds)
     ├── InvoicePreconditions.cs the shared If-Match check: NotFound first, then Invoice.VersionMismatch
     ├── EventHandlers/          SendReceiptOnInvoicePaid, RecordInvoiceMetrics
@@ -127,7 +128,7 @@ src/Presentation/UI/Trellis.UI.Common/
 
 ## Application (`src/Core/Trellis.Application/Features/Invoices/`)
 
-Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListOverdueInvoices`. Each carries a validator too, except `PayInvoice`, `VoidInvoice` and `GetInvoice`: they take only the id the route has already bound, which leaves nothing to check. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`), `EventHandlers/RecordInvoiceMetrics` (→ `InvoiceMetrics`: the issued and paid counters, one handler per event) and `InvoiceResponse` (read model).
+Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListInvoices`, `ListOverdueInvoices`. Each carries a validator too, except `PayInvoice`, `VoidInvoice` and `GetInvoice`: they take only the id the route has already bound, which leaves nothing to check. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`), `EventHandlers/RecordInvoiceMetrics` (→ `InvoiceMetrics`: the issued and paid counters, one handler per event) and `InvoiceResponse` (read model).
 
 `CreateInvoiceCommandHandler` is the railway reference, one chain: `Result.Combine(EmailAddress.Create(…), Currency.Create(…))` creates both value objects before failing, so an invalid e-mail and an invalid currency come back in one 400, and the deconstructing `Bind((email, currency) => Invoice.Create(…))` hands both values on. `Combine` merges validation errors only; a 404 or a 500 among the failures is returned on its own (ADR-0024 amendment).
 
