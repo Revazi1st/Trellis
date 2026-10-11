@@ -119,6 +119,49 @@ architecture: an invoice's states, the rules between them and where each file li
 from `src/Presentation/Api/Trellis.Api/Trellis.Api.http` (sign in, create, add a line, issue, a
 304, pay, an idempotent replay and a member's 403), and the web UI clicks through the same steps.
 
+## The code, in two excerpts
+
+An aggregate method checks its rule, changes its state, raises an event, and reports a refusal as a value
+instead of an exception
+([`src/Core/Trellis.Domain/Invoices/Invoice.cs`](src/Core/Trellis.Domain/Invoices/Invoice.cs)):
+
+```csharp
+public Result MarkPaid(DateTimeOffset paidAtUtc)
+{
+    if (Status != InvoiceStatus.Issued)
+    {
+        return Result.Failure(InvoiceErrors.NotIssued);
+    }
+
+    Status = InvoiceStatus.Paid;
+    PaidAtUtc = paidAtUtc;
+    Raise(new InvoicePaidDomainEvent(Id, CustomerEmail.Value));
+    return Result.Success();
+}
+```
+
+The event is written to the outbox in the same transaction as the payment, and after the commit it
+reaches a handler that knows nothing of HTTP or EF Core
+([`src/Core/Trellis.Application/Features/Invoices/EventHandlers/SendReceiptOnInvoicePaid.cs`](src/Core/Trellis.Application/Features/Invoices/EventHandlers/SendReceiptOnInvoicePaid.cs)):
+
+```csharp
+[DomainEventHandlerName("invoices.paid.send-receipt")]
+internal sealed class SendReceiptOnInvoicePaid(IEmailSender emailSender)
+    : IDomainEventHandler<InvoicePaidDomainEvent>
+{
+    public Task Handle(InvoicePaidDomainEvent domainEvent, CancellationToken cancellationToken)
+        => emailSender.SendAsync(
+            domainEvent.CustomerEmail,
+            "Thanks for your payment",
+            $"We received the payment for invoice {domainEvent.InvoiceId}.",
+            cancellationToken);
+}
+```
+
+Between the two, the endpoint turns the `Result` into a 204 or an RFC 9457 problem, and the outbox
+credits the handler under its stable name so a retry never sends the receipt twice;
+[docs/features/invoices.md](docs/features/invoices.md#from-a-payment-to-its-receipt) draws the whole path.
+
 ## Architecture
 
 Dependencies point inward; the arrows are enforced by `ArchitectureTests`.
