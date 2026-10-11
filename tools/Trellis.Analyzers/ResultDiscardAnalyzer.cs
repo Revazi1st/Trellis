@@ -160,6 +160,8 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     /// The value a statement computes and throws away, or null when the statement stores it (any
     /// assignment, the explicit discard included) or computes nothing. A conditional access drops
     /// whatever its last link computes, so <c>a?.B()</c> counts and the C# 14 <c>a?.B = c</c> does not.
+    /// A creation counts in every form whose type the compiler knows: <c>new X(dynamicArgument)</c> and
+    /// <c>new T()</c> as well as a plain <c>new X()</c>.
     /// </summary>
     private static IOperation? DroppedValue(IOperation operation)
     {
@@ -168,7 +170,11 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
             operation = conditionalAccess.WhenNotNull;
         }
 
-        return operation.Kind is OperationKind.Invocation or OperationKind.ObjectCreation or OperationKind.Await
+        return operation.Kind is OperationKind.Invocation
+            or OperationKind.Await
+            or OperationKind.ObjectCreation
+            or OperationKind.DynamicObjectCreation
+            or OperationKind.TypeParameterObjectCreation
             ? operation
             : null;
     }

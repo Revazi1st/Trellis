@@ -47,6 +47,12 @@ public sealed class ResultDiscardAnalyzerTests
             public (Result Outcome, int Lines) CloseAndCount() => (Close(), 1);
         }
 
+        public sealed class Marked : Result
+        {
+            public Marked() : base(true, null) { }
+            public Marked(object marker) : this() => GC.KeepAlive(marker);
+        }
+
         public static class AccountErrors
         {
             public static Error NotFound(int id) => Error.NotFound("Account.NotFound", $"No account {id}.");
@@ -102,6 +108,8 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("an Error static factory", "Error.Conflict(\"Account.Locked\", \"The account is locked.\");")]
     [InlineData("a FieldError creation", "new FieldError(\"amount\", \"Money.Negative\", \"The amount is negative.\");")]
     [InlineData("a ValidationError creation", "new ValidationError([]);")]
+    [InlineData("a dynamic creation of a Result type", "dynamic marker = 1; new Marked(marker);")]
+    [InlineData("a new() of a type parameter constrained to Result", "static void Make<T>() where T : Result, new() { new T(); } Make<Marked>();")]
     public async Task A_dropped_result_is_reported(string shape, string statements)
     {
         ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(InRunMethod(statements));
