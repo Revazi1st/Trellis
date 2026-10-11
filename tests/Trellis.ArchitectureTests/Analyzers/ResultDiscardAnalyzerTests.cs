@@ -46,6 +46,11 @@ public sealed class ResultDiscardAnalyzerTests
             public async IAsyncEnumerable<Result> ClosingsAsync() { await Task.Yield(); yield return Close(); }
             public (Result Outcome, int Lines) CloseAndCount() => (Close(), 1);
         }
+
+        public static class AccountErrors
+        {
+            public static Error NotFound(int id) => Error.NotFound("Account.NotFound", $"No account {id}.");
+        }
         """;
 
     private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);
@@ -93,6 +98,10 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("an Array.ConvertAll to results", "Array.ConvertAll(new[] { account }, a => a.Close());")]
     [InlineData("a projection to results", "new[] { account }.Select(a => a.Close());")]
     [InlineData("a tuple holding a Result", "account.CloseAndCount();")]
+    [InlineData("an Error factory call, its return forgotten", "if (maybe is null) { AccountErrors.NotFound(1); }")]
+    [InlineData("an Error static factory", "Error.Conflict(\"Account.Locked\", \"The account is locked.\");")]
+    [InlineData("a FieldError creation", "new FieldError(\"amount\", \"Money.Negative\", \"The amount is negative.\");")]
+    [InlineData("a ValidationError creation", "new ValidationError([]);")]
     public async Task A_dropped_result_is_reported(string shape, string statements)
     {
         ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(InRunMethod(statements));
@@ -114,6 +123,7 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("a List.Add call", "var results = new List<Result>(); results.Add(account.Close());")]
     [InlineData("a held Task<Result> also seen as a plain Task", "Task<Result> closing = account.CloseAsync(); Task plain = closing; await plain; _ = await closing;")]
     [InlineData("a Task<Result> returned as itself", "Task<Result> Closing() => account.CloseAsync(); _ = await Closing();")]
+    [InlineData("an Error returned as a Result", "Result Refuse() { return AccountErrors.NotFound(1); } _ = Refuse();")]
     [InlineData("a kept Result[]", "Result[] all = account.CloseAll(); GC.KeepAlive(all);")]
     [InlineData("a deconstructed tuple", "(Result outcome, int lines) = account.CloseAndCount(); GC.KeepAlive(outcome); GC.KeepAlive(lines);")]
     [InlineData("a dropped sequence of plain values", "new[] { 1 }.Select(static i => i + 1).ToList();")]

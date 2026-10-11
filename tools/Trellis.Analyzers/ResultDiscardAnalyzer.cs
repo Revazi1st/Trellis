@@ -329,9 +329,14 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
-    /// <summary><c>Result</c> or <c>Result&lt;T&gt;</c> in a namespace ending in <c>SharedKernel.Results</c>.</summary>
+    /// <summary>
+    /// <c>Result</c>, <c>Result&lt;T&gt;</c> or <c>Error</c> (with <c>FieldError</c> and <c>ValidationError</c>,
+    /// which derive from it) in a namespace ending in <c>SharedKernel.Results</c>. A dropped <c>Error</c> is a
+    /// forgotten <c>return</c>: <c>if (invoice is null) { InvoiceErrors.NotFound(id); }</c> falls through to
+    /// success.
+    /// </summary>
     private static bool IsSharedKernelResult(ITypeSymbol type)
-        => type.Name == "Result"
+        => type.Name is "Result" or "Error"
            && type.ContainingNamespace is { Name: "Results", ContainingNamespace.Name: "SharedKernel" };
 
     /// <summary><c>Microsoft.AspNetCore.Identity.IdentityResult</c>: a failed role or user write that nobody checks.</summary>
