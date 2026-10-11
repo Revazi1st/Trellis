@@ -4,6 +4,7 @@ using Shouldly;
 using Trellis.Api.Common.Idempotency;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
+using Trellis.Application.Abstractions;
 using Xunit;
 
 namespace Trellis.ApiTests.InProcess;
@@ -134,7 +135,7 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         ProblemResponse problem = (await response.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();
         problem.Code.ShouldBe("Idempotency.InvalidKey");
-        problem.Detail.ShouldBe(IdempotencyHeaderErrors.MultipleKeys.Description);
+        problem.Detail.ShouldBe(IdempotencyErrors.MultipleKeys.Description);
     }
 
     [Fact]
