@@ -18,7 +18,7 @@ namespace Trellis.Application.UnitTests;
 
 /// <summary>
 /// Exercises the real DI container: AddApplication() wiring, Scrutor scanning, and the shape and
-/// behavior of the decorator pipeline (Logging → Tracing → Validation → UnitOfWork → handler) end-to-end.
+/// behavior of the decorator pipeline (Tracing → Logging → Validation → UnitOfWork → handler) end-to-end.
 /// </summary>
 public sealed class DecoratorPipelineTests : IDisposable
 {
@@ -84,6 +84,30 @@ public sealed class DecoratorPipelineTests : IDisposable
         validationError.Errors.OfType<FieldError>().Select(static e => (e.Field, e.Code)).ShouldBe(
             [("Name", "Validation.NotEmpty"), ("Tag", "Validation.MaximumLength"), ("Amount", "Echo.NegativeAmount")],
             ignoreOrder: true);
+        await _pipeline.UnitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_root_level_rule_failure_is_a_whole_request_error_not_an_empty_field()
+    {
+        // RuleFor(x => x) checks the message as a whole and names no member: the failure must reach the
+        // wire as field: null (ADR-0024), so it is a plain Error beside the per-member FieldErrors.
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddSingleton(_pipeline.UnitOfWork);
+        services.AddScoped<ICommandHandler<PeriodCommand>, PeriodCommandHandler>();
+        services.AddScoped<IValidator<PeriodCommand>, PeriodCommandValidator>();
+        services.AddUseCasePipeline();
+        await using ServiceProvider provider = services.BuildServiceProvider();
+
+        var handler = provider.GetRequiredService<ICommandHandler<PeriodCommand>>();
+        Result result = await handler.Handle(new PeriodCommand(Name: "", From: 5, To: 3), TestContext.Current.CancellationToken);
+
+        var validationError = result.Error.ShouldBeOfType<ValidationError>();
+        validationError.Errors.Count.ShouldBe(2);
+        validationError.Errors.OfType<FieldError>().ShouldHaveSingleItem().Field.ShouldBe("Name");
+        Error wholeRequest = validationError.Errors.Where(static e => e is not FieldError).ShouldHaveSingleItem();
+        wholeRequest.ShouldBe(Error.Validation(PeriodCommandValidator.EndsBeforeStart, PeriodCommandValidator.EndsBeforeStartMessage));
         await _pipeline.UnitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
@@ -196,6 +220,26 @@ public sealed class DecoratorPipelineTests : IDisposable
     private sealed class EchoCommandHandler : ICommandHandler<EchoCommand>
     {
         public Task<Result> Handle(EchoCommand command, CancellationToken cancellationToken) => Task.FromResult(Result.Success());
+    }
+
+    private sealed record PeriodCommand(string Name, int From, int To) : ICommand;
+
+    private sealed class PeriodCommandHandler : ICommandHandler<PeriodCommand>
+    {
+        public Task<Result> Handle(PeriodCommand command, CancellationToken cancellationToken) => Task.FromResult(Result.Success());
+    }
+
+    private sealed class PeriodCommandValidator : AbstractValidator<PeriodCommand>
+    {
+        public const string EndsBeforeStart = "Period.EndsBeforeStart";
+
+        public const string EndsBeforeStartMessage = "A period cannot end before it starts.";
+
+        public PeriodCommandValidator()
+        {
+            RuleFor(static c => c.Name).NotEmpty();
+            RuleFor(static c => c).Must(static c => c.To >= c.From).WithErrorCode(EndsBeforeStart).WithMessage(EndsBeforeStartMessage);
+        }
     }
 
     private sealed class EchoCommandValidator : AbstractValidator<EchoCommand>

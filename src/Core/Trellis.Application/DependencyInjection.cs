@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Trellis.Application.Observability;
 using Trellis.SharedKernel.Decorators;
 using Trellis.SharedKernel.Domain;
@@ -32,9 +33,10 @@ public static class DependencyInjection
 
     /// <summary>
     /// Wraps every registered command and query handler in the use-case pipeline:
-    /// <b>Logging → Tracing → Validation → UnitOfWork → handler</b> (queries skip UnitOfWork — they never
-    /// commit). Logging and Tracing are outermost so a rejected request and a failing commit both still
-    /// produce their outcome line and span.
+    /// <b>Tracing → Logging → Validation → UnitOfWork → handler</b> (queries skip UnitOfWork — they never
+    /// commit). Tracing and Logging are outermost so a rejected request and a failing commit both still
+    /// produce their span and outcome line. Tracing wraps Logging, so the outcome line is written while the
+    /// use-case span is still current and carries its trace and span ids.
     /// <para>
     /// <c>TryDecorate</c>, not <c>Decorate</c>: Scrutor's <c>Decorate</c> throws when it finds nothing to
     /// wrap, so a project with no query (the remove-feature path) or no command would not boot.
@@ -42,6 +44,10 @@ public static class DependencyInjection
     /// </summary>
     internal static IServiceCollection AddUseCasePipeline(this IServiceCollection services)
     {
+        // The outcome line's defaults (no error descriptions); a host that binds the Telemetry section
+        // registers its own instance, which wins whether it is added before this call or after it.
+        services.TryAddSingleton(new UseCaseLoggingOptions());
+
         // The FIRST call is the INNERMOST wrapper: read this block bottom-up to follow a request in.
         services.TryDecorate(typeof(ICommandHandler<>), typeof(UnitOfWorkDecorators.CommandHandler<>));
         services.TryDecorate(typeof(ICommandHandler<,>), typeof(UnitOfWorkDecorators.CommandHandler<,>));
@@ -50,13 +56,13 @@ public static class DependencyInjection
         services.TryDecorate(typeof(ICommandHandler<,>), typeof(ValidationDecorators.CommandHandler<,>));
         services.TryDecorate(typeof(IQueryHandler<,>), typeof(ValidationDecorators.QueryHandler<,>));
 
-        services.TryDecorate(typeof(ICommandHandler<>), typeof(TracingDecorators.CommandHandler<>));
-        services.TryDecorate(typeof(ICommandHandler<,>), typeof(TracingDecorators.CommandHandler<,>));
-        services.TryDecorate(typeof(IQueryHandler<,>), typeof(TracingDecorators.QueryHandler<,>));
-
         services.TryDecorate(typeof(ICommandHandler<>), typeof(LoggingDecorators.CommandHandler<>));
         services.TryDecorate(typeof(ICommandHandler<,>), typeof(LoggingDecorators.CommandHandler<,>));
         services.TryDecorate(typeof(IQueryHandler<,>), typeof(LoggingDecorators.QueryHandler<,>));
+
+        services.TryDecorate(typeof(ICommandHandler<>), typeof(TracingDecorators.CommandHandler<>));
+        services.TryDecorate(typeof(ICommandHandler<,>), typeof(TracingDecorators.CommandHandler<,>));
+        services.TryDecorate(typeof(IQueryHandler<,>), typeof(TracingDecorators.QueryHandler<,>));
 
         return services;
     }

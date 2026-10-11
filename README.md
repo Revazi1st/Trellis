@@ -166,7 +166,7 @@ flowchart RL
 ## Highlights
 
 - **Rich DDD** — aggregates with factories + private EF constructors, value objects as EF Core 10 complex types, hand-rolled strongly-typed IDs, domain events through a transactional outbox (written in the same transaction, dispatched after commit), specifications ([docs/features/invoices.md](docs/features/invoices.md) is the reference slice).
-- **CQRS without a mediator** — hand-rolled handlers + a logging→tracing→validation→unit-of-work decorator pipeline; **no commercially-licensed packages** ([ADR-0011](docs/adr/0011-license-ceiling-policy.md)).
+- **CQRS without a mediator** — hand-rolled handlers + a tracing→logging→validation→unit-of-work decorator pipeline; **no commercially-licensed packages** ([ADR-0011](docs/adr/0011-license-ceiling-policy.md)).
 - **Result over exceptions**, mapped to RFC 9457 problem details at one seam, every problem carrying a stable `code` ([ADR-0024](docs/adr/0024-problem-details-v2.md)).
 - **Production-shaped defaults** — endpoints authenticated unless allowlisted, a transactional outbox with per-handler checkpoints, idempotent writes that replay the stored response, options validated at boot, an OpenAPI document committed and compared with the served one on every test run, telemetry exported by prefix.
 - **AI-friendly** — `AGENTS.md`, path-scoped `.claude/rules`, agents, skills, a docs-drift hook, `.mcp.json`, and Architecture Decision Records.

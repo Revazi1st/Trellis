@@ -6,22 +6,35 @@ namespace Trellis.SharedKernel.Decorators;
 
 /// <summary>
 /// One <see cref="Activity"/> span per use case, nested inside the HTTP span, so a trace shows which
-/// use case ran and how its time was spent. Register <see cref="ActivitySourceName"/> with
-/// OpenTelemetry in the host. It sits outside Validation, so a rejected request still has its span.
+/// use case ran and how its time was spent. ServiceDefaults exports <see cref="ActivitySourceName"/>
+/// with every other <c>Trellis.*</c> source. It is the outermost stage: outside Validation, so a rejected
+/// request still has its span, and outside Logging, so the outcome line is written inside the span.
 /// Every span carries <see cref="OutcomeTag"/>; an expected failure adds the error code and type but
-/// leaves the status unset, and only an exception that ends the use case marks the span as an error
-/// and records the exception event.
+/// leaves the status unset, and only an exception that ends the use case marks the span as an error:
+/// <see cref="FaultTypeTag"/>, status Error with the exception's message, and the exception event. The
+/// outcome is also where <see cref="UseCaseMetrics"/> counts validation failures.
 /// </summary>
 public static class TracingDecorators
 {
     public const string ActivitySourceName = "Trellis.UseCases";
 
     /// <summary><c>success</c>, <c>failure</c> (a failed Result), <c>exception</c> or <c>cancelled</c> (the caller gave up).</summary>
-    public const string OutcomeTag = "usecase.outcome";
+    public const string OutcomeTag = "trellis.usecase.outcome";
 
-    public const string ErrorCodeTag = "usecase.error_code";
+    /// <summary>A failed Result's <see cref="Error.Code"/>.</summary>
+    public const string ErrorCodeTag = "trellis.usecase.error_code";
 
-    public const string ErrorTypeTag = "usecase.error_type";
+    /// <summary>
+    /// A failed Result's <see cref="ErrorType"/>. Deliberately not <c>error.type</c>: backends count a span
+    /// carrying that attribute as an error, and a 404 or a rejected form is an outcome, not a fault.
+    /// </summary>
+    public const string ErrorTypeTag = "trellis.usecase.error_type";
+
+    /// <summary>
+    /// The OpenTelemetry semantic-convention attribute, set only when the use case throws: the exception's
+    /// full type name (<c>System.InvalidOperationException</c>).
+    /// </summary>
+    public const string FaultTypeTag = "error.type";
 
     private static readonly ActivitySource ActivitySource = new(ActivitySourceName);
 
@@ -56,6 +69,7 @@ public static class TracingDecorators
         try
         {
             TResult result = await handle();
+            UseCaseMetrics.RecordOutcome(useCase, result);
             if (result.IsSuccess)
             {
                 activity?.SetTag(OutcomeTag, "success");
@@ -78,6 +92,7 @@ public static class TracingDecorators
         {
             // Keyed on the caller's token: a downstream timeout's OperationCanceledException is a fault.
             activity?.SetTag(OutcomeTag, "exception");
+            activity?.SetTag(FaultTypeTag, exception.GetType().FullName);
             activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
             activity?.AddException(exception);
             throw;

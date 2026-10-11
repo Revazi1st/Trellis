@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -16,10 +17,10 @@ using Xunit;
 namespace Trellis.Application.UnitTests;
 
 /// <summary>
-/// The pipeline's outcome record: every use-case invocation writes exactly one line from the outermost
-/// stage and one span, and the log level follows the outcome class — Information for success and for
-/// classified expected failures, Warning for an unclassified failure, Error only for an exception that
-/// ends the use case. Driven through the real container with a capturing logger.
+/// The pipeline's outcome record: every use-case invocation writes exactly one line from the logging
+/// stage, inside its one span, and the log level follows the outcome class — Information for success
+/// and for classified expected failures, Warning for an unclassified failure, Error only for an
+/// exception that ends the use case. Driven through the real container with a capturing logger.
 /// </summary>
 public sealed class UseCaseOutcomeTests : IDisposable
 {
@@ -42,6 +43,7 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Information);
+        line.EventId.Id.ShouldBe(1001);
         line.Message.ShouldContain("ScriptedCommand succeeded");
     }
 
@@ -55,7 +57,8 @@ public sealed class UseCaseOutcomeTests : IDisposable
         // Validation sits INSIDE Logging: the rejected request is not invisible.
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Information);
-        line.Message.ShouldContain("Validation.General");
+        line.EventId.Id.ShouldBe(1003);
+        line.Message.ShouldContain("Validation (Validation.General)");
         line.Message.ShouldContain("CustomerName:Validation.NotEmpty");
         line.Message.ShouldContain("CustomerEmail:Validation.NotEmpty");
     }
@@ -95,8 +98,41 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Warning);
-        line.Message.ShouldContain("Test.Unclassified");
-        line.Message.ShouldContain("Nobody classified this yet.");
+        line.EventId.Id.ShouldBe(1002);
+        line.Message.ShouldContain("Failure (Test.Unclassified)");
+        line.Message.ShouldNotContain("Nobody classified this yet.");
+    }
+
+    [Fact]
+    public async Task A_failure_line_names_the_type_and_code_but_never_the_description()
+    {
+        // A description can carry what the user typed: Identity's duplicate-account text names the e-mail.
+        await Handle(new ScriptedCommand(static _ =>
+            Task.FromResult(Result.Failure(Error.Conflict("Test.DuplicateAccount", "Email 'jane@example.com' is already taken.")))));
+
+        LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+        line.Message.ShouldContain("Conflict (Test.DuplicateAccount)");
+        line.Message.ShouldNotContain("jane@example.com");
+    }
+
+    [Fact]
+    public async Task With_IncludeErrorDetail_the_failure_line_carries_the_description()
+    {
+        // Development's opt-in: registered before AddApplication(), the host's instance wins over the default.
+        using var pipeline = new PipelineHarness(static services =>
+        {
+            services.AddSingleton(new UseCaseLoggingOptions { IncludeErrorDetail = true });
+            services.AddScoped<ICommandHandler<ScriptedCommand>, ScriptedCommandHandler>();
+        });
+
+        await pipeline.Resolve<ICommandHandler<ScriptedCommand>>().Handle(
+            new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.Failure("Test.Unclassified", "Nobody classified this yet.")))),
+            TestContext.Current.CancellationToken);
+
+        LogEntry line = pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+        line.Level.ShouldBe(LogLevel.Warning);
+        line.EventId.Id.ShouldBe(1004);
+        line.Message.ShouldContain("Failure (Test.Unclassified): Nobody classified this yet.");
     }
 
     [Theory]
@@ -126,6 +162,7 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Error);
+        line.EventId.Id.ShouldBe(1006);
         line.Exception.ShouldBeSameAs(boom);
         await _pipeline.UnitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
@@ -159,6 +196,7 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Information);
+        line.EventId.Id.ShouldBe(1005);
         line.Message.ShouldContain("cancelled by the caller");
     }
 
@@ -172,7 +210,10 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         Activity span = spans.Of(nameof(ScriptedCommand)).ShouldHaveSingleItem();
         span.Status.ShouldBe(ActivityStatusCode.Error);
+        span.StatusDescription.ShouldBe("boom");
         span.GetTagItem(TracingDecorators.OutcomeTag).ShouldBe("exception");
+        span.GetTagItem("error.type").ShouldBe(typeof(InvalidOperationException).FullName);
+        span.GetTagItem(TracingDecorators.ErrorTypeTag).ShouldBeNull();
         ActivityEvent exceptionEvent = span.Events.ShouldHaveSingleItem();
         exceptionEvent.Name.ShouldBe("exception");
         exceptionEvent.Tags.ShouldContain(static t => t.Key == "exception.type" && Equals(t.Value, typeof(InvalidOperationException).FullName));
@@ -205,6 +246,44 @@ public sealed class UseCaseOutcomeTests : IDisposable
         span.GetTagItem(TracingDecorators.ErrorCodeTag).ShouldBe("Test.Conflict");
         span.GetTagItem(TracingDecorators.ErrorTypeTag).ShouldBe(nameof(ErrorType.Conflict));
         span.Events.ShouldBeEmpty();
+
+        // The names are a contract with every dashboard (ADR-0028), so they are pinned as literals; and an
+        // expected failure never carries error.type, which backends would count as an error.
+        span.TagObjects.Select(static t => t.Key).ShouldBe(
+            ["trellis.usecase.outcome", "trellis.usecase.error_code", "trellis.usecase.error_type"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task Every_validation_failure_is_counted_by_use_case_and_code_including_domain_codes()
+    {
+        using var counted = new ValidationFailureRecorder();
+
+        // A FluentValidation failure, rejected by the validation stage...
+        await _pipeline.Resolve<ICommandHandler<GuardedCommand>>().Handle(new GuardedCommand(""), TestContext.Current.CancellationToken);
+
+        // ...and a domain rule's, returned by the handler: both reach the outcome site, where they are counted.
+        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.Validation("Test.DomainRule", "A domain rule failed.")))));
+
+        // Neither a success nor a failure of another type counts.
+        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())));
+        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.NotFound("Test.Missing", "Gone.")))));
+
+        counted.Of(nameof(GuardedCommand)).ShouldBe(["Validation.NotEmpty"]);
+        counted.Of(nameof(ScriptedCommand)).ShouldBe(["Test.DomainRule"]);
+    }
+
+    [Fact]
+    public async Task The_outcome_line_is_written_inside_the_use_case_span()
+    {
+        using var spans = new SpanRecorder();
+
+        await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())));
+
+        // Tracing wraps Logging: the line is written while the span is current, so a backend links the
+        // outcome line to the use case's span rather than to the HTTP request around it.
+        Activity span = spans.Of(nameof(ScriptedCommand)).ShouldHaveSingleItem();
+        LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+        line.SpanId.ShouldBe(span.SpanId);
     }
 
     [Fact]
@@ -240,6 +319,53 @@ public sealed class UseCaseOutcomeTests : IDisposable
     private sealed class GuardedCommandHandler : ICommandHandler<GuardedCommand>
     {
         public Task<Result> Handle(GuardedCommand command, CancellationToken cancellationToken) => Task.FromResult(Result.Success());
+    }
+
+    /// <summary>
+    /// Records the <see cref="UseCaseMetrics.ValidationFailuresInstrument"/> measurements made while it is
+    /// alive, one code per unit counted. The meter is process-wide, so callers filter by use case.
+    /// </summary>
+    private sealed class ValidationFailureRecorder : IDisposable
+    {
+        private readonly List<(string? UseCase, string? Code)> _counted = [];
+        private readonly MeterListener _listener = new();
+
+        public ValidationFailureRecorder()
+        {
+            _listener.InstrumentPublished = static (instrument, listener) =>
+            {
+                if (instrument.Meter.Name == UseCaseMetrics.MeterName && instrument.Name == UseCaseMetrics.ValidationFailuresInstrument)
+                {
+                    listener.EnableMeasurementEvents(instrument);
+                }
+            };
+            _listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
+            {
+                string? useCase = null;
+                string? code = null;
+                foreach (KeyValuePair<string, object?> tag in tags)
+                {
+                    useCase = tag.Key == UseCaseMetrics.UseCaseAttribute ? tag.Value as string : useCase;
+                    code = tag.Key == UseCaseMetrics.ValidationCodeAttribute ? tag.Value as string : code;
+                }
+
+                lock (_counted)
+                {
+                    _counted.AddRange(Enumerable.Repeat((useCase, code), (int)value));
+                }
+            });
+            _listener.Start();
+        }
+
+        public IReadOnlyList<string?> Of(string useCase)
+        {
+            lock (_counted)
+            {
+                return [.. _counted.Where(c => c.UseCase == useCase).Select(static c => c.Code)];
+            }
+        }
+
+        public void Dispose() => _listener.Dispose();
     }
 
     /// <summary>

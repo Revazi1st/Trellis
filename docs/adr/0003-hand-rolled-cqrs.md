@@ -3,6 +3,7 @@
 - **Status**: accepted
 - **Date**: 2026-07-14
 - **Amended**: 2026-10-08 — pipeline order and outcome logging (see *Amendment* below)
+- **Amended**: 2026-10-11 — Tracing wraps Logging (see the second *Amendment* below)
 
 ## Context
 
@@ -24,3 +25,13 @@ Cross-cutting concerns are DI-registered open-generic decorators (`SharedKernel.
 ## Amendment (2026-10-08): Logging → Tracing → Validation → UnitOfWork → handler
 
 The original order above put Validation outermost, so a rejected request returned before Logging and Tracing ran: no log line, no span. The pipeline is now **Logging → Tracing → Validation → UnitOfWork → handler** (queries skip UnitOfWork), registered with `TryDecorate` so a project with no queries (or no commands) still boots. Every invocation writes exactly one outcome line and one span; the log level follows the outcome class — Information for success and for classified expected failures (Validation, NotFound, Conflict, Unauthorized, Forbidden), Warning for an unclassified `ErrorType.Failure`, Error only for an exception that ends the use case. `IUnitOfWork.CommitAsync` returns `Result`, so a stale concurrency token travels through the pipeline as a Conflict outcome instead of an exception (ADR-0004). The decision above — hand-rolled contracts, Scrutor decoration, direct handler injection — is unchanged.
+
+## Amendment (2026-10-11): Tracing → Logging → Validation → UnitOfWork → handler
+
+The 2026-10-08 order put Logging outside Tracing, so the use-case span had already stopped when the
+outcome line was written: the line linked to the HTTP request's span instead of the use case's, and a
+trace view could not show it under the use case. Tracing now wraps Logging: **Tracing → Logging →
+Validation → UnitOfWork → handler** (queries skip UnitOfWork). Both stages still sit outside Validation
+and the commit, so a rejected request and a failing commit keep their span and their one outcome line.
+`DecoratorPipelineTests` asserts the sequence; `UseCaseOutcomeTests` asserts that the outcome line
+carries the use-case span's id. What the line and the span record is ADR-0028's.
