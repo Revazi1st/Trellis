@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-08
+- **Amended**: 2026-10-11 — the L1 lifetime can repeat a 412 to a conditional write; ADR-0025 records it (see *Amendment* below)
 
 ## Context
 
@@ -49,3 +50,11 @@ single-instance, single-tenant demo:
   Lower `LocalCacheExpiration` if a feature cannot tolerate it, or skip the cache for that read.
 - Fitness: `InvoiceReadCacheTests` (create → GET → 304 → every write evicts and retires the ETag, a
   404 is never cached), `TenantIsolationTests` (the cache is tenant-scoped, all-options leg).
+
+## Amendment (2026-10-11): the staleness bound also applies to `If-Match`
+
+The invoice writes now honour an optional `If-Match` (ADR-0025, amendment of 2026-10-11). The 30-second
+L1 bound above therefore reaches writes too: a client that met a 412 and reloads from another replica can
+be handed the same stale `ETag` from that replica's L1 and meet a second 412 until the entry expires.
+ADR-0025's amendment records the consequence and the remedy, which is the one stated here for 304s:
+lower `LocalCacheExpiration`, or read that resource uncached.
