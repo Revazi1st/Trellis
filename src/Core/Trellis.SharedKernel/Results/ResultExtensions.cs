@@ -80,6 +80,39 @@ public static class ResultExtensions
     public static async Task<Result<TIn>> MapOnFailure<TIn>(this Task<Result<TIn>> resultTask, Func<Error, Error> map)
         => (await resultTask).MapOnFailure(map);
 
+    /// <summary>
+    /// Attributes a validation failure to the request member it came from, so the 400 names the field
+    /// (<c>customerEmail</c>) instead of the whole request (ADR-0024 amendment). The Domain stays
+    /// transport-free: the handler, which knows what it passed, calls
+    /// <c>EmailAddress.Create(command.CustomerEmail).AtField(nameof(command.CustomerEmail))</c>.
+    /// A plain <see cref="ErrorType.Validation"/> error becomes a <see cref="FieldError"/>; any other type,
+    /// an existing <see cref="FieldError"/> and an aggregated <see cref="ValidationError"/> pass through, so
+    /// attribute each value object before <see cref="Result.Combine(Result[])"/>. Naming errors in
+    /// <paramref name="only"/> moves just those codes, for an aggregate method with several rules:
+    /// <c>invoice.Issue(…).AtField(nameof(command.DueDate), InvoiceErrors.DueDateInPast)</c>.
+    /// </summary>
+    public static Result<TIn> AtField<TIn>(this Result<TIn> result, string member, params Error[] only)
+        => result.IsFailure && Attribute(result.Error, member, only) is { } field
+            ? Result.Failure<TIn>(field)
+            : result;
+
+    /// <inheritdoc cref="AtField{TIn}(Result{TIn}, string, Error[])"/>
+    public static Result AtField(this Result result, string member, params Error[] only)
+        => result.IsFailure && Attribute(result.Error, member, only) is { } field
+            ? Result.Failure(field)
+            : result;
+
+    private static FieldError? Attribute(Error error, string member, Error[] only)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(member);
+
+        bool attributable = error.Type == ErrorType.Validation
+            && error is not FieldError and not ValidationError
+            && (only.Length == 0 || Array.Exists(only, e => string.Equals(e.Code, error.Code, StringComparison.Ordinal)));
+
+        return attributable ? new FieldError(member, error.Code, error.Description) : null;
+    }
+
     /// <summary>Runs a side effect on success (e.g. repository Add) and passes the result through.</summary>
     public static Result<TIn> Tap<TIn>(this Result<TIn> result, Action<TIn> action)
     {

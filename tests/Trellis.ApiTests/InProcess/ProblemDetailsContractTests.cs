@@ -53,18 +53,53 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     }
 
     [Fact]
-    public async Task Whole_request_errors_are_listed_with_a_null_field()
+    public async Task Value_object_errors_name_the_request_field_they_came_from()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
 
-        // Passes the shape validator; the value objects reject both, combined into one 400.
+        // Passes the shape validator; the value objects reject both, combined into one 400, each under its input.
         HttpResponseMessage response = await admin.PostAsJsonAsync(
-            "/api/v1/invoices", new CreateInvoiceRequest("ACME", "not-an-email", "123"), ct);
+            "/api/v1/invoices", new CreateInvoiceRequest("ACME", "a@b", "123"), ct);
 
         ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.BadRequest, "Validation.General", "/api/v1/invoices", ct);
         problem.Errors.ShouldNotBeNull().Select(static e => (e.Field, e.Code)).ShouldBe(
-            [(null, "EmailAddress.Invalid"), (null, "Money.InvalidCurrency")], ignoreOrder: true);
+            [("customerEmail", "EmailAddress.Invalid"), ("currency", "Money.InvalidCurrency")], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task A_single_value_object_error_keeps_its_own_code_and_names_its_field()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+
+        // "a@b" passes the shape validator and the UI's [EmailAddress]; only the value object rejects it.
+        HttpResponseMessage response = await admin.PostAsJsonAsync(
+            "/api/v1/invoices", new CreateInvoiceRequest("ACME", "a@b", "USD"), ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.BadRequest, "EmailAddress.Invalid", "/api/v1/invoices", ct);
+        WireFieldError only = problem.Errors.ShouldNotBeNull().ShouldHaveSingleItem();
+        only.Field.ShouldBe("customerEmail");
+        only.Code.ShouldBe("EmailAddress.Invalid");
+        only.Description.ShouldBe(problem.Detail);
+    }
+
+    [Fact]
+    public async Task An_aggregate_rule_a_handler_attributes_names_its_field()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        Guid id = await CreateInvoiceAsync(admin, ct);
+        (await admin.PostAsJsonAsync($"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Design", 10m), ct))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        HttpResponseMessage response = await admin.PostAsJsonAsync(
+            $"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(factory.Time.GetUtcNow().AddDays(-1)), ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.BadRequest, InvoiceErrors.DueDateInPast.Code, $"/api/v1/invoices/{id}/issue", ct);
+        WireFieldError only = problem.Errors.ShouldNotBeNull().ShouldHaveSingleItem();
+        only.Field.ShouldBe("dueDate");
+        only.Code.ShouldBe(InvoiceErrors.DueDateInPast.Code);
     }
 
     [Fact]
@@ -74,7 +109,8 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
         Guid id = await CreateInvoiceAsync(admin, ct);
 
-        // A draft with no lines cannot be issued: one plain Error.Validation from the aggregate.
+        // A draft with no lines cannot be issued: one plain Error.Validation from the aggregate, about the
+        // request as a whole, so the handler attributes it to no field.
         HttpResponseMessage response = await admin.PostAsJsonAsync(
             $"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(DateTimeOffset.UtcNow.AddDays(7)), ct);
 

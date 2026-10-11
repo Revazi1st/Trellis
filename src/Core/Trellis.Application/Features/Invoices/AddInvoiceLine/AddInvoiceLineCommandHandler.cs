@@ -16,7 +16,11 @@ internal sealed class AddInvoiceLineCommandHandler(IInvoiceRepository invoices)
             return Result.Failure(InvoiceErrors.NotFound(command.InvoiceId));
         }
 
+        // Money spans two inputs and AddLine has several rules, so only the codes that belong to one
+        // request member are attributed to it; the rest stay whole-request errors.
         return Money.Create(command.Amount, invoice.Currency)
-            .Bind(amount => invoice.AddLine(command.Description, amount));
+            .AtField(nameof(command.Amount), MoneyErrors.NegativeAmount, MoneyErrors.TooManyDecimalPlaces)
+            .Bind(amount => invoice.AddLine(command.Description, amount)
+                .AtField(nameof(command.Description), InvoiceErrors.EmptyLineDescription));
     }
 }
