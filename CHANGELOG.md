@@ -33,9 +33,11 @@ If you generated a project from 0.1.0, read these before adopting this version w
   refusal by the provider is the new 500 `ExchangeRate.Rejected`; a stale `If-Match` on an invoice
   write is **412** `Invoice.VersionMismatch`. A client that branched on 500 for the outage should
   branch on 503, and a decorator or classifier of your own that switches over `ErrorType` has two more
-  values, `Unavailable` and `PreconditionFailed`.
-- **A Release build fails on a discarded Domain or `Result` value** (CA1806 over `src/` and `tools/`):
-  a dropped `invoice.Issue(…)` or `Result.Combine(…)` is an error. Handle it or write `_ = …`.
+  values, `Unavailable` and `PreconditionFailed`. On the outcome line a 412 is Information like the other
+  expected failures and `Unavailable` is a Warning, so an alert on Warning still means a dependency is down.
+- **A Release build fails on a discarded Domain or `Result` value** (CA1806 over every `*.cs` file, the
+  tests included): a dropped `invoice.Issue(…)` or `Result.Combine(…)` is an error. Handle it or write
+  `_ = …`; in a test, end the step in `ShouldBeSuccess()` (see *Added*).
 - **`GET /invoices/{id}` emits a strong ETag** (`"42"`, was `W/"42"`); `If-None-Match` still compares
   weakly, so a stored tag keeps answering 304.
 
@@ -51,9 +53,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   `docs/development.md` has the user-secrets commands and a Mailpit recipe; implicit TLS on 465 and
   OAuth2 are not supported.
 - **A "Try it" walkthrough** (idea from amantinband/clean-architecture):
-  `src/Presentation/Api/Trellis.Api/Trellis.Api.http` walks the invoice lifecycle in eleven requests
-  (sign in, create with an `Idempotency-Key`, add a line, issue, conditional GET and 304, pay, the
-  idempotent replay, register and sign in a member, the member's 403), with `http-client.env.json`
+  `src/Presentation/Api/Trellis.Api/Trellis.Api.http` walks the invoice lifecycle in twelve requests
+  (sign in, create with an `Idempotency-Key`, add a line, issue, conditional GET and 304, pay, a second
+  issue with the ETag from before the payment answered 412, the idempotent replay, register and sign in
+  a member, the member's 403), with `http-client.env.json`
   one folder above the project so no build or image copies it. `docs/features/invoices.md` has the
   matching step table and now opens with the domain in plain words, a state diagram and an annotated
   tree of the slice.
@@ -105,10 +108,12 @@ If you generated a project from 0.1.0, read these before adopting this version w
 - **Conditional writes** (xavierjohn/Trellis): `AddInvoiceLine`, `IssueInvoice`, `PayInvoice` and
   `VoidInvoice` take an optional `If-Match` carrying the ETag the `GET` emitted
   (`.SupportsConditionalWrite()` declares the header and the 412 in the OpenAPI document; the commands
-  gained `uint? ExpectedVersion`, compared by `InvoicePreconditions.ToWrite`). A stale, weak, listed or
-  foreign tag is 412 `Invoice.VersionMismatch` that changes nothing; `*` or no header is unconditional
-  (no 428); a missing invoice stays a 404. The Blazor detail page sends the version it loaded and shows
-  "Someone else changed this in the meantime" over the reloaded invoice on a 412.
+  gained `uint? ExpectedVersion`, compared by `InvoicePreconditions.ToWrite`). A stale, weak, listed,
+  zero-padded or foreign tag is 412 `Invoice.VersionMismatch` that changes nothing: a tag names a version
+  only in the exact form the `GET` emitted (`"42"`, never `"042"`), and a malformed header is refused
+  before the lookup, so it never tells whether the invoice exists; `*` or no header is unconditional
+  (no 428); a well-formed tag on a missing invoice stays a 404. The Blazor detail page sends the version
+  it loaded and shows "Someone else changed this in the meantime" over the reloaded invoice on a 412.
 - **One permission per endpoint, pinned** (idea from amantinband/clean-architecture):
   `EndpointMetadataTests.ExpectedPermissions` lists each endpoint's one permission beside
   `AnonymousAllowlist` and fails on a missing, extra or stale row; a wire-level theory calls every
@@ -138,6 +143,50 @@ If you generated a project from 0.1.0, read these before adopting this version w
   `InvoiceFormMirrorTests` (the UI forms' lengths equal the Domain constants);
   `UseCaseLoggingOptionsTests`; `ShouldHaveMediaType`/`ShouldBeProblemJson` assertions that fail when
   `Content-Type` is missing (the `?.MediaType` form passed when both responses lacked the header).
+- **Test helpers** (ideas from [amantinband/clean-architecture](https://github.com/amantinband/clean-architecture):
+  use-case drivers, optional-parameter factories, the paired HTTP client and a switchable current user,
+  rewritten without MediatR; the failed `Result` that names its code from xavierjohn/Trellis):
+  `ShouldBeSuccess()` (`tests/TestSupport/ResultAssertions.cs`, compiled into the four test projects
+  with a global `using Trellis.TestSupport`) asserts a `Result` succeeded, returns a `Result<T>`'s value,
+  and on failure names the asserted expression and the error's code, type, description and field errors;
+  `InvoiceFactory` (`tests/TestSupport/Invoices/`, namespace `Trellis.TestSupport.Invoices`, compiled into
+  Application.UnitTests and IntegrationTests) builds valid commands (`CreateCommand`, `AddLineCommand`,
+  `IssueCommand`) and aggregates (`Draft`, `DraftWithLine`, `Issued`, `Paid`) with an optional parameter
+  per value and replaces `InvoiceTestData`; `InvoiceDriver` (IntegrationTests; `IServiceProvider`
+  extensions `CreateInvoiceAsync`, `AddInvoiceLineAsync`, `IssueInvoiceAsync`, `PayInvoiceAsync`,
+  `VoidInvoiceAsync` and the `IssuedInvoiceAsync` shortcut) runs each use case through the real
+  pipeline, asserts success and returns the id; `InvoiceHttpDriver` (ApiTests) is the same steps as
+  `HttpClient` extensions, failing with the method, path, status, problem code and body;
+  `TestCurrentUser` (`IntegrationTestBase.CurrentUser`) is the mutable `ICurrentUser`, so a test acts
+  as a second user. Drivers are for arrange steps only, one method per use case, no generic
+  `SendAsync`; `tests/TestSupport/` is linked source, not a project (ADR-0009 amendment).
+- **Tests**: `VoidInvoiceCommandHandlerTests` (not found, a draft voided with its event, a paid invoice
+  refused unchanged, the `If-Match` version paths) and `InvoiceCommandValidatorTests` (every bound at
+  its Domain constant: the maximum accepted, one more rejected naming the property; the amount floor,
+  the required due date, the overdue list's paging bounds). The Application tests mirror the slice, one
+  folder per use case under `Application.UnitTests/Features/Invoices/<UseCase>/` (the
+  one-test-suite-per-use-case discipline from amantinband/clean-architecture). `UseCaseOutcomeTests`
+  pins the level of `PreconditionFailed` and `Unavailable`; `InvoiceContractTests` proves the
+  `private, no-cache` opt-in and the zero-padded `If-Match`; `TelemetryNamingTests` holds the
+  Telemetry reference in `docs/deployment.md` to the code, so a meter, source, instrument, attribute or
+  `[LoggerMessage]` event id without a row fails the suite.
+- **Docs, rules and skills** (shapes from amantinband/clean-architecture where named):
+  `docs/deployment.md` gains the Telemetry reference (spans, metrics and the event-id ranges), trace
+  sampling, image tags and an SBOM; `docs/development.md` the testing map by project and layer (now the
+  one the other docs point to; amantinband's Testing section), the Microsoft.Testing.Platform filter
+  syntax for running part of the suite, which helper serves which goal, and "When a request fails";
+  `docs/architecture.md` the pipeline stage by stage, domain versus integration events with their
+  delivery guarantees, scheduled use cases and package validation for a shipped `Api.Contracts`;
+  `docs/features/auth.md` "Protecting an endpoint" with the ownership recipe (amantinband's authorization
+  how-to) and an external identity-provider checklist; `docs/features/invoices.md` the path from a
+  payment to its receipt (amantinband's eventual-consistency walkthrough) and the 412 step of the
+  walkthrough; the README shows the code in two excerpts. The rules gain handler rules, multi-aggregate
+  commands, the lifecycle rule and an `ErrorType` chooser (`application.md`, `domain.md`), the fitness
+  suites and their controls (`tests.md`), the idempotency-key rules and the cache opt-in (`api.md`); the
+  skills a webhook recipe (`add-integration`), a spec-first step and a keyset-paging recipe
+  (`add-feature`), the invoice test files to retarget (`remove-feature`) and an optional
+  *Alternatives / Revisit when* section (`new-adr`); `AGENTS.md` three more *Always* lines. ADR-0001,
+  0003, 0004, 0007, 0009, 0018, 0021, 0025, 0026 and 0028 carry dated amendments.
 - **Docs**: `docs/INDEX.md` lists every skill under *Skills*, and `check-adr-links.sh` fails when one is
   missing; the persistence rule names the lease fence and handler isolation, the infrastructure rule the
   SMTP sender and its selected-only validation; a threat-model row for the SMTP relay credentials;
@@ -181,9 +230,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
 - **Migration job**: a sample invoice whose transition fails stops the run with exit 1 instead of
   saving a half-built invoice.
 - **HTTP contract** (ADR-0021 and ADR-0024 amendments): every `/api/` response carries
-  `Cache-Control: no-store`, problems and the ETagged `GET` included, unless the endpoint sets its own
-  (`/auth/` is `no-store` whatever it sets); every 401 carries `WWW-Authenticate: Bearer`, the
-  Result-produced ones from login and refresh included.
+  `Cache-Control: no-store`, problems included, unless the endpoint sets its own (`/auth/` is `no-store`
+  whatever it sets); `GET /invoices/{id}` is the one opt-out, `private, no-cache` on its 200 and 304, so
+  a browser keeps the body and revalidates with the ETag (its 404 stays `no-store`); every 401 carries
+  `WWW-Authenticate: Bearer`, the Result-produced ones from login and refresh included.
 - **Exchange rates** (xavierjohn/Trellis): the reference client maps the provider's status by the
   endpoint's contract (Frankfurter was probed): 422 and 400 → `ExchangeRate.UnknownCurrency` naming
   both codes (the provider's text is never copied); 404, 401 and 403 → `ExchangeRate.Rejected`, logged
@@ -193,6 +243,24 @@ If you generated a project from 0.1.0, read these before adopting this version w
 - **`Telemetry:IncludeErrorDetail`** is bound by the API host and is `true` only in
   `appsettings.Development.json`: the error description is on the outcome line in Development and off
   everywhere else unless you set it.
+- **Outcome line levels** (ADR-0028 second amendment): a stale `If-Match` (`ErrorType.PreconditionFailed`)
+  is a classified expected failure logged at Information; `ErrorType.Unavailable` stays at Warning beside
+  `Failure`.
+- **One owner per `Idempotency.*` code** (ADR-0018 second amendment): `IdempotencyErrors`
+  (`Trellis.Application.Abstractions`) now declares `MultipleKeys` and `KeyRequired` too, and
+  `Idempotency.InvalidKey` once as `IdempotencyErrors.InvalidKeyCode`, shared by `BlankKey`, `KeyTooLong`
+  and `MultipleKeys`; `Api.Common`'s `IdempotencyHeaderErrors` is gone. `RefreshTokenStore` returns
+  `AuthErrors.InvalidRefreshToken` instead of a copy of it.
+- **CA1806 covers the tests**: `.editorconfig`'s section is `[*.cs]`, so a test that drops a Domain or
+  `Result` value fails the Release build like production code; a deliberate discard is `_ = …`.
+
+### Removed
+
+- **Bogus**: the package reference in `IntegrationTests` and its central version (no test used it; ADR-0009
+  amendment). A generated project's `IntegrationTests` no longer references it and its `dependabot.yml`
+  no longer lists it.
+- `Application.UnitTests/Invoices/InvoiceTestData.cs`, replaced by `InvoiceFactory`, and
+  `IdempotencyHeaderErrors` (see *Changed*).
 
 ### Fixed
 
