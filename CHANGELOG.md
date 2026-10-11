@@ -8,6 +8,147 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+If you generated a project from 0.1.0, read these before adopting this version with `docs/upgrading.md`:
+
+- **The shipped `InitialCreate` was regenerated.** `InvoiceLines.Amount` is `numeric(18,3)` (was
+  `numeric(18,2)`), and the outbox's `NextAttemptAtUtc` is now a concurrency token (a snapshot-only
+  change, no DDL). A deployed database needs a new migration on top for the column, never the
+  regenerated one.
+- **`Result.Error` is nullable** and `IsSuccess`/`IsFailure` carry `[MemberNotNullWhen]`: code that
+  reads `result.Error.Code` without checking `IsFailure` no longer compiles (it used to answer a 500
+  with an empty code). Guard the read.
+- **The decorator pipeline order changed** to Tracing → Logging → Validation → UnitOfWork → handler.
+  A decorator of your own registered by position should be re-checked.
+- **New error codes** clients may branch on: 400 `Auth.RegistrationRejected`; 409
+  `Invoice.AlreadyIssued` split off `Invoice.AlreadyFinalized`; `Money.AmountTooLarge`,
+  `EmailAddress.TooLong`, `Invoice.CustomerNameTooLong` and `Invoice.LineDescriptionTooLong` (all 400).
+  A registration race now answers 409 `Auth.EmailAlreadyInUse` instead of 500.
+- **Dashboards**: the use-case span attributes are `trellis.usecase.outcome`,
+  `trellis.usecase.error_code` and `trellis.usecase.error_type`, and the outcome log line changed
+  shape (see *Changed*).
+
+### Added
+
+- **SMTP e-mail** (`Email:Provider=Smtp`; idea from
+  [amantinband/clean-architecture](https://github.com/amantinband/clean-architecture)): a sender on
+  the BCL `SmtpClient`, configured by an `Email:Smtp` section (`Host`, `Port` 587, `UseStartTls` on,
+  `FromAddress`, and `UserName`/`Password` together or not at all) that is validated at boot only
+  while selected (port 465 and credentials without STARTTLS are refused). A failed send is thrown so
+  the outbox retries it (delivery is at least once). Events 1205 `EmailSent` (masked recipient) and
+  1206 `EmailSmtpInClear` (a Warning when `UseStartTls` is off outside Development).
+  `docs/development.md` has the user-secrets commands and a Mailpit recipe; implicit TLS on 465 and
+  OAuth2 are not supported.
+- **A "Try it" walkthrough** (idea from amantinband/clean-architecture):
+  `src/Presentation/Api/Trellis.Api/Trellis.Api.http` walks the invoice lifecycle in eleven requests
+  (sign in, create with an `Idempotency-Key`, add a line, issue, conditional GET and 304, pay, the
+  idempotent replay, register and sign in a member, the member's 403), with `http-client.env.json`
+  one folder above the project so no build or image copies it. `docs/features/invoices.md` has the
+  matching step table and now opens with the domain in plain words, a state diagram and an annotated
+  tree of the slice.
+- **Results kernel** (ideas from [xavierjohn/Trellis](https://github.com/xavierjohn/Trellis)):
+  `Result.Combine` merges into a `ValidationError` only when every failure is one and otherwise
+  returns the first failure unmerged (two 404s no longer answer 400); `Combine<T1,T2>` and
+  `<T1,T2,T3>` keep their values for a deconstructing `Bind`/`Map`; `MapOnFailure` replaces a
+  failure's error; `Result.AtField(member)` attributes a value-object or aggregate-rule error to a
+  request field, so `"a@b"` lands under `customerEmail` on the wire and on the form; reading `Value`
+  on a failure throws naming the error's code (never its description).
+- **Telemetry**: a `trellis.validation.failures` counter on the `Trellis.UseCases` meter, by use case
+  and code; the outcome lines are `[LoggerMessage]` events 1001–1006 (succeeded, failed, failed
+  validation, failed with detail, cancelled, threw); `UseCaseLoggingOptions.IncludeErrorDetail` (off
+  by default; a host that wants it in Development binds the `Telemetry` section) puts the error
+  description back on the line.
+- **Persistence**: `IScalarValueObject<TSelf, TValue>` with `ScalarValueObjectConverter`, the mapping
+  for a single-value value object that needs an index — a converted column instead of a complex type
+  (ADR-0006 amendment; `EmailAddress` and `Currency` stay complex types); `AggregateConcurrencyInterceptor`
+  marks the root modified when only its children changed, so the root's `xmin` is checked and bumped
+  (idea from xavierjohn/Trellis); `UniqueConstraintErrors` maps constraint names pinned in
+  configuration to errors.
+- **Domain**: `Currency.MinorUnits` (ISO 4217: 0 for JPY, 3 for KWD and the other dinars) and
+  `Currency.CodeLength`; `Money.MaxAmount`, `Money.AmountPrecision` and `Money.AmountScale`;
+  `Invoice.CustomerNameMaxLength` (200), `InvoiceLine.DescriptionMaxLength` (500) and
+  `EmailAddress.MaxLength` (254) as the one place each limit lives — the validators, the EF
+  configurations and the UI forms use them.
+- **Security events** 1105 `FailedSignInNotCounted` and 1106 `FailedSignInCountNotReset` (Warning,
+  user id and Identity error codes): the lockout counter's writes report failure instead of being
+  discarded.
+- **Generated CI**: a line-rate floor per ring (Core 90 %, Infrastructure 85 %, Presentation 75 %,
+  Shared 80 %) with a per-ring table; a TRX summary in the job summary, failures first; a
+  `container-smoke` job that publishes the API and migration images, runs the migration against
+  PostgreSQL and boots the API in Production with only the documented settings, probing `/health`,
+  an anonymous 401 problem document and a seeded sign-in (the web image too with `--include-ui`,
+  Redis with `--use-redis`); `scripts/check-adr-links.sh` also resolves every relative Markdown link;
+  `.gitattributes` gives C# diffs hunk headers that name the member.
+- **Aspire dashboard**: a "Scalar" link on the `api` resource.
+- **Template repository** (not in generated projects): a Credits section in the README and the rule
+  that keeps it current, a package icon and wider tags, a Discussions link for questions, and a
+  Windows leg in Template CI.
+
+### Changed
+
+- **Pipeline**: Tracing wraps Logging (Tracing → Logging → Validation → UnitOfWork → handler), so
+  the outcome line carries the use-case span's id instead of the HTTP request's (xavierjohn/Trellis).
+- **Outcome line**: a failure reads `with {ErrorType} ({ErrorCode})`, a `ValidationError` keeps its
+  field:code pairs, and `Error.Description` appears only with `IncludeErrorDetail`
+  (xavierjohn/Trellis). The use-case span attributes are `trellis.usecase.outcome`,
+  `trellis.usecase.error_code` and `trellis.usecase.error_type`; `error.type` is set only on a crash,
+  to the exception's type name, so backends count failures where they count errors.
+- **Outbox** (xavierjohn/Trellis): `NextAttemptAtUtc` is the row's concurrency token, so every
+  bookkeeping save is conditional on the lease — a processor that outlived its lease books
+  `lease_lost` (`trellis.outbox.outcome`, Warning 1303) instead of overwriting what the next claimant
+  wrote, and a batch stops before a message whose dispatch budget would outlive the lease (Warning
+  1306, leases handed back). Every uncredited handler runs on every attempt and only the failed ones
+  are retried (Warning 1304 per handler; several failures surface as one `AggregateException` naming
+  them); the retry and dead-letter counters and log lines fire only after their save succeeded. Every
+  outbox line has an event id 1301–1309 (`docs/deployment.md` lists them), the dispatch span's
+  `error.type` names the failing exception, and the events of one save are claimed in the order
+  they were raised (`OccurredAtUtc` spaced by a microsecond each, `Id` as the tiebreaker).
+- **Domain**: `Invoice.Issue` on an issued invoice answers 409 `Invoice.AlreadyIssued`;
+  `Invoice.AlreadyFinalized` is for paid and voided ones. `Money` and `Invoice` hold the `Currency`
+  value object (same columns); `Money` rejects amounts finer than the currency's minor units
+  (`Money.TooManyDecimalPlaces` names the limit) instead of rounding, and amounts over
+  `Money.MaxAmount`; `InvoiceLines.Amount` is stored as `numeric(18,3)`. Customer name and line
+  description are trimmed and bounded in the Domain, not only in the validators, so the seeder cannot
+  bypass them. `EmailAddress` allows at most 254 characters and 64 before the `@`, refuses leading,
+  trailing or doubled dots and empty or hyphen-edged labels, and still accepts internationalized
+  addresses.
+- **Validation errors** from value objects and single-rule aggregate methods carry their field
+  (`customerName`, `customerEmail`, `currency`, `amount`, `description`, `dueDate`) instead of
+  `field: null`; a root-level FluentValidation rule (`RuleFor(x => x)`) is a whole-request error,
+  `field: null`, no longer `field: ""` (xavierjohn/Trellis).
+- **Registration**: an e-mail or password Identity refuses is 400 `Auth.RegistrationRejected`, one
+  fixed sentence per Identity error code; `Auth.RegistrationFailed` is only the 500 of a failed role
+  rollback. The auth validators bound the e-mail at 254 (was 320).
+- **Migration job**: a sample invoice whose transition fails stops the run with exit 1 instead of
+  saving a half-built invoice.
+
+### Fixed
+
+- Two registrations of one e-mail racing each other answered 500; the loser now gets the same 409
+  `Auth.EmailAlreadyInUse` as a sequential duplicate, because declared unique constraints map to a
+  `Result` by their pinned name (`PK_IdempotencyKeys` → `Idempotency.Duplicate`, `UserNameIndex` →
+  `Auth.EmailAlreadyInUse`; an unregistered constraint still throws) (xavierjohn/Trellis).
+- An outbox processor that outlived its lease could overwrite the bookkeeping of the claimant that
+  took over its row, resurrecting a processed message as pending or dead-lettered.
+- A failing outbox handler held up its siblings: the handlers after it did not run until the retry.
+- A change to an aggregate's children alone (a new invoice line) did not bump the root's concurrency
+  token, so two such edits could both succeed against the same version.
+- An endpoint returning `Task<Result<T>>` answered 200 with the `Result`'s members; the host now
+  fails at boot naming `TypedResults` and `CustomResults.Problem` (xavierjohn/Trellis).
+- A 257- to 320-character e-mail passed the registration validator and failed Identity's
+  256-character column with a 500.
+- The outcome log line was written after its use-case span had ended, so it linked to the HTTP
+  request's span.
+
+### Security
+
+- The outcome log line no longer carries `Error.Description`, which can repeat what a user typed
+  (Identity's duplicate-account text names the address) (xavierjohn/Trellis); a failed `Result`'s
+  `Value` exception names the code only.
+- Registration rejections never echo the e-mail: fixed sentences per Identity error code replace
+  Identity's descriptions.
+- SMTP credentials are refused unless STARTTLS is on, the relay's reply (which quotes the recipient)
+  is dropped from the error the outbox stores, and the log line masks the recipient.
+
 ## [0.1.0] - 2026-10-08
 
 The first release. *Added* describes what a project generated from 0.1.0 contains. *Changed*,
