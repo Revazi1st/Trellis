@@ -2,8 +2,9 @@
 # Fails if any "ADR-NNNN" reference in the repo has no matching docs/adr/NNNN-*.md file,
 # if any docs/adr/*.md is not listed in docs/INDEX.md (template ADRs 0001-0099 above the
 # '## Project decisions' heading, project ADRs 0100 and up below it), if two ADRs share a number,
-# if the template's own repository holds an ADR numbered 0100 or more, or if a 'paths:' glob in
-# .claude/rules/*.md matches zero files (a renamed directory silently unloads a rule).
+# if the template's own repository holds an ADR numbered 0100 or more, if a 'paths:' glob in
+# .claude/rules/*.md matches zero files (a renamed directory silently unloads a rule), or if a
+# relative link in a Markdown file points at a path that does not exist (a moved or renamed doc).
 set -euo pipefail
 # Under pipefail, "echo … | grep -q" is a race: grep exits on the first match, echo can get EPIPE and
 # the pipeline fails although the match was found. Membership tests use here-strings instead.
@@ -94,7 +95,72 @@ for f in .claude/rules/*.md; do
   fi
 done
 
+# --- every relative Markdown link resolves ---
+# Inline links and images, [text](path) and ![alt](path), outside fenced code blocks and inline code
+# spans. URLs (any scheme), protocol-relative and same-page #anchor links are skipped, and so is the
+# #anchor part of a path: the file must exist, its headings are not checked. A path that starts
+# with / is taken from the repository root, as GitHub renders it. .template.config/consumer/ holds
+# the files a generated project gets at its root, so their links resolve only there and are checked
+# there (Template CI runs this script in every generated project).
+md_links() {  # prints "line<TAB>target" for each link in one Markdown file
+  awk '
+    {
+      text = $0
+      if (fence != "") {
+        if (match(text, /^[[:space:]]*(```+|~~~+)[[:space:]]*$/)) {
+          marker = substr(text, RSTART, RLENGTH)
+          gsub(/[[:space:]]/, "", marker)
+          if (substr(marker, 1, 1) == substr(fence, 1, 1) && length(marker) >= length(fence)) fence = ""
+        }
+        next
+      }
+      if (match(text, /^[[:space:]]*(```+|~~~+)/)) {
+        fence = substr(text, RSTART, RLENGTH)
+        gsub(/[[:space:]]/, "", fence)
+        next
+      }
+      gsub(/`[^`]*`/, "", text)
+      while (match(text, /\]\([^)]*\)/)) {
+        printf "%d\t%s\n", FNR, substr(text, RSTART + 2, RLENGTH - 3)
+        text = substr(text, RSTART + RLENGTH)
+      }
+    }
+  ' "$1"
+}
+
+md_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./.template.config/consumer \
+    -o -path ./artifacts -o -name node_modules -o -name bin -o -name obj -o -name TestResults \) -prune \
+    -o -type f -name '*.md' -print | sed 's|^\./||' | sort)
+
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  while IFS=$'\t' read -r line target; do
+    [ -n "$line" ] || continue
+    case "$target" in
+      '<'*) target="${target#<}"; target="${target%%>*}" ;;   # <path with spaces>
+      *) target="${target%%[[:space:]]*}" ;;                  # drop a "title"
+    esac
+    case "$target" in
+      '' | '#'* | '//'*) continue ;;
+    esac
+    if [[ "$target" =~ ^[A-Za-z][A-Za-z0-9+.-]*: ]]; then
+      continue   # https:, mailto: and every other scheme
+    fi
+    path="${target%%#*}"
+    path="${path%%\?*}"
+    path="${path//%20/ }"
+    case "$path" in
+      /*) resolved=".$path" ;;
+      *) resolved="$(dirname "$f")/$path" ;;
+    esac
+    if [ ! -e "$resolved" ]; then
+      echo "::error file=$f,line=$line::link target '$target' does not exist (looked for ${resolved#./})"
+      fail=1
+    fi
+  done <<< "$(md_links "$f")"
+done <<< "$md_files"
+
 if [ "$fail" -eq 0 ]; then
-  echo "ADR link check passed — references resolve, INDEX is complete, rules globs match files."
+  echo "ADR link check passed — references resolve, INDEX is complete, rules globs match files, relative links resolve."
 fi
 exit "$fail"
