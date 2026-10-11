@@ -85,6 +85,7 @@ jobs:
       # eng/coverage.runsettings limits it to the solution's own production code: no test
       # assemblies, no third-party packages that ship symbols, no migrations, no generated code.
       - name: Test (with coverage)
+        id: test
         env:
           RUN_ASPIRE_E2E: "1"
         run: |
@@ -97,6 +98,13 @@ jobs:
           fi
           dotnet dotnet-coverage collect "${settings[@]}" -f cobertura -o coverage.cobertura.xml \
             "dotnet test Trellis.slnx --no-build -c Release -- --report-trx --results-directory TestResults"
+
+      # From the TRX files the run wrote: totals per test project, skipped tests included, then every
+      # failure with its message and stack trace, in the job summary and as annotations. It runs
+      # whenever the tests ran, red or green, so a failure is read there instead of in the raw log.
+      - name: Test summary
+        if: ${{ !cancelled() && steps.test.outcome != 'skipped' }}
+        run: python3 .github/scripts/trx-summary.py TestResults
 
       - name: Upload coverage
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
