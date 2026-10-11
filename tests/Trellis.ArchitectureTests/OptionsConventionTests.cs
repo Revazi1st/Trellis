@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Shouldly;
+using Trellis.Infrastructure.Email;
 using Xunit;
 
 namespace Trellis.ArchitectureTests;
@@ -53,7 +54,68 @@ public sealed partial class OptionsConventionTests
         DiscoverOptionsTypes()
             .Where(optionsType => !host.Services.GetServices(typeof(IValidateOptions<>).MakeGenericType(optionsType)).Any())
             .Select(static optionsType => optionsType.FullName)
-            .ShouldBeEmpty("the API host binds these without validating them: add ValidateDataAnnotations() (and ValidateOnStart() in the host)");
+            .ShouldBeEmpty("the API host binds these without validating them: add ValidateDataAnnotations() (and ValidateOnStart() in the host), "
+                           + "or, for a section read only while a setting selects it, a validator of its own (see ValidatedOnlyWhenSelected)");
+    }
+
+    /// <summary>
+    /// The exception to "bind with <c>ValidateDataAnnotations()</c>": a section the host reads only while a
+    /// setting selects it. <c>ValidateDataAnnotations()</c> would demand the SMTP relay from a deployment that
+    /// keeps the logging stand-in, so <see cref="SmtpOptions"/> has its own <c>IValidateOptions</c>, which
+    /// applies the same annotations only while <c>Email:Provider</c> is <c>Smtp</c>. The rows below prove both
+    /// halves at boot: a bad relay stops the API while selected, and is ignored otherwise.
+    /// </summary>
+    [Fact]
+    public async Task A_section_read_only_when_selected_is_validated_by_its_own_validator_not_by_data_annotations()
+    {
+        await using BuiltHost host = BuiltHost.Of(typeof(Program).Assembly, ValidArguments());
+
+        object[] validators = [.. host.Services.GetServices<IValidateOptions<SmtpOptions>>()];
+
+        validators.ShouldNotBeEmpty("Email:Smtp is still checked, by its own validator, while Email:Provider is Smtp");
+        validators.ShouldNotContain(
+            static validator => validator is DataAnnotationValidateOptions<SmtpOptions>,
+            "ValidateDataAnnotations() would check Email:Smtp whatever the provider; the relay's validator applies the annotations itself");
+    }
+
+    /// <summary>With <c>Email:Provider=Smtp</c>, each relay mistake stops the API at boot and the message says what to fix.</summary>
+    [Theory]
+    [InlineData("Email:Smtp:Host is required when Email:Provider is Smtp.", new[] { "--Email:Smtp:Host=" })]
+    [InlineData("Email:Smtp:FromAddress is required when Email:Provider is Smtp.", new[] { "--Email:Smtp:FromAddress=" })]
+    [InlineData("Email:Smtp:Port must be between 1 and 65535.", new[] { "--Email:Smtp:Port=0" })]
+    [InlineData("Email:Smtp:Port 465 is implicit TLS", new[] { "--Email:Smtp:Port=465" })]
+    [InlineData("Email:Smtp:FromAddress is not an e-mail address", new[] { "--Email:Smtp:FromAddress=billing" })]
+    [InlineData("Email:Smtp:UserName and Email:Smtp:Password go together", new[] { "--Email:Smtp:UserName=relay" })]
+    [InlineData("Email:Smtp:UseStartTls=false would send the relay credentials in clear",
+        new[] { "--Email:Smtp:UseStartTls=false", "--Email:Smtp:UserName=relay", "--Email:Smtp:Password=not-a-secret" })]
+    public async Task An_invalid_relay_stops_the_api_at_boot_while_Smtp_is_selected(string expected, string[] settings)
+    {
+        await using BuiltHost host = BuiltHost.Of(typeof(Program).Assembly, [.. SmtpArguments(), .. settings]);
+
+        OptionsValidationException exception = Should.Throw<OptionsValidationException>(
+            () => host.Services.GetRequiredService<IStartupValidator>().Validate());
+
+        exception.Message.ShouldContain(expected);
+    }
+
+    [Fact]
+    public async Task A_valid_relay_passes_boot_while_Smtp_is_selected()
+    {
+        await using BuiltHost host = BuiltHost.Of(typeof(Program).Assembly, SmtpArguments());
+
+        Should.NotThrow(() => host.Services.GetRequiredService<IStartupValidator>().Validate());
+    }
+
+    [Theory]
+    [InlineData("Logging")]
+    [InlineData("None")]
+    public async Task The_relay_is_not_checked_while_another_provider_is_selected(string provider)
+    {
+        await using BuiltHost host = BuiltHost.Of(
+            typeof(Program).Assembly,
+            [.. ValidArguments(), $"--Email:Provider={provider}", "--Email:Smtp:Host=", "--Email:Smtp:Port=465"]);
+
+        Should.NotThrow(() => host.Services.GetRequiredService<IStartupValidator>().Validate());
     }
 
     [Fact]
@@ -156,6 +218,15 @@ public sealed partial class OptionsConventionTests
         "--ConnectionStrings:trellis-db=Host=localhost;Database=architecture_tests",
         "--ConnectionStrings:cache=localhost:6379",
         $"--Authentication:SigningKey={SigningKey}",
+    ];
+
+    /// <summary>The valid arguments plus a valid relay, selected: a row then breaks one setting.</summary>
+    private static string[] SmtpArguments() =>
+    [
+        .. ValidArguments(),
+        "--Email:Provider=Smtp",
+        "--Email:Smtp:Host=smtp.example.com",
+        "--Email:Smtp:FromAddress=billing@example.com",
     ];
 
     [GeneratedRegex(@"\bclass\s+(?<name>\w+Options)\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
