@@ -111,6 +111,10 @@ then run **MigrationService** once, then **Trellis.Api** (<http://localhost:5171
 
 Seeded admin: `admin@example.com` / `Admin123!`. Full detail in [docs/development.md](docs/development.md).
 
+The app ships one sample feature, invoicing, and
+[docs/features/invoices.md](docs/features/invoices.md) explains it in plain words before any
+architecture: an invoice's states, the rules between them and where each file lives.
+
 ## Architecture
 
 Dependencies point inward; the arrows are enforced by `ArchitectureTests`.

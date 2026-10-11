@@ -2,6 +2,73 @@
 
 The **reference vertical slice** — the canonical shape to copy for new features (aggregates or use cases). It exercises every tactical pattern in the template.
 
+## The domain in plain words
+
+An invoice bills one customer, in one currency, for one or more lines of work. It starts as a
+**draft**, the only state in which lines can be added. **Issuing** it freezes the lines and sets a
+due date that may not lie in the past; an issued invoice whose due date then passes appears in the
+overdue list. **Paying** an issued invoice closes it and e-mails the customer a receipt, **voiding**
+cancels a draft or an issued one, and a paid or voided invoice never changes again.
+Administrators may do all of this; members may only read.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Draft: Create
+    Draft --> Draft: AddLine
+    Draft --> Issued: Issue (at least one line, due date not past)
+    Issued --> Paid: MarkPaid (receipt e-mailed after the commit)
+    Draft --> Voided: Void
+    Issued --> Voided: Void
+    Paid --> [*]
+    Voided --> [*]
+    note right of Issued: overdue once its due date has passed
+```
+
+Every arrow is a method on `Invoice` that returns a `Result`; a call from the wrong state answers a
+409 (`Invoice.NotDraft`, `Invoice.NotIssued` or `Invoice.AlreadyFinalized`) and changes nothing.
+
+## Where the code lives
+
+One folder per layer, one subfolder per use case:
+
+```text
+src/Core/Trellis.Domain/
+├── Common/                     Money, Currency, EmailAddress: value objects, not invoice-only
+└── Invoices/
+    ├── Invoice.cs              the aggregate: Create, AddLine, Issue, MarkPaid, Void
+    ├── InvoiceLine.cs          child entity, reachable only through Invoice
+    ├── InvoiceId.cs            strongly-typed IDs (InvoiceLineId.cs alike)
+    ├── InvoiceErrors.cs        one Error per rule: the codes clients branch on
+    ├── InvoiceSpecs.cs         query shapes (Overdue), translated to SQL by Persistence
+    ├── IInvoiceRepository.cs   the port Persistence implements
+    └── Events/                 Issued, Paid, Voided: delivered by the outbox after commit
+src/Core/Trellis.Application/Features/Invoices/
+    ├── CreateInvoice/          command + handler + validator, one folder per use case
+    ├── AddInvoiceLine/         IssueInvoice/ alike; PayInvoice/ and VoidInvoice/ take only
+    │                           an id, so they carry no validator
+    ├── GetInvoice/             the queries (ListOverdueInvoices/ alike)
+    ├── EventHandlers/          SendReceiptOnInvoicePaid, RecordInvoiceMetrics
+    └── InvoiceResponse.cs      the read model the queries return
+src/Infrastructure/Trellis.Persistence/
+    ├── Configurations/         InvoiceConfiguration, InvoiceLineConfiguration: the EF mapping
+    └── Repositories/           InvoiceRepository
+src/Presentation/Api/Trellis.Api.Contracts/Invoices/
+    └── InvoiceContracts.cs     the wire records, shared with every client
+src/Presentation/Api/Trellis.Api/
+    ├── Features/Invoices/      one endpoint class per use case
+    └── Trellis.Api.http        the requests behind "Try it" below
+```
+
+<!--#if (IncludeUI) -->
+```text
+src/Presentation/UI/Trellis.UI.Common/
+    ├── Pages/                  Invoices, InvoiceDetail, CreateInvoice
+    ├── Forms/InvoiceForms.cs   DataAnnotations mirroring the command validators
+    └── Services/               IInvoiceApiClient over the contracts
+```
+
+<!--#endif -->
 ## Domain (`src/Core/Trellis.Domain/Invoices/`)
 
 - **`Invoice`** — aggregate root (`AggregateRoot<InvoiceId>`, also `IAuditable`, `ISoftDeletable`).

@@ -54,7 +54,7 @@ Delete `SeedSampleDataAsync` and its call in `MigrationWorker.cs` (plus dead usi
 - `grep -rl Invoice tests` afterwards lists anything this step missed.
 
 ## 8. Docs
-Delete `docs/features/invoices.md`; fix the mentions of the slice as the reference pattern in `AGENTS.md`, `.claude/rules/` and `.claude/skills/add-feature/`. A final `grep -ri invoice` catches stragglers (XML doc comments citing it as an example may simply be reworded).
+Delete `docs/features/invoices.md` and the paragraph in `README.md` that points newcomers to it; fix the mentions of the slice as the reference pattern in `AGENTS.md`, `.claude/rules/` and `.claude/skills/add-feature/`. A final `grep -ri invoice` catches stragglers (XML doc comments citing it as an example may simply be reworded).
 
 ## 9. Migration + finish
 Delete `src/Infrastructure/Trellis.Persistence/Migrations/` and regenerate the single initial migration (pre-release convention, see `add-migration`):
