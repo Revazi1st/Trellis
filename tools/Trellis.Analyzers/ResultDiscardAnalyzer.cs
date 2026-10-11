@@ -30,6 +30,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     private const string Title = "The result of this call is discarded";
     private const string Category = "Reliability";
     private const string HelpLink = "docs/adr/0030-discarded-result-analyzer.md";
+
     /// <summary>How deep <see cref="CarriesResult"/> looks through wrappers: <c>Task&lt;Result[]&gt;</c> is two levels.</summary>
     private const int MaxNesting = 4;
 
@@ -65,7 +66,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
 
     public override void Initialize(AnalysisContext context)
     {
-        // Generated code is read only to reach a Razor component's @code block; IsHandWritten skips the rest.
+        // Generated code is read only to reach a Razor component's @code block; IsInScope skips the rest.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
         context.RegisterOperationAction(AnalyzeExpressionStatement, OperationKind.ExpressionStatement);
@@ -77,9 +78,9 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeExpressionStatement(OperationAnalysisContext context)
     {
         IOperation statementValue = ((IExpressionStatementOperation)context.Operation).Operation;
-        if (IsHandWritten(context)
-            && DroppedValue(statementValue) is { Type: { } type } dropped
+        if (DroppedValue(statementValue) is { Type: { } type } dropped
             && CarriesResult(type)
+            && IsInScope(context)
             && !IsCompilersUnawaitedCall(context, dropped, type)
             && !IsSubstituteCallCheck(dropped)
             && !IsAssertion(dropped)
@@ -104,7 +105,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
             && conversion.Operand.Type is { } source
             && CarriesResult(source)
             && DroppedValue(conversion.Operand) is { } computed
-            && IsHandWritten(context)
+            && IsInScope(context)
             && !IsSubstituteCallCheck(computed)
             && !IsExpectedToThrow(conversion))
         {
@@ -120,7 +121,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
             && creation.Type is INamedTypeSymbol { DelegateInvokeMethod.ReturnType: { } delegateReturns }
             && IsPlainTask(delegateReturns)
             && CarriesResult(returned)
-            && IsHandWritten(context)
+            && IsInScope(context)
             && !IsExpectedToThrow(creation))
         {
             Report(context, TaskRule, reference.Syntax, returned, delegateReturns);
@@ -135,11 +136,46 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     {
         foreach (IOperation initializer in ((IObjectOrCollectionInitializerOperation)context.Operation).Initializers)
         {
-            if (initializer is IInvocationOperation { IsImplicit: true, Type: { } type } add && CarriesResult(type) && IsHandWritten(context))
+            if (initializer is IInvocationOperation { IsImplicit: true, Type: { } type } add && CarriesResult(type) && IsInScope(context))
             {
                 Report(context, Rule, add.Syntax, type);
             }
         }
+    }
+
+    /// <summary>Hand-written code that runs: see <see cref="IsHandWritten"/> and <see cref="IsInExpressionTree"/>.</summary>
+    private static bool IsInScope(OperationAnalysisContext context)
+        => IsHandWritten(context) && !IsInExpressionTree(context.Operation);
+
+    /// <summary>
+    /// Inside a lambda converted to an expression tree (<c>Expression&lt;Action&lt;Invoice&gt;&gt; e = i =&gt;
+    /// i.Void();</c>): the tree is data, never executed, so it computes no result.
+    /// </summary>
+    private static bool IsInExpressionTree(IOperation operation)
+    {
+        for (IOperation? enclosing = operation.Parent; enclosing is not null; enclosing = enclosing.Parent)
+        {
+            if (enclosing is IAnonymousFunctionOperation { Parent.Type: { } converted } && IsExpressionTreeType(converted))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary><c>System.Linq.Expressions.Expression&lt;TDelegate&gt;</c>, through its base <c>LambdaExpression</c>.</summary>
+    private static bool IsExpressionTreeType(ITypeSymbol type)
+    {
+        for (ITypeSymbol? current = type; current is not null; current = current.BaseType)
+        {
+            if (current is { Name: "LambdaExpression", ContainingNamespace: { Name: "Expressions", ContainingNamespace: { Name: "Linq", ContainingNamespace.Name: "System" } } })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -154,6 +154,8 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("Interlocked.CompareExchange handing back the old value", "Result? last = null; System.Threading.Interlocked.CompareExchange(ref last, account.Close(), null); GC.KeepAlive(last);")]
     [InlineData("a concurrent dictionary handing back what it stored", "var cache = new System.Collections.Concurrent.ConcurrentDictionary<string, Result>(StringComparer.Ordinal); Result closed = account.Close(); cache.AddOrUpdate(\"k\", closed, (_, _) => closed); cache.GetOrAdd(\"k\", _ => closed);")]
     [InlineData("a stack and a queue handing back an element they held", "var stack = new Stack<Result>(); stack.Push(account.Close()); stack.Pop(); var queue = new Queue<Result>(); queue.Enqueue(account.Close()); queue.Dequeue();")]
+    [InlineData("an expression tree, which is data and never runs", "System.Linq.Expressions.Expression<Action<Account>> tree = a => a.Close(); GC.KeepAlive(tree);")]
+    [InlineData("an expression tree of a plain-Task lambda", "System.Linq.Expressions.Expression<Func<Task>> tree = () => account.CloseAsync(); GC.KeepAlive(tree);")]
     [InlineData("a collection initializer of results", "List<Result> results = new() { account.Close() }; GC.KeepAlive(results);")]
     [InlineData("a kept Result[]", "Result[] all = account.CloseAll(); GC.KeepAlive(all);")]
     [InlineData("a deconstructed tuple", "(Result outcome, int lines) = account.CloseAndCount(); GC.KeepAlive(outcome); GC.KeepAlive(lines);")]
