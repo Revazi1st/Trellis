@@ -98,7 +98,8 @@ If you generated a project from 0.1.0, read these before adopting this version w
   an anonymous 401 problem document and a seeded sign-in (the web image too with `--include-ui`,
   Redis with `--use-redis`); `scripts/check-adr-links.sh` also resolves every relative Markdown link;
   `.gitattributes` gives C# diffs hunk headers that name the member.
-- **Aspire dashboard**: a "Scalar" link on the `api` resource.
+- **Aspire dashboard**: a "Scalar" link on the `api` resource; with `--use-redis`, a RedisInsight tile
+  beside the `cache` resource, as pgAdmin sits beside PostgreSQL.
 - **AppHost launch profiles**: `tools/Trellis.AppHost/Properties/launchSettings.json` with an `https`
   profile (dashboard at `https://localhost:17171`) and an `http` one (`http://localhost:15171`), so
   the AppHost runs from Rider's and Visual Studio's Aspire run configuration, which refuses to start

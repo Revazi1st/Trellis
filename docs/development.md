@@ -158,7 +158,8 @@ dotnet run --project tools/Trellis.AppHost   # the same app, no CLI needed
 ```
 
 PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire dashboard, all
-wired together; open the dashboard URL either command prints. This is the best loop when a host
+wired together, plus pgAdmin (and RedisInsight with `--use-redis`) as dashboard tiles that open
+without a login; open the dashboard URL either command prints. This is the best loop when a host
 SDK is available. The Aspire CLI reads the AppHost path from the committed `aspire.config.json`
 (`appHost.path`), the project settings file it would otherwise create on first use.
 
