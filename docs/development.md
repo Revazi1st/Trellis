@@ -164,7 +164,8 @@ SDK is available. The Aspire CLI reads the AppHost path from the committed `aspi
 
 From Rider or Visual Studio, run the **Trellis.AppHost** project: its `Properties/launchSettings.json`
 has an `https` profile (the dashboard at `https://localhost:17171`) and an `http` profile
-(`http://localhost:15171`, no certificate involved). The IDE's Aspire run configuration needs one of
+(`http://localhost:15171`, no certificate involved); the ports are picked free when the solution is
+created, so this document names yours. The IDE's Aspire run configuration needs one of
 them; without a launch profile it refuses to start, while `dotnet run` and `aspire run` fall back to
 a dynamic dashboard URL. The `https` profile wants a trusted development certificate: run
 `dotnet dev-certs https --trust` once (macOS and Windows prompt for confirmation), or use `http`.
@@ -172,6 +173,13 @@ The AppHost's own profile is the only one Aspire reads: the API, web and migrati
 with `ExcludeLaunchProfile = true` and get their endpoints and connection string from Aspire
 (the comment in `tools/Trellis.AppHost/Program.cs` says why). The AppHost reads its `appsettings.json`
 from the project folder; it only sets log levels, so the dashboard's request logs stay out of the console.
+
+On the first start against an empty database the `migrations` resource logs one red EF Core line,
+`Failed executing DbCommand … SELECT "MigrationId", "ProductVersion" FROM "__EFMigrationsHistory"`,
+and PostgreSQL logs `relation "__EFMigrationsHistory" does not exist`. EF Core probes the history
+table by querying it, then creates it and applies the migrations; the resource still exits with
+code 0 and the API starts, because the API waits for exactly that. A real migration failure leaves
+the API waiting, with the exception in the `migrations` console log.
 
 ### Containerized smoke
 

@@ -105,7 +105,8 @@ If you generated a project from 0.1.0, read these before adopting this version w
   without a profile. `dotnet run` and `aspire run` pick the `https` profile too instead of a dynamic
   dashboard URL. An `appsettings.json` beside it keeps the dashboard's own request logs out of the
   AppHost console (`Microsoft.AspNetCore` and `Aspire.Hosting.Dcp` at Warning), as the Aspire
-  starter template does.
+  starter template does. Each generated solution gets its own six ports, picked free at `dotnet new`
+  time (`port` generator symbols, as the Aspire starter does), so two solutions run side by side.
 - **Template repository** (not in generated projects): a Credits section in the README and the rule
   that keeps it current, a package icon and wider tags, a Discussions link for questions, and a
   Windows leg in Template CI.

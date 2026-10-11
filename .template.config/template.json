@@ -208,22 +208,143 @@
         "separator": ""
       },
       "description": "Every generated project gets its own Development JWT signing key in place of the repository's fixed placeholder: 'dev-only-' plus 64 hex characters (two random GUIDs, 244 random bits), so a token minted by one project's dev API is worthless against another's. The prefix says what the value is, and it is also why gitleaks' default rules (which skip values containing common words such as 'dev') pass the file with no allowlist entry; a bare hex value of this length is flagged as generic-api-key. onlyIf limits the replacement to the appsettings value; the placeholder keeps working in the template's own repository, where the engine never runs, and needs no .gitleaks.toml allowlist entry."
+    },
+    "appHostHttpPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": {
+        "low": 15000,
+        "high": 15300,
+        "fallback": 15171
+      },
+      "replaces": "15171",
+      "description": "A free port for the http profile's dashboard in tools/*.AppHost/Properties/launchSettings.json, picked when the project is created so two generated solutions can run side by side (the Aspire starter does the same); the source repository keeps 15171."
+    },
+    "appHostHttpsPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": {
+        "low": 17000,
+        "high": 17300,
+        "fallback": 17171
+      },
+      "replaces": "17171",
+      "description": "A free port for the https profile's dashboard in tools/*.AppHost/Properties/launchSettings.json, picked when the project is created so two generated solutions can run side by side (the Aspire starter does the same); the source repository keeps 17171."
+    },
+    "appHostOtlpHttpPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": {
+        "low": 19000,
+        "high": 19300,
+        "fallback": 19171
+      },
+      "replaces": "19171",
+      "description": "A free port for the http profile's OTLP endpoint in tools/*.AppHost/Properties/launchSettings.json, picked when the project is created so two generated solutions can run side by side (the Aspire starter does the same); the source repository keeps 19171."
+    },
+    "appHostResourceHttpPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": {
+        "low": 20000,
+        "high": 20300,
+        "fallback": 20171
+      },
+      "replaces": "20171",
+      "description": "A free port for the http profile's resource service in tools/*.AppHost/Properties/launchSettings.json, picked when the project is created so two generated solutions can run side by side (the Aspire starter does the same); the source repository keeps 20171."
+    },
+    "appHostOtlpHttpsPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": {
+        "low": 21000,
+        "high": 21300,
+        "fallback": 21171
+      },
+      "replaces": "21171",
+      "description": "A free port for the https profile's OTLP endpoint in tools/*.AppHost/Properties/launchSettings.json, picked when the project is created so two generated solutions can run side by side (the Aspire starter does the same); the source repository keeps 21171."
+    },
+    "appHostResourceHttpsPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": {
+        "low": 22000,
+        "high": 22300,
+        "fallback": 22171
+      },
+      "replaces": "22171",
+      "description": "A free port for the https profile's resource service in tools/*.AppHost/Properties/launchSettings.json, picked when the project is created so two generated solutions can run side by side (the Aspire starter does the same); the source repository keeps 22171."
     }
   },
   "forms": {
-    "identity": { "identifier": "identity" },
-    "safeNamespace": { "identifier": "safe_namespace" },
-    "dotsToUnderscores": { "identifier": "replace", "pattern": "\\.", "replacement": "_" },
-    "appendUnderscore": { "identifier": "replace", "pattern": "$", "replacement": "_" },
-    "aspireProjectForm": { "identifier": "chain", "steps": [ "safeNamespace", "dotsToUnderscores", "appendUnderscore" ] },
-    "lower": { "identifier": "lowerCaseInvariant" },
-    "nonAlphanumericToHyphen": { "identifier": "replace", "pattern": "[^a-z0-9]+", "replacement": "-" },
-    "trimLeadingHyphens": { "identifier": "replace", "pattern": "^-+", "replacement": "" },
-    "appendHyphen": { "identifier": "replace", "pattern": "$", "replacement": "-" },
-    "aspireResourceForm": { "identifier": "chain", "steps": [ "lower", "nonAlphanumericToHyphen", "trimLeadingHyphens", "appendHyphen" ] },
-    "nonAlphanumericToUnderscore": { "identifier": "replace", "pattern": "[^A-Za-z0-9]+", "replacement": "_" },
-    "upper": { "identifier": "upperCaseInvariant" },
-    "upperSnakeForm": { "identifier": "chain", "steps": [ "safeNamespace", "nonAlphanumericToUnderscore", "upper", "appendUnderscore" ] }
+    "identity": {
+      "identifier": "identity"
+    },
+    "safeNamespace": {
+      "identifier": "safe_namespace"
+    },
+    "dotsToUnderscores": {
+      "identifier": "replace",
+      "pattern": "\\.",
+      "replacement": "_"
+    },
+    "appendUnderscore": {
+      "identifier": "replace",
+      "pattern": "$",
+      "replacement": "_"
+    },
+    "aspireProjectForm": {
+      "identifier": "chain",
+      "steps": [
+        "safeNamespace",
+        "dotsToUnderscores",
+        "appendUnderscore"
+      ]
+    },
+    "lower": {
+      "identifier": "lowerCaseInvariant"
+    },
+    "nonAlphanumericToHyphen": {
+      "identifier": "replace",
+      "pattern": "[^a-z0-9]+",
+      "replacement": "-"
+    },
+    "trimLeadingHyphens": {
+      "identifier": "replace",
+      "pattern": "^-+",
+      "replacement": ""
+    },
+    "appendHyphen": {
+      "identifier": "replace",
+      "pattern": "$",
+      "replacement": "-"
+    },
+    "aspireResourceForm": {
+      "identifier": "chain",
+      "steps": [
+        "lower",
+        "nonAlphanumericToHyphen",
+        "trimLeadingHyphens",
+        "appendHyphen"
+      ]
+    },
+    "nonAlphanumericToUnderscore": {
+      "identifier": "replace",
+      "pattern": "[^A-Za-z0-9]+",
+      "replacement": "_"
+    },
+    "upper": {
+      "identifier": "upperCaseInvariant"
+    },
+    "upperSnakeForm": {
+      "identifier": "chain",
+      "steps": [
+        "safeNamespace",
+        "nonAlphanumericToUnderscore",
+        "upper",
+        "appendUnderscore"
+      ]
+    }
   },
   "sources": [
     {
