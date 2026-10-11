@@ -92,20 +92,24 @@ public static class ResultExtensions
     /// <c>invoice.Issue(…).AtField(nameof(command.DueDate), InvoiceErrors.DueDateInPast)</c>.
     /// </summary>
     public static Result<TIn> AtField<TIn>(this Result<TIn> result, string member, params Error[] only)
-        => result.IsFailure && Attribute(result.Error, member, only) is { } field
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(member);
+        return result.IsFailure && Attribute(result.Error, member, only) is { } field
             ? Result.Failure<TIn>(field)
             : result;
+    }
 
     /// <inheritdoc cref="AtField{TIn}(Result{TIn}, string, Error[])"/>
     public static Result AtField(this Result result, string member, params Error[] only)
-        => result.IsFailure && Attribute(result.Error, member, only) is { } field
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(member);
+        return result.IsFailure && Attribute(result.Error, member, only) is { } field
             ? Result.Failure(field)
             : result;
+    }
 
     private static FieldError? Attribute(Error error, string member, Error[] only)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(member);
-
         bool attributable = error.Type == ErrorType.Validation
             && error is not FieldError and not ValidationError
             && (only.Length == 0 || Array.Exists(only, e => string.Equals(e.Code, error.Code, StringComparison.Ordinal)));

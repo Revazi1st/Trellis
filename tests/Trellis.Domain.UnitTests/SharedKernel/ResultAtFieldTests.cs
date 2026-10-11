@@ -65,5 +65,8 @@ public sealed class ResultAtFieldTests
     [InlineData("")]
     [InlineData(" ")]
     public void AtField_WithoutAMemberName_IsAProgrammingError(string member)
-        => Should.Throw<ArgumentException>(() => Result.Failure(Invalid).AtField(member));
+    {
+        Should.Throw<ArgumentException>(() => Result.Failure(Invalid).AtField(member));
+        Should.Throw<ArgumentException>(() => Result.Success(1).AtField(member));
+    }
 }
