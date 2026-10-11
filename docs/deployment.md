@@ -17,6 +17,18 @@ dotnet publish src/Presentation/UI/Trellis.UI.Web /t:PublishContainer   # if the
 
 Base image, exposed port and entry point derive from the project; registry and tag are MSBuild
 properties (`-p:ContainerRegistry=… -p:ContainerRepository=… -p:ContainerImageTag=…`).
+Tag each image with the commit it was built from (`-p:ContainerImageTag=$(git rev-parse --short HEAD)`),
+or with the version of a release build, rather than only the default `latest`: `service.version` in the
+telemetry already carries the commit (the informational version, `1.0.0+<sha>`), so a trace leads to
+the image that produced it, and a rollback names one.
+
+**A software bill of materials.** GitHub's dependency graph exports an SPDX SBOM of every package the
+solution references (*Insights → Dependency graph → Export SBOM*, or
+`gh api repos/{owner}/{repo}/dependency-graph/sbom`). An SBOM of what an image actually contains comes
+from the pipeline that publishes it: a scanner over the pushed image or over the `dotnet publish`
+output, optionally attested with `actions/attest-sbom`, which, like provenance attestation, needs a
+public repository or GitHub Enterprise Cloud. CI here builds the images only to smoke-test them, so it
+produces none.
 
 CI's `container-smoke` job (`.github/workflows/ci.yml`) publishes these images on every run, runs the
 migration image against PostgreSQL, then boots the API image (and the web image, with the UI) in

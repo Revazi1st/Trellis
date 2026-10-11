@@ -5,7 +5,7 @@ Agent entry point — read only what the task needs.
 ## Guides (humans & agents)
 - [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns, a request stage by stage, domain versus integration events and what each delivery step guarantees, shipping `Api.Contracts` as a package, scheduled use cases
 - [development.md](development.md) — prerequisites, commands, running the app, the testing map (what each project proves, running part of the suite, which helper for which goal), when a request fails
-- [deployment.md](deployment.md) — container images, what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP and trace sampling, the telemetry reference (every source, meter, instrument, attribute and log event id, test-checked), outbox and idempotency runbooks
+- [deployment.md](deployment.md) — container images (tags, an SBOM), what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP and trace sampling, the telemetry reference (every source, meter, instrument, attribute and log event id, test-checked), outbox and idempotency runbooks
 - [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge
 - [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice
 - [features/auth.md](features/auth.md) — Identity + JWT, refresh rotation/revocation, permissions, lockout
@@ -13,7 +13,7 @@ Agent entry point — read only what the task needs.
 - [threat-model.md](threat-model.md) — assets, mitigations that exist today, known gaps to decide before production
 - [api/openapi.v1.json](api/openapi.v1.json) — the committed OpenAPI contract, regenerated with `UPDATE_OPENAPI_SNAPSHOT=1` and checked against the served document on every test run (ADR-0025)
 <!--#if (TemplateSource) -->
-- [releasing.md](releasing.md) — releasing the template package: CHANGELOG section, dry run, tag, nuget.org trusted publishing, recovery
+- [releasing.md](releasing.md) — releasing the template package: an agent dry run before a minor release, CHANGELOG section, dry run, tag, nuget.org trusted publishing, recovery
 <!--#endif -->
 
 ## Layer rules (`.claude/rules/`, loaded when you touch a file their glob matches)

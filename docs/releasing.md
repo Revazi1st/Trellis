@@ -46,6 +46,20 @@ next, and the GitHub release is published only after the push succeeded.
    behaviour. Create it once:
    `gh label create docs-not-needed --description "No feature or threat-model doc change needed"`.
 
+## Before a minor release: an agent dry run
+
+The template's guidance (`AGENTS.md`, the rules, the skills) is code for agents, and it drifts like
+code. Before a minor version, pack the release candidate, generate a fresh project from it into a
+private hive (`dotnet new install <nupkg> --debug:custom-hive <dir>`), and give an agent one fixed
+feature spec (keep the same one from release to release, for example a `Customer` with a unique e-mail
+that can be created, renamed and deactivated, which members may list) and nothing but the generated
+repository. Judge the result by the gates that already exist: the Release build, the whole test suite
+with the architecture tests, `scripts/check-docs-drift.sh` and the OpenAPI snapshot. Then read the diff
+for what no gate sees: the rule in the aggregate rather than the handler, the feature doc written first,
+the shapes from the `add-feature` skill's "not shown" list handled the way it points. Each miss becomes
+a fix to a rule, a skill box or a test in the release, never a note to the agent. One run is anecdote,
+and results vary between models and attempts: it is a smoke test of the guidance, not a score.
+
 ## Cutting a release
 
 1. **Pick the version.** SemVer: a breaking change to generated output or to a toggle's meaning
