@@ -170,7 +170,8 @@ a dynamic dashboard URL. The `https` profile wants a trusted development certifi
 `dotnet dev-certs https --trust` once (macOS and Windows prompt for confirmation), or use `http`.
 The AppHost's own profile is the only one Aspire reads: the API, web and migration projects run
 with `ExcludeLaunchProfile = true` and get their endpoints and connection string from Aspire
-(the comment in `tools/Trellis.AppHost/Program.cs` says why).
+(the comment in `tools/Trellis.AppHost/Program.cs` says why). The AppHost reads its `appsettings.json`
+from the project folder; it only sets log levels, so the dashboard's request logs stay out of the console.
 
 ### Containerized smoke
 
