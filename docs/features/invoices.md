@@ -48,10 +48,11 @@ placeholder variables at the top of the file name the response each value comes 
 | 5 | `GET /api/v1/invoices/{id}` | | 200: status `Issued`, total 1200.00, and an `ETag` header to paste into `@etag` |
 | 6 | the same GET with `If-None-Match: {etag}` | | 304 and no body, until the invoice changes |
 | 7 | `POST /api/v1/invoices/{id}/pay` | | 204; seconds later the api logs `E-mail not sent (Email:Provider=Logging) …`: the outbox handed `invoices.paid.v1` to `SendReceiptOnInvoicePaid` after the commit |
-| 8 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
-| 9 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
-| 10 | `POST /api/v1/auth/login` as the member | as in step 9 | 200: paste its `accessToken` into `@memberToken` |
-| 11 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
+| 8 | step 4 again with `If-Match: {etag}` | same as step 4 | 412 `Invoice.VersionMismatch`: paying moved the version past the ETag you read in step 5, so nothing changes (without the header: 409 `Invoice.AlreadyFinalized`) |
+| 9 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
+| 10 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
+| 11 | `POST /api/v1/auth/login` as the member | as in step 10 | 200: paste its `accessToken` into `@memberToken` |
+| 12 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
 
 To walk through again, change `@createKey` first: the same key keeps answering with the first
 invoice, paid by then, so steps 3, 4 and 7 would answer 409 (`Invoice.NotDraft`,
@@ -83,7 +84,8 @@ src/Core/Trellis.Application/Features/Invoices/
     ├── CreateInvoice/          command + handler + validator, one folder per use case
     ├── AddInvoiceLine/         IssueInvoice/ alike; PayInvoice/ and VoidInvoice/ take only
     │                           an id, so they carry no validator
-    ├── GetInvoice/             the queries (ListOverdueInvoices/ alike)
+    ├── GetInvoice/             query + handler; no validator, it takes only the route's id
+    ├── ListOverdueInvoices/    query + handler + validator (the paging bounds)
     ├── EventHandlers/          SendReceiptOnInvoicePaid, RecordInvoiceMetrics
     └── InvoiceResponse.cs      the read model the queries return
 src/Infrastructure/Trellis.Persistence/
@@ -124,7 +126,7 @@ src/Presentation/UI/Trellis.UI.Common/
 
 ## Application (`src/Core/Trellis.Application/Features/Invoices/`)
 
-Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListOverdueInvoices`. Each carries a validator too, except `PayInvoice`, `VoidInvoice` and `GetInvoice`: they take only the id the route has already bound, which leaves nothing to check. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`) and `InvoiceResponse` (read model).
+Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListOverdueInvoices`. Each carries a validator too, except `PayInvoice`, `VoidInvoice` and `GetInvoice`: they take only the id the route has already bound, which leaves nothing to check. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`), `EventHandlers/RecordInvoiceMetrics` (→ `InvoiceMetrics`: the issued and paid counters, one handler per event) and `InvoiceResponse` (read model).
 
 `CreateInvoiceCommandHandler` is the railway reference, one chain: `Result.Combine(EmailAddress.Create(…), Currency.Create(…))` creates both value objects before failing, so an invalid e-mail and an invalid currency come back in one 400, and the deconstructing `Bind((email, currency) => Invoice.Create(…))` hands both values on. `Combine` merges validation errors only; a 404 or a 500 among the failures is returned on its own (ADR-0024 amendment).
 
