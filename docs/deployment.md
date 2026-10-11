@@ -153,9 +153,12 @@ Worth alerting on:
   (a handler's dependency is slow, the database claim fails, no API replica runs the processor). Both
   gauges are sampled by the processor on each poll and are the same global number from every replica:
   take `max`, not `sum`.
-- `trellis.outbox.retries` rate (`error.type` names the exception) — a handler's dependency is
-  struggling; the per-attempt line is logged at Warning (event 1301). `trellis.outbox.dispatch.duration`
-  (by `trellis.outbox.outcome`) shows whether handlers approach `Outbox__DispatchTimeout`.
+- `trellis.outbox.retries` rate (`error.type` names the exception; `AggregateException` means several
+  handlers of one message failed) — a handler's dependency is struggling; the per-attempt line is
+  logged at Warning (event 1301) and each failed handler by name (event 1304). Its sibling handlers
+  are not delayed: they ran and were credited, and only the failed ones are retried.
+  `trellis.outbox.dispatch.duration` (by `trellis.outbox.outcome`) shows whether handlers approach
+  `Outbox__DispatchTimeout`.
 - `trellis.outbox.dispatch.duration` with `trellis.outbox.outcome=lease_lost` (event 1303, Warning) —
   a processor outlived its lease: a handler ignored its token past `Outbox__DispatchTimeout`, or the
   database was slower than the budget (event 1306 then says a batch was cut short for that reason).

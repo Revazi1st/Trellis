@@ -278,14 +278,8 @@ internal sealed class OutboxProcessor(
             await dispatcher.Dispatch(
                 domainEvent,
                 completed,
-                checkpoint: handler =>
-                {
-                    // Commit this handler's tracked writes together with its credit, so "credited" always
-                    // means "durable". CancellationToken.None: the side effect already happened, and a
-                    // stopping host must still write the credit or the handler runs again on the next one.
-                    message.CompletedHandlers = JsonSerializer.Serialize(completed.Append(handler));
-                    return context.SaveChangesAsync(CancellationToken.None);
-                },
+                checkpoint: handler => CheckpointAsync(context, message, completed, handler),
+                onHandlerFailed: (handler, exception) => HandlerFailedAsync(context, message, handler, exception),
                 dispatch.Token);
 
             message.Status = OutboxMessageStatus.Processed;
@@ -308,6 +302,31 @@ internal sealed class OutboxProcessor(
             context.Update(message);
             return await BookFailureAsync(context, message, activity, exception, completed);
         }
+    }
+
+    /// <summary>
+    /// Commits this handler's tracked writes together with its credit, so "credited" always means
+    /// "durable". CancellationToken.None: the side effect already happened, and a stopping host must still
+    /// write the credit or the handler runs again on the next one.
+    /// </summary>
+    private static async Task CheckpointAsync(AppDbContext context, OutboxMessage message, HashSet<string> completed, string handler)
+    {
+        message.CompletedHandlers = JsonSerializer.Serialize(completed.Append(handler));
+        await context.SaveChangesAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// A handler threw and its siblings go on (the dispatcher isolates them): whatever it left in the
+    /// scope's tracker was never committed and must not ride the next handler's checkpoint, so the tracker
+    /// is cleared and the message re-attached unchanged — its originals, the lease included, are what the
+    /// last successful save left. Only this handler is retried; the line says which one.
+    /// </summary>
+    private Task HandlerFailedAsync(AppDbContext context, OutboxMessage message, string handler, Exception exception)
+    {
+        context.ChangeTracker.Clear();
+        context.Attach(message);
+        OutboxLog.HandlerFailed(logger, exception, handler, message.Id, message.Type);
+        return Task.CompletedTask;
     }
 
     /// <summary>

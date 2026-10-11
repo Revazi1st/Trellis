@@ -7,14 +7,16 @@ using Xunit;
 namespace Trellis.Application.UnitTests;
 
 /// <summary>
-/// The dispatcher's per-handler bookkeeping is what the outbox's retry semantics stand on: a handler
-/// that already succeeded must never run again for the same message — across a retry in a fresh
-/// process, and across a rename of its class.
+/// The dispatcher's per-handler bookkeeping and isolation are what the outbox's retry semantics stand
+/// on: a handler that already succeeded must never run again for the same message — across a retry in
+/// a fresh process, and across a rename of its class — and a handler that fails must not stop its
+/// siblings from running, only itself from being credited.
 /// </summary>
 public sealed class DomainEventDispatcherTests
 {
     private const string RecordingName = "test.recording";
     private const string FlakyName = "test.flaky";
+    private const string SecondFlakyName = "test.flaky-too";
 
     [Fact]
     public async Task Retry_after_a_partial_failure_skips_handlers_that_already_succeeded()
@@ -49,7 +51,7 @@ public sealed class DomainEventDispatcherTests
         await using ServiceProvider provider = Handlers(
             new RecordingHandler(() => sequence.Add("handler:" + RecordingName)),
             new FlakyHandler { Throw = false, OnHandle = () => sequence.Add("handler:" + FlakyName) });
-        var dispatcher = new DomainEventDispatcher(provider);
+        IDomainEventDispatcher dispatcher = new DomainEventDispatcher(provider);
         var completed = new HashSet<string>(StringComparer.Ordinal);
         List<int> creditedWhenCheckpointed = [];
 
@@ -78,7 +80,7 @@ public sealed class DomainEventDispatcherTests
         var first = new RecordingHandler();
         var second = new FlakyHandler { Throw = false };
         await using ServiceProvider provider = Handlers(first, second);
-        var dispatcher = new DomainEventDispatcher(provider);
+        IDomainEventDispatcher dispatcher = new DomainEventDispatcher(provider);
         var completed = new HashSet<string>(StringComparer.Ordinal);
 
         // The second handler ran, but its writes could not be committed: it must run again on retry.
@@ -108,7 +110,7 @@ public sealed class DomainEventDispatcherTests
         var succeeded = new RecordingHandler();
         await using (ServiceProvider firstProcess = Handlers(succeeded, new FlakyHandler()))
         {
-            var dispatcher = new DomainEventDispatcher(firstProcess);
+            IDomainEventDispatcher dispatcher = new DomainEventDispatcher(firstProcess);
             await Should.ThrowAsync<InvalidOperationException>(
                 () => dispatcher.Dispatch(new TestEvent(), completedFirst, Persist, CancellationToken.None));
         }
@@ -121,7 +123,7 @@ public sealed class DomainEventDispatcherTests
         current = completedRetry;
         await using (ServiceProvider secondProcess = Handlers(succeededAgain, recovered))
         {
-            var dispatcher = new DomainEventDispatcher(secondProcess);
+            IDomainEventDispatcher dispatcher = new DomainEventDispatcher(secondProcess);
             await dispatcher.Dispatch(new TestEvent(), completedRetry, Persist, CancellationToken.None);
         }
 
@@ -177,6 +179,170 @@ public sealed class DomainEventDispatcherTests
         first.Calls.ShouldBe(0);
     }
 
+    [Fact]
+    public async Task A_failing_handler_does_not_stop_its_siblings_and_is_rethrown_as_it_was()
+    {
+        var flaky = new FlakyHandler();        // first: throws
+        var sibling = new RecordingHandler();  // second: must still get its turn
+        await using ServiceProvider provider = Handlers(flaky, sibling);
+        var dispatcher = new DomainEventDispatcher(provider);
+        var completed = new HashSet<string>(StringComparer.Ordinal);
+        List<(string Handler, Exception Exception)> reported = [];
+
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(() => dispatcher.Dispatch(
+            new TestEvent(),
+            completed,
+            checkpoint: null,
+            onHandlerFailed: (handler, exception) =>
+            {
+                reported.Add((handler, exception));
+                return Task.CompletedTask;
+            },
+            CancellationToken.None));
+
+        thrown.Message.ShouldBe("downstream down");   // the single failure, unwrapped
+        sibling.Calls.ShouldBe(1);
+        completed.ShouldBe([RecordingName]);          // the sibling is credited; the failed handler alone is owed
+        reported.ShouldHaveSingleItem();
+        reported[0].Handler.ShouldBe(FlakyName);
+        reported[0].Exception.ShouldBeSameAs(thrown);
+    }
+
+    [Fact]
+    public async Task The_failure_hook_runs_after_the_failed_handler_and_before_the_next_one()
+    {
+        List<string> sequence = [];
+        await using ServiceProvider provider = Handlers(
+            new FlakyHandler { OnHandle = () => sequence.Add("handler:" + FlakyName) },
+            new RecordingHandler(() => sequence.Add("handler:" + RecordingName)));
+        var dispatcher = new DomainEventDispatcher(provider);
+
+        await Should.ThrowAsync<InvalidOperationException>(() => dispatcher.Dispatch(
+            new TestEvent(),
+            new HashSet<string>(StringComparer.Ordinal),
+            checkpoint: name =>
+            {
+                sequence.Add("checkpoint:" + name);
+                return Task.CompletedTask;
+            },
+            onHandlerFailed: (name, _) =>
+            {
+                sequence.Add("failed:" + name);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None));
+
+        sequence.ShouldBe(["handler:" + FlakyName, "failed:" + FlakyName, "handler:" + RecordingName, "checkpoint:" + RecordingName]);
+    }
+
+    [Fact]
+    public async Task Several_failing_handlers_are_thrown_together_naming_each_one()
+    {
+        var survivor = new RecordingHandler();
+        await using ServiceProvider provider = Handlers(new FlakyHandler(), survivor, new SecondFlakyHandler());
+        IDomainEventDispatcher dispatcher = new DomainEventDispatcher(provider);
+        var completed = new HashSet<string>(StringComparer.Ordinal);
+
+        AggregateException thrown = await Should.ThrowAsync<AggregateException>(
+            () => dispatcher.Dispatch(new TestEvent(), completed, CancellationToken.None));
+
+        thrown.InnerExceptions.Count.ShouldBe(2);
+        thrown.InnerExceptions[0].ShouldBeOfType<InvalidOperationException>();
+        thrown.InnerExceptions[1].ShouldBeOfType<TimeoutException>();
+        thrown.Message.ShouldContain("2 of the 3 handlers");
+        thrown.Message.ShouldContain(FlakyName);
+        thrown.Message.ShouldContain(SecondFlakyName);
+        survivor.Calls.ShouldBe(1);
+        completed.ShouldBe([RecordingName]);
+    }
+
+    [Fact]
+    public async Task A_downstream_timeout_while_the_token_is_live_is_one_handlers_failure_like_any_other()
+    {
+        // What HttpClient throws on a timeout: an OperationCanceledException while nobody asked us to stop.
+        var flaky = new FlakyHandler { Exception = static () => new TaskCanceledException("the receipt service timed out") };
+        var sibling = new RecordingHandler();
+        await using ServiceProvider provider = Handlers(flaky, sibling);
+        IDomainEventDispatcher dispatcher = new DomainEventDispatcher(provider);
+        var completed = new HashSet<string>(StringComparer.Ordinal);
+
+        // Awaited as the outbox awaits it (Should.ThrowAsync would Wait() the cancelled task and see a fresh
+        // "A task was canceled." instance): the original exception, message and all, is what comes out.
+        Exception? thrown = await Record.ExceptionAsync(() => dispatcher.Dispatch(new TestEvent(), completed, CancellationToken.None));
+
+        thrown.ShouldBeOfType<TaskCanceledException>().Message.ShouldBe("the receipt service timed out");
+        sibling.Calls.ShouldBe(1);
+        completed.ShouldBe([RecordingName]);
+    }
+
+    [Fact]
+    public async Task A_cancelled_dispatch_token_ends_the_dispatch_at_once_and_is_not_isolated()
+    {
+        // The caller's budget (or the host) cancels while the first handler runs: nothing after it may start,
+        // and the cancellation is not booked against the handler it happened to interrupt.
+        using var budget = new CancellationTokenSource();
+        var interrupted = new FlakyHandler { OnHandle = budget.Cancel, Exception = () => new OperationCanceledException(budget.Token) };
+        var next = new RecordingHandler();
+        await using ServiceProvider provider = Handlers(interrupted, next);
+        var dispatcher = new DomainEventDispatcher(provider);
+        var completed = new HashSet<string>(StringComparer.Ordinal);
+        int reported = 0;
+
+        await Should.ThrowAsync<OperationCanceledException>(() => dispatcher.Dispatch(
+            new TestEvent(),
+            completed,
+            checkpoint: null,
+            onHandlerFailed: (_, _) =>
+            {
+                reported++;
+                return Task.CompletedTask;
+            },
+            budget.Token));
+
+        next.Calls.ShouldBe(0);
+        completed.ShouldBeEmpty();
+        reported.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_failing_checkpoint_on_the_first_handler_stops_the_dispatch_before_the_second_runs()
+    {
+        var first = new RecordingHandler();
+        var second = new FlakyHandler { Throw = false };
+        await using ServiceProvider provider = Handlers(first, second);
+        IDomainEventDispatcher dispatcher = new DomainEventDispatcher(provider);
+        var completed = new HashSet<string>(StringComparer.Ordinal);
+
+        // A checkpoint failure is never isolated: nothing after it could be committed either.
+        await Should.ThrowAsync<InvalidOperationException>(() => dispatcher.Dispatch(
+            new TestEvent(),
+            completed,
+            name => name == RecordingName ? Task.FromException(new InvalidOperationException("commit failed")) : Task.CompletedTask,
+            CancellationToken.None));
+
+        first.Calls.ShouldBe(1);
+        second.Calls.ShouldBe(0);
+        completed.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_throwing_failure_hook_ends_the_dispatch()
+    {
+        var sibling = new RecordingHandler();
+        await using ServiceProvider provider = Handlers(new FlakyHandler(), sibling);
+        var dispatcher = new DomainEventDispatcher(provider);
+
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(() => dispatcher.Dispatch(
+            new TestEvent(),
+            new HashSet<string>(StringComparer.Ordinal),
+            checkpoint: null,
+            onHandlerFailed: (_, _) => Task.FromException(new InvalidOperationException("the tracker could not be reset")),
+            CancellationToken.None));
+
+        thrown.Message.ShouldBe("the tracker could not be reset");
+        sibling.Calls.ShouldBe(0);
+    }
+
     private static ServiceProvider Handlers(params IDomainEventHandler<TestEvent>[] handlers)
     {
         var services = new ServiceCollection();
@@ -210,14 +376,23 @@ public sealed class DomainEventDispatcherTests
 
         public bool Throw { get; set; } = true;
 
+        public Func<Exception> Exception { get; init; } = static () => new InvalidOperationException("downstream down");
+
         public Action? OnHandle { get; init; }
 
         public Task Handle(TestEvent domainEvent, CancellationToken cancellationToken)
         {
             Calls++;
             OnHandle?.Invoke();
-            return Throw ? Task.FromException(new InvalidOperationException("downstream down")) : Task.CompletedTask;
+            return Throw ? Task.FromException(Exception()) : Task.CompletedTask;
         }
+    }
+
+    [DomainEventHandlerName(SecondFlakyName)]
+    private sealed class SecondFlakyHandler : IDomainEventHandler<TestEvent>
+    {
+        public Task Handle(TestEvent domainEvent, CancellationToken cancellationToken)
+            => Task.FromException(new TimeoutException("also down"));
     }
 
     private sealed class UnnamedHandler : IDomainEventHandler<TestEvent>

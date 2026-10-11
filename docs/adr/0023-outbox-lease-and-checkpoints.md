@@ -2,7 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-08
-- **Amended**: 2026-10-11 — the lease is also the fence on every bookkeeping write (see *Amendment* below)
+- **Amended**: 2026-10-11 — the lease is also the fence on every bookkeeping write, and every sibling handler runs on each attempt (see *Amendment* below)
 - **Refines**: ADR-0018 (the transactional outbox stays; this decides how the processor dispatches,
   retries and fails). It does not supersede it.
 
@@ -114,7 +114,7 @@ no new package; the `OutboxMessages` schema does not change (the shipped `Initia
   the dispatcher checkpoint tests, and the writing-handler case in `TenancyTests` on the all-options leg.
 
 
-## Amendment (2026-10-11): the lease is also the fence
+## Amendment (2026-10-11): the lease is also the fence; siblings run on every attempt
 
 Decision 1 made a claimed row invisible to the other processors by stamping `NextAttemptAtUtc`, and
 the consequences admitted the residue: a processor that outlived its lease — a handler ignoring its
@@ -150,6 +150,21 @@ The residual duplicate-dispatch window is as before (a crash between a side effe
 a handler past the lease); what changed is that the stale processor can no longer corrupt the row.
 `OutboxRetryTests` proves it: a processor that wakes up after its lease was taken over fails to book
 either a back-off or a dead letter over the Processed row.
+
+**Decision 3, refined: every sibling handler runs on each attempt; only the failed ones are retried.**
+The dispatcher used to stop at the first handler that threw, so an SMTP outage behind
+`SendReceiptOnInvoicePaid` held `RecordMetricsOnInvoicePaid` hostage through 45 minutes of back-off.
+`IDomainEventDispatcher.Dispatch(event, completed, checkpoint, onHandlerFailed, ct)` now catches each
+handler's own exception — keyed on the token, `when (e is not OperationCanceledException ||
+!cancellationToken.IsCancellationRequested)` — reports it through `onHandlerFailed`, leaves the handler
+uncredited and goes on to the next one. The outbox's hook clears the message scope's tracker and
+re-attaches the message, so the next checkpoint commits its own handler's writes alone (nothing of the
+failed handler rides along), and logs the handler by name (Warning 1304). After the last handler a single
+failure is rethrown as it was (`error.type` and the retry line keep their meaning) and several are one
+`AggregateException` naming the handlers, which the row's `Error` then shows. What is not isolated: a
+checkpoint failure (nothing after it could be committed either) and a cancellation of the dispatch token
+(a budget expiry or a stopping host), which ends the dispatch at once — a handler that times out still
+consumes the shared budget. `Attempts` still counts one per claim, however many handlers failed in it.
 
 [^1]: Amended 2026-10-11: the concurrency-token annotation of the amendment below changed the EF model
     snapshot, so the shipped `InitialCreate` was regenerated (pre-release convention) with the

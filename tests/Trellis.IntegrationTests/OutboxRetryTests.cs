@@ -75,13 +75,92 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         paid.NextAttemptAtUtc.ShouldBe(Now + TimeSpan.FromSeconds(30));
         paid.Error.ShouldBe("downstream down");
         paid.ProcessedAtUtc.ShouldBeNull();
-        ShouldCredit(paid, SendReceipt, RecordMetrics);
+        ShouldCredit(paid, SendReceipt, RecordMetrics, BlockingName);   // the sibling after the failed one ran too
         ShouldNotCredit(paid, FlakyName);
         _flaky.Calls.ShouldBe(1);
         await EmailSender.Received(1).SendAsync("billing@acme.com", Arg.Any<string>(), Arg.Is<string>(body => body.Contains(id.ToString())), Arg.Any<CancellationToken>());
 
         // Isolation across the batch: the other message of the same claim is finished, not dragged along.
         (await RowAsync(IssuedType)).Status.ShouldBe(OutboxMessageStatus.Processed);
+    }
+
+    [Fact]
+    public async Task A_failing_first_handler_does_not_delay_its_siblings_and_alone_is_retried()
+    {
+        // The real receipt handler is first: an SMTP outage must not delay the metric or the writer behind it.
+        EmailSender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("smtp down")));
+        _writing.Enabled = true;
+        await PayNewInvoiceAsync();
+        OutboxProcessor processor = CreateOutboxProcessor();
+
+        (await processor.ProcessBatchAsync(Ct)).ShouldBe(2);
+
+        OutboxMessage paid = await RowAsync(PaidType);
+        paid.Status.ShouldBe(OutboxMessageStatus.Pending);
+        paid.Attempts.ShouldBe(1);
+        paid.Error.ShouldBe("smtp down");
+        ShouldCredit(paid, RecordMetrics, WritingName, FlakyName, BlockingName);   // every sibling ran and was checkpointed…
+        ShouldNotCredit(paid, SendReceipt);                                        // …the failed one alone is owed
+        (await InvoiceCountAsync()).ShouldBe(2);   // the writer's invoice is durable although the handler before it failed
+        _flaky.Calls.ShouldBe(1);
+
+        // SMTP is back: the retry sends the receipt and runs nothing else.
+        EmailSender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        Time.Advance(TimeSpan.FromSeconds(30));
+        (await processor.ProcessBatchAsync(Ct)).ShouldBe(1);
+
+        paid = await RowAsync(PaidType);
+        paid.Status.ShouldBe(OutboxMessageStatus.Processed);
+        ShouldCredit(paid, SendReceipt, RecordMetrics, WritingName, FlakyName, BlockingName);
+        (await InvoiceCountAsync()).ShouldBe(2);
+        _flaky.Calls.ShouldBe(1);
+        await EmailSender.Received(2).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Two_failing_handlers_are_retried_together_and_the_error_names_both()
+    {
+        using var recorder = new MetricRecorder(MeterFactory);
+        EmailSender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("smtp down")));
+        _flaky.Throw = true;
+        await PayNewInvoiceAsync();
+        OutboxProcessor processor = CreateOutboxProcessor();
+
+        await processor.ProcessBatchAsync(Ct);
+
+        OutboxMessage paid = await RowAsync(PaidType);
+        paid.Status.ShouldBe(OutboxMessageStatus.Pending);
+        paid.Attempts.ShouldBe(1);   // one attempt, however many handlers failed in it
+        string error = paid.Error.ShouldNotBeNull();
+        error.ShouldContain(SendReceipt);
+        error.ShouldContain(FlakyName);
+        error.ShouldContain("smtp down");
+        error.ShouldContain("downstream down");
+        ShouldCredit(paid, RecordMetrics, BlockingName);
+        ShouldNotCredit(paid, SendReceipt, FlakyName);
+        recorder.Total("trellis.outbox.retries", Tag(OutboxMetrics.ErrorTypeAttribute, nameof(AggregateException))).ShouldBe(1);
+
+        // One dependency recovers: its handler is credited, the other is owed alone and the error is its own again.
+        EmailSender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        Time.Advance(TimeSpan.FromSeconds(30));
+        await processor.ProcessBatchAsync(Ct);
+
+        paid = await RowAsync(PaidType);
+        paid.Status.ShouldBe(OutboxMessageStatus.Pending);
+        paid.Attempts.ShouldBe(2);
+        paid.Error.ShouldBe("downstream down");
+        ShouldCredit(paid, SendReceipt, RecordMetrics, BlockingName);
+        ShouldNotCredit(paid, FlakyName);
+
+        _flaky.Throw = false;
+        Time.Advance(TimeSpan.FromMinutes(1));
+        await processor.ProcessBatchAsync(Ct);
+
+        (await RowAsync(PaidType)).Status.ShouldBe(OutboxMessageStatus.Processed);
+        _flaky.Calls.ShouldBe(3);
+        await EmailSender.Received(2).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());   // the failed try and the one that went out
     }
 
     [Fact]
@@ -120,7 +199,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         paid.Error.ShouldBeNull();
         paid.ProcessedAtUtc.ShouldBe(Time.GetUtcNow());
         paid.Attempts.ShouldBe(1);   // the successful attempt is not a failure to count
-        ShouldCredit(paid, SendReceipt, FlakyName);
+        ShouldCredit(paid, SendReceipt, RecordMetrics, FlakyName, BlockingName);
         _flaky.Calls.ShouldBe(2);
         await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
