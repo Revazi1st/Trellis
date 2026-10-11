@@ -17,6 +17,18 @@ dotnet publish src/Presentation/UI/Trellis.UI.Web /t:PublishContainer   # if the
 
 Base image, exposed port and entry point derive from the project; registry and tag are MSBuild
 properties (`-p:ContainerRegistry=… -p:ContainerRepository=… -p:ContainerImageTag=…`).
+Tag each image with the commit it was built from (`-p:ContainerImageTag=$(git rev-parse --short HEAD)`),
+or with the version of a release build, rather than only the default `latest`: `service.version` in the
+telemetry already carries the commit (the informational version, `1.0.0+<sha>`), so a trace leads to
+the image that produced it, and a rollback names one.
+
+**A software bill of materials.** GitHub's dependency graph exports an SPDX SBOM of every package the
+solution references (*Insights → Dependency graph → Export SBOM*, or
+`gh api repos/{owner}/{repo}/dependency-graph/sbom`). An SBOM of what an image actually contains comes
+from the pipeline that publishes it: a scanner over the pushed image or over the `dotnet publish`
+output, optionally attested with `actions/attest-sbom`, which, like provenance attestation, needs a
+public repository or GitHub Enterprise Cloud. CI here builds the images only to smoke-test them, so it
+produces none.
 
 CI's `container-smoke` job (`.github/workflows/ci.yml`) publishes these images on every run, runs the
 migration image against PostgreSQL, then boots the API image (and the web image, with the UI) in
@@ -107,6 +119,7 @@ fails the rollout, not the first request.
 | `ForwardedHeaders__KnownProxies__0…` / `ForwardedHeaders__KnownNetworks__0…` | behind ingress | IPs / CIDR ranges of trusted proxies. Without them `X-Forwarded-For` is ignored (loopback-only default — spoof-safe) and every caller shares the ingress IP's rate-limit bucket. `aspire publish` output sets `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`; that switch cannot widen trust — with no list configured the API keeps the loopback-only default and logs a startup warning naming these settings (ADR-0021). A Blazor Server web host signs everyone in from one address: 10 logins/min per web host, by design. |
 | `Kestrel__Limits__MaxRequestBodySize` / `Kestrel__Limits__MaxRequestHeadersTotalSize` | no | Request caps in bytes: 1 MB body (larger → 413) and 32 KB of headers by default. Raise per endpoint for a real upload, not globally. |
 | `Cors__AllowedOrigins__0…` | if browsers call cross-origin | Allowed origins; **none by default** (same-origin only). |
+| `Telemetry__IncludeErrorDetail` | no — Development only | `true` appends `Error.Description` to the use-case outcome line of a failure (event 1004 instead of 1002). Only `appsettings.Development.json` sets it; leave it unset elsewhere, because a description can repeat what a user typed or what a third party wrote, and the line is written at Information for every request. The error type and code identify the failure without it, and the response carries the text. |
 | `Retention__*` | no | Janitor windows for the bookkeeping tables: `SweepInterval` (1h; 1 s – 1 day), `InitialDelay` before the first sweep (1m; 0 – 1h), `ProcessedOutboxAge` (3d; ≥ 1h), `DeadLetteredOutboxAge` (30d; ≥ 1 day), `IdempotencyKeyAge` (2d; ≥ 1h), `DeadRefreshTokenAge` (30d; ≥ 1 day — keep it ≥ `Authentication__RefreshTokenDays`, a consumed token is what makes a replay detectable). Every window is capped at 365 days. TimeSpan format, e.g. `7.00:00:00`. A value out of range stops the API at boot, naming the key. |
 | `Outbox__*` | no | The outbox processor (ADR-0023): `PollInterval` (5 s; 100 ms – 10 min) between polls once a batch came back short, `BatchSize` (20; 1 – 1000) rows per claim, `MaxAttempts` (8; 1 – 50) failures before a message is dead-lettered, `BaseRetryDelay` (30 s; 1 s – 1 h) doubling per failure up to `MaxRetryDelay` (15 min; 1 s – 1 day, and ≥ `BaseRetryDelay`), `DispatchTimeout` (30 s; 1 s – 10 min) per message's handlers. Defaults retry after 30 s, 1 m, 2 m, 4 m, 8 m, 15 m, 15 m and dead-letter about 45 minutes after the first failure. A claimed row is leased for `DispatchTimeout × (BatchSize + 1)` (10.5 min): after a **crash** its in-flight rows reappear within that long (a graceful stop releases them at once) — shorten `BatchSize` or `DispatchTimeout` to shorten it. The lease is also the fence: a processor still working on a row after its lease was claimed again writes nothing more to it (the attempt is booked `lease_lost`), so a stale replica cannot undo the new owner's bookkeeping. TimeSpan format. A value out of range stops the API at boot, naming the key. |
 
@@ -129,7 +142,7 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every host exports logs, metrics and trace
 
 - **What is exported**: every meter and trace source named `Trellis.*` — ServiceDefaults subscribes
   by prefix, so a new meter needs no host registration (`TelemetryNamingTests` keeps every name on
-  the prefix) — plus ASP.NET Core, HttpClient and runtime instrumentation, the `Polly` meter
+  the prefix, and in the [Telemetry reference](#telemetry-reference) below) — plus ASP.NET Core, HttpClient and runtime instrumentation, the `Polly` meter
   (retries, timeouts and open circuits of every HttpClient pipeline) and the
   `Microsoft.EntityFrameworkCore` meter (SaveChanges, optimistic-concurrency failures,
   execution-strategy retries).
@@ -180,10 +193,69 @@ Worth alerting on:
 
 Health-probe requests are filtered out of tracing — probes don't pollute the trace stream.
 
+**Sampling.** Every host records every trace by default (the SDK's parent-based always-on sampler):
+right for development and a small deployment, expensive at production volume. To sample, set
+`OTEL_TRACES_SAMPLER=parentbased_traceidratio` and `OTEL_TRACES_SAMPLER_ARG` to the share to keep
+(`0.1` keeps one trace in ten) on every host. Parent-based matters: a host that receives a sampled
+call records its part of the trace, so a request that crosses hosts stays one whole trace, which a bare
+`traceidratio` sampler, deciding afresh on each host, breaks apart. To keep every failing trace, leave the
+SDK at 100 % and tail-sample at an OpenTelemetry collector instead. Sampling thins spans only: counts come
+from the metrics (ASP.NET Core's `http.server.request.duration`, the instruments below) and from the
+use-case outcome lines, which are written whatever the decision. An outbox dispatch span follows the
+decision of the request that raised the event, so a message from an unsampled request has no span, but
+its failures still reach `trellis.outbox.retries`, `trellis.outbox.dead_lettered` and the Warning lines.
+Leave Development at the default: the Aspire dashboard is more useful with every trace.
+<!--#if (IncludeUI) -->
+
+The web host runs the same ServiceDefaults: set the two variables on it as well as on the API, so a page
+that calls the API is sampled as one trace.
+<!--#endif -->
+
 The invoice read cache keeps an entry 30 seconds in each API instance's memory (L1) and, with the
 `UseRedis` toggle, five minutes in Redis (L2). A write evicts the entry from its own instance and
 from Redis only, so with several replicas another replica can serve the previous state, ETag
 included, for up to 30 seconds; without Redis every replica caches on its own for the same 30 seconds.
+
+### Telemetry reference
+
+Every source, meter, instrument, attribute and log event id the code emits, as dashboards and alerts
+should name them. `TelemetryNamingTests` reads this section and the code and fails both ways: a name,
+unit or event id listed here that the code does not emit, and one the code emits that is not listed.
+Change the two together.
+
+**Spans**
+
+| Source | Span | Attributes |
+|---|---|---|
+| `Trellis.UseCases` | one per use case, named after its message type (`CreateInvoiceCommand`), inside the request span | `trellis.usecase.outcome`: `success`, `failure`, `exception` or `cancelled`. A failed `Result` adds `trellis.usecase.error_code` (its code) and `trellis.usecase.error_type` (its `ErrorType`), not `error.type`, so a 404 does not count as an error. Only an exception sets `error.type` (its full type name), status Error with its message, and the exception event |
+| `Trellis.Outbox` | `outbox <event type>` (`outbox invoices.paid.v1`), one per dispatch attempt, under the trace of the request that raised the event | `trellis.outbox.message_id`, `trellis.outbox.event_type`, `trellis.outbox.attempt` (from 1), `trellis.outbox.outcome`: `processed`, `retry_scheduled`, `dead_lettered` or `lease_lost`; `trellis.outbox.reason` on a dead letter: `exhausted`, `unknown_type` or `poison`; `error.type`: the failing exception's full type name, or the `Outbox.*` code of an unreadable row |
+| `Trellis.MigrationService` | `Migrate and seed database`, once per run | — |
+
+The ASP.NET Core request span carries `trellis.correlation_id`, the response's `X-Correlation-ID`. Every
+signal's resource carries `service.version` and `deployment.environment.name` (*Who emits it*, above).
+
+**Metrics**
+
+| Instrument | Meter | Kind | Unit | Attributes |
+|---|---|---|---|---|
+| `trellis.validation.failures` | `Trellis.UseCases` | counter | `{failure}` | `trellis.usecase.name` (the message type), `trellis.validation.code` (the rule's code, never the field or the value); counted at the outcome, so a domain rule's code counts beside the validators' |
+| `trellis.invoices.issued` | `Trellis.Invoices` | counter | `{invoice}` | `trellis.invoice.currency` |
+| `trellis.invoices.paid` | `Trellis.Invoices` | counter | `{invoice}` | — |
+| `trellis.outbox.dispatched` | `Trellis.Outbox` | counter | `{message}` | `trellis.outbox.event_type` |
+| `trellis.outbox.retries` | `Trellis.Outbox` | counter | `{message}` | `trellis.outbox.event_type`, `error.type` (the exception's short type name) |
+| `trellis.outbox.dead_lettered` | `Trellis.Outbox` | counter | `{message}` | `trellis.outbox.event_type`, `trellis.outbox.reason` |
+| `trellis.outbox.dispatch.duration` | `Trellis.Outbox` | histogram | `s` | `trellis.outbox.event_type`, `trellis.outbox.outcome` |
+| `trellis.outbox.pending` | `Trellis.Outbox` | gauge | `{message}` | — (every replica reports the same number: take `max`) |
+| `trellis.outbox.oldest_pending_age` | `Trellis.Outbox` | gauge | `s` | — (take `max`) |
+
+**Log event ids** — match an alert on the id, never on the text.
+
+| Range | Written by | Events |
+|---|---|---|
+| 10xx | the use-case outcome line (`LoggingDecorators`), one per invocation inside the `UseCase {UseCase}` scope, with `ElapsedMilliseconds` | 1001 succeeded (Information); 1002 failed, with `ErrorType` and `ErrorCode`; 1003 failed validation, adding the `ValidationFailures` field:code pairs; 1004 failed with `ErrorDescription`, only while `Telemetry__IncludeErrorDetail` is on; 1005 cancelled by the caller (Information); 1006 threw (Error, with the exception). 1002–1004 are Information for a classified 4xx outcome and Warning otherwise |
+| 11xx | the security events (`SecurityEventLog`) | 1101–1106, listed in [features/auth.md](features/auth.md) under *Security events* |
+| 12xx | e-mail (`Infrastructure/Email`) | 1201 not sent, the `Logging` stand-in (Information); 1202 discarded, `None` (Debug); 1203 the stand-in runs outside Development (Warning); 1204 e-mail switched off (Information); 1205 sent through the relay (Information, masked recipient); 1206 SMTP in clear outside Development (Warning) |
+| 13xx | the outbox processor (`OutboxLog`); a message's lines inside the `OutboxMessage {MessageId} {EventType}` scope | 1301–1309, listed under [Outbox operations](#outbox-operations) |
 
 ### Outbox operations
 

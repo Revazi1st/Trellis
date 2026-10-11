@@ -3,9 +3,9 @@
 Agent entry point — read only what the task needs.
 
 ## Guides (humans & agents)
-- [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns
-- [development.md](development.md) — prerequisites, commands, running the app, tests
-- [deployment.md](deployment.md) — container images, what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP, outbox and idempotency runbooks
+- [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns, a request stage by stage, domain versus integration events and what each delivery step guarantees, shipping `Api.Contracts` as a package, scheduled use cases
+- [development.md](development.md) — prerequisites, commands, running the app, the testing map (what each project proves, running part of the suite, which helper for which goal), when a request fails
+- [deployment.md](deployment.md) — container images (tags, an SBOM), what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP and trace sampling, the telemetry reference (every source, meter, instrument, attribute and log event id, test-checked), outbox and idempotency runbooks
 - [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge
 - [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice
 - [features/auth.md](features/auth.md) — Identity + JWT, refresh rotation/revocation, permissions, lockout
@@ -13,30 +13,30 @@ Agent entry point — read only what the task needs.
 - [threat-model.md](threat-model.md) — assets, mitigations that exist today, known gaps to decide before production
 - [api/openapi.v1.json](api/openapi.v1.json) — the committed OpenAPI contract, regenerated with `UPDATE_OPENAPI_SNAPSHOT=1` and checked against the served document on every test run (ADR-0025)
 <!--#if (TemplateSource) -->
-- [releasing.md](releasing.md) — releasing the template package: CHANGELOG section, dry run, tag, nuget.org trusted publishing, recovery
+- [releasing.md](releasing.md) — releasing the template package: an agent dry run before a minor release, CHANGELOG section, dry run, tag, nuget.org trusted publishing, recovery
 <!--#endif -->
 
 ## Layer rules (`.claude/rules/`, loaded when you touch a file their glob matches)
 - [api.md](../.claude/rules/api.md) — `src/Presentation/Api/**/*.cs`: one endpoint per use case, problem details, secure by default, rate limits, idempotency, caching, paging, OpenAPI
-- [application.md](../.claude/rules/application.md) — `src/Core/Trellis.Application/**/*.cs`: slices, handlers, validators, ports, event handlers, telemetry names, the pipeline
-- [domain.md](../.claude/rules/domain.md) — `src/Core/Trellis.Domain/**/*.cs`: aggregates, value objects, IDs, events, specifications
+- [application.md](../.claude/rules/application.md) — `src/Core/Trellis.Application/**/*.cs`: slices, handlers, validators, ports, event handlers, one aggregate per command, multi-aggregate commands, handler failures and idempotency keys, per-record authorization, telemetry names, the pipeline
+- [domain.md](../.claude/rules/domain.md) — `src/Core/Trellis.Domain/**/*.cs`: aggregates, lifecycle rules, value objects and what they guarantee, IDs, events, specifications, choosing an `ErrorType`
 - [infrastructure.md](../.claude/rules/infrastructure.md) — `src/Infrastructure/Trellis.Infrastructure/**/*.cs`: adapters, options, outbound HTTP, e-mail
 - [persistence.md](../.claude/rules/persistence.md) — `src/Infrastructure/Trellis.Persistence/**/*.cs`: EF configurations, interceptors, tenancy, outbox, retention, options, migrations, Identity
 - [sharedkernel.md](../.claude/rules/sharedkernel.md) — `src/Core/Trellis.SharedKernel/**/*.cs`: Result and errors, CQRS contracts, the decorator pipeline, cancellation filters, the unit of work
-- [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, each test project's job, the fitness suites, the OpenAPI snapshot
+- [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, test names, each test project's conventions, the fitness suites and their positive controls, the fixture contract and helpers, the OpenAPI snapshot
 - [tools.md](../.claude/rules/tools.md) — `tools/**/*.{cs,csproj}`, `.github/**/*.{yml,yaml}`, `docker-compose.yml`: AppHost, MigrationService, CI supply-chain gates
 <!--#if (IncludeUI) -->
 - [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the host shell
 <!--#endif -->
 
 ## Skills (`.claude/skills/`, step-by-step recipes; invoke one by name, e.g. `/add-feature`)
-- [add-feature](../.claude/skills/add-feature/SKILL.md) — a new aggregate or use case, copied from the Invoices slice from the Domain outward; a checklist that names the test behind each enforced box
-- [add-integration](../.claude/skills/add-integration/SKILL.md) — a call to a third-party HTTP API, copied from ExchangeRates: port, validated options, typed client, per-client resilience, a cheap cached health probe, tests, docs
+- [add-feature](../.claude/skills/add-feature/SKILL.md) — a new aggregate or use case, copied from the Invoices slice from the Domain outward; a checklist that starts from the feature doc, names the test behind each enforced box, and lists the shapes the slice does not show (ownership, several aggregates, unique keys, timers, keyset paging)
+- [add-integration](../.claude/skills/add-integration/SKILL.md) — a call to a third-party HTTP API, copied from ExchangeRates: port, validated options, typed client, per-client resilience, a cheap cached health probe, tests, docs; and receiving the provider's webhooks (signature, deduplication on its event id)
 - [add-migration](../.claude/skills/add-migration/SKILL.md) — an EF Core migration generated with the containerized `dotnet-ef`, never hand-edited
 <!--#if (TemplateSource) -->
 - [add-toggle](../.claude/skills/add-toggle/SKILL.md) — a new template toggle wired through template config, slnx/csproj conditionals, C# blocks, CI and docs (maintainers only)
 <!--#endif -->
-- [new-adr](../.claude/skills/new-adr/SKILL.md) — record an architecture decision: the next number in the right range (0100 and up for the project's own), the index line, dated amendments instead of edits
+- [new-adr](../.claude/skills/new-adr/SKILL.md) — record an architecture decision: the next number in the right range (0100 and up for the project's own), the index line, an optional *Alternatives / Revisit when* section, dated amendments instead of edits
 - [remove-feature](../.claude/skills/remove-feature/SKILL.md) — delete the Invoices reference slice from the Domain outward once your own first feature exists
 - [run-app](../.claude/skills/run-app/SKILL.md) — run the full stack with `aspire run` (needs a local SDK) or as sibling containers without one, and verify it end to end
 

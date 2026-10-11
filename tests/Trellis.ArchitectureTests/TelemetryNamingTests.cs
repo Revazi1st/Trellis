@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Shouldly;
 using Xunit;
@@ -17,6 +18,11 @@ namespace Trellis.ArchitectureTests;
 /// </list>
 /// A name passed as an identifier must be a <c>const string</c> declared in the same file (or in the file
 /// named after its qualifier, <c>Type.Name</c> → <c>Type.cs</c>); anything the scan cannot resolve fails.
+/// <para>
+/// The same scan holds the operators' reference to the code: the <c>Telemetry reference</c> section of
+/// <c>docs/deployment.md</c> lists every source, meter, instrument (with its unit), attribute and log event
+/// id, and a name, unit or id found on one side only fails here, whichever side it is on.
+/// </para>
 /// </summary>
 public sealed partial class TelemetryNamingTests
 {
@@ -48,6 +54,13 @@ public sealed partial class TelemetryNamingTests
     private static readonly string LowerPrefix = Prefix.ToLowerInvariant();
 
     private static readonly Lazy<Scan> Found = new(ScanSources);
+
+    /// <summary>The heading of the section in <see cref="ReferenceDocument"/> that lists every telemetry name.</summary>
+    private const string ReferenceHeading = "### Telemetry reference";
+
+    private static readonly string ReferenceDocument = Path.Combine("docs", "deployment.md");
+
+    private static readonly Lazy<Reference> Documented = new(ReadReference);
 
     [Fact]
     public void Meters_and_activity_sources_are_named_with_the_subscribed_prefix()
@@ -97,6 +110,67 @@ public sealed partial class TelemetryNamingTests
             "pass telemetry names as string literals or as const strings declared in the same file (or in Type.cs for Type.Name)");
 
     [Fact]
+    public void Every_emitted_name_is_in_the_telemetry_reference()
+    {
+        Documented.Value.Names.ShouldNotBeEmpty($"no telemetry name found under '{ReferenceHeading}' in {ReferenceDocument}");
+
+        string[] undocumented = [.. EmittedNames()
+            .Where(static name => !Documented.Value.Names.Contains(name.Value))
+            .Select(static name => $"{name.Location}: '{name.Value}'")
+            .Distinct(StringComparer.Ordinal)];
+
+        undocumented.ShouldBeEmpty(
+            $"list every emitted name under '{ReferenceHeading}' in {ReferenceDocument}: dashboards and alerts are built from that page");
+    }
+
+    [Fact]
+    public void Every_name_in_the_telemetry_reference_is_emitted()
+    {
+        HashSet<string> emitted = new(EmittedNames().Select(static name => name.Value), StringComparer.Ordinal);
+
+        string[] stale = [.. Documented.Value.Names.Where(name => !emitted.Contains(name)).Order(StringComparer.Ordinal)];
+
+        stale.ShouldBeEmpty($"{ReferenceDocument} lists names the code no longer emits: rename or delete them there");
+    }
+
+    [Fact]
+    public void Every_instrument_is_in_the_telemetry_reference_with_its_unit()
+    {
+        List<string> violations = [];
+        foreach (Instrument instrument in Found.Value.Instruments)
+        {
+            if (!Documented.Value.Units.TryGetValue(instrument.Name.Value, out string? documented))
+            {
+                violations.Add($"{instrument.Name.Location}: '{instrument.Name.Value}' has no row in the metrics table");
+            }
+            else if (!string.Equals(documented, instrument.Unit, StringComparison.Ordinal))
+            {
+                violations.Add(
+                    $"{instrument.Name.Location}: '{instrument.Name.Value}' is documented in '{documented}' but declares '{instrument.Unit ?? "no unit"}'");
+            }
+        }
+
+        violations.ShouldBeEmpty($"every instrument has a metrics row under '{ReferenceHeading}' whose Unit cell is the unit it declares");
+    }
+
+    [Fact]
+    public void The_telemetry_reference_lists_exactly_the_logged_event_ids()
+    {
+        Found.Value.EventIds.ShouldNotBeEmpty("the scan found no [LoggerMessage] event id; has the declaration pattern changed?");
+        Documented.Value.EventIds.ShouldNotBeEmpty(
+            $"no event-id row (a first cell such as '13xx') under '{ReferenceHeading}' in {ReferenceDocument}");
+
+        HashSet<int> logged = [.. Found.Value.EventIds.Select(static site => site.Id)];
+        string[] undocumented = [.. Found.Value.EventIds
+            .Where(static site => !Documented.Value.EventIds.Contains(site.Id))
+            .Select(static site => $"{site.Location}: {site.Id}")];
+        int[] stale = [.. Documented.Value.EventIds.Where(id => !logged.Contains(id)).Order()];
+
+        undocumented.ShouldBeEmpty($"list every event id in the event-id table under '{ReferenceHeading}' (a range such as 1301–1309 counts)");
+        stale.ShouldBeEmpty($"{ReferenceDocument} lists event ids that no [LoggerMessage] declares");
+    }
+
+    [Fact]
     public void Pending_renames_still_exist()
     {
         HashSet<string> current = new(
@@ -142,14 +216,80 @@ public sealed partial class TelemetryNamingTests
                     // CreateCounter<T>(name, unit, description, …), CreateObservableGauge<T>(name, callback,
                     // unit, …): the unit is named, or positional right after the name (after the callback).
                     int unitPosition = instrument.Groups["kind"].Value.StartsWith("Observable", StringComparison.Ordinal) ? 2 : 1;
-                    bool hasUnit = arguments.Skip(1).Any(static a => a.StartsWith("unit:", StringComparison.Ordinal))
-                                   || (arguments.Count > unitPosition && !NamedArgument().IsMatch(arguments[unitPosition]));
-                    scan.Instruments.Add(new Instrument(name, hasUnit));
+                    string? unitArgument = arguments.Skip(1).FirstOrDefault(static a => a.StartsWith("unit:", StringComparison.Ordinal))?["unit:".Length..].Trim();
+                    if (unitArgument is null && arguments.Count > unitPosition && !NamedArgument().IsMatch(arguments[unitPosition]))
+                    {
+                        unitArgument = arguments[unitPosition];
+                    }
+
+                    string? unit = unitArgument is null ? null : constants.Resolve(file, unitArgument) ?? unitArgument;
+                    scan.Instruments.Add(new Instrument(name, HasUnit: unitArgument is not null, unit));
                 }
             }
+
+            scan.EventIds.AddRange(LoggerMessageEventId().Matches(file.Code)
+                .Select(match => new EventIdSite(
+                    int.Parse(match.Groups["id"].Value, CultureInfo.InvariantCulture),
+                    $"{file.RelativePath}:{file.LineOf(match.Index)}")));
         }
 
         return scan;
+    }
+
+    /// <summary>Every emitted name: meters, sources, instruments and attributes, semantic-convention ones included.</summary>
+    private static IEnumerable<Name> EmittedNames()
+        => Found.Value.Meters
+            .Concat(Found.Value.Sources)
+            .Concat(Found.Value.Instruments.Select(static instrument => instrument.Name))
+            .Concat(Found.Value.Attributes);
+
+    /// <summary>
+    /// Reads the reference section: every backticked name that carries the prefix or is a semantic-convention
+    /// attribute, the Unit cell of each metrics row (keyed by the instrument in its first cell), and every
+    /// event id of the rows whose first cell is a range such as <c>13xx</c> (one id, or an en-dash range like
+    /// <c>1301–1309</c>). A missing section reads as empty, which the facts above report.
+    /// </summary>
+    private static Reference ReadReference()
+    {
+        var reference = new Reference();
+        string[] lines = File.ReadAllLines(Path.Combine(RepositorySource.Root.FullName, ReferenceDocument));
+        int start = Array.FindIndex(lines, static line => string.Equals(line.Trim(), ReferenceHeading, StringComparison.Ordinal));
+        if (start < 0)
+        {
+            return reference;
+        }
+
+        var prefixedName = new Regex(
+            $@"^(?:{Regex.Escape(Prefix)}|{Regex.Escape(LowerPrefix)})\.[A-Za-z0-9_.]+$", RegexOptions.None, TimeSpan.FromSeconds(1));
+        bool IsName(string token) => prefixedName.IsMatch(token) || SemanticConventionAttributes.Contains(token);
+
+        foreach (string line in lines.Skip(start + 1).TakeWhile(static line => !SectionEnd().IsMatch(line)))
+        {
+            reference.Names.UnionWith(CodeSpan().Matches(line).Select(static code => code.Groups["code"].Value).Where(IsName));
+
+            if (!line.TrimStart().StartsWith('|'))
+            {
+                continue;
+            }
+
+            string[] cells = line.Trim().Trim('|').Split('|');
+            string first = cells[0].Trim();
+            if (EventIdRange().IsMatch(first))
+            {
+                foreach (Match span in EventIdSpan().Matches(string.Join('|', cells.Skip(1))))
+                {
+                    int from = int.Parse(span.Groups["from"].Value, CultureInfo.InvariantCulture);
+                    int to = span.Groups["to"].Success ? int.Parse(span.Groups["to"].Value, CultureInfo.InvariantCulture) : from;
+                    reference.EventIds.UnionWith(Enumerable.Range(from, Math.Max(to - from + 1, 1)));
+                }
+            }
+            else if (cells.Length >= 4 && CodeSpan().Match(first) is { Success: true } instrument && prefixedName.IsMatch(instrument.Groups["code"].Value))
+            {
+                reference.Units[instrument.Groups["code"].Value] = cells[3].Trim().Trim('`');
+            }
+        }
+
+        return reference;
     }
 
     private const string Argument = """(?<arg>"(?:[^"\\]|\\.)*"|(?!new\b)[A-Za-z_][\w.]*)""";
@@ -170,9 +310,40 @@ public sealed partial class TelemetryNamingTests
     [GeneratedRegex(@"^[A-Za-z_]\w*\s*:(?!:)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex NamedArgument();
 
+    [GeneratedRegex(@"\[\s*LoggerMessage\s*\(\s*EventId\s*=\s*(?<id>\d+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex LoggerMessageEventId();
+
+    /// <summary>The next heading of the same or a higher level ends the reference section.</summary>
+    [GeneratedRegex(@"^#{1,3}\s", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex SectionEnd();
+
+    [GeneratedRegex("`(?<code>[^`]+)`", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex CodeSpan();
+
+    [GeneratedRegex(@"^\d{2}xx$", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex EventIdRange();
+
+    [GeneratedRegex(@"\b(?<from>\d{4})(?:\s*[–-]\s*(?<to>\d{4}))?\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex EventIdSpan();
+
     private sealed record Name(string Value, string Location);
 
-    private sealed record Instrument(Name Name, bool HasUnit);
+    /// <param name="Name">The instrument's name and where it is created.</param>
+    /// <param name="HasUnit">Whether the creation passes a unit at all.</param>
+    /// <param name="Unit">The unit as declared (a literal, or the constant it names); null when none is passed.</param>
+    private sealed record Instrument(Name Name, bool HasUnit, string? Unit);
+
+    private sealed record EventIdSite(int Id, string Location);
+
+    /// <summary>What the reference section of <see cref="ReferenceDocument"/> lists.</summary>
+    private sealed class Reference
+    {
+        public HashSet<string> Names { get; } = new(StringComparer.Ordinal);
+
+        public Dictionary<string, string> Units { get; } = new(StringComparer.Ordinal);
+
+        public HashSet<int> EventIds { get; } = [];
+    }
 
     private sealed class Scan
     {
@@ -183,6 +354,8 @@ public sealed partial class TelemetryNamingTests
         public List<Instrument> Instruments { get; } = [];
 
         public List<Name> Attributes { get; } = [];
+
+        public List<EventIdSite> EventIds { get; } = [];
 
         public List<string> Unresolved { get; } = [];
     }

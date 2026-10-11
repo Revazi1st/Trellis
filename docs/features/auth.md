@@ -112,6 +112,103 @@ Contracts in `Api.Contracts/Auth/AuthContracts.cs`. Errors flow as RFC 9457 prob
 for input that fails a validator. The host's own rejections use the same vocabulary:
 `Auth.Unauthenticated` (the bearer challenge, 401), `Auth.Forbidden` (403), `RateLimit.Exceeded` (429).
 
+## Protecting an endpoint
+
+Every endpoint on the versioned group already requires a signed-in caller; what you add says who else is
+let through. `reports:read` below is a placeholder for a permission of yours: a constant in
+`Permissions`, listed in `Permissions.All` and granted to a role in `Roles.Permissions` (the seeding and
+the test hosts read that map), with its row in `EndpointMetadataTests.ExpectedPermissions`.
+
+1. **One permission, the default.** `.RequirePermission(Permissions.Reports.Read)` admits a caller whose
+   token carries `reports:read`. No token, or one that fails validation: **401** `Auth.Unauthenticated`
+   with `WWW-Authenticate: Bearer` (`error="invalid_token"` when a token was presented). A valid token
+   without the permission: **403** `Auth.Forbidden`.
+2. **Signed in is the whole requirement**, for an action on the caller's own account (`revoke-all`): no
+   permission call, and a row in `EndpointMetadataTests.AuthenticatedOnly`, because the test otherwise
+   reads a missing `RequirePermission` as a mistake. Rejected: the same 401.
+3. **Anonymous**, for an endpoint that must work without a token: `.AllowAnonymous()` and a row in
+   `EndpointMetadataTests.AnonymousAllowlist`, reviewed together. Nobody is refused by authorization; an
+   endpoint that takes a guessable credential adds
+   `.RequireRateLimiting(ApiHardeningExtensions.AuthRateLimitPolicy)`, and a source past its ten
+   attempts a minute gets **429** `RateLimit.Exceeded` with `Retry-After`.
+4. **A permission plus a further condition** (office hours, a claim from another system): register a
+   named policy in the API host
+   (`builder.Services.AddAuthorizationBuilder().AddPolicy("ReportsDuringOfficeHours", …)`) and stack it
+   beside the permission, `.RequirePermission(Permissions.Reports.Read).RequireAuthorization("ReportsDuringOfficeHours")`.
+   Both must pass; a caller who fails either gets **403** `Auth.Forbidden`. A named policy never stands in
+   for the permission: `EndpointMetadataTests` wants exactly one catalogued permission per endpoint, and a
+   name outside `Permissions.All` is an ordinary policy, not a permission any role is granted.
+5. **This record, not only this kind of record.** A permission says what a caller may do to reports, not
+   to which report; a per-record rule is the recipe below, and a caller who fails it gets **404**, the
+   same answer as for a record that does not exist.
+
+### Ownership: a record only its owner may see
+
+Permissions are per endpoint; a rule per record (the owner, a team) is the feature's own, and it is
+what OWASP lists first among API risks when it is missing.
+
+- **The owner is a domain fact.** The aggregate stores an `OwnerId`, the `ICurrentUser.UserId` the
+  handler passes to `Create`. Never authorize on the audit `CreatedBy`: it is a user name stamped by
+  Persistence (`AuditingInterceptor`), it changes when the user's name does, and the domain never sees it.
+- **Enforce it where rows are found.** A specification (`ReportSpecs.OwnedBy(ownerId, id)`) or the
+  repository's load filters by owner, so a non-owner's read and write both find nothing and answer the
+  aggregate's own `NotFound`, exactly as the `"SoftDeleted"` filter hides a deleted invoice. Answer 403 instead
+  only where the record's existence is not itself sensitive.
+- **Mind the read cache.** The cache-aside endpoint (`GetInvoice` is the model) answers a hit without
+  running the handler, so an owner check inside the handler never runs on a hit. An owner-scoped read
+  puts the owner in its `CacheKeys` key (and its writes evict that key) or is not cached at all.
+- **Seeing everything is its own endpoint**, with its own permission and an unscoped specification, not a
+  flag on the owner-scoped one.
+- **Test it with two users.** Two clients from `ApiFactory.CreateClientWithPermissions(...)` are two
+  users: the second reads and writes the first's record and gets 404, before and after the record is
+  cached.
+
+Invoices are deliberately not owner-scoped: an invoice belongs to the business, every Member may read it,
+and the reference slice keeps it that way.
+
+## Adding an external identity provider
+
+The API signs and checks its own tokens (ADR-0007). Putting an OpenID Connect provider (Entra ID,
+Keycloak, Auth0) in front of it, beside the local sign-in or instead of it, is not one more
+`AddJwtBearer`; a second bearer scheme breaks in these places, so go through them all:
+
+- **Pick the scheme by issuer.** The permission policies name no authentication scheme
+  (`PermissionPolicyProvider` builds them from `RequireAuthenticatedUser` and the permission alone), so
+  they authenticate with the default scheme. Register the provider's scheme
+  (`AddJwtBearer("External", …)` with its `Authority` and `Audience`) and make the default a policy scheme
+  (`AddPolicyScheme`) whose `ForwardDefaultSelector` reads the token's `iss` and forwards to the local
+  `JwtBearerDefaults.AuthenticationScheme` or to `External`.
+- **Give every scheme the same events.** `AddApiAuthentication` wires the problem-details challenge
+  (`OnChallenge`, which also writes `WWW-Authenticate`) and the forbidden body (`OnForbidden`) on the
+  local scheme only; without them the external scheme's rejections reach clients as the status-code
+  pages' generic `Http.Unauthorized` and `Http.Forbidden` problems, not `Auth.Unauthenticated` and
+  `Auth.Forbidden`.
+<!--#if (UseMultitenancy) -->
+- **Keep the tenant check on the new scheme.** With multi-tenancy the local scheme's `OnTokenValidated`
+  fails a token without a `tenant` claim (ADR-0022); the external scheme needs it too, or such a token
+  reads system-scoped rows instead of being refused.
+<!--#endif -->
+- **Do not carry the HS256 pin over.** `ValidAlgorithms = [SecurityAlgorithms.HmacSha256]` describes the
+  tokens this API mints. The external scheme validates against the provider's published keys with
+  `ValidAlgorithms` set to its asymmetric algorithm (RS256, ES256), never a symmetric one.
+- **Translate the provider's claims into this API's.** Turn off `MapInboundClaims` on that scheme and add
+  an `IClaimsTransformation` that finds the local user for the token's `iss` and `sub` and adds a
+  `ClaimTypes.NameIdentifier` holding that user's `Guid`, plus one `permission` claim per permission
+  (from the provider's roles or the local user's). `CurrentUser` reads `NameIdentifier` as a `Guid`; a
+  provider's `sub` is rarely one, and without the mapping `ICurrentUser.UserId` is null for every external
+  caller, which breaks auditing and ownership and puts them all in the idempotency filter's single
+  `anonymous` partition.
+- **Leave out what the provider owns.** Registration, the lockout and refresh tokens belong to the local
+  sign-in; an external user gets none of them.
+<!--#if (IncludeUI) -->
+- **UI.Web needs a sign-in of its own.** The Blazor pages post a password to `/auth/login`; an external
+  user signs in through an OpenID Connect authorization-code flow or a backend-for-frontend (ADR-0015),
+  and the OIDC handler is a new package: ask first.
+<!--#endif -->
+- **Test the scheme without the provider**: sign an RS256 token with a key the test generates, point the
+  external scheme's issuer and signing key at it, and assert a permission policy's 200 and 403 and the
+  401 problem body.
+
 ## UI
 
 `Login.razor` signs in and `Register.razor` creates a Member account via `IAuthApiClient`;

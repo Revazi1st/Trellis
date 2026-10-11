@@ -30,7 +30,7 @@ you build on top.
 | SMTP relay credentials leaked from configuration or logs (mail sent as your domain: phishing, a burnt sender reputation) | User-secrets in Development, the platform's secret store in production (`Email__Smtp__UserName` / `__Password`), never appsettings: the shipped `appsettings.json` has no `UserName` or `Password` key to fill in. While `Email:Provider` is `Smtp`, boot refuses half a credential pair and credentials without STARTTLS; the sender logs neither them nor the relay's reply | `SmtpOptions`, `SmtpOptionsValidator`, `SmtpEmailSender` |
 | Tokens forged with a weak or absent key | Signing key must be ≥ 32 chars; the API refuses to boot otherwise | `RequireValidTokenOptions`, `AuthTokenOptions` |
 | Refresh tokens readable from a database dump | Only SHA-256 hashes are persisted | `JwtTokenProvider.HashRefreshToken` |
-| Privilege escalation between roles | Permission-based authorization, policies resolved per permission claim; endpoints declare `.RequirePermission(...)` | `PermissionPolicyProvider` |
+| Privilege escalation between roles | Permission-based authorization, policies resolved per permission claim; endpoints declare `.RequirePermission(...)`, and each endpoint's one permission is pinned in the `ExpectedPermissions` table, so a write declared with a read permission fails the test run, and checked on the wire (only that permission is admitted, every other is a 403) | `PermissionPolicyProvider`, `EndpointMetadataTests` |
 | An endpoint shipped without authorization | Deny-by-default on the versioned API group; permissions per endpoint (unknown names fail the boot); the anonymous set is an allowlist test | `MapVersionedApiGroup`, `EndpointMetadataTests` |
 | Token forged by algorithm confusion | Validation accepts HS256 only (`ValidAlgorithms`) | `AddApiAuthentication` |
 | Cross-tenant data access (`--use-multitenancy`) | The tenant comes only from the signed `tenant` claim, minted from the user's persisted membership (`AspNetUsers.TenantId`); request headers are ignored; every aggregate root is filtered and stamped by convention; cache keys carry the tenant; a valid token without the claim is rejected 401 (ADR-0022) | `TenantContext`, `AuthenticationExtensions`, `AppDbContext`, `CacheKeys` |
@@ -70,6 +70,13 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   is never confirmed and invoices are not owner-scoped: every registrant can read all business
   data. Before opening it, add e-mail confirmation or give Member no data permissions until an
   administrator grants a role.
+- **Permissions are per endpoint, never per record** — *open*. A permission lets its holder act on
+  every record its endpoints can address (OWASP's broken object-level authorization when that is
+  wrong). A rule about which records (the owner, a team) is each feature's own: a domain `OwnerId`,
+  enforced in the specification or repository so a non-owner gets the same 404 as for a missing
+  record, with owner-scoped reads keyed by owner or left uncached, because a read-cache hit never runs
+  the handler (`docs/features/auth.md`, *Protecting an endpoint*). The reference invoices are
+  business-wide on purpose.
 - **The tenant chosen by a request header (`--use-multitenancy`)** — *addressed* (ADR-0022). The
   `X-Tenant-Id` header used to select the tenant for authenticated callers; the tenant now comes
   only from the signed `tenant` claim minted from the user's persisted membership, and the header
