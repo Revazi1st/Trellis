@@ -277,7 +277,6 @@ describes planned work that is not in the template yet; the marker goes when it 
   - the error-code vocabulary fitness test and the value-object constructor test;
   - *once imported*: the build-time analyzer for a discarded `Result`.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
-- [ErrorOr](https://github.com/amantinband/error-or) by Amichai Mantinband (MIT): the `Error`/`ErrorType` vocabulary our hand-rolled `Result` mirrors (ADR-0004).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
 
