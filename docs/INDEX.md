@@ -4,7 +4,7 @@ Agent entry point — read only what the task needs.
 
 ## Guides (humans & agents)
 - [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns
-- [development.md](development.md) — prerequisites, commands, running the app, tests
+- [development.md](development.md) — prerequisites, commands, running the app, the testing map (what each project proves, running part of the suite, which helper for which goal), when a request fails
 - [deployment.md](deployment.md) — container images, what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP and trace sampling, the telemetry reference (every source, meter, instrument, attribute and log event id, test-checked), outbox and idempotency runbooks
 - [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge
 - [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice

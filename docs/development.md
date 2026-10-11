@@ -241,6 +241,82 @@ PostgreSQL. Every endpoint's permission, problem shape, idempotency and OpenAPI 
 by the fitness suites, so an `ApiTests` test is for what they cannot see, and the Aspire E2E and browser
 tests stay few.
 
+### Running part of the suite
+
+The test projects run on Microsoft.Testing.Platform (xUnit v3). Narrow a run to one project, then to a
+class or a method by pattern:
+
+```bash
+./scripts/dotnet.sh test tests/Trellis.Domain.UnitTests                                    # one project
+./scripts/dotnet.sh test tests/Trellis.Application.UnitTests --filter-class '*CommandHandlerTests'
+./scripts/dotnet.sh test tests/Trellis.ArchitectureTests --filter-method '*telemetry_reference*'
+./scripts/dotnet.sh test tests/Trellis.ApiTests --filter 'FullyQualifiedName~Idempotency'  # the VSTest-style expression works too
+```
+
+Filter a project, not `Trellis.slnx`: every other project then runs zero tests and exits 8, so the run is
+red although your test passed (add `--ignore-exit-code 8` if you must filter the solution). VSTest-only
+switches such as `--nologo` are not understood either, and a run that reports zero tests is a failure to
+look at, never a pass.
+
+### Which helper for which goal
+
+| Goal | Use | Worked example |
+|---|---|---|
+| A caller holding exactly some permissions | `ApiFactory.CreateClientWithPermissions(...)`: a fresh user each call, minted by the host's `ITokenProvider` | `EndpointMetadataTests` |
+| The seeded admin, or a member who can only read | `ApiFactory.CreateAdminClientAsync`, `CreateMemberClientAsync` | `ProblemDetailsContractTests` |
+| Many users behind one address (a proxy, the web host) | `ApiFactory.CreateClientFrom(address)` | `AuthRateLimitTests` |
+| A commit that conflicts or throws, a cache that fails | `ApiFactory.WithTestServices(...)`, then `CreateAdminClientOnAsync(host, …)` | `CommitFailureTests` |
+| A POST in an arrange step | `PostWithIdempotencyKeyAsync` | `InvoiceContractTests` |
+| A problem response, header and body | `ShouldBeProblemJson()`, then read `ProblemResponse` | `ProblemDetailsContractTests` |
+| A new status or problem `code` | a row in `ProblemDetailsContractTests` | — |
+| Time that passes without sleeping | `IntegrationTestBase.Time`, `ApiFactory.Time` (`Reset()` it in a `finally`), `FakeTimeProvider` | `DataRetentionJanitorTests` |
+| A limit only Kestrel enforces | `RequestLimitTests.KestrelApiFactory` | `EndpointMetadataTests.cs` |
+| Observers instead of mocks: a clock, a hasher, captured logs | `AuthFlowTests.Factory` | `AuthFlowTests` |
+| The shipped defaults, not the fixture's settings | a plain `WebApplicationFactory<Program>` | `AuthFlowTests.Register_WithTheShippedProductionConfiguration_IsClosed` |
+| The outcome line and the span of a use case | `PipelineHarness` and its `Logs` | `UseCaseOutcomeTests` |
+| Metrics and spans against PostgreSQL | `MetricRecorder`, `ActivityRecorder`, `IntegrationTestBase.MeterFactory` | `OutboxRetryTests` |
+| A wire change | `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`, then commit `docs/api/openapi.v1.json` | `OpenApiSnapshotTests` |
+<!--#if (UseMultitenancy) -->
+
+With multi-tenancy, `ApiFactory.CreateAdminClientAsync(tenantId, …)` signs in an administrator of another
+tenant (created on first use); `TenantIsolationTests` is the worked example.
+<!--#endif -->
+
+## When a request fails
+
+Every problem response carries `traceId` and `code`. Start from the `traceId`, not the `correlationId`,
+which may be a value the caller chose: in the Aspire dashboard (or your OTLP backend) it finds the
+request's trace, the use-case span with `trellis.usecase.outcome`, `trellis.usecase.error_code` and
+`trellis.usecase.error_type`, and the outcome line logged inside it (events 1001–1006, `docs/deployment.md`
+has the telemetry reference). Then let the `code` name the stage that refused the request (the stage
+table is in [architecture.md](architecture.md#a-request-stage-by-stage)):
+
+| `code` | Refused by |
+|---|---|
+| `Http.*` | the host, before any endpoint: an unknown route, a wrong method, the 30 s request timeout |
+| `Request.*` | binding: unreadable JSON, a value of the wrong type (`errors[]` names the field), a body too large or not JSON |
+| `Auth.Unauthenticated`, `Auth.Forbidden`, `RateLimit.Exceeded` | authentication, authorization, rate limiting; the other `Auth.*` codes are the Auth use cases' own |
+| `Idempotency.*` | the idempotency filter; `Idempotency.Duplicate` also comes from the commit, when two first requests raced |
+| `Validation.General` | a validator, or a value object the handler attributed with `AtField`: each `errors[]` entry's own `code` says which (`Validation.NotEmpty` against `EmailAddress.Invalid`) |
+| `Concurrency.Conflict` | the commit: someone else changed the aggregate since it was loaded |
+| `Invoice.*`, `Money.*`, `EmailAddress.*`, any feature's area | the handler and the aggregate: the feature doc's code list says what each means |
+
+Four failures do not explain themselves:
+
+- **`Server.Failure` (500).** The body is opaque on purpose (ADR-0024). Under the same `traceId` look for
+  the Error line `Use case … threw` (event 1006) with the exception; without one, the fault happened
+  outside a use case (binding, a filter, work after the commit) and the exception handler logged it.
+- **The migration job exits 1.** It logs why: a `Seed` value refused at boot, the default admin password
+  outside Development, or a scoped service it cannot build, such as a new port with no system stand-in
+  for a host without a request ([deployment.md](deployment.md#migrations-a-one-shot-pre-deploy-job), and
+  the MigrationService rules in `.claude/rules/tools.md`).
+- **A retry keeps answering 409 `Idempotency.InFlight`.** The first request committed and the process
+  died before it stored the response; the command did apply. Read the resource, or see
+  [Idempotency keys](deployment.md#idempotency-keys) for when the key frees itself.
+- **A reaction has not happened** (no receipt, no metric). The event waits in `OutboxMessages`: in
+  back-off after a failure (`Attempts`, `Error`), leased by a processor, or dead-lettered;
+  [Outbox operations](deployment.md#outbox-operations) reads the row and re-drives it.
+
 ## Vulnerable packages (NuGetAudit)
 
 Restore audits the whole package graph, transitive packages included, against the GitHub Advisory
