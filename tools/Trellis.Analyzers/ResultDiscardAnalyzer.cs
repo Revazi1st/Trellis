@@ -161,13 +161,20 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     /// assignment, the explicit discard included) or computes nothing. A conditional access drops
     /// whatever its last link computes, so <c>a?.B()</c> counts and the C# 14 <c>a?.B = c</c> does not.
     /// A creation counts in every form whose type the compiler knows: <c>new X(dynamicArgument)</c> and
-    /// <c>new T()</c> as well as a plain <c>new X()</c>.
+    /// <c>new T()</c> as well as a plain <c>new X()</c>. <c>task.Wait()</c> returns nothing (or a timeout
+    /// flag) and leaves the task's result unread, so it drops the task it waited on.
     /// </summary>
     private static IOperation? DroppedValue(IOperation operation)
     {
         while (operation is IConditionalAccessOperation conditionalAccess)
         {
             operation = conditionalAccess.WhenNotNull;
+        }
+
+        if (operation is IInvocationOperation { TargetMethod: { Name: "Wait", ContainingType: { Arity: 0, Name: "Task" } owner }, Instance: { } waited }
+            && IsSystemThreadingTasks(owner.ContainingNamespace))
+        {
+            return DroppedValue(waited);
         }
 
         return operation.Kind is OperationKind.Invocation

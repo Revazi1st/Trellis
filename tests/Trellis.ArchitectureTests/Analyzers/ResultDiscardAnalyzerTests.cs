@@ -108,6 +108,8 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("an Error static factory", "Error.Conflict(\"Account.Locked\", \"The account is locked.\");")]
     [InlineData("a FieldError creation", "new FieldError(\"amount\", \"Money.Negative\", \"The amount is negative.\");")]
     [InlineData("a ValidationError creation", "new ValidationError([]);")]
+    [InlineData("a Task<Result> waited on", "account.CloseAsync().Wait();")]
+    [InlineData("a Task<Result> waited on with a timeout", "account.CloseAsync().Wait(TimeSpan.FromSeconds(1));")]
     [InlineData("a dynamic creation of a Result type", "dynamic marker = 1; new Marked(marker);")]
     [InlineData("a new() of a type parameter constrained to Result", "static void Make<T>() where T : Result, new() { new T(); } Make<Marked>();")]
     public async Task A_dropped_result_is_reported(string shape, string statements)
@@ -132,6 +134,8 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("a held Task<Result> also seen as a plain Task", "Task<Result> closing = account.CloseAsync(); Task plain = closing; await plain; _ = await closing;")]
     [InlineData("a Task<Result> returned as itself", "Task<Result> Closing() => account.CloseAsync(); _ = await Closing();")]
     [InlineData("an Error returned as a Result", "Result Refuse() { return AccountErrors.NotFound(1); } _ = Refuse();")]
+    [InlineData("a held Task<Result> waited on and read", "Task<Result> closing = account.CloseAsync(); closing.Wait(); _ = closing.Result;")]
+    [InlineData("a plain Task waited on", "account.SaveAsync().Wait();")]
     [InlineData("a kept Result[]", "Result[] all = account.CloseAll(); GC.KeepAlive(all);")]
     [InlineData("a deconstructed tuple", "(Result outcome, int lines) = account.CloseAndCount(); GC.KeepAlive(outcome); GC.KeepAlive(lines);")]
     [InlineData("a dropped sequence of plain values", "new[] { 1 }.Select(static i => i + 1).ToList();")]
