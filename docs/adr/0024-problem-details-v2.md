@@ -71,7 +71,11 @@ Every response with status ≥ 400 is `application/problem+json` with this shape
    - `code` per entry: a FluentValidation failure is `Validation.` + the validator name without its
      `Validator` suffix (`Validation.NotEmpty`, `Validation.MaximumLength`, `Validation.Email`); a rule with
      `.WithErrorCode("Invoice.DueDateInPast")` passes its code through; a failure with no code is
-     `Validation.Invalid`. A domain error keeps its own code.
+     `Validation.Invalid`. A domain error keeps its own code. *(Corrected 2026-10-11: an uncoded `Must` is
+     not a failure with no code. FluentValidation names it after its predicate validator, so it arrives as
+     `Validation.Predicate`, or `Validation.AsyncPredicate` for `MustAsync`, a code no client can branch on;
+     `CommandValidatorConventionTests` therefore fails any `Must` or `MustAsync` without `.WithErrorCode(...)`.
+     `Validation.Invalid` is what a failure with an empty code gets, such as a `Custom` rule's `AddFailure`.)*
    - A 400 from a **single** plain validation error (`Invoice.NoLines`) still carries
      `errors: [{ field: null, code: "Invoice.NoLines", … }]` with top-level `code: "Invoice.NoLines"`; a
      `ValidationError` carries top-level `code: "Validation.General"` and the list. Clients can therefore
