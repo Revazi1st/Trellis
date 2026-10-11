@@ -55,7 +55,7 @@ they caused); the all-options template build then found 3 more in multitenancy-o
   handler.Handle(…))`, any method whose name starts with `Throw` or `ShouldThrow`), which is expected
   to throw; a call that hands back a result something else holds (`Tap` on a held result,
   `Stack.Pop`, `Queue.Dequeue`, `ConcurrentDictionary.GetOrAdd`/`AddOrUpdate`,
-  `Interlocked.Exchange`); a lambda converted to an expression tree, which never runs; and generated
+  `Interlocked.Exchange`, `Task.WhenAll` or `WhenAny` over tasks held in variables); a lambda converted to an expression tree, which never runs; and generated
   code, except Razor's: a component's `@code` block is hand-written C# that reaches the compiler as
   the Razor generator's output (`*_razor.g.cs`), so it is read and its diagnostics point at the
   `.razor` line. The EF migrations are generated code by the `.editorconfig` section that names

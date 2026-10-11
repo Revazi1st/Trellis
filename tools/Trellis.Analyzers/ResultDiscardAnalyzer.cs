@@ -312,7 +312,9 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
     /// <item>a collection's own method typed by its element (<c>Stack.Pop</c>, <c>Queue.Dequeue</c>,
     /// <c>ConcurrentDictionary.GetOrAdd</c> and <c>AddOrUpdate</c>) returns an element it holds;</item>
     /// <item>a method returning the old value of a <c>ref</c> location (<c>Interlocked.Exchange</c>,
-    /// <c>CompareExchange</c>) returns what that location held.</item>
+    /// <c>CompareExchange</c>) returns what that location held;</item>
+    /// <item><c>Task.WhenAll</c> or <c>WhenAny</c> over tasks held in variables returns results those tasks
+    /// still carry (<c>await Task.WhenAll(first, second); var r = await first;</c>).</item>
     /// </list>
     /// </summary>
     private static bool HandsBackHeldValue(IOperation dropped)
@@ -343,10 +345,32 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
             }
         }
 
+        if (method is { Name: "WhenAll" or "WhenAny", ContainingType: { Arity: 0, Name: "Task" } tasks }
+            && IsSystemThreadingTasks(tasks.ContainingNamespace))
+        {
+            return invocation.Arguments.All(static argument => AreHeld(argument.Value));
+        }
+
         return method.Name == "Tap"
                && method.ContainingType.ContainingNamespace is { Name: "Results", ContainingNamespace.Name: "SharedKernel" }
                && invocation.Arguments.FirstOrDefault(static argument => argument.Parameter?.Ordinal == 0)?.Value is { } receiver
                && IsHeld(receiver);
+    }
+
+    /// <summary>A held value, or a <c>params</c> collection whose every element is one.</summary>
+    private static bool AreHeld(IOperation value)
+    {
+        while (value is IConversionOperation conversion)
+        {
+            value = conversion.Operand;
+        }
+
+        return value switch
+        {
+            IArrayCreationOperation { Initializer: { } initializer } => initializer.ElementValues.All(IsHeld),
+            ICollectionExpressionOperation collection => collection.Elements.All(IsHeld),
+            _ => IsHeld(value),
+        };
     }
 
     /// <summary>A reference to a value stored in a local, a parameter, a field or an array element.</summary>
