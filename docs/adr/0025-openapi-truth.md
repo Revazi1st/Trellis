@@ -3,6 +3,7 @@
 - **Status**: accepted
 - **Date**: 2026-10-08
 - **Refines**: ADR-0013 (the committed contract artifact) and ADR-0024 (the problem shape the document now declares).
+- **Amended**: 2026-10-11 — a strong `ETag`, an optional `If-Match` on the invoice writes answered 412, declared by `SupportsConditionalWrite()`; a 503 declared where an integration is called (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -108,6 +109,7 @@ full response.
   mirror, mapped by name at the API seam; `ContractMirrorTests` (ArchitectureTests) keeps it equal to
   the domain enum member for member.
 - Version: `long` (`format: int64`); it is the row version behind the weak ETag, opaque to clients.
+  *(Amended 2026-10-11: the ETag is strong; see below.)*
 - Paging: `PageRequest` is gone. List endpoints bind `page`/`pageSize` inline with
   `[Range(PagingLimits.…)]` (1..10000, 1..100, default 20), which is how the document gets camelCase
   names, bounds and defaults; the query's validator enforces the same bounds (a value outside answers 400
@@ -141,3 +143,41 @@ the same promises on the wire.
 - Known limits: a strongly-typed id in a route is documented as `type: string` without `format: uuid`
   (parameter schemas do not pass through the schema transformer; a follow-up), and the deprecation /
   sunset lifecycle is not modelled — the swap recipe above is the path when it is.
+
+## Amendment (2026-10-11): a strong `ETag`, and `If-Match` on the writes
+
+**The `ETag` is strong.** `GET /invoices/{id}` emitted `W/"42"`, and nothing read it back except
+`If-None-Match`. The row version it carries moves with every change to the aggregate, a line's
+included (the aggregate-boundary interceptor writes the root row whenever only a child changed,
+ADR-0006), so equal versions mean identical state: exactly what a strong validator promises. The
+header is now `"42"` (`ConditionalGetExtensions.ETag`). `If-None-Match` still compares weakly, so a
+poller that kept the old weak form keeps getting its 304s.
+
+**Writes honour an optional `If-Match`.** The commit's concurrency token caught only a race inside the
+server's own load-to-commit window; the gap that matters to a person is between reading an invoice and
+acting on it: issuing a draft whose lines a colleague just changed, voiding a draft someone just edited.
+The four writes to an existing invoice (`AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`)
+declare `.SupportsConditionalWrite()` and read the header with
+`HttpRequest.TryGetExpectedVersion(out uint?)`: no header or `*` is no precondition; one strong tag is
+the command's `ExpectedVersion`. The handler compares it with the loaded `Version`
+(`InvoicePreconditions.ToWrite`) and returns `Invoice.VersionMismatch`, a `PreconditionFailed` that the
+seam answers with **412** (ADR-0004 amendment); nothing changes. A missing invoice is still a 404
+whatever the header names (RFC 9110 §13.2.1). A header that can never match a current representation
+(a weak tag, since `If-Match` compares strongly; a list, since the client sends the one tag it read; a
+tag this API never issued; an unparsable value) is answered 412 by the endpoint before the handler
+runs. The header stays optional: no 428, so existing clients are unaffected. The Blazor client sends the
+version its page loaded on every such write. The transformer declares `If-Match` and the 412 on every
+operation that carries the marker, and `OpenApiDocumentTests` pins it.
+
+Two consequences are documented rather than engineered away. The read cache (ADR-0026) lets another
+replica's L1 serve the previous version for up to 30 seconds, so a client that reloads from that
+replica after a 412 can be handed the same stale `ETag` and meet a second 412 until the entry expires;
+a feature that cannot tolerate it lowers `LocalCacheExpiration` or reads that resource uncached. The
+idempotency fingerprint covers the method, the path and the body, not headers, so a retry with the same
+key and a different `If-Match` replays the first response.
+
+**A 503 is declared, not inferred.** `ErrorType.Unavailable` answers 503 (ADR-0004 amendment), and an
+operation's shape cannot show that it calls a third party: an endpoint that does declares it with a
+bare `.Produces(StatusCodes.Status503ServiceUnavailable)`, which the transformer gives the
+`ProblemResponse` body like any other declared status. No shipped endpoint calls an integration, so the
+committed document has no 503.

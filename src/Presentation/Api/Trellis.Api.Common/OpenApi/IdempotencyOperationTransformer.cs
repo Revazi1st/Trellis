@@ -25,14 +25,17 @@ internal sealed class IdempotencyOperationTransformer : IOpenApiOperationTransfo
         {
             Name = IdempotencyFilter.HeaderName,
             In = ParameterLocation.Header,
-            Required = false,
+            Required = idempotency.KeyRequired,
             Description =
                 "Unique value per logical request; a retry repeats the request with the same key. Scoped to the caller, the method and the route. "
                 + "A retry of a completed request is answered with the original status, body and Location plus `Idempotency-Replayed: true`; "
                 + "the same key with a different method, path or body is a 422; a retry while the first request is still running is a 409 with Retry-After. "
                 + "A failed request leaves no reservation, so its key may be retried as is. "
                 + $"Responses larger than {idempotency.MaxReplayBodyBytes} bytes are not stored: a retry of such a request is a 409 (Idempotency.Duplicate) and the resource must be read instead. "
-                + "Omit the header to send the request without idempotency; a blank value is a 400.",
+                + (idempotency.KeyRequired
+                    ? "This endpoint requires the header: a request without it is a 400 (Idempotency.KeyRequired). "
+                    : "Omit the header to send the request without idempotency. ")
+                + "A blank value, a repeated header or a comma-separated list is a 400 (Idempotency.InvalidKey).",
             Schema = new OpenApiSchema { Type = JsonSchemaType.String, MaxLength = IdempotencyFilter.MaxKeyLength },
         });
 

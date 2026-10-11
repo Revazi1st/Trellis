@@ -33,7 +33,7 @@ public sealed class CommitFailureTests(ApiFactory factory) : IClassFixture<ApiFa
         HttpResponseMessage response = await PostCreateAsync(faulted, key, ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         ProblemResponse problem = await ReadProblemAsync(response, ct);
         problem.Status.ShouldBe((int)HttpStatusCode.Conflict);
         problem.Code.ShouldBe(UnitOfWorkErrors.ConcurrencyConflict.Code);
@@ -55,7 +55,7 @@ public sealed class CommitFailureTests(ApiFactory factory) : IClassFixture<ApiFa
         HttpResponseMessage response = await PostCreateAsync(faulted, key, ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         string body = await response.Content.ReadAsStringAsync(ct);
         body.ShouldNotContain("boom");
         body.ShouldNotContain("hunter2");

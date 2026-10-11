@@ -40,7 +40,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
 
         HttpResponseMessage read = await tenantB.GetAsync($"/api/v1/invoices/{id}", ct);
         read.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        read.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        read.ShouldBeProblemJson();
 
         // Writes are isolated too: the handler loads through the filtered repository, so the other
         // tenant's row does not exist as far as the command is concerned.
@@ -98,6 +98,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
             Content = JsonContent.Create(new CreateInvoiceRequest("Header Corp", "h@h.co", "USD")),
         };
         createAsB.Headers.Add(TenantHeader, ApiFactory.TenantB);
+        createAsB.Headers.Add(ApiHeaders.IdempotencyKey, Guid.NewGuid().ToString());
         HttpResponseMessage created = await tenantA.SendAsync(createAsB, ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         Guid id = (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
@@ -154,7 +155,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
         HttpResponseMessage response = await CallWithMintedTokenAsync(tenant: null, ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         response.Headers.WwwAuthenticate.ToString().ShouldContain("invalid_token");
     }
 
@@ -163,7 +164,7 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
 
     private static async Task<Guid> CreateInvoiceAsync(HttpClient client, CancellationToken ct)
     {
-        HttpResponseMessage created = await client.PostAsJsonAsync(
+        HttpResponseMessage created = await client.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("Tenant Corp", "t@t.co", "USD"), ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;

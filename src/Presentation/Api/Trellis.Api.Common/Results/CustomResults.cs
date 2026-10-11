@@ -9,7 +9,9 @@ namespace Trellis.Api.Common.Results;
 /// <summary>
 /// Maps SharedKernel errors onto RFC 9457 problem details — the single translation point from Result to
 /// HTTP (ADR-0004, shape in ADR-0024). The document carries a human <c>title</c> per error class, the
-/// error's description as <c>detail</c>, its code as the <c>code</c> extension and, for a 400, an
+/// error's description as <c>detail</c> on a 4xx (a 5xx says nothing specific: its description can carry
+/// what a third party or a connection said, so the client gets the catalogue sentence), its code as the
+/// <c>code</c> extension on every status and, for a 400, an
 /// <c>errors[]</c> of <c>{ field, code, description }</c>: one entry per <see cref="FieldError"/> (field =
 /// the request's JSON path) or per whole-request error (field = null) — a single plain validation error
 /// included, so clients can always render <c>errors[]</c> on a 400. <c>type</c>, <c>instance</c>,
@@ -18,6 +20,9 @@ namespace Trellis.Api.Common.Results;
 /// </summary>
 public static class CustomResults
 {
+    /// <summary>The <c>detail</c> of every Result-produced 503, whatever the error's description says.</summary>
+    public const string UnavailableDetail = "A service this request depends on is unavailable right now. Retry later.";
+
     public static ProblemHttpResult Problem(Error error)
     {
         var extensions = new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -36,12 +41,25 @@ public static class CustomResults
                 .ToArray();
         }
 
+        int status = StatusCodeFor(error.Type);
         return TypedResults.Problem(
             title: ProblemTitles.For(error.Type),
-            detail: error.Description,
-            statusCode: StatusCodeFor(error.Type),
+            detail: DetailFor(error, status),
+            statusCode: status,
             extensions: extensions);
     }
+
+    /// <summary>
+    /// A 4xx says what the caller can fix, so it carries the description. A 5xx carries nothing specific:
+    /// the description of a failure can hold what a third party or a connection said, and the code
+    /// already identifies it (ADR-0024 rule 4). A 503 says only that retrying later may help.
+    /// </summary>
+    private static string? DetailFor(Error error, int status) => status switch
+    {
+        StatusCodes.Status503ServiceUnavailable => UnavailableDetail,
+        >= StatusCodes.Status500InternalServerError => ProblemCatalog.ServerFailure.Detail,
+        _ => error.Description,
+    };
 
     private static int StatusCodeFor(ErrorType errorType) => errorType switch
     {
@@ -50,6 +68,8 @@ public static class CustomResults
         ErrorType.Conflict => StatusCodes.Status409Conflict,
         ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
         ErrorType.Forbidden => StatusCodes.Status403Forbidden,
+        ErrorType.Unavailable => StatusCodes.Status503ServiceUnavailable,
+        ErrorType.PreconditionFailed => StatusCodes.Status412PreconditionFailed,
         _ => StatusCodes.Status500InternalServerError,
     };
 }

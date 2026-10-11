@@ -300,7 +300,7 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         HttpResponseMessage response = await factory.CreateClient().PostAsync(route, empty, ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
     }
 
     [Fact]
@@ -365,7 +365,7 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     /// <summary>The problem's error code: the <c>code</c> member when present, else the title that carries it today.</summary>
     private static async Task<string?> ProblemCodeAsync(HttpResponseMessage response, CancellationToken ct)
     {
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         using JsonDocument problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         return problem.RootElement.TryGetProperty("code", out JsonElement code)
             ? code.GetString()

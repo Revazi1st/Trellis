@@ -12,6 +12,7 @@ using Trellis.Application;
 using Trellis.Infrastructure;
 using Trellis.Persistence;
 using Trellis.ServiceDefaults;
+using Trellis.SharedKernel.Decorators;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +41,14 @@ builder.Services.AddSerilog(
     writeToProviders: true);
 #endif
 
+// The use-case outcome line names an error's type and code; its description joins only where
+// Telemetry:IncludeErrorDetail says so (appsettings.Development.json), because a description can carry what a
+// user typed (ADR-0028). Registered before AddApplication, whose TryAdd would otherwise register the default.
+builder.Services.AddSingleton(new UseCaseLoggingOptions
+{
+    IncludeErrorDetail = builder.Configuration.GetValue<bool>(
+        $"{UseCaseLoggingOptions.SectionName}:{nameof(UseCaseLoggingOptions.IncludeErrorDetail)}"),
+});
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOutboundIntegrations(builder.Configuration);

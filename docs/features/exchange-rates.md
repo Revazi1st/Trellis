@@ -8,9 +8,19 @@ Like the Invoices slice, this is reference material — delete it once a real in
 ## Port (`src/Core/Trellis.Application/Abstractions/`)
 
 `IExchangeRateProvider.GetRateAsync(baseCurrency, quoteCurrency, ct)` → `Result<decimal>`.
-Failures are `ExchangeRateErrors.Unavailable`, `.MalformedResponse` and `.UnknownCurrency(code)`.
+Failures are split by whether waiting helps:
+
+| Error | `ErrorType` | Our API answers | Means |
+|---|---|---|---|
+| `ExchangeRateErrors.Unavailable` | `Unavailable` | 503 | the provider is down for now: retry later |
+| `ExchangeRateErrors.Rejected` | `Failure` | 500 | the provider refused our credentials, plan or URL: fix the configuration |
+| `ExchangeRateErrors.MalformedResponse` | `Failure` | 500 | an answer the adapter cannot read |
+| `ExchangeRateErrors.UnknownCurrency(…)` | `Validation` | 400 | the caller asked for a currency the feed does not publish |
+
 Nothing the third party does reaches Application code as an exception (ADR-0004) — except the
-caller's own cancellation, which propagates as `OperationCanceledException`.
+caller's own cancellation, which propagates as `OperationCanceledException`. An endpoint that calls
+the port declares the 503 with a bare `.Produces(StatusCodes.Status503ServiceUnavailable)` (ADR-0020,
+amendment of 2026-10-11); none ships today.
 
 ## Adapter (`src/Infrastructure/Trellis.Infrastructure/ExternalApis/ExchangeRates/`)
 
@@ -50,10 +60,14 @@ options at boot, and this client's are computed from `ExchangeRateOptions`.
   other `ExecutionRejectedException` (the concurrency limiter) → `Unavailable`; `JsonException` →
   `MalformedResponse`; an `OperationCanceledException` the caller did not cause → `Unavailable`. The
   caller's own cancellation is not caught.
+- **An error status is mapped by this endpoint's contract, not by its class** (`MapFailure`; the
+  status table under *Configuration*). What arrives there is final: the pipeline already retried the
+  transient ones. The provider's error text is never copied into an error.
 - **A 200 can still be a failure.** An object body with `"success": false` (providers that wrap their
-  errors in a 200) → `Unavailable`; Frankfurter's array is read normally; any other shape — v1's object
-  among them, or a quote without a rate — → `MalformedResponse`. A quote the answer does not contain
-  (an empty array included) → `UnknownCurrency`.
+  errors in a 200: a missing key, an exhausted plan) → `Rejected`, logged at Error; Frankfurter's array
+  is read normally; any other shape — v1's object among them, or a quote without a rate — →
+  `MalformedResponse`. A quote the answer does not contain (an empty array included) →
+  `UnknownCurrency`. The quote is matched whatever its case: Frankfurter accepts `usd` and answers `USD`.
 - **Configuration fails at boot, not on first call.** A malformed `BaseUrl` stops the API with a
   precise message instead of surfacing later as a timeout or a `NullReferenceException`.
 - **The health check cannot be used as a load lever.** It opens a bare TCP connection (no application
@@ -81,9 +95,22 @@ one element per quote, no date meaning the latest rates. Frankfurter's `/v1` (`l
 an object of `rates`) is deprecated — it answers with a `Deprecation` header dated 2026-05-18 and a
 `successor-version` link to `/v2/rates` — so the adapter moved to v2, which serves the same use case. The
 previous default before that, `api.exchangerate.host`, now requires an access key and answers every
-keyless call with `success:false` at HTTP 200. How v2 answers a code it does not publish was not probed:
-an error status maps to `Unavailable`, an answer without the quote to `UnknownCurrency`. The live smoke
-test below is what notices when the provider changes again.
+keyless call with `success:false` at HTTP 200.
+
+What v2 answers when it does not answer a rate was probed (2026-10-11), and the adapter maps each
+status by what it means for `GET rates`, not by its class:
+
+| Provider answers | Probed with | Port error | Our API answers | Logged |
+|---|---|---|---|---|
+| 422 `{"status":422,"message":"invalid currency: XYZ"}` (400 means the same) | `base=EUR&quotes=XYZ`, `base=XYZ`, `base=EU`, `quotes=USD,XYZ` | `UnknownCurrency(base, quote)`: the body names one code without saying which side, so the error names the pair | 400 | Information |
+| 200 `[]` | `quotes=` (empty), `date=1900-01-01` | `UnknownCurrency(quote)` | 400 | — |
+| 404 `{"status":404,"message":"not found"}` | `ratez?…` | `Rejected`: `rates` is a collection route, so a 404 is a wrong `BaseUrl` or a retired API version, never "no such rate" | 500 | Error, as a misconfiguration |
+| 401 / 403 | not served by Frankfurter (no key) | `Rejected`: our key or plan was refused, never "the caller must sign in" | 500 | Error |
+| 408 / 429 / 5xx after the retries | — | `Unavailable` | 503 | Warning |
+| any other status | — | `Rejected`: our request no longer matches the provider's API | 500 | Error |
+
+The live smoke tests below are what notice when the provider changes again: one asks for a rate, one
+for a code it does not know.
 
 The check appears in `/health` as `exchange-rates`, tagged `external`. It is not tagged `live`, so
 `/alive` is unaffected by a provider outage.
@@ -93,9 +120,11 @@ The check appears in `/health` as `exchange-rates`, tagged `external`. It is not
 - `tests/Trellis.ApiTests/ExchangeRateProviderTests.cs` drives the real registration — options binding,
   typed client and resilience pipeline included — with only the socket replaced, and asserts that each
   third-party outcome comes back as a `Result` — the v2 request shape (`rates?base=&quotes=`) is pinned
-  on the way: error status, unreadable body, a body of the wrong shape, unknown currency,
-  transport failure, `success:false`, a provider slower than the attempt timeout, an open circuit (a
-  burst of failures opens the real breaker; the next call sends nothing), 429/503 retried to success.
+  on the way: each row of the status table (Frankfurter's own 422 body included, and a refusal of our
+  configuration logged at Error), unreadable body, a body of the wrong shape, unknown currency, a
+  lower-case quote, transport failure, `success:false`, a provider slower than the attempt timeout, an
+  open circuit (a burst of failures opens the real breaker; the next call sends nothing), 429/503
+  retried to success.
   The caller's cancellation propagates as `OperationCanceledException`, unretried. The probe is pinned
   twice: Degraded-not-Unhealthy, and the 30 s cache (a moved clock, a listener that disappears).
 - `tests/Trellis.ApiTests/ExchangeRateResilienceTests.cs` boots the API's real graph —
@@ -104,5 +133,5 @@ The check appears in `/health` as `exchange-rates`, tagged `external`. It is not
   client's own budget (two calls, under the blanket 10 s), a fail-once-then-succeed retry that waits past
   an attempts-only budget, and the boot split: the API rejects a malformed section, starts without one,
   and a migration-shaped host starts with a malformed one.
-- `tests/Trellis.ApiTests/ExchangeRateLiveSmokeTests.cs` makes one real call to the default provider —
-  opt-in, `RUN_LIVE_SMOKE_TESTS=1`.
+- `tests/Trellis.ApiTests/ExchangeRateLiveSmokeTests.cs` makes two real calls to the default provider,
+  a rate and an unknown code (`UnknownCurrency`) — opt-in, `RUN_LIVE_SMOKE_TESTS=1`.

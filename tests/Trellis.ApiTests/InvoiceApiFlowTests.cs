@@ -129,7 +129,7 @@ public sealed class InvoiceApiFlowTests
         HttpResponseMessage notFound = await client.GetAsync($"/api/v1/invoices/{Guid.NewGuid()}", ct);
         notFound.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        HttpResponseMessage badRequest = await client.PostAsJsonAsync(
+        HttpResponseMessage badRequest = await client.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("", "", "USD"), ct);
         badRequest.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await badRequest.Content.ReadAsStringAsync(ct)).ShouldContain("\"errors\"");
@@ -140,7 +140,7 @@ public sealed class InvoiceApiFlowTests
 
     private static async Task<Guid> CreateDraftAsync(HttpClient client, string customerName, CancellationToken ct)
     {
-        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+        HttpResponseMessage createResponse = await client.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices",
             new CreateInvoiceRequest(customerName, "billing@acme.com", "USD"),
             ct);

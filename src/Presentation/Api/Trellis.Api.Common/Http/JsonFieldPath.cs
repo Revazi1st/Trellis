@@ -28,4 +28,13 @@ internal static class JsonFieldPath
 
         return string.Join('.', segments);
     }
+
+    /// <summary>
+    /// The member path of a <see cref="JsonException.Path"/> (<c>$.lines[1].amount</c> → <c>lines[1].amount</c>),
+    /// camel-cased like every other <c>field</c> (the binder matches names case-insensitively, so the client
+    /// may have sent <c>Amount</c>); null for the root (<c>$</c>) or a bracketed name, which is not a member
+    /// of any contract this API declares.
+    /// </summary>
+    public static string? FromSerializerPath(string? jsonPath)
+        => jsonPath is { Length: > 2 } && jsonPath.StartsWith("$.", StringComparison.Ordinal) ? From(jsonPath[2..]) : null;
 }

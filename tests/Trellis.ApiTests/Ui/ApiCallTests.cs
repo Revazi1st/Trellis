@@ -88,7 +88,7 @@ public sealed class ApiCallTests
         await using var ui = new UiHarness();
         ui.Api.Always(static _ => SuccessWith("html page"));
 
-        (await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+        (await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), cancellationToken: TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
     }
 
     [Theory]
@@ -120,7 +120,7 @@ public sealed class ApiCallTests
         ui.Api.Respond = Hang;
 
         ApiResult<InvoiceDto> read = await ui.InvoiceApi.GetAsync(Guid.CreateVersion7(), TestContext.Current.CancellationToken);
-        ApiResult<bool> paid = await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), TestContext.Current.CancellationToken);
+        ApiResult<bool> paid = await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), cancellationToken: TestContext.Current.CancellationToken);
 
         read.Error.ShouldBe(ServiceUnavailable);
         paid.Error.ShouldBe(ServiceUnavailable);
@@ -177,7 +177,7 @@ public sealed class ApiCallTests
                 created.IsSuccess.ShouldBeFalse();
                 return (created.Error, created.StatusCode);
             case "status only":
-                ApiResult<bool> paid = await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), cancellationToken);
+                ApiResult<bool> paid = await ui.InvoiceApi.PayAsync(Guid.CreateVersion7(), cancellationToken: cancellationToken);
                 paid.IsSuccess.ShouldBeFalse();
                 return (paid.Error, paid.StatusCode);
             default:

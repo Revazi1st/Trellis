@@ -23,18 +23,24 @@ public static class ProblemDetailsHttpContextExtensions
     {
         httpContext.Response.StatusCode = problem.Status;
 
-        return await httpContext.RequestServices.GetRequiredService<IProblemDetailsService>().TryWriteAsync(
-            new ProblemDetailsContext
+        var context = new ProblemDetailsContext
+        {
+            HttpContext = httpContext,
+            Exception = exception,
+            ProblemDetails =
             {
-                HttpContext = httpContext,
-                Exception = exception,
-                ProblemDetails =
-                {
-                    Status = problem.Status,
-                    Title = problem.Title,
-                    Detail = problem.Detail,
-                    Extensions = { [ProblemExtensions.Code] = problem.Code },
-                },
-            });
+                Status = problem.Status,
+                Title = problem.Title,
+                Detail = problem.Detail,
+                Extensions = { [ProblemExtensions.Code] = problem.Code },
+            },
+        };
+
+        if (problem.Errors is { Count: > 0 } errors)
+        {
+            context.ProblemDetails.Extensions[ProblemExtensions.Errors] = errors;
+        }
+
+        return await httpContext.RequestServices.GetRequiredService<IProblemDetailsService>().TryWriteAsync(context);
     }
 }

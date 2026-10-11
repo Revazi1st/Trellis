@@ -9,10 +9,9 @@ internal sealed class VoidInvoiceCommandHandler(IInvoiceRepository invoices)
 {
     public async Task<Result> Handle(VoidInvoiceCommand command, CancellationToken cancellationToken)
     {
-        Invoice? invoice = await invoices.GetByIdAsync(command.InvoiceId, cancellationToken);
+        Invoice? loaded = await invoices.GetByIdAsync(command.InvoiceId, cancellationToken);
 
-        return invoice is null
-            ? Result.Failure(InvoiceErrors.NotFound(command.InvoiceId))
-            : invoice.Void();
+        return loaded.ToWrite(command.InvoiceId, command.ExpectedVersion)
+            .Bind(static invoice => invoice.Void());
     }
 }

@@ -6,6 +6,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.RateLimiting;
@@ -19,6 +20,7 @@ using Trellis.Api.Common.Authentication;
 using Trellis.Api.Common.Hardening;
 using Trellis.Api.Common.Idempotency;
 using Trellis.Api.Contracts.Auth;
+using Trellis.Api.Contracts.Invoices;
 using Trellis.Application.Authorization;
 using Trellis.Application.Options;
 using Xunit;
@@ -51,6 +53,22 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
     private static readonly HashSet<string> AuthenticatedOnly = new(StringComparer.Ordinal)
     {
         "POST auth/revoke-all",
+    };
+
+    /// <summary>
+    /// The one permission each remaining endpoint requires. "Has some catalogued permission" would pass
+    /// a write declared with Read (anyone who may look could pay or void); this table is what turns that
+    /// mix-up into a red build. A new endpoint is a new row, reviewed with its <c>RequirePermission</c>.
+    /// </summary>
+    private static readonly Dictionary<string, string> ExpectedPermissions = new(StringComparer.Ordinal)
+    {
+        ["GET invoices/{id}"] = Permissions.Invoices.Read,
+        ["GET invoices/overdue"] = Permissions.Invoices.Read,
+        ["POST invoices"] = Permissions.Invoices.Write,
+        ["POST invoices/{id}/lines"] = Permissions.Invoices.Write,
+        ["POST invoices/{id}/issue"] = Permissions.Invoices.Write,
+        ["POST invoices/{id}/pay"] = Permissions.Invoices.Write,
+        ["POST invoices/{id}/void"] = Permissions.Invoices.Write,
     };
 
     /// <summary>Endpoints that accept a guessable credential carry the strict auth limiter; token endpoints must not.</summary>
@@ -111,6 +129,91 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
             .Select(static e => e.Key)];
 
         missing.ShouldBeEmpty("declare the permission with .RequirePermission(Permissions.X.Y)");
+    }
+
+    [Fact]
+    public void Every_permissioned_endpoint_requires_exactly_its_expected_permission()
+    {
+        List<string> violations = [];
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        foreach (ApiEndpoint endpoint in ApiEndpoints()
+                     .Where(static e => !e.Metadata.OfType<IAllowAnonymous>().Any() && !AuthenticatedOnly.Contains(e.Key)))
+        {
+            seen.Add(endpoint.Key);
+            string[] declared = [.. endpoint.Metadata.OfType<IAuthorizeData>()
+                .Select(static data => data.Policy)
+                .OfType<string>()
+                .Where(static policy => Permissions.All.Contains(policy, StringComparer.Ordinal))
+                .Distinct(StringComparer.Ordinal)];
+
+            if (!ExpectedPermissions.TryGetValue(endpoint.Key, out string? expected))
+            {
+                violations.Add($"{endpoint.Key}: no row in ExpectedPermissions (declares {string.Join(", ", declared)})");
+            }
+            else if (declared.Length != 1 || !string.Equals(declared[0], expected, StringComparison.Ordinal))
+            {
+                violations.Add($"{endpoint.Key}: requires [{string.Join(", ", declared)}], expected exactly {expected}");
+            }
+        }
+
+        violations.AddRange(ExpectedPermissions.Keys.Where(key => !seen.Contains(key)).Select(static key => $"{key}: a row for an endpoint that no longer exists"));
+        violations.ShouldBeEmpty("each permissioned endpoint declares exactly one .RequirePermission(...), the one ExpectedPermissions names");
+    }
+
+    [Theory]
+    [InlineData("GET", "invoices/{id}", HttpStatusCode.NotFound)]
+    [InlineData("GET", "invoices/overdue", HttpStatusCode.OK)]
+    [InlineData("POST", "invoices", HttpStatusCode.Created)]
+    [InlineData("POST", "invoices/{id}/lines", HttpStatusCode.NotFound)]
+    [InlineData("POST", "invoices/{id}/issue", HttpStatusCode.NotFound)]
+    [InlineData("POST", "invoices/{id}/pay", HttpStatusCode.NotFound)]
+    [InlineData("POST", "invoices/{id}/void", HttpStatusCode.NotFound)]
+    public async Task Each_endpoint_admits_its_one_permission_and_refuses_every_other(string method, string route, HttpStatusCode admitted)
+    {
+        // Wire-level, beside the table above: the permission alone gets the endpoint's own answer (a 404
+        // for an id that does not exist proves authorization passed), and every OTHER permission, all of
+        // them together, is a 403 problem. Exact statuses, never "not 401/403".
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string required = ExpectedPermissions[$"{method} {route}"];
+        string[] others = [.. Permissions.All.Where(permission => !string.Equals(permission, required, StringComparison.Ordinal))];
+
+        HttpResponseMessage withIt = await SendAsync(factory.CreateClientWithPermissions(required), method, route, ct);
+        HttpResponseMessage withEverythingElse = await SendAsync(factory.CreateClientWithPermissions(others), method, route, ct);
+
+        withIt.StatusCode.ShouldBe(admitted, await withIt.Content.ReadAsStringAsync(ct));
+        withEverythingElse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await withEverythingElse.Content.ReadFromJsonAsync<Trellis.Api.Contracts.Common.ProblemResponse>(ct)).ShouldNotBeNull().Code.ShouldBe("Auth.Forbidden");
+    }
+
+    [Fact]
+    public async Task A_token_without_permissions_is_authenticated_but_forbidden()
+    {
+        HttpResponseMessage response = await factory.CreateClientWithPermissions()
+            .GetAsync("/api/v1/invoices/overdue", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>A request to <paramref name="route"/> with a fresh id and a body that would pass validation, so only authorization can stop it.</summary>
+    private static async Task<HttpResponseMessage> SendAsync(HttpClient client, string method, string route, CancellationToken ct)
+    {
+        string path = "/api/v1/" + route.Replace("{id}", Guid.NewGuid().ToString(), StringComparison.Ordinal);
+        if (string.Equals(method, HttpMethods.Get, StringComparison.Ordinal))
+        {
+            return await client.GetAsync(path, ct);
+        }
+
+        object? body = route switch
+        {
+            "invoices" => new CreateInvoiceRequest("Scoped Co", "s@s.co", "USD"),
+            "invoices/{id}/lines" => new AddInvoiceLineRequest("Line", 10m),
+            "invoices/{id}/issue" => new IssueInvoiceRequest(DateTimeOffset.UtcNow.AddDays(7)),
+            _ => null,
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = body is null ? null : JsonContent.Create(body) };
+        request.Headers.Add(Trellis.Api.Contracts.Common.ApiHeaders.IdempotencyKey, Guid.NewGuid().ToString());
+        return await client.SendAsync(request, ct);
     }
 
     [Fact]
@@ -229,6 +332,43 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
+    public async Task Api_responses_are_not_stored_by_a_cache_unless_the_endpoint_says_otherwise()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        HttpResponseMessage created = await admin.PostWithIdempotencyKeyAsync(
+            "/api/v1/invoices", new CreateInvoiceRequest("Cache Co", "c@c.co", "USD"), ct);
+        Guid id = (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;
+
+        // Per-user data, its 404 and a 201 alike: no-store unless the endpoint chose its own.
+        HttpResponseMessage read = await admin.GetAsync($"/api/v1/invoices/{id}", ct);
+        HttpResponseMessage missing = await admin.GetAsync($"/api/v1/invoices/{Guid.NewGuid()}", ct);
+        read.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+        missing.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+        created.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+
+        // An endpoint that sets its own keeps it (here a stand-in sets it before the endpoint runs).
+        using var host = factory.WithTestServices(static services => services.AddTransient<IStartupFilter, OwnCacheControlStartupFilter>());
+        HttpClient chosen = await factory.CreateAdminClientOnAsync(host, ct);
+        HttpResponseMessage own = await chosen.GetAsync($"/api/v1/invoices/{id}", ct);
+        System.Net.Http.Headers.CacheControlHeaderValue kept = own.Headers.CacheControl.ShouldNotBeNull();
+        kept.Private.ShouldBeTrue();
+        kept.MaxAge.ShouldBe(TimeSpan.FromSeconds(60));
+        kept.NoStore.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Responses_outside_the_api_keep_their_own_caching()
+    {
+        // The health-check middleware writes its own "no-store, no-cache"; the API default (a bare no-store)
+        // must not be what decides a probe's header.
+        HttpResponseMessage alive = await factory.CreateClient().GetAsync("/alive", TestContext.Current.CancellationToken);
+
+        alive.StatusCode.ShouldBe(HttpStatusCode.OK);
+        alive.Headers.CacheControl.ShouldNotBeNull().NoCache.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task A_401_without_a_token_names_the_bearer_scheme()
     {
         HttpResponseMessage response = await factory.CreateClient()
@@ -315,6 +455,23 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
     {
         public string Key => $"{Method} {Route}";
     }
+}
+
+/// <summary>Stands in for an endpoint that chose its own caching: the header is on the response before the endpoint runs.</summary>
+internal sealed class OwnCacheControlStartupFilter : IStartupFilter
+{
+    public const string Value = "private, max-age=60";
+
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+    {
+        app.Use(static (context, nextMiddleware) =>
+        {
+            context.Response.Headers.CacheControl = Value;
+            return nextMiddleware(context);
+        });
+
+        next(app);
+    };
 }
 
 /// <summary>

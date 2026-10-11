@@ -44,7 +44,9 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         retry.StatusCode.ShouldBe(HttpStatusCode.Created);
         retry.Headers.GetValues(IdempotencyFilter.ReplayedHeaderName).ShouldHaveSingleItem().ShouldBe("true");
         retry.Headers.Location.ShouldNotBeNull().ShouldBe(first.Headers.Location);
-        retry.Content.Headers.ContentType?.ToString().ShouldBe(first.Content.Headers.ContentType?.ToString());
+        // Both sides present and equal: a replay that dropped the header must not pass because the first lacked it too.
+        string firstContentType = first.ShouldHaveMediaType("application/json").ToString();
+        retry.ShouldHaveMediaType("application/json").ToString().ShouldBe(firstContentType);
         (await retry.Content.ReadAsByteArrayAsync(ct)).ShouldBe(firstBody);
 
         // The replayed id is the first one, and it is a real invoice: one command ran, not two.
@@ -200,7 +202,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         HttpResponseMessage response, HttpStatusCode status, string code, string instance, CancellationToken ct)
     {
         response.StatusCode.ShouldBe(status);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.ShouldBeProblemJson();
         string body = await response.Content.ReadAsStringAsync(ct);
         ProblemResponse problem = JsonSerializer.Deserialize<ProblemResponse>(body, JsonSerializerOptions.Web).ShouldNotBeNull(body);
         problem.Status.ShouldBe((int)status, body);
@@ -213,7 +215,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
 
     private static async Task<Guid> CreateInvoiceAsync(HttpClient client, CancellationToken ct)
     {
-        HttpResponseMessage created = await client.PostAsJsonAsync(
+        HttpResponseMessage created = await client.PostWithIdempotencyKeyAsync(
             "/api/v1/invoices", new CreateInvoiceRequest("Replay Ltd", "lines@replay.io", "USD"), ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         return (await created.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct)).ShouldNotBeNull().Id;
