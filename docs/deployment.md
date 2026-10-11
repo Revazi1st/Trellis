@@ -210,6 +210,8 @@ DELETE FROM "OutboxMessages" WHERE "Status" = 2 AND "Id" = '<id>';
   its concurrency token), so an `UPDATE` of that column on a leased row revokes the lease: the processor
   holding it books `lease_lost` and discards its attempt, and the handlers it had checkpointed stay
   credited. Harmless, and pointless — the statements above touch dead letters only, which nobody holds.
+- The single-row re-drive above is executed as written by `OutboxRetryTests` against PostgreSQL: the
+  row gets a fresh budget, the handlers it had credited stay skipped, and the receipt is not re-sent.
 - Re-driving a `poison` row without a code fix dead-letters it again on the next poll.
 - `unknown_type` rows mean an event type was removed or renamed while rows were in flight: redeploy a
   type carrying that `[DomainEventName]` and re-drive them.

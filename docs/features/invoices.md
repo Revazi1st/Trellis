@@ -90,7 +90,9 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
   a processor that outlived its lease fenced off the row, a batch cut short of its lease, the raise
   order of one save's events, the dispatch timeout, a downstream cancellation as a retryable failure,
   a failed bookkeeping save contained to its own message, the backlog gauges, leases released on
-  stop), `OutboxBackoffTests`
+  stop, the processor loop itself — a full batch drained without a sleep, a failed poll logged and
+  retried after the interval, a clean stop — and the runbook's re-drive statement executed as written,
+  the credited receipt not re-sent), `OutboxBackoffTests`
   (the 30 s → 15 min schedule and the derived lease) and `OutboxOptionsTests` (the `Outbox` section's
   defaults and limits). `IdempotencyStoreTests`: the three lookup states, the primary-key race and
   retention. With multi-tenancy, `TenancyTests`: stamping, filtering, the aggregate-root convention,

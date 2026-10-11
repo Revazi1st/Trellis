@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Text.Json;
@@ -6,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 using NSubstitute;
 using Shouldly;
 using Trellis.Application.Features.Invoices.AddInvoiceLine;
@@ -27,7 +30,9 @@ namespace Trellis.IntegrationTests;
 /// <summary>
 /// The processor's failure semantics against the real database (ADR-0023): what a row looks like after a
 /// handler throws, times out, writes, or cannot even be read; what a second processor, a processor that
-/// outlived its lease and a stopping host see; and what the meters and spans report. Three test handlers
+/// outlived its lease and a stopping host see; what the meters and spans report; the loop around the batch
+/// (a full batch drained at once, a failed poll retried after the interval, a clean stop); and the runbook's
+/// re-drive statement, which must not re-send a credited receipt. Three test handlers
 /// of <c>InvoicePaidDomainEvent</c> are registered after the real ones (so they are "the later handlers")
 /// and switched on per test; the real receipt e-mail is the side effect that must never be sent twice.
 /// </summary>
@@ -700,6 +705,160 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         recorder.Last("trellis.outbox.oldest_pending_age").ShouldBe(TimeSpan.FromMinutes(10).TotalSeconds);
     }
 
+    [Fact]
+    public async Task The_runbooks_redrive_statement_gives_a_dead_letter_a_fresh_budget_without_resending_the_credited_receipt()
+    {
+        // One attempt only: the receipt goes out and is credited at its checkpoint, the flaky handler fails,
+        // and the row is dead-lettered with the credit kept.
+        var options = new OutboxOptions { MaxAttempts = 1 };
+        _flaky.Throw = true;
+        await PayNewInvoiceAsync();
+        await CreateOutboxProcessor(options).ProcessBatchAsync(Ct);
+        OutboxMessage dead = await RowAsync(PaidType);
+        dead.Status.ShouldBe(OutboxMessageStatus.DeadLettered);
+        dead.Attempts.ShouldBe(1);
+        ShouldCredit(dead, SendReceipt, RecordMetrics, BlockingName);
+        ShouldNotCredit(dead, FlakyName);
+        await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+        // The dependency is fixed and the operator runs the single-row statement of docs/deployment.md
+        // ("Outbox operations") as written there, with '<id>' filled in.
+        _flaky.Throw = false;
+        using (IServiceScope scope = CreateScope())
+        {
+            int affected = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.ExecuteSqlAsync($"""
+                UPDATE "OutboxMessages" SET "Status" = 0, "Attempts" = 0, "Error" = NULL, "NextAttemptAtUtc" = now()
+                WHERE "Status" = 2 AND "Id" = {dead.Id}
+                """, Ct);
+            affected.ShouldBe(1);
+        }
+
+        OutboxMessage redriven = await RowAsync(PaidType);
+        redriven.Status.ShouldBe(OutboxMessageStatus.Pending);
+        redriven.Attempts.ShouldBe(0);
+        redriven.Error.ShouldBeNull();
+        redriven.CompletedHandlers.ShouldBe(dead.CompletedHandlers);   // kept on purpose: the credited handlers stay skipped
+
+        // now() is the database's wall clock, not the test's: the row is due once the processor's clock caught up.
+        if (redriven.NextAttemptAtUtc > Time.GetUtcNow())
+        {
+            Time.SetUtcNow(redriven.NextAttemptAtUtc);
+        }
+
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(1);
+
+        OutboxMessage finished = await RowAsync(PaidType);
+        finished.Status.ShouldBe(OutboxMessageStatus.Processed);
+        finished.Attempts.ShouldBe(0);
+        finished.Error.ShouldBeNull();
+        ShouldCredit(finished, SendReceipt, RecordMetrics, FlakyName, BlockingName);
+        _flaky.Calls.ShouldBe(2);   // the failed try and the one the re-drive owed
+        await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());   // not sent again
+    }
+
+    [Fact]
+    public async Task The_loop_drains_a_full_batch_without_sleeping_and_waits_the_poll_interval_after_a_short_one()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            await PayNewInvoiceAsync();   // six rows
+        }
+
+        var options = new OutboxOptions { BatchSize = 4 };
+        var clock = new SleepRecordingClock(Time, options.PollInterval);
+        using OutboxProcessor processor = CreateLoopProcessor(options, clock);
+
+        await processor.StartAsync(Ct);
+        try
+        {
+            // The first poll comes back full and is followed by another claim at once; the second comes back
+            // short and only then does the loop wait — so by its first wait every row is finished.
+            (await clock.NextSleepAsync()).ShouldBe(options.PollInterval);
+            (await RowsAsync()).ShouldAllBe(static r => r.Status == OutboxMessageStatus.Processed);
+            await EmailSender.Received(3).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+            // The interval elapses on the injected clock: one more poll, nothing due, one more wait.
+            Time.Advance(options.PollInterval);
+            (await clock.NextSleepAsync()).ShouldBe(options.PollInterval);
+            processor.ExecuteTask.ShouldNotBeNull().IsCompleted.ShouldBeFalse();
+        }
+        finally
+        {
+            await processor.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task The_loop_logs_a_failed_poll_and_polls_again_after_the_interval()
+    {
+        await PayNewInvoiceAsync();
+        var options = new OutboxOptions();
+        var clock = new SleepRecordingClock(Time, options.PollInterval);
+        var log = new LogRecorder();
+        using OutboxProcessor processor = CreateLoopProcessor(options, clock, log);
+        _outage.Down = true;
+
+        await processor.StartAsync(Ct);
+        try
+        {
+            // The poll fails at its first query. The loop neither dies nor hot-loops: it logs the failure as
+            // a Warning with its event id and waits the interval like after an empty poll.
+            (await clock.NextSleepAsync()).ShouldBe(options.PollInterval);
+            LogLine failed = log.Lines.ShouldHaveSingleItem();
+            failed.Level.ShouldBe(LogLevel.Warning);
+            failed.EventId.Id.ShouldBe(1309);
+            failed.EventId.Name.ShouldBe("OutboxBatchFailed");
+            failed.Exception.ShouldBeOfType<NpgsqlException>();
+            failed.Message.ShouldContain(options.PollInterval.ToString());
+            processor.ExecuteTask.ShouldNotBeNull().IsCompleted.ShouldBeFalse();
+
+            // Nothing was claimed or counted against the rows.
+            _outage.Down = false;
+            (await RowsAsync()).ShouldAllBe(static r => r.Status == OutboxMessageStatus.Pending && r.Attempts == 0 && r.NextAttemptAtUtc == Now);
+
+            // The database is back when the interval elapses: the next poll drains and the loop waits again.
+            Time.Advance(options.PollInterval);
+            (await clock.NextSleepAsync()).ShouldBe(options.PollInterval);
+            (await RowsAsync()).ShouldAllBe(static r => r.Status == OutboxMessageStatus.Processed);
+            await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            log.Lines.Count.ShouldBe(1);   // a poll that works logs nothing
+        }
+        finally
+        {
+            await processor.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task Stopping_the_host_while_the_loop_waits_ends_it_at_once_without_an_error()
+    {
+        var options = new OutboxOptions();
+        var clock = new SleepRecordingClock(Time, options.PollInterval);
+        var log = new LogRecorder();
+        using OutboxProcessor processor = CreateLoopProcessor(options, clock, log);
+
+        await processor.StartAsync(Ct);
+        (await clock.NextSleepAsync()).ShouldBe(options.PollInterval);   // nothing due: the loop is in its wait
+
+        // The clock never moves: only the stop can end the wait, and it must not need the interval to elapse.
+        await processor.StopAsync(Ct).WaitAsync(WaitBudget, Ct);
+
+        processor.ExecuteTask.ShouldNotBeNull().IsCompletedSuccessfully.ShouldBeTrue();   // ended by the break, not by an exception
+        log.Lines.ShouldBeEmpty();   // a stop is not a failed poll
+    }
+
+    /// <summary>
+    /// The processor as a hosted service, so a test runs <c>ExecuteAsync</c> itself — the loop around
+    /// <c>ProcessBatchAsync</c> — on a clock that reports its waits and a logger that keeps its lines.
+    /// </summary>
+    private OutboxProcessor CreateLoopProcessor(OutboxOptions options, TimeProvider clock, ILogger<OutboxProcessor>? logger = null)
+        => new(
+            Services.GetRequiredService<IServiceScopeFactory>(),
+            clock,
+            options,
+            new OutboxMetrics(MeterFactory),
+            logger ?? NullLogger<OutboxProcessor>.Instance);
+
     private async Task<InvoiceId> PayNewInvoiceAsync()
     {
         InvoiceId id = await IssueInvoiceAsync();
@@ -933,4 +1092,96 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
     }
+
+    /// <summary>
+    /// Takes the database away from every query and command of this test's contexts while <see cref="Down"/>
+    /// is set — the shape of a poll that cannot even count the backlog. Non-transient on purpose, so the
+    /// retrying execution strategy gives up at once instead of spending its real-time schedule.
+    /// </summary>
+    private sealed class DatabaseOutage : DbCommandInterceptor
+    {
+        public bool Down { get; set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            ThrowIfDown();
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            ThrowIfDown();
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<object> result, CancellationToken cancellationToken = default)
+        {
+            ThrowIfDown();
+            return base.ScalarExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        private void ThrowIfDown()
+        {
+            if (Down)
+            {
+                throw new NpgsqlException("Simulated: the database is unavailable.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The fixture's fake clock, reporting every wait the loop starts. <c>Task.Delay</c> on a
+    /// <see cref="TimeProvider"/> creates one timer per wait, due in <c>PollInterval</c>, which tells the test
+    /// that the loop finished a poll and went to sleep — <c>BackgroundService</c> runs <c>ExecuteAsync</c> on
+    /// the thread pool, so a clock advanced before the wait exists would be lost. The per-message budget
+    /// timers (due in <c>DispatchTimeout</c>) are not waits and are not reported.
+    /// </summary>
+    private sealed class SleepRecordingClock(TimeProvider inner, TimeSpan pollInterval) : TimeProvider
+    {
+        private readonly Channel<TimeSpan> _sleeps = Channel.CreateUnbounded<TimeSpan>();
+
+        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow();
+
+        public override long GetTimestamp() => inner.GetTimestamp();
+
+        public override long TimestampFrequency => inner.TimestampFrequency;
+
+        public override TimeZoneInfo LocalTimeZone => inner.LocalTimeZone;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            ITimer timer = inner.CreateTimer(callback, state, dueTime, period);
+            if (dueTime == pollInterval)
+            {
+                _sleeps.Writer.TryWrite(dueTime);
+            }
+
+            return timer;
+        }
+
+        public async Task<TimeSpan> NextSleepAsync()
+            => await _sleeps.Reader.ReadAsync(Ct).AsTask().WaitAsync(WaitBudget, Ct);
+    }
+
+    /// <summary>The processor's log lines as an alert sees them: level, event id, message and exception.</summary>
+    private sealed class LogRecorder : ILogger<OutboxProcessor>
+    {
+        private readonly ConcurrentQueue<LogLine> _lines = new();
+
+        public IReadOnlyList<LogLine> Lines => [.. _lines];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => _lines.Enqueue(new LogLine(logLevel, eventId, formatter(state, exception), exception));
+    }
+
+    private sealed record LogLine(LogLevel Level, EventId EventId, string Message, Exception? Exception);
 }
