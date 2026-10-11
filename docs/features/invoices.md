@@ -77,7 +77,7 @@ src/Core/Trellis.Domain/
     ├── InvoiceLine.cs          child entity, reachable only through Invoice
     ├── InvoiceId.cs            strongly-typed IDs (InvoiceLineId.cs alike)
     ├── InvoiceErrors.cs        one Error per rule: the codes clients branch on
-    ├── InvoiceSpecs.cs         query shapes (Overdue), translated to SQL by Persistence
+    ├── InvoiceSpecs.cs         query shapes (All, Overdue), translated to SQL by Persistence
     ├── IInvoiceRepository.cs   the port Persistence implements
     └── Events/                 Issued, Paid, Voided: delivered by the outbox after commit
 src/Core/Trellis.Application/Features/Invoices/
@@ -123,7 +123,7 @@ src/Presentation/UI/Trellis.UI.Common/
   `EmailAddress` is shallow on purpose but refuses what mail systems refuse: more than 254 characters or more than 64 before the `@` (`EmailAddress.TooLong`), whitespace, a leading, trailing or doubled dot, an empty domain label or one that starts or ends with a hyphen (`EmailAddress.Invalid`); any other character is allowed, so internationalized addresses pass. The `CustomerEmail` column stays 320 wide; the domain's 254 is the bound.
   `Currency` and `EmailAddress` are single values, so they implement `IScalarValueObject` and could be mapped as an indexable converted column (`ScalarValueObjectConverter`, one `ConfigureConventions` line per type); the slice needs no such index, so both stay complex types (ADR-0006, amendment of 2026-10-11).
 - **Strongly-typed IDs**: `InvoiceId`, `InvoiceLineId` (`readonly record struct … : IStronglyTypedId<>, IParsable<>`).
-- **`InvoiceSpecs.Overdue(now)`**, **`InvoiceErrors`**, **`IInvoiceRepository`**.
+- **`InvoiceSpecs.All(status)`** (every invoice, or those in one status, newest first: `CreatedAtUtc` descending, then `Id` descending as the unique tiebreaker), **`InvoiceSpecs.Overdue(now)`**, **`InvoiceErrors`**, **`IInvoiceRepository`**.
 
 ## Application (`src/Core/Trellis.Application/Features/Invoices/`)
 
@@ -254,7 +254,7 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
 
 ## Tests
 
-- `Domain.UnitTests/Invoices`: invariants, events, the overdue specification, ID parsing.
+- `Domain.UnitTests/Invoices`: invariants, events, the list and overdue specifications, ID parsing.
 - `Application.UnitTests/Features/Invoices/<UseCase>` (one folder per use case, the event handlers under
   `EventHandlers/`): the handlers, and the validators' bounds at the Domain constants; every use case
   through the real pipeline.
