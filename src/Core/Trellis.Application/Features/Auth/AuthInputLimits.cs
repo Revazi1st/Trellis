@@ -1,3 +1,5 @@
+using Trellis.Domain.Common;
+
 namespace Trellis.Application.Features.Auth;
 
 /// <summary>
@@ -7,8 +9,13 @@ namespace Trellis.Application.Features.Auth;
 /// </summary>
 internal static class AuthInputLimits
 {
-    /// <summary>RFC 5321's practical maximum for an address (64-character local part, 255-character domain).</summary>
-    public const int EmailMaxLength = 320;
+    /// <summary>
+    /// The Domain's bound (254: RFC 5321's forward-path limit less the brackets, with a 64-character
+    /// local part). It is also within Identity's 256-character <c>Email</c>/<c>UserName</c> columns, so
+    /// an address the validator accepts can always be stored: the 320 this used to be let a longer
+    /// address past the validator only to fail the INSERT, a 500 instead of a 400.
+    /// </summary>
+    public const int EmailMaxLength = EmailAddress.MaxLength;
 
     public const int PasswordMinLength = 8;
 

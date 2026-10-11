@@ -42,8 +42,10 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   only once anyone on the network may read what a Member can. `RegisterCommandHandler` is the one
   place an account is created, so everything that comes with one sits behind this check.
 - **Input limits**: validators reject a missing e-mail, password or refresh token, an e-mail over
-  320 characters, a password over 128 (login and registration alike) and a refresh token over 512
-  (issued tokens are 43) with 400, before Identity, the password hasher or the token hash run.
+  254 characters (`EmailAddress.MaxLength`, which also fits Identity's 256-character columns, so an
+  accepted address can always be stored), a password over 128 (login and registration alike) and a
+  refresh token over 512 (issued tokens are 43) with 400, before Identity, the password hasher or the
+  token hash run.
 - **Security events** (`SecurityEventLog`, `[LoggerMessage]`, written by `IdentityService`): 1101
   `LoginFailed` (Information, user id), 1102 `LoginFailedUnknownAccount` (Information, masked
   e-mail such as `j***@example.com`), 1103 `AccountLockedOut` (Warning, user id — the counter just
