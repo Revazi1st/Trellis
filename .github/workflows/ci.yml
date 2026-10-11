@@ -93,7 +93,7 @@ jobs:
           if [ -f eng/coverage.runsettings ]; then
             settings=(--settings eng/coverage.runsettings)
           else
-            echo "::warning::eng/coverage.runsettings is missing: coverage also measures test assemblies, third-party packages and migrations (the Core gate below is unaffected)."
+            echo "::warning::eng/coverage.runsettings is missing: coverage also measures test assemblies, third-party packages and migrations (the ring tables below skip the first two; migrations count toward the Infrastructure ring)."
           fi
           dotnet dotnet-coverage collect "${settings[@]}" -f cobertura -o coverage.cobertura.xml \
             "dotnet test Trellis.slnx --no-build -c Release -- --report-trx --results-directory TestResults"
@@ -105,12 +105,20 @@ jobs:
           path: coverage.cobertura.xml
           retention-days: 14
 
-      # A per-assembly table in the job summary, and a floor under the Core ring (src/Core:
-      # SharedKernel, Domain, Application), where the business rules live and tests are cheapest.
-      # Core measured 97.4% of 704 lines when the gate was introduced; 90 is the conservative floor
-      # below that. Raise it as coverage grows; never lower it to get a change through.
-      - name: Coverage summary and Core gate
-        run: python3 .github/scripts/coverage-summary.py coverage.cobertura.xml --min-core-line-rate 90
+      # Per-ring and per-assembly tables in the job summary, and a line-rate floor under each src/
+      # ring. With the template's default options they measured, in October 2026: Core 97.5% of
+      # 721 lines (SharedKernel, Domain, Application: the business rules, where tests are cheapest),
+      # Infrastructure 94.2% of 976, Presentation 83.7% of 1682 (the Blazor UI is its least covered
+      # part; 91.8% without it) and Shared 100% of 69. Each floor sits several points below, so an
+      # option's extra code or an ordinary change does not trip it while untested code piling up
+      # does. tools (the AppHost and the migration job) is reported, not gated: most of its
+      # coverage comes from the Aspire E2E test. Raise a floor as coverage grows; never lower one
+      # to get a change through.
+      - name: Coverage summary and ring floors
+        run: >-
+          python3 .github/scripts/coverage-summary.py coverage.cobertura.xml
+          --min-line-rate src/Core=90 --min-line-rate src/Infrastructure=85
+          --min-line-rate src/Presentation=75 --min-line-rate src/Shared=80
 
       # A flaky Testcontainers/Aspire run must not have to be reproduced blind.
       - name: Upload test results on failure

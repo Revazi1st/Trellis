@@ -1,9 +1,10 @@
-"""Summarise a Cobertura coverage report and gate the Core ring on a minimum line rate.
+"""Summarise a Cobertura coverage report and gate each ring on a minimum line rate.
 
-Used by the "Coverage summary and Core gate" step in .github/workflows/ci.yml; standard library
+Used by the "Coverage summary and ring floors" step in .github/workflows/ci.yml; standard library
 only, so CI needs no extra tool. Run it from the repository root against any Cobertura file:
 
-    python3 .github/scripts/coverage-summary.py coverage.cobertura.xml --min-core-line-rate 90
+    python3 .github/scripts/coverage-summary.py coverage.cobertura.xml \\
+        --min-line-rate src/Core=90 --min-line-rate src/Infrastructure=85
 
 Every source file is assigned to the ring folder it lives in (src/Core, src/Infrastructure,
 src/Presentation, src/Shared, tools), read from the path the PDB recorded and checked against the
@@ -12,9 +13,14 @@ Files outside the ring folders (tests, third-party packages that ship symbols, g
 under obj/) are not counted even when the collection let them in. Lines are counted once per
 (file, line) even when a file contributes to several classes (partial types, closures).
 
-The Markdown table goes to $GITHUB_STEP_SUMMARY when that is set, and to stdout always. The exit
-code is 1 when the Core ring is below --min-core-line-rate, or has no measured lines at all (the
-collection or its filters are broken), and 0 otherwise.
+--min-line-rate RING=PERCENT sets one ring's floor and may be repeated; a ring without one is
+reported but not gated. --min-core-line-rate PERCENT is the older spelling of
+--min-line-rate src/Core=PERCENT and still works.
+
+The Markdown tables go to $GITHUB_STEP_SUMMARY when that is set, and to stdout always. The exit
+code is 1 when a ring is below its floor, when a ring with a floor has no measured lines, or when
+the Core ring has no measured lines at all (either way the collection or its filters are broken),
+and 0 otherwise.
 """
 
 from __future__ import annotations
@@ -89,14 +95,40 @@ class Tally:
         return f"{100.0 * covered / total:.1f}%" if total else "n/a"
 
 
+def floor_arg(text: str) -> tuple[str, float]:
+    """One --min-line-rate value: RING=PERCENT, with RING one of RINGS."""
+    ring, separator, percent = text.partition("=")
+    ring = ring.strip().rstrip("/")
+    if not separator or ring not in RINGS:
+        raise argparse.ArgumentTypeError(
+            f"expected RING=PERCENT with RING one of {', '.join(RINGS)}, got '{text}'")
+    try:
+        value = float(percent)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{percent}' is not a number") from None
+    if not 0.0 <= value <= 100.0:
+        raise argparse.ArgumentTypeError(f"{value:g} is not a percentage between 0 and 100")
+    return ring, value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("report", help="Cobertura XML file (dotnet-coverage -f cobertura)")
-    parser.add_argument("--min-core-line-rate", type=float, default=0.0,
-                        help="fail when the src/Core line rate (percent) is below this")
+    parser.add_argument("--min-line-rate", type=floor_arg, action="append", default=[],
+                        metavar="RING=PERCENT",
+                        help="fail when RING's line rate (percent) is below PERCENT; repeat it "
+                             "for each ring that has a floor")
+    parser.add_argument("--min-core-line-rate", type=float, metavar="PERCENT",
+                        help="the older spelling of --min-line-rate src/Core=PERCENT (which wins "
+                             "when both are given)")
     parser.add_argument("--repo-root", default=".",
                         help="the checkout the ring folders are resolved against")
     args = parser.parse_args()
+
+    floors: dict[str, float] = {}
+    if args.min_core_line_rate is not None:
+        floors["src/Core"] = args.min_core_line_rate
+    floors.update(dict(args.min_line_rate))
 
     root = ET.parse(args.report).getroot()
     by_assembly: dict[tuple[str, str], Tally] = defaultdict(Tally)
@@ -116,14 +148,40 @@ def main() -> int:
     total = Tally()
     for tally in by_ring.values():
         total.merge(tally)
-    core = by_ring.get("src/Core", Tally())
+
+    errors: list[str] = []
+    if by_ring["src/Core"].lines_valid == 0:
+        errors.append("No src/Core lines in the coverage report: the collection or its filters "
+                      "(eng/coverage.runsettings) are broken, or this is not run from the "
+                      "repository root.")
+    ring_rows = []
+    for ring in RINGS:
+        tally = by_ring[ring]
+        floor = floors.get(ring)
+        if tally.lines_valid == 0 and floor is None:
+            continue
+        floor_text = "none" if floor is None else f"{floor:g}%"
+        if floor is not None and tally.lines_valid == 0 and ring != "src/Core":
+            errors.append(f"No {ring} lines in the coverage report, although the ring has a "
+                          f"{floor:g}% floor: the collection or its filters are broken, or the "
+                          f"ring no longer exists and its floor should go.")
+            floor_text = f"**{floor:g}%, no lines**"
+        elif floor is not None and tally.lines_valid and tally.line_rate < floor:
+            errors.append(f"{ring} line coverage {tally.line_rate:.1f}% is below its {floor:g}% "
+                          f"floor. Add tests for the uncovered code in {ring}.")
+            floor_text = f"**{floor:g}%, below**"
+        ring_rows.append(f"| {ring} | {tally.lines_covered}/{tally.lines_valid} "
+                         f"| {tally.line_rate:.1f}% | {tally.branch_text} | {floor_text} |")
 
     out = [
         "## Code coverage",
         "",
-        f"Core ring (`src/Core`): **{core.line_rate:.1f}%** of {core.lines_valid} lines "
-        f"(gate: at least {args.min_core_line_rate:g}%). "
-        f"All rings: {total.line_rate:.1f}% of {total.lines_valid} lines.",
+        f"All rings: {total.line_rate:.1f}% of {total.lines_valid} lines. A ring below its floor "
+        f"fails the job; a ring without one is reported only.",
+        "",
+        "| Ring | Lines | Line rate | Branch rate | Floor |",
+        "|---|---:|---:|---:|---:|",
+        *ring_rows,
         "",
         "| Ring | Assembly | Lines | Line rate | Branch rate |",
         "|---|---|---:|---:|---:|",
@@ -140,15 +198,9 @@ def main() -> int:
             handle.write(summary)
     print(summary)
 
-    if core.lines_valid == 0:
-        print("::error::No src/Core lines in the coverage report: the collection or its filters "
-              "(eng/coverage.runsettings) are broken, or this is not run from the repository root.")
-        return 1
-    if core.line_rate < args.min_core_line_rate:
-        print(f"::error::Core ring line coverage {core.line_rate:.1f}% is below the "
-              f"{args.min_core_line_rate:g}% gate. Add tests for the uncovered Core code.")
-        return 1
-    return 0
+    for error in errors:
+        print(f"::error::{error}")
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
