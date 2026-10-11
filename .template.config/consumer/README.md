@@ -38,6 +38,14 @@ Sign in as `admin@example.com` / `Admin123!`; that account and the demo data are
 Development only (production seeding wants your own password, see
 [docs/deployment.md](docs/deployment.md)). In Development the API serves its reference at `/scalar/v1`.
 
+The demo data belongs to the sample invoicing feature;
+[docs/features/invoices.md](docs/features/invoices.md) explains it in plain words: an invoice's
+states, the rules between them and where each file lives. Its *Try it* section walks the lifecycle
+one request at a time from `src/Presentation/Api/Trellis.Api/Trellis.Api.http`.
+<!--#if (IncludeUI) -->
+The web UI clicks through the same steps once you sign in.
+<!--#endif -->
+
 No .NET SDK on the host? Build and test through the SDK container (`scripts/dotnet.sh`) or open the
 folder in the dev container: [docs/development.md](docs/development.md).
 

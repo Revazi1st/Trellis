@@ -4,6 +4,10 @@ Thanks for helping improve Trellis. This is both a working solution and a
 `dotnet new` template, so changes should keep the reference solution green and
 the template instantiable.
 
+A question, or an idea you want to try out before writing code? Start a thread in
+[GitHub Discussions](https://github.com/Revazi1st/Trellis/discussions) (Q&A or Ideas); issues are for
+bugs and feature requests.
+
 ## Getting started
 
 With a local .NET 10 SDK:
@@ -36,6 +40,11 @@ With a local SDK you can also `aspire run` the full app. See
   0100 (`docs/adr/`, see the `new-adr` skill).
 - A user-visible change gets a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), written
   for the people who generate projects from the template.
+- A change that copies or adapts someone else's work (an idea, a pattern, a layout, text or code)
+  adds a line to the README's [Credits](README.md#credits) in the same PR: project, author, license
+  and what was taken. Projects we only compared against get no line. Verbatim MIT or BSD material
+  also brings its copyright and permission notice into a `THIRD-PARTY-NOTICES.md`, listed beside
+  `LICENSE` under `copyOnly` in `.template.config/template.json` so the rename never rewrites it.
 - Follow the layer conventions in `.claude/rules/` and the boundaries in
   `AGENTS.md`. In particular: dependencies point inward, failures are `Result`s
   (not exceptions), migrations are generated (never hand-edited), and **no

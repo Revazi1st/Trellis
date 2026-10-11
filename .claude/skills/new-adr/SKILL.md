@@ -26,6 +26,7 @@ ADRs are short, dated, immutable records of load-bearing decisions (ADR-0001). O
 
 - **Status**: accepted
 - **Date**: <YYYY-MM-DD>
+- **Prior art**: <optional: the project, author and license this decision takes an idea from, and what>
 
 ## Context
 <the forces: what problem, what constraints>
@@ -37,6 +38,9 @@ ADRs are short, dated, immutable records of load-bearing decisions (ADR-0001). O
 <what this makes easy/hard; follow-ups; who must know>
 ```
 
+   Keep the **Prior art** line only when the decision adopts an idea, pattern or text from someone
+   else's project, and delete it otherwise; a verbatim copy also needs the notice its license
+   requires. In the template's own repository the same line goes into the README's Credits.
 3. Add a one-line pointer to `docs/INDEX.md`: under **Project decisions** for 0100 and up, under
    **Template decisions** for the template's own.
 4. If the decision creates a rule agents must follow, restate the rule (not the rationale) in the

@@ -31,6 +31,7 @@ Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events,
 ## 4. Api
 - Delete `Api/Features/Invoices/` (7 endpoints) and `Api.Contracts/Invoices/` (the DTOs and the `InvoiceStatus` wire enum).
 - `Program.cs`: no telemetry line to remove — ServiceDefaults subscribes every `Trellis.*` meter, so deleting `InvoiceMetrics` is enough.
+- `Trellis.Api.http`: delete the invoice requests and keep the sign-in and register ones as the start of your own walkthrough.
 - `Api.Common/Caching/CacheKeys.cs`: replace the `Invoice(id)` method with keys for your feature — keep the class, it is the tenant-scoping seam.
 - **Regenerate the OpenAPI document**: `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` (`./scripts/dotnet.sh` forwards the variable) and commit `docs/api/openapi.v1.json`. `OpenApiSnapshotTests` fails until the committed document drops the invoice operations and schemas.
 
@@ -54,7 +55,7 @@ Delete `SeedSampleDataAsync`, its `Seeded` helper and its call in `MigrationWork
 - `grep -rl Invoice tests` afterwards lists anything this step missed.
 
 ## 8. Docs
-Delete `docs/features/invoices.md`; fix the mentions of the slice as the reference pattern in `AGENTS.md`, `.claude/rules/` and `.claude/skills/add-feature/`. A final `grep -ri invoice` catches stragglers (XML doc comments citing it as an example may simply be reworded).
+Delete `docs/features/invoices.md` and the paragraph in `README.md` that points newcomers to it; fix the mentions of the slice as the reference pattern in `AGENTS.md`, `.claude/rules/` and `.claude/skills/add-feature/`. A final `grep -ri invoice` catches stragglers (XML doc comments citing it as an example may simply be reworded).
 
 ## 9. Migration + finish
 Delete `src/Infrastructure/Trellis.Persistence/Migrations/` and regenerate the single initial migration (pre-release convention, see `add-migration`):

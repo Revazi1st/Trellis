@@ -2,6 +2,108 @@
 
 The **reference vertical slice** — the canonical shape to copy for new features (aggregates or use cases). It exercises every tactical pattern in the template.
 
+## The domain in plain words
+
+An invoice bills one customer, in one currency, for one or more lines of work. It starts as a
+**draft**, the only state in which lines can be added. **Issuing** it freezes the lines and sets a
+due date that may not lie in the past; an issued invoice whose due date then passes appears in the
+overdue list. **Paying** an issued invoice closes it and e-mails the customer a receipt, **voiding**
+cancels a draft or an issued one, and a paid or voided invoice never changes again.
+Administrators may do all of this; members may only read.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Draft: Create
+    Draft --> Draft: AddLine
+    Draft --> Issued: Issue (at least one line, due date not past)
+    Issued --> Paid: MarkPaid (receipt e-mailed after the commit)
+    Draft --> Voided: Void
+    Issued --> Voided: Void
+    Paid --> [*]
+    Voided --> [*]
+    note right of Issued: overdue once its due date has passed
+```
+
+Every arrow is a method on `Invoice` that returns a `Result`; a call from the wrong state answers a
+409 (`Invoice.NotDraft`, `Invoice.NotIssued` or `Invoice.AlreadyFinalized`) and changes nothing.
+
+## Try it
+
+Start the app (`aspire run`) and open `src/Presentation/Api/Trellis.Api/Trellis.Api.http` in Rider,
+Visual Studio or VS Code with the REST Client extension. Set `@host` to the `api` resource's URL
+from the Aspire dashboard (the IDE launch profiles and the dev container serve
+`http://localhost:5171`) and choose the `dev` environment, which
+`src/Presentation/Api/http-client.env.json` fills with the seeded admin and a demo member. Then
+send the requests in order; each row shows a request, its body and what comes back, and the
+placeholder variables at the top of the file name the response each value comes from.
+
+| # | Request | Body | Answer |
+|---|---|---|---|
+| 1 | `POST /api/v1/auth/login` | `{"email": "admin@example.com", "password": "Admin123!"}` | 200 with an `accessToken`: paste it into `@token` |
+| 2 | `POST /api/v1/invoices` with `Idempotency-Key: try-it-1` | `{"customerName": "Ada Lovelace", "customerEmail": "ada@example.com", "currency": "EUR"}` | 201, a `Location` header and the new `id`: paste it into `@invoiceId` |
+| 3 | `POST /api/v1/invoices/{id}/lines` | `{"description": "Analytical engine consulting", "amount": 1200.00}` | 204 |
+| 4 | `POST /api/v1/invoices/{id}/issue` | `{"dueDate": "2099-12-31T00:00:00Z"}` | 204; a past date answers 400 `Invoice.DueDateInPast` |
+| 5 | `GET /api/v1/invoices/{id}` | | 200: status `Issued`, total 1200.00, and an `ETag` header to paste into `@etag` |
+| 6 | the same GET with `If-None-Match: {etag}` | | 304 and no body, until the invoice changes |
+| 7 | `POST /api/v1/invoices/{id}/pay` | | 204; seconds later the api logs `E-mail not sent (Email:Provider=Logging) …`: the outbox handed `invoices.paid.v1` to `SendReceiptOnInvoicePaid` after the commit |
+| 8 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
+| 9 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
+| 10 | `POST /api/v1/auth/login` as the member | as in step 9 | 200: paste its `accessToken` into `@memberToken` |
+| 11 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
+
+To walk through again, change `@createKey` first: the same key keeps answering with the first
+invoice, paid by then, so steps 3, 4 and 7 would answer 409 (`Invoice.NotDraft`,
+`Invoice.AlreadyFinalized`, `Invoice.NotIssued`). Tokens expire after 15 minutes, so send step 1
+again when a request answers 401. Visual Studio and VS Code can chain the values instead of pasting
+them, Rider through a response handler script; the file's header shows both.
+
+<!--#if (IncludeUI) -->
+The web UI (the `web` resource) walks the same lifecycle with clicks: sign in as the admin, create
+an invoice, then add a line, issue and pay it from its detail page.
+
+<!--#endif -->
+## Where the code lives
+
+One folder per layer, one subfolder per use case:
+
+```text
+src/Core/Trellis.Domain/
+├── Common/                     Money, Currency, EmailAddress: value objects, not invoice-only
+└── Invoices/
+    ├── Invoice.cs              the aggregate: Create, AddLine, Issue, MarkPaid, Void
+    ├── InvoiceLine.cs          child entity, reachable only through Invoice
+    ├── InvoiceId.cs            strongly-typed IDs (InvoiceLineId.cs alike)
+    ├── InvoiceErrors.cs        one Error per rule: the codes clients branch on
+    ├── InvoiceSpecs.cs         query shapes (Overdue), translated to SQL by Persistence
+    ├── IInvoiceRepository.cs   the port Persistence implements
+    └── Events/                 Issued, Paid, Voided: delivered by the outbox after commit
+src/Core/Trellis.Application/Features/Invoices/
+    ├── CreateInvoice/          command + handler + validator, one folder per use case
+    ├── AddInvoiceLine/         IssueInvoice/ alike; PayInvoice/ and VoidInvoice/ take only
+    │                           an id, so they carry no validator
+    ├── GetInvoice/             the queries (ListOverdueInvoices/ alike)
+    ├── EventHandlers/          SendReceiptOnInvoicePaid, RecordInvoiceMetrics
+    └── InvoiceResponse.cs      the read model the queries return
+src/Infrastructure/Trellis.Persistence/
+    ├── Configurations/         InvoiceConfiguration, InvoiceLineConfiguration: the EF mapping
+    └── Repositories/           InvoiceRepository
+src/Presentation/Api/Trellis.Api.Contracts/Invoices/
+    └── InvoiceContracts.cs     the wire records, shared with every client
+src/Presentation/Api/Trellis.Api/
+    ├── Features/Invoices/      one endpoint class per use case
+    └── Trellis.Api.http        the requests behind "Try it" above
+```
+
+<!--#if (IncludeUI) -->
+```text
+src/Presentation/UI/Trellis.UI.Common/
+    ├── Pages/                  Invoices, InvoiceDetail, CreateInvoice
+    ├── Forms/InvoiceForms.cs   DataAnnotations mirroring the command validators
+    └── Services/               IInvoiceApiClient over the contracts
+```
+
+<!--#endif -->
 ## Domain (`src/Core/Trellis.Domain/Invoices/`)
 
 - **`Invoice`** — aggregate root (`AggregateRoot<InvoiceId>`, also `IAuditable`, `ISoftDeletable`).

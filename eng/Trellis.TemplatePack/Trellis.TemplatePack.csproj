@@ -6,12 +6,13 @@
     <Title>Trellis Clean Architecture Solution Template</Title>
     <Authors>Trellis contributors</Authors>
     <Description>A rich-DDD, Clean Architecture .NET 10 solution template: feature-based minimal APIs, separate Infrastructure and Persistence, Aspire orchestration, Blazor UI, and an AI-friendly repository.</Description>
-    <PackageTags>dotnet-new;templates;clean-architecture;ddd;aspire;blazor</PackageTags>
+    <PackageTags>dotnet-new;templates;clean-architecture;ddd;cqrs;vertical-slice;aspire;blazor;postgresql</PackageTags>
     <Version>0.1.0</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/Revazi1st/trellis</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/Revazi1st/trellis</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Revazi1st/Trellis</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Revazi1st/Trellis</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
 
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -81,6 +82,8 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- The same file the IDEs show through ide.host.json; its SVG source sits beside it. -->
+    <None Include="..\..\.template.config\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>

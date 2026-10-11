@@ -1,8 +1,15 @@
 # Trellis
 
-[![CI](https://github.com/Revazi1st/trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/Revazi1st/trellis/actions/workflows/ci.yml)
+[![CI](https://github.com/Revazi1st/Trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/Revazi1st/Trellis/actions/workflows/ci.yml)
+[![Template CI](https://github.com/Revazi1st/Trellis/actions/workflows/template-ci.yml/badge.svg)](https://github.com/Revazi1st/Trellis/actions/workflows/template-ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/Trellis.Templates?logo=nuget)](https://www.nuget.org/packages/Trellis.Templates)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+
+```bash
+dotnet new install Trellis.Templates
+dotnet new trellis -n Your.Project
+```
 
 A best-practices .NET 10 **solution template**: rich DDD, Clean Architecture with vertical-slice features, feature-based Minimal APIs, separate Infrastructure and Persistence, ASP.NET Identity + JWT, Aspire orchestration, a Blazor UI, and a deeply **AI-friendly** repository (dual human/AI docs, Claude Code rules/agents/skills/hooks). Every major feature is a toggle, so you scaffold only what you need.
 
@@ -14,19 +21,13 @@ A best-practices .NET 10 **solution template**: rich DDD, Clean Architecture wit
 
 ## Use the template
 
-From nuget.org, once a version is published there (see [CHANGELOG.md](CHANGELOG.md) for what each
-version contains):
+The two lines above install the latest release from nuget.org and generate a solution;
+[CHANGELOG.md](CHANGELOG.md) says what each version contains. To try `main` instead, install from a
+clone of this repository:
 
 ```bash
-dotnet new install Trellis.Templates
-dotnet new trellis -n Your.Project
-```
-
-From a clone of this repository, which is what to do before the first release or to try `main`:
-
-```bash
-git clone https://github.com/Revazi1st/trellis.git
-dotnet new install ./trellis                   # a folder install; `dotnet new uninstall ./trellis` removes it
+git clone https://github.com/Revazi1st/Trellis.git
+dotnet new install ./Trellis                   # a folder install; `dotnet new uninstall ./Trellis` removes it
 dotnet new trellis -n Your.Project -o Your.Project
 ```
 
@@ -111,6 +112,13 @@ then run **MigrationService** once, then **Trellis.Api** (<http://localhost:5171
 
 Seeded admin: `admin@example.com` / `Admin123!`. Full detail in [docs/development.md](docs/development.md).
 
+The app ships one sample feature, invoicing, and
+[docs/features/invoices.md](docs/features/invoices.md) explains it in plain words before any
+architecture: an invoice's states, the rules between them and where each file lives. Its
+[*Try it*](docs/features/invoices.md#try-it) section then walks the lifecycle one request at a time
+from `src/Presentation/Api/Trellis.Api/Trellis.Api.http` (sign in, create, add a line, issue, a
+304, pay, an idempotent replay and a member's 403), and the web UI clicks through the same steps.
+
 ## Architecture
 
 Dependencies point inward; the arrows are enforced by `ArchitectureTests`.
@@ -189,6 +197,50 @@ The skills are plain Markdown procedures: an AI agent follows them, and so can y
 See [CONTRIBUTING.md](CONTRIBUTING.md). Architecture decisions live in [docs/adr](docs/adr/); the docs
 index for both humans and agents is [docs/INDEX.md](docs/INDEX.md); what changed in each version is in
 [CHANGELOG.md](CHANGELOG.md).
+Questions and ideas are welcome in [GitHub Discussions](https://github.com/Revazi1st/Trellis/discussions).
+
+## Credits
+
+Trellis takes ideas from other people's work. Each line names what was taken; nothing below is a
+verbatim copy, so the MIT and BSD notices stay with their projects. Templates we only compared
+against are not listed (ADR-0002 names them).
+
+**Templates and libraries we learned from**
+- [clean-architecture](https://github.com/amantinband/clean-architecture) by Amichai Mantinband (MIT), *when adopted*:
+  - the per-use-case request collection and the Getting Started walkthrough, one request and body per step;
+  - one authorization test per use case, which prompted pinning each endpoint's permission, and the permission-scoped token idiom;
+  - use-case drivers, optional-parameter factories, the paired HTTP test client and the switchable current-user double (rewritten, no MediatR);
+  - the one-test-suite-per-use-case discipline with test folders mirroring the Application slice;
+  - a configuration-gated SMTP sender and the user-secrets setup walkthrough;
+  - the Domain Overview device, plain words before architecture, and the folder map that prompted our slice tree;
+  - the eventual-consistency walkthrough shape, the one-aggregate-per-use-case explanation, and the idea of a reference time-triggered use case;
+  - the Testing section mapping each test type onto the layers it exercises, and where to invest;
+  - the authorization how-to format, one snippet then who passes, and the self-or-admin idea behind our ownership recipe;
+  - the show-the-code README sections, the visual walkthrough-style README, and feature-first folders in the persistence adapter.
+- [Trellis](https://github.com/xavierjohn/Trellis) by Xavier John (MIT; no affiliation, the shared name is a coincidence), *once imported*:
+  - lease-fenced outbox bookkeeping writes, and sibling event handlers run on every attempt with only the failed ones retried;
+  - the build-time analyzer for a discarded `Result`, failing fast when a `Result` reaches JSON, and the guard against a handler invoking another handler;
+  - value-object errors attributed to the request field, a type-aware and tuple `Result.Combine`, and concurrency promotion at the aggregate boundary;
+  - error descriptions redacted from the outcome log line and from every 5xx `detail`, and tracing outside logging;
+  - upstream status mapped by endpoint contract, `Unavailable` as 503, declared unique constraints as 409, and optional `If-Match` on transition POSTs;
+  - the error-code vocabulary fitness test, whole-request validation errors, the value-object constructor test, a failed `Result` that names its code, and compiler-guarded `Error` access.
+- [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
+- [ErrorOr](https://github.com/amantinband/error-or) by Amichai Mantinband (MIT): the `Error`/`ErrorType` vocabulary our hand-rolled `Result` mirrors (ADR-0004).
+- [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
+- [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
+
+**Formats and conventions**
+- [Michael Nygard's ADR format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions): Status, Context, Decision, Consequences (ADR-0001).
+- [AGENTS.md](https://agents.md): the tool-neutral agent instruction file (ADR-0014).
+- [Contributor Covenant 2.1](https://www.contributor-covenant.org) (CC BY 4.0): `CODE_OF_CONDUCT.md`.
+- [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html): `CHANGELOG.md` and the release rules.
+- [Conventional Commits](https://www.conventionalcommits.org): the commit style in `CONTRIBUTING.md`.
+- Martin Fowler's [subcutaneous test](https://martinfowler.com/bliki/SubcutaneousTest.html) term, used for the integration-test host.
+
+**Services**
+- [Frankfurter](https://frankfurter.dev): the free exchange-rate API the reference integration calls by default.
+
+Packages carry their own licenses; see `Directory.Packages.props` and ADR-0011.
 
 ## License
 

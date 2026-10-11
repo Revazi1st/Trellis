@@ -3,6 +3,7 @@
 - **Status**: accepted
 - **Date**: 2026-07-14
 - **Amended**: 2026-10-08 — numbering: the template's ADRs are 0001–0099, a generated project's own start at 0100 (see *Amendment* below)
+- **Amended**: 2026-10-11 — an optional *Prior art* line credits what a decision takes from another project (see *Amendment* below)
 
 ## Context
 
@@ -26,3 +27,13 @@ its records 0001–0099 and a generated project numbers its own from 0100 (the `
 on a shared number, on a record under the wrong heading, and on a number of 0100 or more in the
 template's own repository. An upgrade then only ever adds or amends files below 0100
 (`docs/upgrading.md`).
+
+## Amendment (2026-10-11): prior art
+
+A decision that adopts an idea, a pattern or text from someone else's project names it in an
+optional `- **Prior art**:` line under the date: the project, its author and license, and what was
+taken (the `new-adr` skill's skeleton carries the line). An idea or a rewritten pattern creates no
+license obligation, so the line is a courtesy that keeps the record honest about where the decision
+came from; a verbatim copy also brings the notice its license requires. A project the decision was
+only compared against gets no line. In the template's own repository the README's Credits section
+collects the same lines, and its contributing guide asks for them in the change that adopts the idea.

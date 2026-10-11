@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Source of icon.png, the template and package icon: a garden lattice with one leaf, drawn for
+       this repository. Re-render it at 128x128 with a transparent background, for example with a
+       headless Chromium: chrome-headless-shell -headless -force-device-scale-factor=1
+       -window-size=128,128 -default-background-color=00000000 -screenshot=icon.png file:///…/icon.svg
+       (each option takes two leading hyphens). -->
+  <defs>
+    <clipPath id="frame">
+      <rect x="18" y="18" width="92" height="92" rx="8"/>
+    </clipPath>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#1F5C3D"/>
+  <g clip-path="url(#frame)" stroke="#EEF6E8" stroke-width="7" fill="none">
+    <path d="M-20 100 L100 -20 M-20 148 L148 -20 M28 148 L148 28"/>
+    <path d="M-20 -68 L148 100 M-20 -20 L148 148 M-20 28 L148 196"/>
+  </g>
+  <rect x="18" y="18" width="92" height="92" rx="8" fill="none" stroke="#EEF6E8" stroke-width="7"/>
+  <path d="M64 64 C 70 46, 84 36, 104 34 C 104 54, 90 66, 64 64 Z" fill="#8FD16A"/>
+  <path d="M64 64 C 76 54, 88 46, 100 38" stroke="#1F5C3D" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>
