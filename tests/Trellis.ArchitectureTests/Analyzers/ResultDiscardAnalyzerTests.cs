@@ -24,6 +24,7 @@ public sealed class ResultDiscardAnalyzerTests
     private const string Usings = """
         using System;
         using System.Collections.Generic;
+        using System.Linq;
         using System.Threading.Tasks;
         using Microsoft.AspNetCore.Identity;
         using Trellis.SharedKernel.Results;
@@ -67,6 +68,15 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("an awaited IdentityResult", "await account.CreateUserAsync();")]
     [InlineData("an object creation", "new IdentityResult();")]
     [InlineData("a type parameter constrained to Result", "static void Drop<T>(Func<T> make) where T : Result { make(); } Drop(() => account.Close());")]
+    [InlineData("a Task<Result> returned as a plain Task", "Task Plain() => account.CloseAsync(); await Plain();")]
+    [InlineData("a Task<Result> lambda typed Func<Task>", "Func<Task> work = () => account.CloseAsync(); await work();")]
+    [InlineData("a Task<Result> method group typed Func<Task>", "Func<Task> work = account.CloseAsync; await work();")]
+    [InlineData("a Task<Result> stored as a plain Task", "Task plain = account.CloseAsync(); await plain;")]
+    [InlineData("a Task<Result> cast to Task", "await (Task)account.CloseAsync();")]
+    [InlineData("a Task<IdentityResult> stored as a plain Task", "Task created = account.CreateUserAsync(); await created;")]
+    [InlineData("a Task<Result> passed as a plain Task", "await Task.WhenAny(account.CloseAsync(), Task.Delay(1));")]
+    [InlineData("a Task<Result> through a conditional access stored as a plain Task", "Task? plain = maybe?.CloseAsync(); await (plain ?? Task.CompletedTask);")]
+    [InlineData("Task<Result>s seen as plain Tasks", "IEnumerable<Task> all = new[] { account }.Select(a => a.CloseAsync()); await Task.WhenAll(all);")]
     public async Task A_dropped_result_is_reported(string shape, string statements)
     {
         ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(InRunMethod(statements));
@@ -86,6 +96,8 @@ public sealed class ResultDiscardAnalyzerTests
     [InlineData("an async Func<Task<Result>> lambda", "Func<Task<Result>> close = async () => await account.CloseAsync(); _ = await close();")]
     [InlineData("an awaited plain Task", "await account.SaveAsync();")]
     [InlineData("a List.Add call", "var results = new List<Result>(); results.Add(account.Close());")]
+    [InlineData("a held Task<Result> also seen as a plain Task", "Task<Result> closing = account.CloseAsync(); Task plain = closing; await plain; _ = await closing;")]
+    [InlineData("a Task<Result> returned as itself", "Task<Result> Closing() => account.CloseAsync(); _ = await Closing();")]
     public async Task A_result_that_is_kept_or_dropped_on_purpose_is_not_reported(string shape, string statements)
     {
         ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(InRunMethod(statements));
@@ -105,16 +117,22 @@ public sealed class ResultDiscardAnalyzerTests
             .ToString(diagnostic.Location.SourceSpan).ShouldBe("account.Withdraw(5)");
     }
 
+    /// <summary>Two messages (a dropped result, a task of one turned into a plain Task), one rule: id, severity, title and ADR.</summary>
     [Fact]
     public void The_rule_is_a_warning_by_default_and_its_help_link_is_the_ADR()
     {
-        DiagnosticDescriptor rule = new ResultDiscardAnalyzer().SupportedDiagnostics.ShouldHaveSingleItem();
+        ImmutableArray<DiagnosticDescriptor> descriptors = new ResultDiscardAnalyzer().SupportedDiagnostics;
 
-        rule.Id.ShouldBe("RSLT001");
-        rule.DefaultSeverity.ShouldBe(DiagnosticSeverity.Warning);
-        rule.IsEnabledByDefault.ShouldBeTrue();
-        File.Exists(Path.Combine(RepositorySource.Root.FullName, rule.HelpLinkUri))
-            .ShouldBeTrue($"the help link '{rule.HelpLinkUri}' must name the ADR file");
+        descriptors.Length.ShouldBe(2);
+        string helpLink = descriptors[0].HelpLinkUri;
+        string title = descriptors[0].Title.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        descriptors.ShouldAllBe(rule => rule.Id == "RSLT001"
+            && rule.DefaultSeverity == DiagnosticSeverity.Warning
+            && rule.IsEnabledByDefault
+            && rule.HelpLinkUri == helpLink
+            && rule.Title.ToString(System.Globalization.CultureInfo.InvariantCulture) == title);
+        File.Exists(Path.Combine(RepositorySource.Root.FullName, helpLink))
+            .ShouldBeTrue($"the help link '{helpLink}' must name the ADR file");
     }
 
     [Fact]
@@ -132,6 +150,65 @@ public sealed class ResultDiscardAnalyzerTests
             """);
 
         diagnostics.ShouldHaveSingleItem().Id.ShouldBe(ResultDiscardAnalyzer.DiagnosticId);
+    }
+
+    /// <summary>
+    /// The shape of an outbox handler on top of an ADR-0020 port: <c>Handle</c> returns a plain
+    /// <see cref="Task"/>, the port a <c>Task&lt;Result&gt;</c>, and the conversion between them drops the
+    /// failure, so the outbox checkpoints a failed push as done and never retries it.
+    /// </summary>
+    [Fact]
+    public async Task A_task_of_a_result_returned_as_a_plain_task_is_reported_with_both_types()
+    {
+        ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync($$"""
+            {{Usings}}
+
+            {{Fixture}}
+
+            public sealed class PushOnClose
+            {
+                public Task Handle(Account account) => account.CloseAsync();
+            }
+            """);
+
+        Diagnostic diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe(ResultDiscardAnalyzer.DiagnosticId);
+        diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldStartWith("This Task<Result> is converted to Task, which drops its result");
+        (await diagnostic.Location.SourceTree.ShouldNotBeNull().GetTextAsync(TestContext.Current.CancellationToken))
+            .ToString(diagnostic.Location.SourceSpan).ShouldBe("account.CloseAsync()");
+    }
+
+    /// <summary>
+    /// A delegate handed to an exception assertion is expected to throw, so the call in its body has
+    /// no result to lose: Shouldly's <c>Should.ThrowAsync</c> and xUnit's <c>Assert.ThrowsAsync</c> take
+    /// the plain <see cref="Task"/> the conversion produces. A stand-in with their names keeps both
+    /// libraries out of the snippet.
+    /// </summary>
+    [Theory]
+    [InlineData("await Should.ThrowAsync<InvalidOperationException>(() => account.CloseAsync());")]
+    [InlineData("await Should.ThrowAsync<InvalidOperationException>(async () => await account.CloseAsync());")]
+    [InlineData("await Should.ThrowAsync<InvalidOperationException>(account.CloseAsync());")]
+    [InlineData("await Should.ThrowAsync<InvalidOperationException>(account.CloseAsync);")]
+    [InlineData("await Assert.ThrowsAsync<InvalidOperationException>(() => account.CloseAsync());")]
+    public async Task A_call_an_exception_assertion_expects_to_throw_is_not_reported(string statements)
+    {
+        const string assertionStandIns = """
+            public static class Should
+            {
+                public static Task ThrowAsync<TException>(Func<Task> actual) where TException : Exception => actual();
+                public static Task ThrowAsync<TException>(Task actual) where TException : Exception => actual;
+            }
+
+            public static class Assert
+            {
+                public static Task ThrowsAsync<TException>(Func<Task> testCode) where TException : Exception => testCode();
+            }
+            """;
+
+        ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(InRunMethod(statements) + assertionStandIns);
+
+        diagnostics.ShouldBeEmpty(statements);
     }
 
     [Fact]

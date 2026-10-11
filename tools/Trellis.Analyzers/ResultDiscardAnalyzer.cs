@@ -27,35 +27,131 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
 {
     public const string DiagnosticId = "RSLT001";
 
+    private const string Title = "The result of this call is discarded";
+    private const string Category = "Reliability";
+    private const string HelpLink = "docs/adr/0030-discarded-result-analyzer.md";
+    /// <summary>How deep <see cref="CarriesResult"/> looks through wrappers: <c>Task&lt;Result[]&gt;</c> is two levels.</summary>
+    private const int MaxNesting = 4;
+
+    private const string Description =
+        "A Result carries the failure of the operation that produced it. Dropping it commits a refused change or hides a failed step as if it had succeeded.";
+
+    /// <summary>A statement computes a result and throws it away.</summary>
     internal static readonly DiagnosticDescriptor Rule = new(
         id: DiagnosticId,
-        title: "The result of this call is discarded",
+        title: Title,
         messageFormat: "This {0} is discarded: handle it or return it, or write '_ = ...' with a one-line reason to drop it on purpose",
-        category: "Reliability",
+        category: Category,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "A Result carries the failure of the operation that produced it. Dropping it commits a refused change or hides a failed step as if it had succeeded.",
-        helpLinkUri: "docs/adr/0030-discarded-result-analyzer.md");
+        description: Description,
+        helpLinkUri: HelpLink);
 
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = ImmutableArray.Create(Rule);
+    /// <summary>
+    /// A task of a result becomes a plain <c>Task</c>: whoever awaits it learns that it finished, never
+    /// whether it failed. The same id, so one severity line and one ADR cover both.
+    /// </summary>
+    internal static readonly DiagnosticDescriptor TaskRule = new(
+        id: DiagnosticId,
+        title: Title,
+        messageFormat: "This {0} is converted to {1}, which drops its result: keep the {0} (return it, or await it and handle the result)",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: Description,
+        helpLinkUri: HelpLink);
+
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = ImmutableArray.Create(Rule, TaskRule);
 
     public override void Initialize(AnalysisContext context)
     {
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
         context.RegisterOperationAction(AnalyzeExpressionStatement, OperationKind.ExpressionStatement);
+        context.RegisterOperationAction(AnalyzeConversion, OperationKind.Conversion);
+        context.RegisterOperationAction(AnalyzeDelegateCreation, OperationKind.DelegateCreation);
     }
 
     private static void AnalyzeExpressionStatement(OperationAnalysisContext context)
     {
         IOperation statementValue = ((IExpressionStatementOperation)context.Operation).Operation;
-        if (DroppedValue(statementValue) is { Type: { } type } dropped && IsResultType(type) && !IsSubstituteCallCheck(dropped))
+        if (DroppedValue(statementValue) is { Type: { } type } dropped
+            && IsResultType(type)
+            && !IsSubstituteCallCheck(dropped)
+            && !IsExpectedToThrow(context.Operation))
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Rule,
-                statementValue.Syntax.GetLocation(),
-                type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            Report(context, Rule, statementValue.Syntax, type);
         }
+    }
+
+    /// <summary>
+    /// <c>Task&lt;Result&gt;</c> to <c>Task</c> is an implicit reference conversion, so a member, lambda
+    /// or variable typed <c>Task</c> swallows the result without a word: <c>public Task Handle(…) =&gt;
+    /// crm.PushPaymentAsync(…);</c> lets the outbox checkpoint a failed push as done. Reported when the
+    /// converted value is computed on the spot; a task already held in a variable keeps its result there.
+    /// </summary>
+    private static void AnalyzeConversion(OperationAnalysisContext context)
+    {
+        var conversion = (IConversionOperation)context.Operation;
+        if (conversion.Type is { } target
+            && IsPlainTask(target)
+            && conversion.Operand.Type is { } source
+            && CarriesResult(source)
+            && DroppedValue(conversion.Operand) is { } computed
+            && !IsSubstituteCallCheck(computed)
+            && !IsExpectedToThrow(conversion))
+        {
+            Report(context, TaskRule, conversion.Operand.Syntax, source, target);
+        }
+    }
+
+    /// <summary>The method-group form of the same conversion: <c>Func&lt;Task&gt; work = port.PushAsync;</c>.</summary>
+    private static void AnalyzeDelegateCreation(OperationAnalysisContext context)
+    {
+        var creation = (IDelegateCreationOperation)context.Operation;
+        if (creation.Target is IMethodReferenceOperation { Method.ReturnType: { } returned } reference
+            && creation.Type is INamedTypeSymbol { DelegateInvokeMethod.ReturnType: { } delegateReturns }
+            && IsPlainTask(delegateReturns)
+            && CarriesResult(returned)
+            && !IsExpectedToThrow(creation))
+        {
+            Report(context, TaskRule, reference.Syntax, returned, delegateReturns);
+        }
+    }
+
+    private static void Report(OperationAnalysisContext context, DiagnosticDescriptor rule, SyntaxNode at, params ITypeSymbol[] types)
+        => context.ReportDiagnostic(Diagnostic.Create(
+            rule,
+            at.GetLocation(),
+            types.Select(static type => (object)type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)).ToArray()));
+
+    /// <summary>
+    /// The expression body of a delegate handed to an exception assertion (<c>Should.ThrowAsync(() =&gt;
+    /// handler.Handle(…))</c>, xUnit's <c>Assert.ThrowsAsync</c>, Shouldly's <c>ShouldThrow</c>), or the task
+    /// handed to one: the call is expected to throw, so there is no result to lose. Matched by a method
+    /// name that starts with <c>Throw</c> or <c>ShouldThrow</c>; only the delegate's own expression body is
+    /// exempt, never the statements of a block body.
+    /// </summary>
+    private static bool IsExpectedToThrow(IOperation operation)
+    {
+        IOperation current = operation;
+        if (current.Parent is IReturnOperation { IsImplicit: true } implicitReturn)
+        {
+            current = implicitReturn;
+        }
+
+        if (current.IsImplicit && current.Parent is IBlockOperation { IsImplicit: true, Parent: IAnonymousFunctionOperation lambda })
+        {
+            current = lambda;
+        }
+
+        while (current.Parent is IDelegateCreationOperation or IConversionOperation)
+        {
+            current = current.Parent;
+        }
+
+        return current.Parent is IArgumentOperation { Parent: IInvocationOperation { TargetMethod.Name: { } assertion } }
+               && (assertion.StartsWith("Throw", StringComparison.Ordinal) || assertion.StartsWith("ShouldThrow", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -108,6 +204,64 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
 
         return ns is { IsGlobalNamespace: false } ? ns.Name : null;
     }
+
+    /// <summary>
+    /// A result, or a value that holds results the caller can only reach through it: the value of a
+    /// <c>Task&lt;T&gt;</c> or <c>ValueTask&lt;T&gt;</c>, an array element or a sequence element.
+    /// </summary>
+    private static bool CarriesResult(ITypeSymbol type, int depth = 0)
+    {
+        if (depth > MaxNesting || type.SpecialType != SpecialType.None)
+        {
+            return false;
+        }
+
+        if (IsResultType(type))
+        {
+            return true;
+        }
+
+        ITypeSymbol? inner = type switch
+        {
+            IArrayTypeSymbol array => array.ElementType,
+            INamedTypeSymbol named => TaskValue(named) ?? SequenceElement(named),
+            _ => null,
+        };
+        return inner is not null && CarriesResult(inner, depth + 1);
+    }
+
+    /// <summary>The non-generic <c>Task</c>, or an array or sequence of them: a shape that carries no result.</summary>
+    private static bool IsPlainTask(ITypeSymbol type) => type switch
+    {
+        IArrayTypeSymbol array => IsPlainTask(array.ElementType),
+        INamedTypeSymbol { Arity: 0, Name: "Task" } task => IsSystemThreadingTasks(task.ContainingNamespace),
+        INamedTypeSymbol named => SequenceElement(named) is { } element && IsPlainTask(element),
+        _ => false,
+    };
+
+    /// <summary>The <c>T</c> of a <c>Task&lt;T&gt;</c> or <c>ValueTask&lt;T&gt;</c>.</summary>
+    private static ITypeSymbol? TaskValue(INamedTypeSymbol type)
+        => type is { Arity: 1, Name: "Task" or "ValueTask" } && IsSystemThreadingTasks(type.ContainingNamespace)
+            ? type.TypeArguments[0]
+            : null;
+
+    /// <summary>The <c>T</c> of a type that is or implements <c>IEnumerable&lt;T&gt;</c> or <c>IAsyncEnumerable&lt;T&gt;</c>.</summary>
+    private static ITypeSymbol? SequenceElement(INamedTypeSymbol type)
+    {
+        foreach (INamedTypeSymbol candidate in type.AllInterfaces.Insert(0, type))
+        {
+            if (candidate.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
+                || candidate is { Arity: 1, Name: "IAsyncEnumerable", ContainingNamespace: { Name: "Generic", ContainingNamespace: { Name: "Collections", ContainingNamespace.Name: "System" } } })
+            {
+                return candidate.TypeArguments[0];
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsSystemThreadingTasks(INamespaceSymbol? ns)
+        => ns is { Name: "Tasks", ContainingNamespace: { Name: "Threading", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } };
 
     private static bool IsResultType(ITypeSymbol type)
     {
