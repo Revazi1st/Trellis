@@ -62,6 +62,7 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
     /// </summary>
     private static readonly Dictionary<string, string> ExpectedPermissions = new(StringComparer.Ordinal)
     {
+        ["GET invoices"] = Permissions.Invoices.Read,
         ["GET invoices/{id}"] = Permissions.Invoices.Read,
         ["GET invoices/overdue"] = Permissions.Invoices.Read,
         ["POST invoices"] = Permissions.Invoices.Write,
@@ -161,6 +162,7 @@ public sealed class EndpointMetadataTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Theory]
+    [InlineData("GET", "invoices", HttpStatusCode.OK)]
     [InlineData("GET", "invoices/{id}", HttpStatusCode.NotFound)]
     [InlineData("GET", "invoices/overdue", HttpStatusCode.OK)]
     [InlineData("POST", "invoices", HttpStatusCode.Created)]

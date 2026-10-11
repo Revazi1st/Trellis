@@ -23,6 +23,7 @@ public sealed class ContractSerializationTests
             "billing@acme.com",
             "USD",
             InvoiceStatus.Issued,
+            new DateTimeOffset(2026, 7, 15, 9, 30, 0, TimeSpan.Zero),
             new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero),
             null,
             500.00m,
@@ -36,6 +37,7 @@ public sealed class ContractSerializationTests
         // The status travels by name, never by ordinal: that is what the document's string enum promises.
         json.ShouldContain("\"status\":\"Issued\"");
         json.ShouldContain("\"version\":7");
+        json.ShouldContain("\"createdAtUtc\":\"2026-07-15T09:30:00+00:00\"");
 
         // Record equality is reference-based over the Lines collection, so compare the shape explicitly.
         InvoiceDto? roundTripped = JsonSerializer.Deserialize<InvoiceDto>(json, Options);

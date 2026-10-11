@@ -201,7 +201,7 @@ The slice's codes: `Invoice.NotFound` (404), `Invoice.NotDraft` / `Invoice.NotIs
 
 **Caching**: `GetInvoice` is cache-aside via `HybridCache` (key from the injected `CacheKeys` service); the mutating endpoints (`AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`) invalidate that key on success. A miss is never pinned (the stored null is removed so a later create isn't answered 404 for the TTL), and with the **`UseMultitenancy`** toggle the key carries the tenant — a cache hit bypasses the EF tenant filter, so unscoped keys would leak across tenants. HybridCache uses an in-memory L1 always; a Redis L2 is added when the **`UseRedis`** template toggle is on (Aspire `cache` resource + `AddRedisDistributedCache`). Entries live 30 s in the L1 and 5 min in the L2 (`DefaultEntryOptions` in `Program.cs`): eviction reaches only the instance that handled the write (and the shared L2), so another API replica may serve the previous state, and its ETag, for up to 30 s.
 
-**Pagination**: `GET /invoices/overdue` is paged — `?page=` (1..10000, default 1) and `?pageSize=` (1..100, default 20), bound inline with `[Range(PagingLimits.…)]` so the document states the camelCase names and the bounds (ADR-0025); `ListOverdueInvoicesQueryValidator` enforces the same bounds (a value outside answers 400 `Validation.General` with `field: "page"` / `"pageSize"`), and the response is `PagedResponse<InvoiceDto>` (items + total count + page metadata). The query flows through the repository's `ListPagedAsync` over the existing `Specification<T>` seam, which pages with checked arithmetic (the page cap keeps `OFFSET` bounded; an offset can never wrap negative). Results are ordered by due date, then by id — the unique tiebreaker every paged specification must end with (`ListPagedAsync` refuses one that does not, or that pages itself), so invoices due at the same instant never repeat or vanish across pages.
+**Pagination**: both lists are paged — `GET /invoices` (every invoice from the moment it is created) and `GET /invoices/overdue` (issued invoices past their due date) take `?page=` (1..10000, default 1) and `?pageSize=` (1..100, default 20), bound inline with `[Range(PagingLimits.…)]` so the document states the camelCase names and the bounds (ADR-0025); `ListInvoicesQueryValidator` and `ListOverdueInvoicesQueryValidator` enforce the same bounds (a value outside answers 400 `Validation.General` with `field: "page"` / `"pageSize"`), and the response is `PagedResponse<InvoiceDto>` (items + total count + page metadata). `GET /invoices` also takes an optional `?status=` (`Draft`, `Issued`, `Paid` or `Voided`, the string enum the document declares): a name outside the enum is a 400 `Request.Malformed` whose `detail` names the parameter, and an ordinal the enum does not define (`?status=99`) a 400 `Validation.General` with `field: "status"`. Each query flows through the repository's `ListPagedAsync` over the existing `Specification<T>` seam, which pages with checked arithmetic (the page cap keeps `OFFSET` bounded; an offset can never wrap negative). `GET /invoices` is ordered newest first (`CreatedAtUtc` descending, then id descending), the overdue list by due date, then by id: each ends with the unique tiebreaker every paged specification must end with (`ListPagedAsync` refuses one that does not, or that pages itself), so invoices created or due at the same instant never repeat or vanish across pages. Neither list is cached.
 
 **Optimistic concurrency**: `Invoice` carries the Postgres `xmin` concurrency token (`InvoiceConfiguration.UseXmin...`). A conflicting write is an expected outcome, not an exception: `IUnitOfWork.CommitAsync` (`AppDbContext`) turns EF's `DbUpdateConcurrencyException` into `UnitOfWorkErrors.ConcurrencyConflict` (`Concurrency.Conflict`), the UnitOfWork decorator returns it as the command's `Result`, and the endpoint maps it to **409** through `CustomResults` like any other conflict (logged at Information, no exception handler involved). The token guards the whole aggregate: adding a line changes only `InvoiceLines`, yet the save still writes the `Invoices` row (`AggregateConcurrencyInterceptor` marks a root column modified when only children changed), so two concurrent `AddLine`s on one invoice conflict rather than both committing (ADR-0006).
 
@@ -232,9 +232,11 @@ The read cache's 30 s L1 can hand a client that reloads from another replica the
 412 can repeat until the entry expires; and the idempotency fingerprint ignores headers, so a retry with
 the same key and another `If-Match` replays the first answer.
 
-**Wire types**: `InvoiceDto.Status` is the Contracts enum `InvoiceStatus` serialised by name
-(`"Draft" | "Issued" | "Paid" | "Voided"`, a string enum in the document; `ContractMirrorTests` keeps it
-equal to the domain enum) and money is `decimal` (`format: decimal`).
+**Wire types**: `InvoiceDto.Status` (and the list's `?status=`) is the Contracts enum `InvoiceStatus`
+serialised by name (`"Draft" | "Issued" | "Paid" | "Voided"`, a string enum in the document;
+`ContractMirrorTests` keeps it equal to the domain enum, and `ContractMappings.ToDomain` maps the query
+value by name), money is `decimal` (`format: decimal`) and `InvoiceDto.CreatedAtUtc` is the audit
+column the list orders by (`format: date-time`).
 
 **OpenAPI** (ADR-0025): `/openapi/v1.json` describes exactly the v1 operations with concrete `/api/v1/…`
 paths and no `servers`; every operation's `operationId` is its endpoint class (`CreateInvoice`,
@@ -272,8 +274,10 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
   the credited receipt not re-sent), `OutboxBackoffTests`
   (the 30 s → 15 min schedule and the derived lease) and `OutboxOptionsTests` (the `Outbox` section's
   defaults and limits). `IdempotencyStoreTests`: the three lookup states, the primary-key race and
-  retention. With multi-tenancy, `TenancyTests`: stamping, filtering, the aggregate-root convention,
-  outbox tenant restore.
+  retention. `InvoicePersistenceTests` and `SpecificationPagingTests` translate both list specifications
+  to SQL, the invoice list newest first with the id tiebreak against PostgreSQL. With multi-tenancy,
+  `TenancyTests`: stamping, filtering (the invoice list through the pipeline included), the
+  aggregate-root convention, outbox tenant restore.
 - `ApiTests` (in-process, the real HTTP pipeline): the lifecycle and error contracts;
   `CommitFailureTests` (a commit conflict is a 409 and a throwing commit an opaque 500, neither leaving
   a reservation); `IdempotencyReplayTests` (a retry replays the stored 201/204 with
@@ -285,11 +289,13 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
   ETag, a 404 is never cached); `InvoiceContractTests` (304 for every matching `If-None-Match` form,
   `private, no-cache` on the 200 and the 304 while other reads stay `no-store`, a current `If-Match`
   applies and a stale, weak, listed, zero-padded or foreign one is a 412 that changes nothing, a missing
-  invoice stays a 404 for a well-formed tag, paging bounds answer 400 naming the field, `Location`
-  resolves); `OpenApiSnapshotTests` +
+  invoice stays a 404 for a well-formed tag, paging bounds answer 400 naming the field on both lists,
+  `Location` resolves, a created-then-issued invoice heads `GET /invoices` for the admin and a reader
+  and is absent from the overdue list, a status narrows the list and one outside the enum is a 400);
+  `OpenApiSnapshotTests` +
   `OpenApiDocumentTests` (the committed document is the served one and says all of this); with
-  multi-tenancy, `TenantIsolationTests` (cross-tenant read/write 404, scoped overdue list, header
-  ignored, cache scoped; the all-options leg runs it). `InvoiceApiFlowTests` is the opt-in Aspire E2E.
+  multi-tenancy, `TenantIsolationTests` (cross-tenant read/write 404, scoped invoice and overdue lists,
+  header ignored, cache scoped; the all-options leg runs it). `InvoiceApiFlowTests` is the opt-in Aspire E2E.
 - `ApiTests/Ui`: the forms' validator mirrors and due-date floor, `errors[]` placed under their
   inputs, success notifications, the loaded version sent as `If-Match` (`InvoiceApiClientTests`).
 
@@ -302,6 +308,7 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
 | POST | `/api/v1/invoices/{id}/issue` | invoices:write |
 | POST | `/api/v1/invoices/{id}/pay` | invoices:write |
 | POST | `/api/v1/invoices/{id}/void` | invoices:write |
+| GET | `/api/v1/invoices` | invoices:read |
 | GET | `/api/v1/invoices/{id}` | invoices:read |
 | GET | `/api/v1/invoices/overdue` | invoices:read |
 

@@ -11,6 +11,8 @@ using Shouldly;
 using Trellis.Application;
 using Trellis.Application.Abstractions;
 using Trellis.Application.Authorization;
+using Trellis.Application.Features.Invoices;
+using Trellis.Application.Features.Invoices.ListInvoices;
 using Trellis.Domain.Invoices;
 using Trellis.Domain.Invoices.Events;
 using Trellis.IntegrationTests.Telemetry;
@@ -19,7 +21,9 @@ using Trellis.Persistence.Identity;
 using Trellis.Persistence.Interceptors;
 using Trellis.Persistence.Outbox;
 using Trellis.SharedKernel.Domain;
+using Trellis.SharedKernel.Messaging;
 using Trellis.SharedKernel.Results;
+using Trellis.SharedKernel.Specifications;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
@@ -77,6 +81,35 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
 
         using IServiceScope other = _tenantB!.CreateScope();
         (await other.ServiceProvider.GetRequiredService<IInvoiceRepository>().GetByIdAsync(id, ct)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task The_invoice_list_returns_only_the_current_tenants_invoices()
+    {
+        // Through the real pipeline (validation, the handler, the repository's paged query): the "Tenant"
+        // filter applies to the count and the page alike, so neither leaks the other tenant's rows.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        InvoiceId ofA = await CreateInvoiceAsAsync(_tenantA!);
+        InvoiceId ofB;
+        using (IServiceScope asTenantB = _tenantB!.CreateScope())
+        {
+            ofB = await asTenantB.ServiceProvider.CreateInvoiceAsync("Tenant B Corp");
+        }
+
+        (await ListInvoicesAsAsync(_tenantA!)).ShouldSatisfyAllConditions(
+            page => page.TotalCount.ShouldBe(1),
+            page => page.Items.ShouldHaveSingleItem().Id.ShouldBe(ofA.Value));
+        (await ListInvoicesAsAsync(_tenantB!)).ShouldSatisfyAllConditions(
+            page => page.TotalCount.ShouldBe(1),
+            page => page.Items.ShouldHaveSingleItem().Id.ShouldBe(ofB.Value));
+        (await ListInvoicesAsAsync(_system!)).TotalCount.ShouldBe(0, "a flow with no tenant sees nothing tenant-scoped");
+
+        async Task<PagedList<InvoiceResponse>> ListInvoicesAsAsync(ServiceProvider provider)
+        {
+            using IServiceScope scope = provider.CreateScope();
+            return (await scope.ServiceProvider.GetRequiredService<IQueryHandler<ListInvoicesQuery, PagedList<InvoiceResponse>>>()
+                .Handle(new ListInvoicesQuery(), ct)).ShouldBeSuccess();
+        }
     }
 
     [Fact]
