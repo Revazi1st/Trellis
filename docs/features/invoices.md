@@ -26,7 +26,8 @@ stateDiagram-v2
 ```
 
 Every arrow is a method on `Invoice` that returns a `Result`; a call from the wrong state answers a
-409 (`Invoice.NotDraft`, `Invoice.NotIssued` or `Invoice.AlreadyFinalized`) and changes nothing.
+409 (`Invoice.NotDraft`, `Invoice.NotIssued`, `Invoice.AlreadyIssued` or `Invoice.AlreadyFinalized`) and
+changes nothing.
 
 ## Try it
 
