@@ -25,6 +25,7 @@ public sealed class AddInvoiceLineCommandHandlerTests
     [Theory]
     [InlineData(-1)]
     [InlineData(10.999)]
+    [InlineData(1_000_000_000_000_000)]
     public async Task Handle_InvalidAmount_FailsAtTheAmountField(decimal amount)
     {
         Invoice invoice = Loaded(InvoiceTestData.Draft());
@@ -46,6 +47,18 @@ public sealed class AddInvoiceLineCommandHandlerTests
         FieldError error = result.Error.ShouldBeOfType<FieldError>();
         error.Field.ShouldBe(nameof(AddInvoiceLineCommand.Description));
         error.Code.ShouldBe(InvoiceErrors.EmptyLineDescription.Code);
+    }
+
+    [Fact]
+    public async Task Handle_OverlongDescription_FailsAtTheDescriptionField()
+    {
+        Invoice invoice = Loaded(InvoiceTestData.Draft());
+
+        var result = await Handle(new AddInvoiceLineCommand(invoice.Id, new string('d', InvoiceLine.DescriptionMaxLength + 1), 10m));
+
+        FieldError error = result.Error.ShouldBeOfType<FieldError>();
+        error.Field.ShouldBe(nameof(AddInvoiceLineCommand.Description));
+        error.Code.ShouldBe(InvoiceErrors.LineDescriptionTooLong.Code);
     }
 
     [Fact]
