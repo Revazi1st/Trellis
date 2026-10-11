@@ -23,7 +23,7 @@ internal sealed class GetInvoice : IEndpoint
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Get one invoice with its lines")
         .WithDescription(
-            "Returns one invoice with its lines and computed total. Responses are served through the read cache, which every write on the same invoice invalidates.");
+            "Returns one invoice with its lines and computed total. Responses are served through the read cache, which every write on the same invoice invalidates. The ETag is the version a write may name in If-Match.");
 
     private static async Task<Results<Ok<InvoiceDto>, StatusCodeHttpResult, ProblemHttpResult>> Handle(
         InvoiceId id,
@@ -46,10 +46,10 @@ internal sealed class GetInvoice : IEndpoint
 
         if (dto is not null)
         {
-            // The xmin concurrency token doubles as a weak ETag: pollers pay a 304 instead of the
-            // full aggregate when nothing changed. Parsed, not string-compared: a client that sends
-            // the strong form, a list or "*" is honoured too (RFC 9110 §13.1.2).
-            EntityTagHeaderValue etag = ConditionalGetExtensions.WeakETag(dto.Version);
+            // The xmin concurrency token doubles as a strong ETag: pollers pay a 304 instead of the
+            // full aggregate when nothing changed, and a write sends it back as If-Match. Parsed, not
+            // string-compared: the weak form, a list or "*" is honoured too (RFC 9110 §13.1.2).
+            EntityTagHeaderValue etag = ConditionalGetExtensions.ETag(dto.Version);
             httpContext.Response.Headers.ETag = etag.ToString();
 
             return httpContext.Request.IsNotModified(etag)

@@ -145,7 +145,7 @@ One `IEndpoint` class per use case on `/api/v1/invoices…`, each `.RequirePermi
   "errors": [ { "field": "customerName", "code": "Validation.NotEmpty", "description": "'Customer Name' must not be empty." } ] }
 ```
 
-The slice's codes: `Invoice.NotFound` (404), `Invoice.NotDraft` / `Invoice.NotIssued` / `Invoice.AlreadyIssued` (issuing an issued invoice) / `Invoice.AlreadyFinalized` (changing a paid or voided one) (409), `Invoice.NoLines` / `Invoice.CurrencyMismatch` (400, `field: null`), `Invoice.DueDateInPast` (400, `field`: `dueDate`), `Invoice.EmptyCustomerName` / `Invoice.CustomerNameTooLong` (400, `field`: `customerName`), `Invoice.EmptyLineDescription` / `Invoice.LineDescriptionTooLong` (400, `field`: `description`), `EmailAddress.*` and `Money.*` from the value objects (400, `field`: `customerEmail`, `currency` or `amount`), `Idempotency.InvalidKey` / `Idempotency.KeyRequired` (400), `Idempotency.InFlight` / `Idempotency.Duplicate` (409) and `Idempotency.FingerprintMismatch` (422) from the idempotency filter (`Duplicate` also from the unit of work when two firsts race), `Concurrency.Conflict` (409) from the unit of work. A new error is a new `InvoiceErrors` member — nothing changes in the API.
+The slice's codes: `Invoice.NotFound` (404), `Invoice.NotDraft` / `Invoice.NotIssued` / `Invoice.AlreadyIssued` (issuing an issued invoice) / `Invoice.AlreadyFinalized` (changing a paid or voided one) (409), `Invoice.NoLines` / `Invoice.CurrencyMismatch` (400, `field: null`), `Invoice.DueDateInPast` (400, `field`: `dueDate`), `Invoice.VersionMismatch` (412, a stale `If-Match`), `Invoice.EmptyCustomerName` / `Invoice.CustomerNameTooLong` (400, `field`: `customerName`), `Invoice.EmptyLineDescription` / `Invoice.LineDescriptionTooLong` (400, `field`: `description`), `EmailAddress.*` and `Money.*` from the value objects (400, `field`: `customerEmail`, `currency` or `amount`), `Idempotency.InvalidKey` / `Idempotency.KeyRequired` (400), `Idempotency.InFlight` / `Idempotency.Duplicate` (409) and `Idempotency.FingerprintMismatch` (422) from the idempotency filter (`Duplicate` also from the unit of work when two firsts race), `Concurrency.Conflict` (409) from the unit of work. A new error is a new `InvoiceErrors` member — nothing changes in the API.
 
 **Caching**: `GetInvoice` is cache-aside via `HybridCache` (key from the injected `CacheKeys` service); the mutating endpoints (`AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`) invalidate that key on success. A miss is never pinned (the stored null is removed so a later create isn't answered 404 for the TTL), and with the **`UseMultitenancy`** toggle the key carries the tenant — a cache hit bypasses the EF tenant filter, so unscoped keys would leak across tenants. HybridCache uses an in-memory L1 always; a Redis L2 is added when the **`UseRedis`** template toggle is on (Aspire `cache` resource + `AddRedisDistributedCache`). Entries live 30 s in the L1 and 5 min in the L2 (`DefaultEntryOptions` in `Program.cs`): eviction reaches only the instance that handled the write (and the shared L2), so another API replica may serve the previous state, and its ETag, for up to 30 s.
 
@@ -160,12 +160,22 @@ The slice's codes: `Invoice.NotFound` (404), `Invoice.NotDraft` / `Invoice.NotIs
 **Business metrics**: `InvoiceMetrics` (meter `Trellis.Invoices`, exported by every host through ServiceDefaults' `Trellis.*` subscription) exports `trellis.invoices.issued` (attribute `trellis.invoice.currency`) and `trellis.invoices.paid`, unit `{invoice}`, incremented by outbox-dispatched event handlers so they count only committed events.
 
 **Conditional GET**: `InvoiceDto.Version` (a `long`, `format: int64`) surfaces the xmin concurrency
-token, `GET /invoices/{id}` emits it as a weak ETag (`W/"42"`) and declares `.SupportsConditionalGet()`,
-so the document lists `If-None-Match`, the `ETag` header and the 304. The header is parsed, not
-string-compared (RFC 9110 §13.1.2): the weak form, the strong form `"42"`, a list and `*` all answer
-**304** with no body, a stale or unparsable tag answers 200 — pollers stop re-downloading unchanged
-aggregates. (Conditional writes stay guarded by xmin → 409 at commit; an `If-Match` precondition is
-a candidate follow-up.)
+token, `GET /invoices/{id}` emits it as a strong ETag (`"42"`: the version moves with every change, a
+line's included) and declares `.SupportsConditionalGet()`, so the document lists `If-None-Match`, the
+`ETag` header and the 304. The header is parsed, not string-compared (RFC 9110 §13.1.2): the strong
+form, the weak form `W/"42"`, a list and `*` all answer **304** with no body, a stale or unparsable tag
+answers 200 — pollers stop re-downloading unchanged aggregates.
+
+**Conditional writes** (ADR-0025 amendment): `AddInvoiceLine`, `IssueInvoice`, `PayInvoice` and
+`VoidInvoice` take an optional `If-Match` with that ETag (`.SupportsConditionalWrite()`). The endpoint
+passes the version to the command's `ExpectedVersion`, the handler compares it with the loaded invoice
+(`InvoicePreconditions.ToWrite`), and a version the invoice has moved on from is **412**
+`Invoice.VersionMismatch` that changes nothing: a colleague's new line can no longer be issued unseen.
+`*` or no header is unconditional (no 428); a weak tag, a list or a value the API never issued is a 412
+too; a missing invoice stays a 404. xmin still guards the remaining load-to-commit window with a 409.
+The read cache's 30 s L1 can hand a client that reloads from another replica the same stale ETag, so a
+412 can repeat until the entry expires; and the idempotency fingerprint ignores headers, so a retry with
+the same key and another `If-Match` replays the first answer.
 
 **Wire types**: `InvoiceDto.Status` is the Contracts enum `InvoiceStatus` serialised by name
 (`"Draft" | "Issued" | "Paid" | "Voided"`, a string enum in the document; `ContractMirrorTests` keeps it
@@ -177,15 +187,16 @@ paths and no `servers`; every operation's `operationId` is its endpoint class (`
 documents its error responses by shape — 400 where there is input, 404 where a route id can miss, 409 on
 a write to an addressed resource (and the `Idempotency-Key` header, the `Idempotency-Replayed` response
 header, the duplicate and in-flight 409 and the fingerprint-mismatch 422 on every `RequireIdempotency()`
-endpoint), 401/403 on secured ones, 429 and 500 everywhere — all referencing the `ProblemResponse`
-component generated from the Contracts record; the 201 declares `Location`. The document is committed at
+endpoint), `If-Match` and the 412 on the four conditional writes, 401/403 on secured ones, 429 and 500
+everywhere — all referencing the `ProblemResponse` component generated from the Contracts record; the
+201 declares `Location`. The document is committed at
 `docs/api/openapi.v1.json` as the server serialises it: `OpenApiSnapshotTests` compares it with the
 in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` or
 `scripts/export-openapi.sh` regenerates it) and CI diffs it against the running app.
 
 ## UI (`src/Presentation/UI/Trellis.UI.Common/Pages/`)
 
-`Invoices` (paged list with pager controls), `InvoiceDetail` (the full lifecycle: add lines and issue while Draft, pay/void after; action errors are kept separate from load errors so they survive the post-action reload), `CreateInvoice` — via `IInvoiceApiClient` over the contracts. The create, add-line and issue forms validate before sending with DataAnnotations that mirror the command validators (`Forms/InvoiceForms.cs`: required, lengths, amount ≥ 0); the issue form's date picker starts at tomorrow (UTC), the first due date the API accepts (`Invoice.DueDateInPast`). What the API still rejects comes back as `errors[]`: each field error under its input, a whole-request error (`field: null`) in the form's alert (`ServerValidation`). Created, issued, paid and voided are announced as notifications. The session outlives the 15-minute access token: `TokenAuthenticationStateProvider` checks `exp` and rotates through `POST /auth/refresh` (single-flight, since refresh tokens are single-use); `BearerTokenHandler` always attaches a currently-valid token via `IAccessTokenSource`.
+`Invoices` (paged list with pager controls), `InvoiceDetail` (the full lifecycle: add lines and issue while Draft, pay/void after; action errors are kept separate from load errors so they survive the post-action reload), `CreateInvoice` — via `IInvoiceApiClient` over the contracts. The create, add-line and issue forms validate before sending with DataAnnotations that mirror the command validators (`Forms/InvoiceForms.cs`: required, lengths, amount ≥ 0); the issue form's date picker starts at tomorrow (UTC), the first due date the API accepts (`Invoice.DueDateInPast`). What the API still rejects comes back as `errors[]`: each field error under its input, a whole-request error (`field: null`) in the form's alert (`ServerValidation`). Created, issued, paid and voided are announced as notifications. Every write on the detail page sends the version the page loaded as `If-Match`; a 412 reads "Someone else changed this in the meantime" over the reloaded invoice. The session outlives the 15-minute access token: `TokenAuthenticationStateProvider` checks `exp` and rotates through `POST /auth/refresh` (single-flight, since refresh tokens are single-use); `BearerTokenHandler` always attaches a currently-valid token via `IAccessTokenSource`.
 
 ## Tests
 
@@ -215,12 +226,13 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
   retry is a 409); `IdempotencyPostCommitTests` (a disconnect after the commit keeps the key and the
   retry replays the 204); `InvoiceReadCacheTests` (every write evicts the cached invoice and retires its
   ETag, a 404 is never cached); `InvoiceContractTests` (304 for every matching `If-None-Match` form,
-  paging bounds answer 400 naming the field, `Location` resolves); `OpenApiSnapshotTests` +
+  a current `If-Match` applies and a stale, weak, listed or foreign one is a 412 that changes nothing, a
+  missing invoice stays a 404, paging bounds answer 400 naming the field, `Location` resolves); `OpenApiSnapshotTests` +
   `OpenApiDocumentTests` (the committed document is the served one and says all of this); with
   multi-tenancy, `TenantIsolationTests` (cross-tenant read/write 404, scoped overdue list, header
   ignored, cache scoped; the all-options leg runs it). `InvoiceApiFlowTests` is the opt-in Aspire E2E.
 - `ApiTests/Ui`: the forms' validator mirrors and due-date floor, `errors[]` placed under their
-  inputs, success notifications.
+  inputs, success notifications, the loaded version sent as `If-Match` (`InvoiceApiClientTests`).
 
 ## Endpoints
 

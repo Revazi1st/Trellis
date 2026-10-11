@@ -3,7 +3,7 @@
 - **Status**: accepted — the HTTP mapping paragraph is superseded by ADR-0024 (problem shape v2); the Result decision stands
 - **Date**: 2026-07-14
 - **Amended**: 2026-10-08 — the unit of work sits inside the Result boundary; the HTTP shape moved to ADR-0024 (see *Amendment* below)
-- **Amended**: 2026-10-11 — `ErrorType.Unavailable` (503) for a dependency that is down for now (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-10-11 — `ErrorType.Unavailable` (503) for a dependency that is down for now, `ErrorType.PreconditionFailed` (412) for a version the caller expected (see *Amendment (2026-10-11)* below)
 
 ## Context
 
@@ -12,7 +12,7 @@ Operations fail in expected ways (validation, not-found, conflict, forbidden). M
 ## Decision
 
 Hand-roll a small `Result`/`Result<T>` + `Error(Code, Description, ErrorType)` in `SharedKernel.Results` (no ErrorOr/FluentResults dependency). Domain methods, handlers, and value-object factories return `Result`; **exceptions are reserved for the genuinely unexpected**. `ErrorType` ∈ { Validation, NotFound, Conflict, Unauthorized, Forbidden, Failure }.
-*(Amended 2026-10-11: `ErrorType` also has `Unavailable`; see below.)*
+*(Amended 2026-10-11: `ErrorType` also has `Unavailable` and `PreconditionFailed`; see below.)*
 
 `Error` is the only "reserved keyword" name we allow (CA1716 suppressed) because it is the Result vocabulary. Feature-specific errors live in `{Aggregate}Errors` static classes. `ValidationError` aggregates per-field failures.
 
@@ -59,7 +59,16 @@ credentials, our plan, a URL it does not serve) or that answered something unrea
 `Failure`: no wait cures our configuration, and a 503 would tell every client to retry a permanent
 fault. The reference adapter draws that line (ADR-0020, amendment of 2026-10-11). The
 `ErrorType` → status table is now Validation → 400, NotFound → 404, Conflict → 409, Unauthorized →
-401, Forbidden → 403, Unavailable → 503, Failure → 500. `Retry-After` on the 503 is deferred: by the
+401, Forbidden → 403, PreconditionFailed → 412, Unavailable → 503, Failure → 500. `Retry-After` on the 503 is deferred: by the
 time an adapter reports `Unavailable` its retry budget is spent, so there is rarely an honest value to
 send; an endpoint that has one (an open circuit's break) sets the header before returning
 `CustomResults.Problem`, the way the idempotency filter's 409 does.
+
+**`PreconditionFailed` for a version the caller expected.** An optional `If-Match` on the invoice writes
+(ADR-0025, amendment of 2026-10-11) needs an outcome the six types could not express: the caller named
+the version it read, and the aggregate has moved on. That is not a `Conflict` (409 already means "the
+state machine forbids this", and the commit's own `Concurrency.Conflict`), and a status computed from a
+request header at the seam would need `CustomResults.Problem` to see the request, which it deliberately
+does not. So the handler, which compares the version, returns `Error.PreconditionFailed(code, description)`
+and the seam maps it to **412** with the title "Precondition failed". Like `Unavailable`, the outcome line
+logs it at Warning until the logging decorator classifies it among the expected 4xx outcomes.

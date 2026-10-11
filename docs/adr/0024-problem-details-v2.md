@@ -5,7 +5,7 @@
 - **Supersedes**: the "At the HTTP boundary…" paragraph of ADR-0004 (the Result decision itself stands).
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
 - **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`); a `Result` never reaches JSON (see *Amendment* below)
-- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence; the 503 title; the field of a body value of the wrong type; `WWW-Authenticate` on every 401; two more idempotency outcomes (see *Second amendment* below)
+- **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence; the 503 and 412 titles; the field of a body value of the wrong type; `WWW-Authenticate` on every 401; two more idempotency outcomes (see *Second amendment* below)
 
 ## Context
 
@@ -59,7 +59,7 @@ Every response with status ≥ 400 is `application/problem+json` with this shape
    failed", NotFound → "Not found", Conflict → "Conflict", Unauthorized → "Unauthorized", Forbidden →
    "Forbidden", Failure → "Server failure"; the non-Result rows use the catalogue titles below. Titles are
    for people, not for branching.
-   *(Amended 2026-10-11: Unavailable → "Service unavailable"; see the second amendment below.)*
+   *(Amended 2026-10-11: Unavailable → "Service unavailable", PreconditionFailed → "Precondition failed"; see the second amendment below.)*
 4. **`detail`** is `Error.Description` or the catalogue sentence. Exception messages never reach `detail`
    except the framework's own `BadHttpRequestException.Message`, which names a parameter or a limit, not
    a stack. The 500's detail is always "An unexpected error occurred."
@@ -242,3 +242,8 @@ and the too-long key share, since the remedy is the same). An endpoint that decl
 create cannot be told from a second intent. Both are Results (`IdempotencyHeaderErrors`, beside the
 filter, since nothing below the API produces them) written through `CustomResults` like the rest of
 the filter's outcomes. `ProblemDetailsContractTests` has a row for each new code.
+
+**A 412 for a stale `If-Match`.** ADR-0004's amendment adds `ErrorType.PreconditionFailed`;
+`CustomResults.Problem` maps it to 412 with the title "Precondition failed" and, as a 4xx, the error's
+own description (`Invoice.VersionMismatch`: reload and try again). `ProblemDetailsContractTests` has the
+412 row.

@@ -12,8 +12,9 @@ namespace Trellis.UI.Common.Services;
 /// Keyed on the problem's stable <c>code</c> first and never on its <c>title</c>, so a policy change that
 /// moves a code to another status does not change the sentence. Where a response carries no code yet,
 /// the status and the server's <c>detail</c> decide: a 400/401/403/404/409 shows the detail (a 400 with
-/// validation errors shows those), a 429 a retry hint built from <c>Retry-After</c>, a 5xx or a missing
-/// response a service-unavailable sentence, and a 401 with nothing to read the invalid-credentials one.
+/// validation errors shows those), a 412 says the resource changed elsewhere, a 429 a retry hint built from
+/// <c>Retry-After</c>, a 5xx or a missing response a service-unavailable sentence, and a 401 with nothing to
+/// read the invalid-credentials one.
 /// </para>
 /// </summary>
 internal static class ApiResponses
@@ -26,6 +27,7 @@ internal static class ApiResponses
     public const string InvalidInput = "Some of the entered values are invalid.";
     public const string TooManyRequests = "Too many requests. Try again shortly.";
     public const string ServiceUnavailable = "The service is unavailable right now. Try again shortly.";
+    public const string ChangedElsewhere = "Someone else changed this in the meantime. The latest version is shown now; check it and try again.";
 
     /// <summary>
     /// The failure for a call the API answered with an error status: its problem body (when readable)
@@ -70,6 +72,13 @@ internal static class ApiResponses
         if (code == HttpStatusCode.TooManyRequests)
         {
             return RetryHint(retryAfter);
+        }
+
+        // A write that named the version the page loaded (If-Match), and the resource has moved on: the
+        // page reloads after every action, so the sentence describes what the user now sees.
+        if (code == HttpStatusCode.PreconditionFailed)
+        {
+            return ChangedElsewhere;
         }
 
         if (code == HttpStatusCode.BadRequest && JoinErrors(problem) is { } errors)

@@ -297,6 +297,23 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     }
 
     [Fact]
+    public async Task Stale_If_Match_is_a_412_problem()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        Guid id = await CreateInvoiceAsync(admin, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/invoices/{id}/void");
+        request.Headers.TryAddWithoutValidation("If-Match", "\"1\"").ShouldBeTrue();
+
+        HttpResponseMessage response = await admin.SendAsync(request, ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.PreconditionFailed, "Invoice.VersionMismatch", $"/api/v1/invoices/{id}/void", ct);
+        problem.Title.ShouldBe("Precondition failed");
+        problem.Detail.ShouldNotBeNullOrWhiteSpace();
+        problem.Errors.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Unknown_route_is_a_404_problem()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;

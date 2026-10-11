@@ -9,10 +9,9 @@ internal sealed class PayInvoiceCommandHandler(IInvoiceRepository invoices, Time
 {
     public async Task<Result> Handle(PayInvoiceCommand command, CancellationToken cancellationToken)
     {
-        Invoice? invoice = await invoices.GetByIdAsync(command.InvoiceId, cancellationToken);
+        Invoice? loaded = await invoices.GetByIdAsync(command.InvoiceId, cancellationToken);
 
-        return invoice is null
-            ? Result.Failure(InvoiceErrors.NotFound(command.InvoiceId))
-            : invoice.MarkPaid(timeProvider.GetUtcNow());
+        return loaded.ToWrite(command.InvoiceId, command.ExpectedVersion)
+            .Bind(invoice => invoice.MarkPaid(timeProvider.GetUtcNow()));
     }
 }

@@ -46,6 +46,7 @@ public static class ProblemTitles
         ErrorType.Unauthorized => "Unauthorized",
         ErrorType.Forbidden => "Forbidden",
         ErrorType.Unavailable => "Service unavailable",
+        ErrorType.PreconditionFailed => "Precondition failed",
         _ => "Server failure",
     };
 
@@ -57,6 +58,7 @@ public static class ProblemTitles
         StatusCodes.Status404NotFound => "Not found",
         StatusCodes.Status405MethodNotAllowed => "Method not allowed",
         StatusCodes.Status409Conflict => "Conflict",
+        StatusCodes.Status412PreconditionFailed => "Precondition failed",
         StatusCodes.Status413PayloadTooLarge => "Request too large",
         StatusCodes.Status415UnsupportedMediaType => "Unsupported media type",
         StatusCodes.Status429TooManyRequests => "Too many requests",

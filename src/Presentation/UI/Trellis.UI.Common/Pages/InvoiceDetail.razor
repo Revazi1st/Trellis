@@ -127,7 +127,7 @@ else
     private async Task PayAsync()
     {
         _busy = true;
-        ApiResult<bool> result = await InvoiceApi.PayAsync(Id);
+        ApiResult<bool> result = await InvoiceApi.PayAsync(Id, _invoice?.Version);
         _actionError = Outcome(result, "Invoice marked as paid.");
         _busy = false;
         await LoadAsync();
@@ -136,7 +136,7 @@ else
     private async Task VoidAsync()
     {
         _busy = true;
-        ApiResult<bool> result = await InvoiceApi.VoidAsync(Id);
+        ApiResult<bool> result = await InvoiceApi.VoidAsync(Id, _invoice?.Version);
         _actionError = Outcome(result, "Invoice voided.");
         _busy = false;
         await LoadAsync();
@@ -145,7 +145,7 @@ else
     private async Task AddLineAsync()
     {
         _busy = true;
-        ApiResult<bool> result = await InvoiceApi.AddLineAsync(Id, _line.ToRequest());
+        ApiResult<bool> result = await InvoiceApi.AddLineAsync(Id, _line.ToRequest(), _invoice?.Version);
         if (result.IsSuccess)
         {
             _lineError = null;
@@ -163,7 +163,7 @@ else
     private async Task IssueAsync()
     {
         _busy = true;
-        ApiResult<bool> result = await InvoiceApi.IssueAsync(Id, _issue.ToRequest());
+        ApiResult<bool> result = await InvoiceApi.IssueAsync(Id, _issue.ToRequest(), _invoice?.Version);
         _issueError = result.IsSuccess ? null : _issueServer.Show(result);
         if (result.IsSuccess)
         {

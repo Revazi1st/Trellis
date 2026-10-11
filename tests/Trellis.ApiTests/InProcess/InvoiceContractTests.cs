@@ -10,15 +10,16 @@ namespace Trellis.ApiTests.InProcess;
 
 /// <summary>
 /// What the OpenAPI document promises about the invoice endpoints, proven on the wire (ADR-0025): the
-/// conditional GET honours every <c>If-None-Match</c> form RFC 9110 allows (not only the exact weak
-/// string the server emitted), the paging bounds the document states are the bounds the API enforces
+/// conditional GET honours every <c>If-None-Match</c> form RFC 9110 allows (not only the exact strong
+/// string the server emits), a write honours an optional <c>If-Match</c> and answers a stale one with a
+/// 412 that changes nothing, the paging bounds the document states are the bounds the API enforces
 /// (naming the field), and a 201's <c>Location</c> resolves to the created invoice.
 /// </summary>
 public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     [Theory]
-    [InlineData("W/\"{0}\"")]                 // the weak form the server emitted
-    [InlineData("\"{0}\"")]                   // the strong form: a weak comparison matches it too
+    [InlineData("\"{0}\"")]                   // the strong form the server emits
+    [InlineData("W/\"{0}\"")]                 // the weak form: If-None-Match compares weakly
     [InlineData("*")]                         // any current representation
     [InlineData("W/\"0\", W/\"{0}\"")]        // a list: any member may match
     [InlineData("\"stale\", \"{0}\"")]        // a list of strong tags
@@ -31,7 +32,7 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
         using HttpResponseMessage response = await GetWithIfNoneMatchAsync(admin, id, string.Format(System.Globalization.CultureInfo.InvariantCulture, format, version), ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotModified);
-        response.Headers.ETag.ShouldNotBeNull().ToString().ShouldBe($"W/\"{version}\"");
+        response.Headers.ETag.ShouldNotBeNull().ToString().ShouldBe($"\"{version}\"");
         (await response.Content.ReadAsByteArrayAsync(ct)).ShouldBeEmpty();
     }
 
@@ -48,8 +49,66 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
         using HttpResponseMessage response = await GetWithIfNoneMatchAsync(admin, id, ifNoneMatch, ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        response.Headers.ETag.ShouldNotBeNull().ToString().ShouldBe($"W/\"{version}\"");
+        response.Headers.ETag.ShouldNotBeNull().ToString().ShouldBe($"\"{version}\"");
         (await response.Content.ReadFromJsonAsync<InvoiceDto>(ct)).ShouldNotBeNull().Id.ShouldBe(id);
+    }
+
+    [Fact]
+    public async Task A_write_naming_the_current_ETag_applies_and_a_stale_one_is_a_412_that_changes_nothing()
+    {
+        // The exposure If-Match closes: a colleague adds a line after you loaded the draft, and your Issue
+        // would issue lines and a total you never saw.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        (Guid id, long loaded) = await CreateAndReadAsync(admin, ct);
+
+        (await PostWithIfMatchAsync(admin, $"/api/v1/invoices/{id}/lines", new AddInvoiceLineRequest("Design", 10m), $"\"{loaded}\"", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        HttpResponseMessage stale = await PostWithIfMatchAsync(
+            admin, $"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(DateTimeOffset.UtcNow.AddDays(7)), $"\"{loaded}\"", ct);
+
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+        ProblemResponse problem = (await stale.Content.ReadFromJsonAsync<ProblemResponse>(ct)).ShouldNotBeNull();
+        problem.Code.ShouldBe("Invoice.VersionMismatch");
+        InvoiceDto unchanged = (await admin.GetFromJsonAsync<InvoiceDto>($"/api/v1/invoices/{id}", ct)).ShouldNotBeNull();
+        unchanged.Status.ShouldBe(InvoiceStatus.Draft, "a failed precondition changes nothing");
+        unchanged.Version.ShouldNotBe(loaded, "adding the line moved the version a child write included");
+
+        (await PostWithIfMatchAsync(admin, $"/api/v1/invoices/{id}/issue", new IssueInvoiceRequest(DateTimeOffset.UtcNow.AddDays(7)), $"\"{unchanged.Version}\"", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await PostWithIfMatchAsync<object>(admin, $"/api/v1/invoices/{id}/pay", body: null, "*", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent, "* matches any current representation");
+    }
+
+    [Theory]
+    [InlineData("W/\"{0}\"")]                 // a weak tag: If-Match compares strongly
+    [InlineData("\"{0}\", \"0\"")]           // a list: send the one tag you read
+    [InlineData("\"abc\"")]                   // not a tag this API issued
+    [InlineData("not-an-etag")]               // unparsable
+    public async Task An_If_Match_that_names_no_single_current_version_is_a_412(string format)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        (Guid id, long version) = await CreateAndReadAsync(admin, ct);
+        string ifMatch = string.Format(System.Globalization.CultureInfo.InvariantCulture, format, version);
+
+        HttpResponseMessage response = await PostWithIfMatchAsync<object>(admin, $"/api/v1/invoices/{id}/void", body: null, ifMatch, ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+        (await admin.GetFromJsonAsync<InvoiceDto>($"/api/v1/invoices/{id}", ct)).ShouldNotBeNull().Status.ShouldBe(InvoiceStatus.Draft);
+    }
+
+    [Fact]
+    public async Task A_missing_invoice_is_a_404_whatever_If_Match_names()
+    {
+        // RFC 9110 §13.2.1: a precondition is ignored when the answer without it would not be a 2xx.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+
+        HttpResponseMessage response = await PostWithIfMatchAsync<object>(admin, $"/api/v1/invoices/{Guid.NewGuid()}/void", body: null, "\"7\"", ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Theory]
@@ -111,6 +170,14 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
 
         InvoiceDto invoice = (await client.GetFromJsonAsync<InvoiceDto>($"/api/v1/invoices/{id}", ct)).ShouldNotBeNull();
         return (id, invoice.Version);
+    }
+
+    private static async Task<HttpResponseMessage> PostWithIfMatchAsync<TBody>(HttpClient client, string path, TBody? body, string ifMatch, CancellationToken ct)
+        where TBody : class
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = body is null ? null : JsonContent.Create(body) };
+        request.Headers.TryAddWithoutValidation("If-Match", ifMatch).ShouldBeTrue();
+        return await client.SendAsync(request, ct);
     }
 
     private static async Task<HttpResponseMessage> GetWithIfNoneMatchAsync(HttpClient client, Guid id, string ifNoneMatch, CancellationToken ct)

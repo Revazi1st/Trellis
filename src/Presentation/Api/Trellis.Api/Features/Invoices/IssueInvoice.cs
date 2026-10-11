@@ -7,6 +7,7 @@ using Trellis.Api.Common.Idempotency;
 using Trellis.Api.Common.Results;
 using Trellis.Api.Contracts.Invoices;
 using Trellis.Application.Authorization;
+using Trellis.Application.Features.Invoices;
 using Trellis.Application.Features.Invoices.IssueInvoice;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Messaging;
@@ -19,10 +20,11 @@ internal sealed class IssueInvoice : IEndpoint
         .MapPost("invoices/{id}/issue", Handle)
         .RequirePermission(Permissions.Invoices.Write)
         .RequireIdempotency()
+        .SupportsConditionalWrite()
         .WithTags(InvoiceEndpoints.Tag)
         .WithSummary("Issue a draft invoice, making it payable")
         .WithDescription(
-            "Moves a Draft invoice to Issued, making it payable and fixing its total. An invoice needs at least one line before it can be issued.");
+            "Moves a Draft invoice to Issued, making it payable and fixing its total. An invoice needs at least one line before it can be issued. Send If-Match with the ETag from GET to act only on the version you read: a stale one is a 412 and changes nothing.");
 
     private static async Task<Results<NoContent, ProblemHttpResult>> Handle(
         InvoiceId id,
@@ -30,9 +32,15 @@ internal sealed class IssueInvoice : IEndpoint
         ICommandHandler<IssueInvoiceCommand> handler,
         CacheKeys cacheKeys,
         HybridCache cache,
+        HttpRequest httpRequest,
         CancellationToken cancellationToken)
     {
-        var result = await handler.Handle(new IssueInvoiceCommand(id, request.DueDate), cancellationToken);
+        if (!httpRequest.TryGetExpectedVersion(out uint? expectedVersion))
+        {
+            return CustomResults.Problem(InvoicePreconditions.VersionMismatch);
+        }
+
+        var result = await handler.Handle(new IssueInvoiceCommand(id, request.DueDate, expectedVersion), cancellationToken);
 
         if (result.IsSuccess)
         {

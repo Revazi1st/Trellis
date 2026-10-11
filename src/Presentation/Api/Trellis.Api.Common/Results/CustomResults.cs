@@ -69,6 +69,7 @@ public static class CustomResults
         ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
         ErrorType.Forbidden => StatusCodes.Status403Forbidden,
         ErrorType.Unavailable => StatusCodes.Status503ServiceUnavailable,
+        ErrorType.PreconditionFailed => StatusCodes.Status412PreconditionFailed,
         _ => StatusCodes.Status500InternalServerError,
     };
 }

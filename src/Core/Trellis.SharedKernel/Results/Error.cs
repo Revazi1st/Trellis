@@ -17,4 +17,7 @@ public record Error(string Code, string Description, ErrorType Type)
 
     /// <summary>A dependency is down for now and a later retry may succeed (<see cref="ErrorType.Unavailable"/>).</summary>
     public static Error Unavailable(string code, string description) => new(code, description, ErrorType.Unavailable);
+
+    /// <summary>The caller's expectation about the resource (a version it read) no longer holds (<see cref="ErrorType.PreconditionFailed"/>).</summary>
+    public static Error PreconditionFailed(string code, string description) => new(code, description, ErrorType.PreconditionFailed);
 }

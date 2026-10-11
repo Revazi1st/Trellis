@@ -16,4 +16,10 @@ public enum ErrorType
     /// rejected us (bad credentials, a wrong URL), which no wait cures: that stays <see cref="Failure"/>.
     /// </summary>
     Unavailable = 6,
+
+    /// <summary>
+    /// A condition the caller attached to the request no longer holds: it expected a version of the
+    /// resource the resource has moved on from. The caller reloads and decides again; nothing was changed.
+    /// </summary>
+    PreconditionFailed = 7,
 }
