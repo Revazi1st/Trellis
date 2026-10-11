@@ -265,6 +265,52 @@ public sealed class ResultDiscardAnalyzerTests
     }
 
     /// <summary>
+    /// An assertion that hands back the value it checked, for chaining (<c>result.Error.ShouldBeOfType&lt;ValidationError&gt;()</c>,
+    /// xUnit's <c>Assert.IsType&lt;T&gt;</c>, a <c>[ShouldlyMethods]</c> helper of our own): checking the value is
+    /// what the test does with it. Stand-ins with the libraries' namespaces keep both out of the snippet.
+    /// </summary>
+    [Theory]
+    [InlineData("account.Close().Error.ShouldBeOfType<ValidationError>();")]
+    [InlineData("account.Close().ShouldNotBeNull();")]
+    [InlineData("Assert.IsType<Result>(account.Close());")]
+    [InlineData("account.Close().ShouldBeChecked();")]
+    public async Task An_assertion_that_hands_back_the_checked_value_is_not_reported(string statements)
+    {
+        const string assertionStandIns = """
+            namespace Shouldly
+            {
+                [AttributeUsage(AttributeTargets.Class)]
+                public sealed class ShouldlyMethodsAttribute : Attribute;
+
+                public static class ShouldBeTestExtensions
+                {
+                    public static T ShouldBeOfType<T>(this object? actual) => (T)actual!;
+                    public static T ShouldNotBeNull<T>(this T? actual) where T : class => actual!;
+                }
+            }
+
+            namespace Xunit
+            {
+                public static class Assert
+                {
+                    public static T IsType<T>(object? @object) => (T)@object!;
+                }
+            }
+
+            [Shouldly.ShouldlyMethods]
+            public static class OwnAssertions
+            {
+                public static Result ShouldBeChecked(this Result result) => result;
+            }
+            """;
+
+        ImmutableArray<Diagnostic> diagnostics = await AnalyzeAsync(
+            InRunMethod(statements, "using Shouldly;\nusing Xunit;") + assertionStandIns);
+
+        diagnostics.ShouldBeEmpty(statements);
+    }
+
+    /// <summary>
     /// An unawaited task of a result is reported exactly once. The compiler's CS4014 covers a call
     /// written as a statement inside an async method, lambda or local function; everywhere it is silent
     /// (a sync method, a non-async lambda, a conditional access) RSLT001 reports it instead.

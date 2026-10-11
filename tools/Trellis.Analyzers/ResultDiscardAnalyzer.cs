@@ -79,6 +79,7 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
             && CarriesResult(type)
             && !IsCompilersUnawaitedCall(context, dropped, type)
             && !IsSubstituteCallCheck(dropped)
+            && !IsAssertion(dropped)
             && !IsExpectedToThrow(context.Operation))
         {
             Report(context, Rule, statementValue.Syntax, type);
@@ -195,6 +196,17 @@ public sealed class ResultDiscardAnalyzer : DiagnosticAnalyzer
                && check.Name is "Received" or "DidNotReceive" or "ReceivedWithAnyArgs" or "DidNotReceiveWithAnyArgs"
                && RootNamespaceName(check.ContainingNamespace) == "NSubstitute";
     }
+
+    /// <summary>
+    /// An assertion that hands back the value it checked, for chaining: a method of the Shouldly or xUnit
+    /// libraries (<c>result.Error.ShouldBeOfType&lt;ValidationError&gt;()</c>, <c>ShouldNotBeNull()</c>,
+    /// <c>Assert.IsType&lt;T&gt;</c>) or of a class marked <c>[ShouldlyMethods]</c>, as the tests' own
+    /// <c>ShouldBeSuccess()</c> is. Checking the value is what the test does with it.
+    /// </summary>
+    private static bool IsAssertion(IOperation dropped)
+        => dropped is IInvocationOperation { TargetMethod: { } method }
+           && (RootNamespaceName(method.ContainingNamespace) is "Shouldly" or "Xunit"
+               || method.ContainingType.GetAttributes().Any(static attribute => attribute.AttributeClass is { Name: "ShouldlyMethodsAttribute" }));
 
     private static string? RootNamespaceName(INamespaceSymbol? ns)
     {
