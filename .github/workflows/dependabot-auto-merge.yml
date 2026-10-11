@@ -11,15 +11,16 @@ name: Dependabot auto-merge
 #     update still arrives at once), so a yanked or compromised release is usually gone before a
 #     pull request exists;
 #   - the pull request has to pass the same checks as any other, and this job acts only when the
-#     repository allows auto-merge AND a ruleset on the base branch requires status checks. Without
-#     both it leaves a notice and does nothing: on an unprotected branch `gh pr merge --auto` would
-#     merge at once, before CI has finished;
+#     repository allows auto-merge AND the base branch requires at least one status check (a
+#     ruleset or classic protection). Without both it leaves a notice and does nothing: on an
+#     unprotected branch `gh pr merge --auto` would merge at once, before CI has finished;
 #   - it runs no code from the pull request. It reads Dependabot's metadata and asks GitHub to merge
 #     when the checks pass; GitHub does the merging.
 #
 # A merge made this way is attributed to the Actions token, so it starts no push workflow on the base
-# branch, and each weekly pull request was tested against the main of its own moment. In the template
-# repository a nightly CI run on main tests the combined tree (ci.yml, TemplateSource block).
+# branch, and each weekly pull request was tested against the main of its own moment. The template
+# repository therefore runs CI and Template CI once a night on main to test the combined tree; a
+# generated project may want the same `schedule:` in its ci.yml.
 
 on: pull_request
 
@@ -51,14 +52,19 @@ jobs:
         env:
           BASE: ${{ github.base_ref }}
         run: |
+          # allow_auto_merge is only visible to a token with contents: write, which this job has.
           allowed=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.allow_auto_merge')
-          required=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE" --jq 'any(.[]; .type == "required_status_checks")')
-          echo "allow_auto_merge=$allowed required_status_checks_on_$BASE=$required"
-          if [ "$allowed" = true ] && [ "$required" = true ]; then
+          # A ruleset (active ones only come back) or classic protection that names at least one check.
+          ruleset=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE" \
+            --jq 'any(.[]; .type == "required_status_checks" and ((.parameters.required_status_checks // []) | length > 0))')
+          classic=$(gh api "repos/$GITHUB_REPOSITORY/branches/$BASE" \
+            --jq '(.protection.required_status_checks.contexts // []) | length > 0')
+          echo "allow_auto_merge=$allowed required_checks: ruleset=$ruleset classic=$classic"
+          if [ "$allowed" = true ] && { [ "$ruleset" = true ] || [ "$classic" = true ]; }; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Auto-merge not enabled::Dependabot pull requests merge by hand until this repository has 'Allow auto-merge' (Settings → General) and a ruleset on '$BASE' that requires the CI checks (rulesets, not classic branch protection)."
+            echo "::notice title=Auto-merge not enabled::Dependabot pull requests merge by hand until this repository has 'Allow auto-merge' (Settings → General) and a ruleset or branch protection on '$BASE' that requires at least one status check."
           fi
 
       - name: Enable auto-merge for a patch or minor update

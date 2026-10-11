@@ -55,11 +55,13 @@ next, and the GitHub release is published only after the push succeeded.
    settings make it work, both set once: *Settings → General → Allow auto-merge* (with
    *Automatically delete head branches*), and a ruleset on `main` that requires the CI, Template CI
    and CodeQL jobs, requires a pull request, gates on CodeQL alerts and forbids force-pushes and
-   deletion. The workflow checks for both before it acts and only leaves a notice without them,
+   deletion (set `require_extra_approval_for_unattributed_changes` explicitly: the API fills it in
+   as `true` when omitted, and with no reviewers that blocks any commit whose author e-mail is not
+   linked to a GitHub account). The workflow checks for both before it acts and only leaves a notice without them,
    because `gh pr merge --auto` on an unprotected branch would merge at once. Two consequences to
    know: a merge made by the Actions token starts no push workflow on `main`, and each weekly pull
-   request was tested against the `main` of its own moment, so `ci.yml` also runs once a night on
-   `main` (template source only) to test the combined tree.
+   request was tested against the `main` of its own moment, so `ci.yml` (template source only) and
+   `template-ci.yml` also run once a night on `main` to test the combined tree.
 
 ## Before a minor release: an agent dry run
 

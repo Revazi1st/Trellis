@@ -56,6 +56,6 @@ compromised release is usually gone before a pull request exists. A major, or a 
 one, a .NET SDK bump and the GitHub Actions group still wait for review. The workflow acts only
 when the repository allows auto-merge and a ruleset requires status checks on the base branch; the
 one-time setup and the two consequences (no push run for a token-made merge, hence the nightly CI
-run on `main`; each weekly pull request tested against the `main` of its moment) are in
+and Template CI runs on `main`; each weekly pull request tested against the `main` of its moment) are in
 `docs/releasing.md`. The licence check of ADR-0011 covers the listed package ids only, so the
 release runbook now starts with a read of the bumps that merged since the last tag.

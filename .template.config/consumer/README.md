@@ -70,10 +70,11 @@ GitHub Advanced Security code scanning is enabled and the `CODEQL_ENABLED` repos
 `.github/dependabot.yml`; new versions wait a week before a pull request opens (security updates
 arrive at once). `.github/workflows/dependabot-auto-merge.yml` lets Dependabot's patch and minor
 pull requests merge on their own once the checks pass. It acts only when the repository allows
-auto-merge (Settings → General) and a ruleset on `main` requires status checks; name only jobs that
-exist in your repository, and prefer a ruleset over classic branch protection, which the workflow
-cannot see. Until both exist it leaves a notice. Majors, .NET SDK bumps and the GitHub Actions
-group always wait for you.
+auto-merge (Settings → General) and a ruleset or branch protection on `main` requires at least one
+status check; name only jobs that exist in your repository. Until both exist it leaves a notice.
+Majors, .NET SDK bumps and the GitHub Actions group always wait for you. Two things to know: a merge
+made by the Actions token starts no push run on `main`, and each weekly pull request was tested
+against the `main` of its own moment, so consider a nightly `schedule:` trigger in `ci.yml`.
 
 ## Where to look next
 
