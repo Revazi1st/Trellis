@@ -13,7 +13,7 @@ using Trellis.Persistence;
 namespace Trellis.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261011030320_InitialCreate")]
+    [Migration("20261011125908_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
