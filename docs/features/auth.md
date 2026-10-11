@@ -44,7 +44,9 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 - **Security events** (`SecurityEventLog`, `[LoggerMessage]`, written by `IdentityService`): 1101
   `LoginFailed` (Information, user id), 1102 `LoginFailedUnknownAccount` (Information, masked
   e-mail such as `j***@example.com`), 1103 `AccountLockedOut` (Warning, user id — the counter just
-  tripped), 1104 `LoginRejectedLockedOut` (Information, user id). Never the password, never the
+  tripped), 1104 `LoginRejectedLockedOut` (Information, user id), 1105 `FailedSignInNotCounted` and
+  1106 `FailedSignInCountNotReset` (Warning, user id and Identity error codes — the lockout counter's
+  writes report failure as an `IdentityResult`, never discarded). Never the password, never the
   e-mail as typed.
 - **Logout** revokes the presented refresh token (idempotent, anonymous — possession of the token is
   the authorization; never trips replay detection). **Revoke-all** signs the caller out everywhere.

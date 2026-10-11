@@ -103,7 +103,7 @@ internal sealed class IdentityService(
             logger.LogWarning(
                 "Registration rolled back: assigning the {Role} role failed ({Errors})",
                 Roles.Member,
-                string.Join(", ", assigned.Errors.Select(static e => e.Code)));
+                CodesOf(assigned));
             return Result.Failure<Guid>(RoleAssignmentFailed);
         }
 
@@ -136,8 +136,14 @@ internal sealed class IdentityService(
 
         if (!await userManager.CheckPasswordAsync(user, password))
         {
-            // Counts toward lockout; Identity locks the account at the configured threshold.
-            await userManager.AccessFailedAsync(user);
+            // Counts toward lockout; Identity locks the account at the configured threshold. A count that
+            // could not be saved (a concurrent sign-in updated the account first) is a failed sign-in the
+            // lockout never saw, so it is a security event, not silence; the caller still gets its 401.
+            IdentityResult counted = await userManager.AccessFailedAsync(user);
+            if (!counted.Succeeded)
+            {
+                SecurityEventLog.FailedSignInNotCounted(logger, user.Id, CodesOf(counted));
+            }
 
             if (await userManager.IsLockedOutAsync(user))
             {
@@ -149,7 +155,13 @@ internal sealed class IdentityService(
             return Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials);
         }
 
-        await userManager.ResetAccessFailedCountAsync(user);
+        // The sign-in stands either way; a count left in place only brings a later lockout closer.
+        IdentityResult reset = await userManager.ResetAccessFailedCountAsync(user);
+        if (!reset.Succeeded)
+        {
+            SecurityEventLog.FailedSignInCountNotReset(logger, user.Id, CodesOf(reset));
+        }
+
         return await BuildAuthenticatedUserAsync(user);
     }
 
@@ -161,6 +173,9 @@ internal sealed class IdentityService(
             ? Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials)
             : await BuildAuthenticatedUserAsync(user);
     }
+
+    /// <summary>Identity's error codes only: its descriptions can repeat what the user typed.</summary>
+    private static string CodesOf(IdentityResult result) => string.Join(", ", result.Errors.Select(static error => error.Code));
 
     /// <summary>Effective permissions = the union of the "permission" claims across all the user's roles.</summary>
     private async Task<AuthenticatedUser> BuildAuthenticatedUserAsync(ApplicationUser user)
