@@ -143,9 +143,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   `Microsoft.CodeAnalysis.Analyzers` 3.11.0 are pinned, build-only; Dependabot proposes only their patch
   updates, because the referenced Roslyn must stay at or below the compiler of the SDK in `global.json`.
   `ResultDiscardAnalyzerTests` cover each shape, the wiring and a planted discard compiled under the
-  repository's `.editorconfig`. Its first run fixed six drops in the tests: identity seeding in
-  `ApiFactory` and `AuthSecurityTests` that never checked an `IdentityResult`, and telemetry tests that
-  never looked at the outcome they caused.
+  repository's `.editorconfig`. Its first run fixed nineteen drops in the tests (twenty-two with the
+  multitenancy-only fixtures): identity seeding in `ApiFactory`, `AuthSecurityTests` and `TenancyTests`
+  that never checked an `IdentityResult`, a handler test, and the `UseCaseOutcomeTests` that never
+  looked at the outcome they caused.
 - **A body value of the wrong type names its field**: `"amount": "abc"` is still 400 `Request.Malformed`,
   now with `errors: [{ field: "lines[0].amount", code: "Request.InvalidValue", description: "The value
   is not of the type this field expects." }]`; a JSON syntax error names no field.

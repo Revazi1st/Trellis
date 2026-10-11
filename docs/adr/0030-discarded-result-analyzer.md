@@ -18,9 +18,10 @@ The first guard was CA1806 with `additional_use_results_methods` listing every D
 `Result` combinator by documentation-ID prefix. It matched by name, not by type, so a handler, an
 Application port, a Persistence method or an `IdentityResult` was never covered, and it never saw
 through `await`, the most common way a `Result` is dropped. When the analyzer below was first wired in,
-it found 33 statements that CA1806 had passed, all in tests: 27 NSubstitute call checks and 6 real
-drops (identity seeding that never checked an `IdentityResult`, and telemetry tests that never looked
-at the outcome they caused).
+it found 33 statements that CA1806 had passed, all in tests: 14 NSubstitute call checks and 19 real
+drops (identity seeding in the ApiTests and IntegrationTests fixtures that never checked an
+`IdentityResult`, a handler test, and the use-case telemetry tests that never looked at the outcome
+they caused); the all-options template build then found 3 more in multitenancy-only fixtures.
 
 ## Decision
 
