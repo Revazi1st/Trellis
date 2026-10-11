@@ -6,7 +6,7 @@ using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Results;
 using Xunit;
 
-namespace Trellis.Application.UnitTests.Invoices;
+namespace Trellis.Application.UnitTests.Features.Invoices.CreateInvoice;
 
 public sealed class CreateInvoiceCommandHandlerTests
 {

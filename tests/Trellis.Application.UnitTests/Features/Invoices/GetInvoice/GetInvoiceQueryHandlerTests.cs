@@ -5,7 +5,7 @@ using Trellis.Domain.Invoices;
 using Trellis.TestSupport.Invoices;
 using Xunit;
 
-namespace Trellis.Application.UnitTests.Invoices;
+namespace Trellis.Application.UnitTests.Features.Invoices.GetInvoice;
 
 public sealed class GetInvoiceQueryHandlerTests
 {

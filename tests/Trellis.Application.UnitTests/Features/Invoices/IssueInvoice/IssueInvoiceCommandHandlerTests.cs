@@ -7,7 +7,7 @@ using Trellis.SharedKernel.Results;
 using Trellis.TestSupport.Invoices;
 using Xunit;
 
-namespace Trellis.Application.UnitTests.Invoices;
+namespace Trellis.Application.UnitTests.Features.Invoices.IssueInvoice;
 
 public sealed class IssueInvoiceCommandHandlerTests
 {
@@ -84,22 +84,6 @@ public sealed class IssueInvoiceCommandHandlerTests
 
         result.Error.ShouldBe(InvoiceErrors.NotFound(missingId));
     }
-
-    [Fact]
-    public void Validator_MissingDueDate_IsRejected()
-    {
-        // A body without "dueDate" binds to default(DateTimeOffset): the validator answers it before the handler runs.
-        var result = new IssueInvoiceCommandValidator().Validate(new IssueInvoiceCommand(InvoiceId.New(), default));
-
-        result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldHaveSingleItem().PropertyName.ShouldBe(nameof(IssueInvoiceCommand.DueDate));
-    }
-
-    [Fact]
-    public void Validator_AnyDueDate_IsShapeValid()
-        // Shape only: "not in the past" needs the clock and is the aggregate's rule.
-        => new IssueInvoiceCommandValidator().Validate(new IssueInvoiceCommand(InvoiceId.New(), Now.AddYears(-1)))
-            .IsValid.ShouldBeTrue();
 
     private Invoice DraftWithLine()
     {

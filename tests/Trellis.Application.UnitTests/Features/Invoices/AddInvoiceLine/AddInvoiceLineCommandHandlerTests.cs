@@ -6,7 +6,7 @@ using Trellis.SharedKernel.Results;
 using Trellis.TestSupport.Invoices;
 using Xunit;
 
-namespace Trellis.Application.UnitTests.Invoices;
+namespace Trellis.Application.UnitTests.Features.Invoices.AddInvoiceLine;
 
 public sealed class AddInvoiceLineCommandHandlerTests
 {

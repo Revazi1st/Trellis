@@ -7,6 +7,7 @@ using Shouldly;
 using Trellis.Application.Features.Invoices;
 using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Application.Features.Invoices.GetInvoice;
+using Trellis.Application.Features.Invoices.PayInvoice;
 using Trellis.Domain.Invoices;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Messaging;
@@ -113,10 +114,10 @@ public sealed class DecoratorPipelineTests : IDisposable
     public async Task Failed_domain_operation_does_not_commit_unit_of_work()
     {
         _pipeline.Invoices.GetByIdAsync(Arg.Any<InvoiceId>(), Arg.Any<CancellationToken>()).Returns((Invoice?)null);
-        var handler = _pipeline.Resolve<ICommandHandler<Features.Invoices.PayInvoice.PayInvoiceCommand>>();
+        var handler = _pipeline.Resolve<ICommandHandler<PayInvoiceCommand>>();
 
         var result = await handler.Handle(
-            new Features.Invoices.PayInvoice.PayInvoiceCommand(InvoiceId.New()),
+            new PayInvoiceCommand(InvoiceId.New()),
             TestContext.Current.CancellationToken);
 
         result.IsFailure.ShouldBeTrue();

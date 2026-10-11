@@ -6,7 +6,7 @@ using Trellis.Domain.Invoices;
 using Trellis.TestSupport.Invoices;
 using Xunit;
 
-namespace Trellis.Application.UnitTests.Invoices;
+namespace Trellis.Application.UnitTests.Features.Invoices.PayInvoice;
 
 public sealed class PayInvoiceCommandHandlerTests
 {
