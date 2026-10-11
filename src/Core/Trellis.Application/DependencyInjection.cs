@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Trellis.Application.Observability;
 using Trellis.SharedKernel.Decorators;
 using Trellis.SharedKernel.Domain;
@@ -43,6 +44,10 @@ public static class DependencyInjection
     /// </summary>
     internal static IServiceCollection AddUseCasePipeline(this IServiceCollection services)
     {
+        // The outcome line's defaults (no error descriptions); a host that binds the Telemetry section
+        // registers its own instance, which wins whether it is added before this call or after it.
+        services.TryAddSingleton(new UseCaseLoggingOptions());
+
         // The FIRST call is the INNERMOST wrapper: read this block bottom-up to follow a request in.
         services.TryDecorate(typeof(ICommandHandler<>), typeof(UnitOfWorkDecorators.CommandHandler<>));
         services.TryDecorate(typeof(ICommandHandler<,>), typeof(UnitOfWorkDecorators.CommandHandler<,>));

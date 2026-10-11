@@ -42,6 +42,7 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Information);
+        line.EventId.Id.ShouldBe(1001);
         line.Message.ShouldContain("ScriptedCommand succeeded");
     }
 
@@ -55,7 +56,8 @@ public sealed class UseCaseOutcomeTests : IDisposable
         // Validation sits INSIDE Logging: the rejected request is not invisible.
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Information);
-        line.Message.ShouldContain("Validation.General");
+        line.EventId.Id.ShouldBe(1003);
+        line.Message.ShouldContain("Validation (Validation.General)");
         line.Message.ShouldContain("CustomerName:Validation.NotEmpty");
         line.Message.ShouldContain("CustomerEmail:Validation.NotEmpty");
     }
@@ -95,8 +97,41 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Warning);
-        line.Message.ShouldContain("Test.Unclassified");
-        line.Message.ShouldContain("Nobody classified this yet.");
+        line.EventId.Id.ShouldBe(1002);
+        line.Message.ShouldContain("Failure (Test.Unclassified)");
+        line.Message.ShouldNotContain("Nobody classified this yet.");
+    }
+
+    [Fact]
+    public async Task A_failure_line_names_the_type_and_code_but_never_the_description()
+    {
+        // A description can carry what the user typed: Identity's duplicate-account text names the e-mail.
+        await Handle(new ScriptedCommand(static _ =>
+            Task.FromResult(Result.Failure(Error.Conflict("Test.DuplicateAccount", "Email 'jane@example.com' is already taken.")))));
+
+        LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+        line.Message.ShouldContain("Conflict (Test.DuplicateAccount)");
+        line.Message.ShouldNotContain("jane@example.com");
+    }
+
+    [Fact]
+    public async Task With_IncludeErrorDetail_the_failure_line_carries_the_description()
+    {
+        // Development's opt-in: registered before AddApplication(), the host's instance wins over the default.
+        using var pipeline = new PipelineHarness(static services =>
+        {
+            services.AddSingleton(new UseCaseLoggingOptions { IncludeErrorDetail = true });
+            services.AddScoped<ICommandHandler<ScriptedCommand>, ScriptedCommandHandler>();
+        });
+
+        await pipeline.Resolve<ICommandHandler<ScriptedCommand>>().Handle(
+            new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.Failure("Test.Unclassified", "Nobody classified this yet.")))),
+            TestContext.Current.CancellationToken);
+
+        LogEntry line = pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+        line.Level.ShouldBe(LogLevel.Warning);
+        line.EventId.Id.ShouldBe(1004);
+        line.Message.ShouldContain("Failure (Test.Unclassified): Nobody classified this yet.");
     }
 
     [Theory]
@@ -126,6 +161,7 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Error);
+        line.EventId.Id.ShouldBe(1006);
         line.Exception.ShouldBeSameAs(boom);
         await _pipeline.UnitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
@@ -159,6 +195,7 @@ public sealed class UseCaseOutcomeTests : IDisposable
 
         LogEntry line = _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
         line.Level.ShouldBe(LogLevel.Information);
+        line.EventId.Id.ShouldBe(1005);
         line.Message.ShouldContain("cancelled by the caller");
     }
 

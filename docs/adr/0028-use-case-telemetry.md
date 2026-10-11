@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-08
+- **Amended**: 2026-10-11 — the span wraps the line, descriptions leave the line, stable event ids (see *Amendment* below)
 
 ## Context
 
@@ -50,3 +51,23 @@ a contract with every dashboard and alert built on them.
   tags and exception), `DecoratorPipelineTests` (the exact chain for every use case),
   `TelemetryNamingTests` (prefixes, units, resolvable names, the pending renames still pending),
   `ServiceDefaultsTests` (a prefixed meter and source are exported and an unprefixed one is not; the resource and the `OTEL_*` overrides).
+
+## Amendment (2026-10-11): the span wraps the line; the line names the error, not its text
+
+- **The span wraps the line.** `TracingDecorators` now runs outside `LoggingDecorators` (ADR-0003's
+  second amendment), so the outcome line is written while the use-case span is current: an OTLP log
+  record carries that span's trace and span ids, and a trace view shows the line under its use case.
+- **No descriptions by default.** A failure line reads `failed in {ElapsedMilliseconds}ms with
+  {ErrorType} ({ErrorCode})`; a `ValidationError` adds its `field:code` pairs. `Error.Description` is
+  left out: it can carry what a user typed or a library wrote (Identity's duplicate-account text names
+  the address), and the line is written at Information for every request. The type and code identify
+  the failure; the response carries the text. `UseCaseLoggingOptions.IncludeErrorDetail` (default
+  false) appends the description; a host binds it from `Telemetry:IncludeErrorDetail`, and only
+  Development turns it on.
+- **Stable event ids.** The outcome lines are `[LoggerMessage]` methods in the use-case range 1001–1099,
+  beside the security events' 11xx and the e-mail sender's 12xx: 1001 succeeded, 1002 failed, 1003
+  failed validation (with the pairs), 1004 failed with the description (written instead of 1002 while
+  the opt-in is on), 1005 cancelled by the caller, 1006 threw. An alert or a query matches the id, not
+  the message text. Renumbering one is a breaking change, like renaming an instrument.
+- Fitness: `UseCaseOutcomeTests` asserts the event id per outcome, that a failure line omits the
+  description unless the opt-in is set, and that the line carries the use-case span's id.
