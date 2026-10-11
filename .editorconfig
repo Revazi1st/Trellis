@@ -103,6 +103,17 @@ dotnet_diagnostic.MA0006.severity = none            # string == is already ordin
 dotnet_diagnostic.MA0048.severity = none            # vertical slices co-locate small related types (response + line + mapper) in one file by design
 dotnet_diagnostic.S1135.severity = suggestion       # TODO tracking — allowed, surfaced gently
 
+# ── A Result is never dropped (ADR-0004) ───────────────────────────────────
+# CA1806 reports a call whose value is discarded when the method is listed below, by documentation ID; a
+# trailing * matches every member under the prefix. Every Domain member (aggregate transitions, factories,
+# value objects: Invoice.Issue, Money.Create, EmailAddress.Create, …, and whatever add-feature puts there)
+# and every Result combinator is listed, so a dropped `invoice.Issue(...)` fails the Release build instead
+# of committing a rejected transition. It matches by name, not by type, and never sees `await`: a dropped
+# Task<Result> still compiles. A deliberate discard is `_ = …`. Tests are out of scope for now.
+[{src,tools}/**.cs]
+dotnet_diagnostic.CA1806.severity = warning
+dotnet_code_quality.CA1806.additional_use_results_methods = M:Trellis.Domain.*|M:Trellis.SharedKernel.Results.*
+
 [{**/Migrations/**.cs,**/*.Designer.cs}]
 generated_code = true
 dotnet_analyzer_diagnostic.severity = none
