@@ -29,6 +29,17 @@
     <GlobalPackageReference Include="Meziantou.Analyzer" Version="3.0.299" />
   </ItemGroup>
 
+  <!-- The in-repository analyzer, tools/Trellis.Analyzers (ADR-0030); both MIT, build-time only
+       (PrivateAssets=all where referenced). Microsoft.CodeAnalysis.CSharp is a ceiling on the compiler:
+       a compiler older than this version cannot load the analyzer, so it stays at or below the compiler
+       of the SDK in global.json and moves only by hand (.github/dependabot.yml ignores its minor and
+       major updates). Transitive pinning also applies it to Microsoft.EntityFrameworkCore.Design's
+       Roslyn dependency, so it cannot sit below that floor either (5.0.0 for EF Core 10.0.x). -->
+  <ItemGroup Label="Analyzer project">
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Domain / Application">
     <PackageVersion Include="FluentValidation" Version="12.2.0" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />

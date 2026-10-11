@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The in-repository Roslyn analyzer (ADR-0030): RSLT001 fails the Release build on a discarded
+       Result. A compiler component, never a runtime dependency: Directory.Build.props hands it to every
+       other project as an Analyzer item, so no project references or copies the assembly. netstandard2.0
+       is what every compiler host loads (the CLI on .NET, Visual Studio on .NET Framework). -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsPackable>false</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- RS2008 asks for AnalyzerReleases.*.md release tracking, which serves analyzers shipped as
+         packages to other people's builds; this one never leaves the repository. -->
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The version is a ceiling on the compiler: one older than the referenced Roslyn cannot load the
+         analyzer (CS9057, an error in Release). Pinned in Directory.Packages.props; ADR-0030. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>
