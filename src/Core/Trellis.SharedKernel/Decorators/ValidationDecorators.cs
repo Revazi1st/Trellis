@@ -76,8 +76,19 @@ public static class ValidationDecorators
 
         return failures.Length == 0
             ? null
-            : new ValidationError([.. failures.Select(static f => new FieldError(f.PropertyName, CodeFor(f), f.ErrorMessage))]);
+            : new ValidationError([.. failures.Select(ErrorFor)]);
     }
+
+    /// <summary>
+    /// A failure FluentValidation attributes to a member becomes a <see cref="FieldError"/> naming it. A
+    /// root-level rule (<c>RuleFor(x =&gt; x).Must(...)</c>, a check across several members) names no member:
+    /// its <c>PropertyName</c> is empty, so it becomes a plain validation <see cref="Error"/>, the
+    /// whole-request entry the API renders as <c>field: null</c> (ADR-0024), never <c>field: ""</c>.
+    /// </summary>
+    private static Error ErrorFor(ValidationFailure failure)
+        => string.IsNullOrWhiteSpace(failure.PropertyName)
+            ? Error.Validation(CodeFor(failure), failure.ErrorMessage)
+            : new FieldError(failure.PropertyName, CodeFor(failure), failure.ErrorMessage);
 
     /// <summary>
     /// FluentValidation's <c>ErrorCode</c> defaults to the validator type name; strip the suffix so the
