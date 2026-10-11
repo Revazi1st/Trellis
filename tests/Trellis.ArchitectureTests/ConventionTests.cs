@@ -25,6 +25,13 @@ public sealed partial class ConventionTests
     /// </summary>
     private static readonly Dictionary<string, string> BareIgnoreQueryFiltersAllowlist = new(StringComparer.Ordinal);
 
+    /// <summary>The open handler contracts Application's assembly scan registers (ADR-0003).</summary>
+    private static readonly Type[] HandlerContracts =
+        [typeof(ICommandHandler<>), typeof(ICommandHandler<,>), typeof(IQueryHandler<,>), typeof(IDomainEventHandler<>)];
+
+    /// <summary>What a handler never injects: another command's pipeline, or the commit itself.</summary>
+    private static readonly Type[] UseCaseCompositionTypes = [typeof(ICommandHandler<>), typeof(ICommandHandler<,>), typeof(IUnitOfWork)];
+
     [Fact]
     public void Command_and_query_handlers_are_sealed()
         => Types.InAssembly(Architecture.ApplicationAssembly)
@@ -48,6 +55,28 @@ public sealed partial class ConventionTests
             .NotBePublic()
             .GetResult()
             .ShouldBeCompliant();
+
+    [Fact]
+    public void Handlers_inject_neither_another_command_handler_nor_the_unit_of_work()
+    {
+        // One command, one commit (application.md). An injected ICommandHandler<B> is B's whole decorated
+        // chain, and B's UnitOfWork stage commits the shared request-scoped DbContext halfway through A: A's
+        // staged changes are saved before A has decided, and a conflict in B clears them. An injected
+        // IUnitOfWork is the same hole without the detour. No non-empty guard on purpose: a project that
+        // toggles or remove-feature leave with few handlers must still pass.
+        List<string> violations = [.. ImplementationsOf(Architecture.ApplicationAssembly, HandlerContracts)
+            .SelectMany(UseCaseCompositionIn)];
+
+        violations.ShouldBeEmpty(
+            "share the logic through the aggregate, a domain service or a port, never another use case's handler; "
+            + "the UnitOfWork decorator commits once per command, so no handler takes IUnitOfWork");
+    }
+
+    [Fact]
+    public void The_composition_rule_refuses_a_handler_calling_other_use_cases()
+        => UseCaseCompositionIn(typeof(PlantedViolations.HandlerCallingOtherUseCases))
+            .Count()
+            .ShouldBe(3, "the planted handler injects a command handler, a Func of one and IUnitOfWork");
 
     [Fact]
     public void Endpoints_are_internal_sealed_one_class_per_use_case()
@@ -187,6 +216,37 @@ public sealed partial class ConventionTests
 
     private static bool IsRecord(Type type)
         => type.GetProperty("EqualityContract", BindingFlags.NonPublic | BindingFlags.Instance) is not null;
+
+    /// <summary>The concrete classes in <paramref name="assembly"/> implementing any of the open generic <paramref name="contracts"/>.</summary>
+    private static IEnumerable<Type> ImplementationsOf(Assembly assembly, Type[] contracts)
+        => assembly.GetTypes()
+            .Where(type => type is { IsClass: true, IsAbstract: false }
+                           && type.GetInterfaces().Any(i => i.IsGenericType && contracts.Contains(i.GetGenericTypeDefinition())));
+
+    /// <summary>Each constructor parameter of <paramref name="handler"/> that reaches another use case or the commit.</summary>
+    private static IEnumerable<string> UseCaseCompositionIn(Type handler)
+        => handler.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            .SelectMany(static constructor => constructor.GetParameters())
+            .Where(static parameter => ReachesUseCaseComposition(parameter.ParameterType))
+            .Select(parameter => $"{handler.FullName}({DisplayName(parameter.ParameterType)} {parameter.Name})");
+
+    /// <summary>The type itself or anything it wraps: a Lazy, a Func or an IEnumerable resolves the same chain.</summary>
+    private static bool ReachesUseCaseComposition(Type type)
+        => UseCaseCompositionTypes.Contains(type.IsGenericType ? type.GetGenericTypeDefinition() : type)
+           || (type.IsGenericType && type.GetGenericArguments().Any(ReachesUseCaseComposition))
+           || (type.GetElementType() is { } element && ReachesUseCaseComposition(element));
+
+    /// <summary><c>Func&lt;ICommandHandler&lt;X&gt;&gt;</c> rather than <c>Func`1</c>, for failure messages.</summary>
+    private static string DisplayName(Type type)
+    {
+        if (!type.IsGenericType)
+        {
+            return type.Name;
+        }
+
+        int arity = type.Name.IndexOf('`', StringComparison.Ordinal);
+        return $"{(arity < 0 ? type.Name : type.Name[..arity])}<{string.Join(", ", type.GetGenericArguments().Select(DisplayName))}>";
+    }
 
     private static bool DerivesFromGeneric(Type type, Type openGeneric)
     {
