@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.RegularExpressions;
 using Shouldly;
 using Xunit;
@@ -113,28 +112,14 @@ public sealed partial class TelemetryNamingTests
     {
         var scan = new Scan();
         List<SourceFile> files = [.. RepositorySource.CSharpFiles("src", "tools")];
-        Dictionary<string, SourceFile> byFileName = files
-            .GroupBy(static f => Path.GetFileNameWithoutExtension(f.RelativePath), StringComparer.Ordinal)
-            .Where(static g => g.Count() == 1)
-            .ToDictionary(static g => g.Key, static g => g.Single(), StringComparer.Ordinal);
+        var constants = new SourceConstants(files);
 
         foreach (SourceFile file in files)
         {
             string? Resolve(Match match)
             {
                 string argument = match.Groups["arg"].Value;
-                if (argument.StartsWith('"'))
-                {
-                    return argument[1..^1];
-                }
-
-                string[] parts = argument.Split('.');
-                string? value = ConstantIn(file, parts[^1]);
-                if (value is null && parts.Length > 1 && byFileName.TryGetValue(parts[^2], out SourceFile? declaring))
-                {
-                    value = ConstantIn(declaring, parts[^1]);
-                }
-
+                string? value = constants.Resolve(file, argument);
                 if (value is null)
                 {
                     scan.Unresolved.Add($"{file.RelativePath}:{file.LineOf(match.Index)}: '{argument}'");
@@ -151,7 +136,7 @@ public sealed partial class TelemetryNamingTests
 
             foreach (Match instrument in InstrumentCreation().Matches(file.Code))
             {
-                List<string> arguments = ArgumentsAt(file.Code, instrument.Index + instrument.Length - 1);
+                List<string> arguments = SourceConstants.ArgumentsAt(file.Code, instrument.Index + instrument.Length - 1);
                 if (NameOf(instrument) is { } name)
                 {
                     // CreateCounter<T>(name, unit, description, …), CreateObservableGauge<T>(name, callback,
@@ -165,67 +150,6 @@ public sealed partial class TelemetryNamingTests
         }
 
         return scan;
-    }
-
-    private static string? ConstantIn(SourceFile file, string identifier)
-        => ConstantDeclaration().Matches(file.Code)
-            .FirstOrDefault(m => string.Equals(m.Groups["name"].Value, identifier, StringComparison.Ordinal))
-            ?.Groups["value"].Value;
-
-    /// <summary>The top-level arguments of the call whose opening parenthesis is at <paramref name="open"/>, trimmed.</summary>
-    private static List<string> ArgumentsAt(string code, int open)
-    {
-        List<string> arguments = [];
-        var current = new StringBuilder();
-        int depth = 0;
-        int i = open;
-        while (i < code.Length)
-        {
-            char c = code[i];
-            if (c == '"')
-            {
-                // A string literal is copied whole: its commas and parentheses are not syntax.
-                int end = i + 1;
-                while (end < code.Length && code[end] != '"')
-                {
-                    end += code[end] == '\\' ? 2 : 1;
-                }
-
-                end = Math.Min(end, code.Length - 1);
-                current.Append(code, i, end - i + 1);
-                i = end + 1;
-                continue;
-            }
-
-            i++;
-            if (c is '(' or '[' or '{')
-            {
-                depth++;
-                if (depth == 1)
-                {
-                    continue;
-                }
-            }
-            else if (c is ')' or ']' or '}')
-            {
-                depth--;
-                if (depth == 0)
-                {
-                    break;
-                }
-            }
-            else if (c == ',' && depth == 1)
-            {
-                arguments.Add(current.ToString().Trim());
-                current.Clear();
-                continue;
-            }
-
-            current.Append(c);
-        }
-
-        arguments.Add(current.ToString().Trim());
-        return arguments;
     }
 
     private const string Argument = """(?<arg>"(?:[^"\\]|\\.)*"|(?!new\b)[A-Za-z_][\w.]*)""";
@@ -242,9 +166,6 @@ public sealed partial class TelemetryNamingTests
 
     [GeneratedRegex(@"(?:\.\s*(?:SetTag|AddTag)\s*\(|\bKeyValuePair\s*\.\s*Create\s*(?:<[^>()]*>)?\s*\(|\bnew\s+KeyValuePair\s*<[^>()]*>\s*\()\s*" + Argument, RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex AttributeSite();
-
-    [GeneratedRegex("""\bconst\s+string\s+(?<name>\w+)\s*=\s*"(?<value>(?:[^"\\]|\\.)*)"\s*;""", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex ConstantDeclaration();
 
     [GeneratedRegex(@"^[A-Za-z_]\w*\s*:(?!:)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex NamedArgument();
