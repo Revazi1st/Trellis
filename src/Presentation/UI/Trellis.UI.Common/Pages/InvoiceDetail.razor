@@ -6,6 +6,9 @@
 
 <PageTitle>Invoice — Trellis</PageTitle>
 
+@* Above the load states, so it is there while loading and after a failed load too. *@
+<NavLink href="invoices" class="back" Match="NavLinkMatch.All">Back to invoices</NavLink>
+
 @if (_error is not null)
 {
     <p class="error" role="alert">@_error</p>

@@ -22,7 +22,7 @@ namespace Trellis.ApiTests.InProcess;
 /// <summary>
 /// Tenant isolation over the REAL HTTP pipeline (ADR-0022): the tenant comes from the signed claim
 /// the API minted from the user's membership and from nothing the caller controls, and every read,
-/// write, listing and cache hit is scoped to it. Compiled only with the multi-tenancy option — the
+/// write, listing (the invoice list and the overdue list) and cache hit is scoped to it. Compiled only with the multi-tenancy option — the
 /// template's all-options CI leg runs it.
 /// </summary>
 public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<ApiFactory>
@@ -80,6 +80,24 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
         {
             factory.Time.Reset();   // the fixture is shared by the class
         }
+    }
+
+    [Fact]
+    public async Task Invoice_listing_contains_only_the_callers_tenant()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient tenantA = await factory.CreateAdminClientAsync(ApiFactory.TenantA, ct);
+        HttpClient tenantB = await factory.CreateAdminClientAsync(ApiFactory.TenantB, ct);
+        Guid ofA = await tenantA.CreateInvoiceAsync();
+        Guid ofB = await tenantB.CreateInvoiceAsync();
+
+        PagedResponse<InvoiceDto> seenByA = await ListAllAsync(tenantA, ct);
+        seenByA.Items[0].Id.ShouldBe(ofA, "A's newest invoice heads A's list");
+        seenByA.Items.ShouldNotContain(invoice => invoice.Id == ofB);
+
+        PagedResponse<InvoiceDto> seenByB = await ListAllAsync(tenantB, ct);
+        seenByB.Items[0].Id.ShouldBe(ofB, "B's newest invoice heads B's list");
+        seenByB.Items.ShouldNotContain(invoice => invoice.Id == ofA);
     }
 
     [Fact]
@@ -158,6 +176,13 @@ public sealed class TenantIsolationTests(ApiFactory factory) : IClassFixture<Api
 
     private static string? TenantClaimOf(string accessToken)
         => new JsonWebToken(accessToken).TryGetClaim(ITenantContext.ClaimType, out Claim? claim) ? claim.Value : null;
+
+    private static async Task<PagedResponse<InvoiceDto>> ListAllAsync(HttpClient client, CancellationToken ct)
+    {
+        HttpResponseMessage response = await client.GetAsync($"/api/v1/invoices?pageSize={PagingLimits.MaxPageSize}", ct);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<PagedResponse<InvoiceDto>>(ct))!;
+    }
 
     private static async Task<PagedResponse<InvoiceDto>> ListOverdueAsync(HttpClient client, CancellationToken ct)
     {

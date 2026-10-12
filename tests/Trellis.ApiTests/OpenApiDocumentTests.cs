@@ -209,19 +209,32 @@ public sealed class OpenApiDocumentTests
             .GetProperty("schema").GetProperty("$ref").GetString().ShouldBe(ProblemSchemaRef);
     }
 
-    [Fact]
-    public void Paging_parameters_are_camel_case_with_bounds()
+    [Theory]
+    [InlineData("/api/v1/invoices/overdue", new[] { "page", "pageSize" })]
+    [InlineData("/api/v1/invoices", new[] { "status", "page", "pageSize" })]
+    public void Paging_parameters_are_camel_case_with_bounds(string path, string[] names)
     {
-        JsonElement list = Operation("get", "/api/v1/invoices/overdue");
+        JsonElement list = Operation("get", path);
         Dictionary<string, JsonElement> parameters = Parameters(list).ToDictionary(static p => p.GetProperty("name").GetString()!, static p => p.GetProperty("schema"), StringComparer.Ordinal);
 
-        parameters.Keys.ShouldBe(["page", "pageSize"], StringComparer.Ordinal, ignoreOrder: true);
+        parameters.Keys.ShouldBe(names, StringComparer.Ordinal, ignoreOrder: true);
         parameters["page"].GetProperty("minimum").GetInt32().ShouldBe(1);
         parameters["page"].GetProperty("maximum").GetInt32().ShouldBe(10_000);
         parameters["page"].GetProperty("default").GetInt32().ShouldBe(1);
         parameters["pageSize"].GetProperty("minimum").GetInt32().ShouldBe(1);
         parameters["pageSize"].GetProperty("maximum").GetInt32().ShouldBe(100);
         parameters["pageSize"].GetProperty("default").GetInt32().ShouldBe(20);
+    }
+
+    [Fact]
+    public void The_list_filter_is_an_optional_status_typed_as_the_string_enum()
+    {
+        JsonElement status = Parameters(Operation("get", "/api/v1/invoices"))
+            .Where(static p => p.GetProperty("name").GetString() == "status").ShouldHaveSingleItem();
+
+        status.GetProperty("in").GetString().ShouldBe("query");
+        (status.TryGetProperty("required", out JsonElement required) && required.GetBoolean()).ShouldBeFalse("no status lists every invoice");
+        ReferencesInvoiceStatus(status.GetProperty("schema")).ShouldBeTrue(status.GetProperty("schema").GetRawText());
     }
 
     [Fact]
@@ -240,6 +253,27 @@ public sealed class OpenApiDocumentTests
         schemas.GetProperty("InvoiceLineDto").GetProperty("properties").GetProperty("amount").GetProperty("format").GetString().ShouldBe("decimal");
         schemas.GetProperty("AddInvoiceLineRequest").GetProperty("properties").GetProperty("amount").GetProperty("format").GetString().ShouldBe("decimal");
         invoice.GetProperty("version").GetProperty("format").GetString().ShouldBe("int64");
+    }
+
+    /// <summary>The schema is the InvoiceStatus component, directly or as the non-null member of a nullable union.</summary>
+    private static bool ReferencesInvoiceStatus(JsonElement schema)
+    {
+        const string StatusRef = "#/components/schemas/InvoiceStatus";
+        if (schema.TryGetProperty("$ref", out JsonElement reference))
+        {
+            return reference.GetString() == StatusRef;
+        }
+
+        foreach (string union in new[] { "oneOf", "anyOf", "allOf" })
+        {
+            if (schema.TryGetProperty(union, out JsonElement members)
+                && members.EnumerateArray().Any(ReferencesInvoiceStatus))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool Has(JsonElement operation, string property) =>

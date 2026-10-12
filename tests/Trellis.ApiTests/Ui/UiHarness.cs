@@ -104,7 +104,8 @@ internal sealed class ScriptedApi : HttpMessageHandler
                 request.RequestUri!.AbsolutePath,
                 request.Headers.Authorization?.ToString(),
                 body,
-                request.Headers.IfMatch.Count == 0 ? null : request.Headers.IfMatch.ToString()));
+                request.Headers.IfMatch.Count == 0 ? null : request.Headers.IfMatch.ToString(),
+                request.RequestUri.Query));
         }
 
         HttpResponseMessage response = await Respond(request, cancellationToken);
@@ -113,8 +114,8 @@ internal sealed class ScriptedApi : HttpMessageHandler
     }
 }
 
-/// <summary>What a request looked like when it left the client (the client disposes the message itself).</summary>
-internal sealed record RecordedRequest(string Method, string Path, string? Authorization, string? Body, string? IfMatch = null);
+/// <summary>What a request looked like when it left the client (the client disposes the message itself); <c>Query</c> keeps its leading <c>?</c>.</summary>
+internal sealed record RecordedRequest(string Method, string Path, string? Authorization, string? Body, string? IfMatch = null, string Query = "");
 
 /// <summary>Canned API answers in the shapes the API writes.</summary>
 internal static class Responses
@@ -177,12 +178,18 @@ internal sealed class InMemoryTokenStore : ITokenStore
 /// <summary>Unsigned JWTs: the UI reads <c>exp</c> and the claims, and never validates a signature (the API does).</summary>
 internal static class TestJwt
 {
-    public static string ExpiringAt(DateTimeOffset expiresAt, string subject = "user-1")
+    /// <param name="expiresAt">The token's <c>exp</c>.</param>
+    /// <param name="subject">The token's <c>sub</c>; the e-mail is derived from it.</param>
+    /// <param name="permissions">The token's <c>permission</c> claims, which the UI maps to roles (a page's <c>RequiredPermission</c>).</param>
+    public static string ExpiringAt(DateTimeOffset expiresAt, string subject = "user-1", IReadOnlyList<string>? permissions = null)
     {
         string header = Base64Url("""{"alg":"HS256","typ":"JWT"}""");
+        string granted = permissions is { Count: > 0 }
+            ? $$""","permission":[{{string.Join(',', permissions.Select(static permission => $"\"{permission}\""))}}]"""
+            : string.Empty;
         string payload = Base64Url(string.Create(
             CultureInfo.InvariantCulture,
-            $$"""{"sub":"{{subject}}","email":"{{subject}}@example.com","exp":{{expiresAt.ToUnixTimeSeconds()}}}"""));
+            $$"""{"sub":"{{subject}}","email":"{{subject}}@example.com","exp":{{expiresAt.ToUnixTimeSeconds()}}{{granted}}}"""));
         return $"{header}.{payload}.not-a-signature";
     }
 

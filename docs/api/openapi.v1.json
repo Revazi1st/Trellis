@@ -292,6 +292,120 @@
             "Bearer": [ ]
           }
         ]
+      },
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "List invoices, newest first (paged, optionally by status)",
+        "description": "Every invoice from the moment it is created, newest first; status narrows the list to Draft, Issued, Paid or Voided invoices. Paged via the standard page/pageSize parameters; the response is the PagedResponse envelope, never a bare array.",
+        "operationId": "ListInvoices",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/InvoiceStatus"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "maximum": 10000,
+              "minimum": 1,
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResponseOfInvoiceDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed or the request could not be read; `errors[]` names each offending field (`field` is null for a whole-request error).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but lacking the required permission.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; `Retry-After` says when to retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure; quote `correlationId` or `traceId` when reporting it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/invoices/{id}": {
@@ -1403,6 +1517,7 @@
           "customerEmail",
           "currency",
           "status",
+          "createdAtUtc",
           "dueDate",
           "paidAtUtc",
           "total",
@@ -1426,6 +1541,10 @@
           },
           "status": {
             "$ref": "#/components/schemas/InvoiceStatus"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
           },
           "dueDate": {
             "type": [
@@ -1464,7 +1583,7 @@
             }
           }
         },
-        "description": "One invoice with its lines. `Version` is the row version behind the strong `ETag` of `GET /invoices/{id}`, which a write may send back as `If-Match`: opaque, monotonic per invoice."
+        "description": "One invoice with its lines. `CreatedAtUtc` is when it was created, the key `GET /invoices` lists by (newest first). `Version` is the row version behind the strong `ETag` of `GET /invoices/{id}`, which a write may send back as `If-Match`: opaque, monotonic per invoice."
       },
       "InvoiceLineDto": {
         "required": [

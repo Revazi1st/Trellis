@@ -13,6 +13,16 @@ namespace Trellis.UI.Common.Services;
 /// </summary>
 internal sealed class InvoiceApiClient(HttpClient httpClient) : IInvoiceApiClient
 {
+    public Task<ApiResult<PagedResponse<InvoiceDto>>> ListAsync(
+        InvoiceStatus? status = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+    {
+        // The status only when one is chosen: without it the API lists every invoice.
+        string uri = status is { } wanted
+            ? string.Create(CultureInfo.InvariantCulture, $"api/v1/invoices?status={wanted}&page={page}&pageSize={pageSize}")
+            : string.Create(CultureInfo.InvariantCulture, $"api/v1/invoices?page={page}&pageSize={pageSize}");
+        return ApiCall.ReadAsync<PagedResponse<InvoiceDto>>(ct => httpClient.GetAsync(uri, ct), cancellationToken);
+    }
+
     public Task<ApiResult<PagedResponse<InvoiceDto>>> GetOverdueAsync(
         int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
         => ApiCall.ReadAsync<PagedResponse<InvoiceDto>>(

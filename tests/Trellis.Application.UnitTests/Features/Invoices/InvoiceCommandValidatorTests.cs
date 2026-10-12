@@ -3,6 +3,7 @@ using Shouldly;
 using Trellis.Application.Features.Invoices.AddInvoiceLine;
 using Trellis.Application.Features.Invoices.CreateInvoice;
 using Trellis.Application.Features.Invoices.IssueInvoice;
+using Trellis.Application.Features.Invoices.ListInvoices;
 using Trellis.Application.Features.Invoices.ListOverdueInvoices;
 using Trellis.Domain.Common;
 using Trellis.Domain.Invoices;
@@ -91,6 +92,31 @@ public sealed class InvoiceCommandValidatorTests
     public void ListOverdueInvoices_rejects_paging_past_its_bounds_naming_the_member(int page, int pageSize, string member)
         => Validate(new ListOverdueInvoicesQuery(page, pageSize)).ShouldBeRejectedAt(member);
 
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(10_000, 100)]
+    public void ListInvoices_accepts_paging_at_its_bounds(int page, int pageSize)
+        => Validate(new ListInvoicesQuery(Page: page, PageSize: pageSize)).IsValid.ShouldBeTrue();
+
+    [Theory]
+    [InlineData(0, 20, nameof(ListInvoicesQuery.Page))]
+    [InlineData(10_001, 20, nameof(ListInvoicesQuery.Page))]
+    [InlineData(1, 0, nameof(ListInvoicesQuery.PageSize))]
+    [InlineData(1, 101, nameof(ListInvoicesQuery.PageSize))]
+    public void ListInvoices_rejects_paging_past_its_bounds_naming_the_member(int page, int pageSize, string member)
+        => Validate(new ListInvoicesQuery(Page: page, PageSize: pageSize)).ShouldBeRejectedAt(member);
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(InvoiceStatus.Draft)]
+    [InlineData(InvoiceStatus.Voided)]
+    public void ListInvoices_accepts_no_status_or_any_defined_one(InvoiceStatus? status)
+        => Validate(new ListInvoicesQuery(status)).IsValid.ShouldBeTrue();
+
+    [Fact]
+    public void ListInvoices_rejects_a_status_the_enum_does_not_define_naming_the_member()
+        => Validate(new ListInvoicesQuery((InvoiceStatus)99)).ShouldBeRejectedAt(nameof(ListInvoicesQuery.Status));
+
     private static string EmailOfLength(int length) => new string('a', length - "@acme.com".Length) + "@acme.com";
 
     private static ValidationResult Validate(CreateInvoiceCommand command) => new CreateInvoiceCommandValidator().Validate(command);
@@ -100,6 +126,8 @@ public sealed class InvoiceCommandValidatorTests
     private static ValidationResult Validate(IssueInvoiceCommand command) => new IssueInvoiceCommandValidator().Validate(command);
 
     private static ValidationResult Validate(ListOverdueInvoicesQuery query) => new ListOverdueInvoicesQueryValidator().Validate(query);
+
+    private static ValidationResult Validate(ListInvoicesQuery query) => new ListInvoicesQueryValidator().Validate(query);
 }
 
 internal static class ValidationResultAssertions

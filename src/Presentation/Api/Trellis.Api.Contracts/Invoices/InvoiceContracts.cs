@@ -25,13 +25,14 @@ public enum InvoiceStatus
     Voided = 3,
 }
 
-/// <summary>One invoice with its lines. <c>Version</c> is the row version behind the strong <c>ETag</c> of <c>GET /invoices/{id}</c>, which a write may send back as <c>If-Match</c>: opaque, monotonic per invoice.</summary>
+/// <summary>One invoice with its lines. <c>CreatedAtUtc</c> is when it was created, the key <c>GET /invoices</c> lists by (newest first). <c>Version</c> is the row version behind the strong <c>ETag</c> of <c>GET /invoices/{id}</c>, which a write may send back as <c>If-Match</c>: opaque, monotonic per invoice.</summary>
 public sealed record InvoiceDto(
     Guid Id,
     string CustomerName,
     string CustomerEmail,
     string Currency,
     InvoiceStatus Status,
+    DateTimeOffset CreatedAtUtc,
     DateTimeOffset? DueDate,
     DateTimeOffset? PaidAtUtc,
     decimal Total,

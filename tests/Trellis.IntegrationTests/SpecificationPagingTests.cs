@@ -9,8 +9,9 @@ using Xunit;
 namespace Trellis.IntegrationTests;
 
 /// <summary>
-/// Paging over a specification is only correct when the order is total: <c>InvoiceSpecs.Overdue</c> ends
-/// with <c>Id</c>, so invoices due at the same instant still page without repeats or gaps, and
+/// Paging over a specification is only correct when the order is total: <c>InvoiceSpecs.Overdue</c> and
+/// <c>InvoiceSpecs.All</c> end with <c>Id</c>, so invoices due (or created) at the same instant still page
+/// without repeats or gaps, and
 /// <c>ListPagedAsync</c> refuses a specification that pages itself or has no unique tiebreaker.
 /// </summary>
 public sealed class SpecificationPagingTests(DatabaseFixture database) : IntegrationTestBase(database)
@@ -20,6 +21,45 @@ public sealed class SpecificationPagingTests(DatabaseFixture database) : Integra
     [Fact]
     public void The_overdue_specification_ends_with_the_id_tiebreaker()
         => InvoiceSpecs.Overdue(Now).EndsWithIdTiebreaker.ShouldBeTrue();
+
+    [Fact]
+    public void The_list_specification_ends_with_the_id_tiebreaker()
+        => InvoiceSpecs.All().EndsWithIdTiebreaker.ShouldBeTrue();
+
+    [Fact]
+    public async Task Invoices_created_at_the_same_instant_list_in_descending_id_order_without_repeats_or_gaps()
+    {
+        // The fixture clock does not move, so every invoice gets the same CreatedAtUtc: only Id orders them.
+        Invoice[] invoices = [.. Enumerable.Range(0, InvoiceCount).Select(static i => InvoiceFactory.Draft($"Same instant {i}"))];
+
+        using (IServiceScope scope = CreateScope())
+        {
+            var repository = scope.ServiceProvider.GetRequiredService<IInvoiceRepository>();
+            foreach (Invoice invoice in invoices)
+            {
+                repository.Add(invoice);
+                (await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().CommitAsync(TestContext.Current.CancellationToken))
+                    .ShouldBeSuccess();
+            }
+        }
+
+        var paged = new List<InvoiceId>();
+        for (int page = 1; page <= InvoiceCount; page++)
+        {
+            using IServiceScope scope = CreateScope();
+            PagedList<Invoice> result = await scope.ServiceProvider.GetRequiredService<IInvoiceRepository>()
+                .ListPagedAsync(InvoiceSpecs.All(), page, pageSize: 1, TestContext.Current.CancellationToken);
+
+            result.TotalCount.ShouldBe(InvoiceCount);
+            result.Items.ShouldHaveSingleItem().CreatedAtUtc.ShouldBe(Now);
+            paged.AddRange(result.Items.Select(static invoice => invoice.Id));
+        }
+
+        // PostgreSQL orders uuid by its bytes, which is the ordinal order of the canonical string.
+        paged.ShouldBe([.. invoices
+            .Select(static invoice => invoice.Id)
+            .OrderByDescending(static id => id.Value.ToString("D"), StringComparer.Ordinal)]);
+    }
 
     [Fact]
     public async Task Invoices_due_at_the_same_instant_page_in_id_order_without_repeats_or_gaps()

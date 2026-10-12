@@ -4,6 +4,7 @@ using System.Text.Json;
 using Shouldly;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
+using Trellis.Application.Authorization;
 using Xunit;
 
 namespace Trellis.ApiTests.InProcess;
@@ -13,10 +14,14 @@ namespace Trellis.ApiTests.InProcess;
 /// conditional GET honours every <c>If-None-Match</c> form RFC 9110 allows (not only the exact strong
 /// string the server emits), a write honours an optional <c>If-Match</c> and answers a stale one with a
 /// 412 that changes nothing, the paging bounds the document states are the bounds the API enforces
-/// (naming the field), and a 201's <c>Location</c> resolves to the created invoice.
+/// (naming the field), a 201's <c>Location</c> resolves to the created invoice, and every invoice is in
+/// <c>GET /invoices</c> from the moment it is created, newest first, narrowed by an optional status.
 /// </summary>
 public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
+    private const string InvoiceList = "/api/v1/invoices";
+    private const string OverdueList = "/api/v1/invoices/overdue";
+
     [Theory]
     [InlineData("\"{0}\"")]                   // the strong form the server emits
     [InlineData("W/\"{0}\"")]                 // the weak form: If-None-Match compares weakly
@@ -64,7 +69,8 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
 
         using HttpResponseMessage full = await admin.GetAsync($"/api/v1/invoices/{id}", ct);
         using HttpResponseMessage revalidated = await GetWithIfNoneMatchAsync(admin, id, $"\"{version}\"", ct);
-        using HttpResponseMessage list = await admin.GetAsync("/api/v1/invoices/overdue", ct);
+        using HttpResponseMessage list = await admin.GetAsync(OverdueList, ct);
+        using HttpResponseMessage everyInvoice = await admin.GetAsync(InvoiceList, ct);
 
         full.StatusCode.ShouldBe(HttpStatusCode.OK);
         revalidated.StatusCode.ShouldBe(HttpStatusCode.NotModified);
@@ -76,8 +82,11 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
             cacheControl.NoStore.ShouldBeFalse();
         }
 
-        list.StatusCode.ShouldBe(HttpStatusCode.OK);
-        list.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+        foreach (HttpResponseMessage response in new[] { list, everyInvoice })
+        {
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            response.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
+        }
     }
 
     [Fact]
@@ -146,16 +155,21 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
     }
 
     [Theory]
-    [InlineData("page=0", "page")]
-    [InlineData("page=10001", "page")]
-    [InlineData("pageSize=0", "pageSize")]
-    [InlineData("pageSize=101", "pageSize")]
-    public async Task Paging_outside_the_documented_bounds_is_a_400_naming_the_field(string query, string field)
+    [InlineData(OverdueList, "page=0", "page")]
+    [InlineData(OverdueList, "page=10001", "page")]
+    [InlineData(OverdueList, "pageSize=0", "pageSize")]
+    [InlineData(OverdueList, "pageSize=101", "pageSize")]
+    [InlineData(InvoiceList, "page=0", "page")]
+    [InlineData(InvoiceList, "page=10001", "page")]
+    [InlineData(InvoiceList, "pageSize=0", "pageSize")]
+    [InlineData(InvoiceList, "pageSize=101", "pageSize")]
+    [InlineData(InvoiceList, "status=Draft&pageSize=101", "pageSize")]
+    public async Task Paging_outside_the_documented_bounds_is_a_400_naming_the_field(string path, string query, string field)
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
 
-        HttpResponseMessage response = await admin.GetAsync($"/api/v1/invoices/overdue?{query}", ct);
+        HttpResponseMessage response = await admin.GetAsync($"{path}?{query}", ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         ProblemResponse problem = JsonSerializer.Deserialize<ProblemResponse>(await response.Content.ReadAsStringAsync(ct), JsonSerializerOptions.Web).ShouldNotBeNull();
@@ -165,18 +179,128 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
             error => error.Code.ShouldBe("Validation.InclusiveBetween"));
     }
 
-    [Fact]
-    public async Task Paging_within_the_bounds_binds_the_camel_case_names()
+    [Theory]
+    [InlineData(OverdueList)]
+    [InlineData(InvoiceList)]
+    public async Task Paging_within_the_bounds_binds_the_camel_case_names(string path)
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient admin = await factory.CreateAdminClientAsync(ct);
 
         PagedResponse<InvoiceDto> page = (await admin.GetFromJsonAsync<PagedResponse<InvoiceDto>>(
-            $"/api/v1/invoices/overdue?page={PagingLimits.MaxPage}&pageSize={PagingLimits.MaxPageSize}", ct)).ShouldNotBeNull();
+            $"{path}?page={PagingLimits.MaxPage}&pageSize={PagingLimits.MaxPageSize}", ct)).ShouldNotBeNull();
 
         page.Page.ShouldBe(PagingLimits.MaxPage);
         page.PageSize.ShouldBe(PagingLimits.MaxPageSize);
         page.Items.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_created_then_issued_invoice_heads_the_list_for_every_reader_and_is_not_overdue()
+    {
+        // The reported gap: an invoice created and issued (due in the future, as Issue demands) appeared in no
+        // list, for the administrator who made it or anyone else. It is the newest invoice, so it heads the list.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        HttpClient reader = factory.CreateClientWithPermissions(Permissions.Invoices.Read);
+        string customer = $"Listed {Guid.NewGuid():N}";
+        Guid id = await admin.CreateInvoiceAsync(customer);
+        await admin.AddInvoiceLineAsync(id, "Listing", 250m);
+        await admin.IssueInvoiceAsync(id, dueDate: factory.Time.GetUtcNow().AddDays(30));
+
+        foreach (HttpClient client in new[] { admin, reader })
+        {
+            using HttpResponseMessage response = await client.GetAsync(InvoiceList, ct);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            response.ShouldHaveMediaType("application/json");
+            PagedResponse<InvoiceDto> page = (await response.Content.ReadFromJsonAsync<PagedResponse<InvoiceDto>>(ct)).ShouldNotBeNull();
+            InvoiceDto first = page.Items[0];
+            first.Id.ShouldBe(id);
+            first.CustomerName.ShouldBe(customer);
+            first.Status.ShouldBe(InvoiceStatus.Issued);
+            first.Total.ShouldBe(250m);
+            page.Page.ShouldBe(PagingLimits.MinPage);
+            page.PageSize.ShouldBe(PagingLimits.DefaultPageSize);
+            page.Items.Select(static invoice => invoice.CreatedAtUtc).ShouldBeInOrder(SortDirection.Descending);
+        }
+
+        PagedResponse<InvoiceDto> overdue = (await admin.GetFromJsonAsync<PagedResponse<InvoiceDto>>(
+            $"{OverdueList}?pageSize={PagingLimits.MaxPageSize}", ct)).ShouldNotBeNull();
+        overdue.Items.ShouldNotContain(invoice => invoice.Id == id, "it is due in 30 days");
+    }
+
+    [Fact]
+    public async Task The_list_is_the_paged_envelope_in_camel_case_with_the_status_by_name()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        Guid id = await admin.CreateInvoiceAsync($"Envelope {Guid.NewGuid():N}");
+
+        using JsonDocument body = JsonDocument.Parse(await admin.GetStringAsync($"{InvoiceList}?pageSize=1", ct));
+
+        JsonElement root = body.RootElement;
+        root.EnumerateObject().Select(static member => member.Name).ShouldBe(
+            ["items", "page", "pageSize", "totalCount", "totalPages", "hasNextPage", "hasPreviousPage"], ignoreOrder: true);
+        JsonElement invoice = root.GetProperty("items").EnumerateArray().ShouldHaveSingleItem();
+        invoice.GetProperty("id").GetGuid().ShouldBe(id);
+        invoice.GetProperty("status").GetString().ShouldBe("Draft");
+        invoice.GetProperty("createdAtUtc").GetDateTimeOffset().ShouldBeGreaterThan(DateTimeOffset.UnixEpoch);
+        root.GetProperty("pageSize").GetInt32().ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData(InvoiceStatus.Draft)]
+    [InlineData(InvoiceStatus.Issued)]
+    public async Task A_status_narrows_the_list_to_the_invoices_in_that_state(InvoiceStatus status)
+    {
+        // Created last of their state, each heads its own filtered list.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        Guid issued = await admin.CreateInvoiceAsync($"Issued {Guid.NewGuid():N}");
+        await admin.AddInvoiceLineAsync(issued);
+        await admin.IssueInvoiceAsync(issued, dueDate: factory.Time.GetUtcNow().AddDays(30));
+        Guid draft = await admin.CreateInvoiceAsync($"Draft {Guid.NewGuid():N}");
+        (Guid expected, Guid other) = status == InvoiceStatus.Draft ? (draft, issued) : (issued, draft);
+
+        PagedResponse<InvoiceDto> page = (await admin.GetFromJsonAsync<PagedResponse<InvoiceDto>>(
+            $"{InvoiceList}?status={status}&pageSize={PagingLimits.MaxPageSize}", ct)).ShouldNotBeNull();
+
+        page.Items.ShouldAllBe(invoice => invoice.Status == status);
+        page.Items[0].Id.ShouldBe(expected);
+        page.Items.ShouldNotContain(invoice => invoice.Id == other);
+    }
+
+    [Fact]
+    public async Task A_status_name_outside_the_enum_is_a_400_naming_the_parameter()
+    {
+        // The binder refuses a name it cannot parse ("Overdue" is a list of its own, not a status); its
+        // message, the problem's detail, names the parameter.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+
+        HttpResponseMessage response = await admin.GetAsync($"{InvoiceList}?status=Overdue", ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.ShouldBeProblemJson();
+        ProblemResponse problem = JsonSerializer.Deserialize<ProblemResponse>(await response.Content.ReadAsStringAsync(ct), JsonSerializerOptions.Web).ShouldNotBeNull();
+        problem.Code.ShouldBe("Request.Malformed");
+        problem.Detail.ShouldNotBeNull().ShouldContain("status");
+    }
+
+    [Fact]
+    public async Task An_ordinal_the_status_enum_does_not_define_is_a_400_naming_the_field()
+    {
+        // An ordinal parses (Enum.TryParse accepts "99"), so the query's validator is what refuses it.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+
+        HttpResponseMessage response = await admin.GetAsync($"{InvoiceList}?status=99", ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        ProblemResponse problem = JsonSerializer.Deserialize<ProblemResponse>(await response.Content.ReadAsStringAsync(ct), JsonSerializerOptions.Web).ShouldNotBeNull();
+        problem.Code.ShouldBe("Validation.General");
+        problem.Errors.ShouldNotBeNull().ShouldHaveSingleItem().Field.ShouldBe("status");
     }
 
     [Fact]

@@ -5,10 +5,12 @@ The **reference vertical slice** — the canonical shape to copy for new feature
 ## The domain in plain words
 
 An invoice bills one customer, in one currency, for one or more lines of work. It starts as a
-**draft**, the only state in which lines can be added. **Issuing** it freezes the lines and sets a
-due date that may not lie in the past; an issued invoice whose due date then passes appears in the
-overdue list. **Paying** an issued invoice closes it and e-mails the customer a receipt, **voiding**
-cancels a draft or an issued one, and a paid or voided invoice never changes again.
+**draft**, the only state in which lines can be added. Every invoice is in the invoice list from the
+moment it is created, newest first, and the list can be narrowed to one state. **Issuing** it freezes
+the lines and sets a due date that may not lie in the past; an issued invoice whose due date then
+passes also appears in the overdue list. **Paying** an issued invoice closes it and e-mails the
+customer a receipt, **voiding** cancels a draft or an issued one, and a paid or voided invoice never
+changes again.
 Administrators may do all of this; members may only read.
 
 ```mermaid
@@ -43,26 +45,37 @@ placeholder variables at the top of the file name the response each value comes 
 |---|---|---|---|
 | 1 | `POST /api/v1/auth/login` | `{"email": "admin@example.com", "password": "Admin123!"}` | 200 with an `accessToken`: paste it into `@token` |
 | 2 | `POST /api/v1/invoices` with `Idempotency-Key: try-it-1` | `{"customerName": "Ada Lovelace", "customerEmail": "ada@example.com", "currency": "EUR"}` | 201, a `Location` header and the new `id`: paste it into `@invoiceId` |
-| 3 | `POST /api/v1/invoices/{id}/lines` | `{"description": "Analytical engine consulting", "amount": 1200.00}` | 204 |
-| 4 | `POST /api/v1/invoices/{id}/issue` | `{"dueDate": "2099-12-31T00:00:00Z"}` | 204; a past date answers 400 `Invoice.DueDateInPast` |
-| 5 | `GET /api/v1/invoices/{id}` | | 200: status `Issued`, total 1200.00, and an `ETag` header to paste into `@etag` |
-| 6 | the same GET with `If-None-Match: {etag}` | | 304 and no body, until the invoice changes |
-| 7 | `POST /api/v1/invoices/{id}/pay` | | 204; seconds later the api logs `E-mail not sent (Email:Provider=Logging) …`: the outbox handed `invoices.paid.v1` to `SendReceiptOnInvoicePaid` after the commit |
-| 8 | step 4 again with `If-Match: {etag}` | same as step 4 | 412 `Invoice.VersionMismatch`: paying moved the version past the ETag you read in step 5, so nothing changes (without the header: 409 `Invoice.AlreadyFinalized`) |
-| 9 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
-| 10 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
-| 11 | `POST /api/v1/auth/login` as the member | as in step 10 | 200: paste its `accessToken` into `@memberToken` |
-| 12 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
+| 3 | `GET /api/v1/invoices` | | 200: a `PagedResponse` whose first item is the draft from step 2; `?status=Draft` (or `Issued`, `Paid`, `Voided`) narrows it, and `GET /api/v1/invoices/overdue` lists only the issued invoices past their due date |
+| 4 | `POST /api/v1/invoices/{id}/lines` | `{"description": "Analytical engine consulting", "amount": 1200.00}` | 204 |
+| 5 | `POST /api/v1/invoices/{id}/issue` | `{"dueDate": "2099-12-31T00:00:00Z"}` | 204; a past date answers 400 `Invoice.DueDateInPast`. Step 3 again now shows it `Issued`, still first; the overdue list does not have it until 2099 |
+| 6 | `GET /api/v1/invoices/{id}` | | 200: status `Issued`, total 1200.00, and an `ETag` header to paste into `@etag` |
+| 7 | the same GET with `If-None-Match: {etag}` | | 304 and no body, until the invoice changes |
+| 8 | `POST /api/v1/invoices/{id}/pay` | | 204; seconds later the api logs `E-mail not sent (Email:Provider=Logging) …`: the outbox handed `invoices.paid.v1` to `SendReceiptOnInvoicePaid` after the commit |
+| 9 | step 5 again with `If-Match: {etag}` | same as step 5 | 412 `Invoice.VersionMismatch`: paying moved the version past the ETag you read in step 6, so nothing changes (without the header: 409 `Invoice.AlreadyFinalized`) |
+| 10 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
+| 11 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
+| 12 | `POST /api/v1/auth/login` as the member | as in step 11 | 200: paste its `accessToken` into `@memberToken` |
+| 13 | `POST /api/v1/invoices` with the member's token | like step 2 | 403 `Auth.Forbidden`: members hold `invoices:read` only |
 
 To walk through again, change `@createKey` first: the same key keeps answering with the first
-invoice, paid by then, so steps 3, 4 and 7 would answer 409 (`Invoice.NotDraft`,
+invoice, paid by then, so steps 4, 5 and 8 would answer 409 (`Invoice.NotDraft`,
 `Invoice.AlreadyFinalized`, `Invoice.NotIssued`). Tokens expire after 15 minutes, so send step 1
 again when a request answers 401. Visual Studio and VS Code can chain the values instead of pasting
 them, Rider through a response handler script; the file's header shows both.
 
+<!--#if (!UseMultitenancy) -->
+Step 3 sent with `@memberToken` lists the same invoices: a member may read every one, only not change it.
+<!--#endif -->
+<!--#if (UseMultitenancy) -->
+Step 3 sent with `@memberToken` lists none of the admin's invoices: registering provisions a fresh
+tenant (ADR-0022), and every list is scoped to the caller's tenant.
+<!--#endif -->
+
 <!--#if (IncludeUI) -->
 The web UI (the `web` resource) walks the same lifecycle with clicks: sign in as the admin, create
-an invoice, then add a line, issue and pay it from its detail page.
+an invoice, then add a line, issue and pay it from its detail page. The Invoices page lists every
+invoice, newest first, filtered by state or to the overdue ones, and the detail and create pages
+lead back to it.
 
 <!--#endif -->
 ## Where the code lives
@@ -77,7 +90,7 @@ src/Core/Trellis.Domain/
     ├── InvoiceLine.cs          child entity, reachable only through Invoice
     ├── InvoiceId.cs            strongly-typed IDs (InvoiceLineId.cs alike)
     ├── InvoiceErrors.cs        one Error per rule: the codes clients branch on
-    ├── InvoiceSpecs.cs         query shapes (Overdue), translated to SQL by Persistence
+    ├── InvoiceSpecs.cs         query shapes (All, Overdue), translated to SQL by Persistence
     ├── IInvoiceRepository.cs   the port Persistence implements
     └── Events/                 Issued, Paid, Voided: delivered by the outbox after commit
 src/Core/Trellis.Application/Features/Invoices/
@@ -85,6 +98,7 @@ src/Core/Trellis.Application/Features/Invoices/
     ├── AddInvoiceLine/         IssueInvoice/ alike; PayInvoice/ and VoidInvoice/ take only
     │                           an id, so they carry no validator
     ├── GetInvoice/             query + handler; no validator, it takes only the route's id
+    ├── ListInvoices/           query + handler + validator (the status and the paging bounds)
     ├── ListOverdueInvoices/    query + handler + validator (the paging bounds)
     ├── InvoicePreconditions.cs the shared If-Match check: NotFound first, then Invoice.VersionMismatch
     ├── EventHandlers/          SendReceiptOnInvoicePaid, RecordInvoiceMetrics
@@ -123,11 +137,11 @@ src/Presentation/UI/Trellis.UI.Common/
   `EmailAddress` is shallow on purpose but refuses what mail systems refuse: more than 254 characters or more than 64 before the `@` (`EmailAddress.TooLong`), whitespace, a leading, trailing or doubled dot, an empty domain label or one that starts or ends with a hyphen (`EmailAddress.Invalid`); any other character is allowed, so internationalized addresses pass. The `CustomerEmail` column stays 320 wide; the domain's 254 is the bound.
   `Currency` and `EmailAddress` are single values, so they implement `IScalarValueObject` and could be mapped as an indexable converted column (`ScalarValueObjectConverter`, one `ConfigureConventions` line per type); the slice needs no such index, so both stay complex types (ADR-0006, amendment of 2026-10-11).
 - **Strongly-typed IDs**: `InvoiceId`, `InvoiceLineId` (`readonly record struct … : IStronglyTypedId<>, IParsable<>`).
-- **`InvoiceSpecs.Overdue(now)`**, **`InvoiceErrors`**, **`IInvoiceRepository`**.
+- **`InvoiceSpecs.All(status)`** (every invoice, or those in one status, newest first: `CreatedAtUtc` descending, then `Id` descending as the unique tiebreaker), **`InvoiceSpecs.Overdue(now)`**, **`InvoiceErrors`**, **`IInvoiceRepository`**.
 
 ## Application (`src/Core/Trellis.Application/Features/Invoices/`)
 
-Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListOverdueInvoices`. Each carries a validator too, except `PayInvoice`, `VoidInvoice` and `GetInvoice`: they take only the id the route has already bound, which leaves nothing to check. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`), `EventHandlers/RecordInvoiceMetrics` (→ `InvoiceMetrics`: the issued and paid counters, one handler per event) and `InvoiceResponse` (read model).
+Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoice`, `AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`, `GetInvoice`, `ListInvoices`, `ListOverdueInvoices`. Each carries a validator too, except `PayInvoice`, `VoidInvoice` and `GetInvoice`: they take only the id the route has already bound, which leaves nothing to check. Plus `EventHandlers/SendReceiptOnInvoicePaid` (→ `IEmailSender`), `EventHandlers/RecordInvoiceMetrics` (→ `InvoiceMetrics`: the issued and paid counters, one handler per event) and `InvoiceResponse` (read model).
 
 `CreateInvoiceCommandHandler` is the railway reference, one chain: `Result.Combine(EmailAddress.Create(…), Currency.Create(…))` creates both value objects before failing, so an invalid e-mail and an invalid currency come back in one 400, and the deconstructing `Bind((email, currency) => Invoice.Create(…))` hands both values on. `Combine` merges validation errors only; a 404 or a 500 among the failures is returned on its own (ADR-0024 amendment).
 
@@ -200,7 +214,7 @@ The slice's codes: `Invoice.NotFound` (404), `Invoice.NotDraft` / `Invoice.NotIs
 
 **Caching**: `GetInvoice` is cache-aside via `HybridCache` (key from the injected `CacheKeys` service); the mutating endpoints (`AddInvoiceLine`, `IssueInvoice`, `PayInvoice`, `VoidInvoice`) invalidate that key on success. A miss is never pinned (the stored null is removed so a later create isn't answered 404 for the TTL), and with the **`UseMultitenancy`** toggle the key carries the tenant — a cache hit bypasses the EF tenant filter, so unscoped keys would leak across tenants. HybridCache uses an in-memory L1 always; a Redis L2 is added when the **`UseRedis`** template toggle is on (Aspire `cache` resource + `AddRedisDistributedCache`). Entries live 30 s in the L1 and 5 min in the L2 (`DefaultEntryOptions` in `Program.cs`): eviction reaches only the instance that handled the write (and the shared L2), so another API replica may serve the previous state, and its ETag, for up to 30 s.
 
-**Pagination**: `GET /invoices/overdue` is paged — `?page=` (1..10000, default 1) and `?pageSize=` (1..100, default 20), bound inline with `[Range(PagingLimits.…)]` so the document states the camelCase names and the bounds (ADR-0025); `ListOverdueInvoicesQueryValidator` enforces the same bounds (a value outside answers 400 `Validation.General` with `field: "page"` / `"pageSize"`), and the response is `PagedResponse<InvoiceDto>` (items + total count + page metadata). The query flows through the repository's `ListPagedAsync` over the existing `Specification<T>` seam, which pages with checked arithmetic (the page cap keeps `OFFSET` bounded; an offset can never wrap negative). Results are ordered by due date, then by id — the unique tiebreaker every paged specification must end with (`ListPagedAsync` refuses one that does not, or that pages itself), so invoices due at the same instant never repeat or vanish across pages.
+**Pagination**: both lists are paged — `GET /invoices` (every invoice from the moment it is created) and `GET /invoices/overdue` (issued invoices past their due date) take `?page=` (1..10000, default 1) and `?pageSize=` (1..100, default 20), bound inline with `[Range(PagingLimits.…)]` so the document states the camelCase names and the bounds (ADR-0025); `ListInvoicesQueryValidator` and `ListOverdueInvoicesQueryValidator` enforce the same bounds (a value outside answers 400 `Validation.General` with `field: "page"` / `"pageSize"`), and the response is `PagedResponse<InvoiceDto>` (items + total count + page metadata). `GET /invoices` also takes an optional `?status=` (`Draft`, `Issued`, `Paid` or `Voided`, the string enum the document declares): a name outside the enum is a 400 `Request.Malformed` whose `detail` names the parameter, and an ordinal the enum does not define (`?status=99`) a 400 `Validation.General` with `field: "status"`. Each query flows through the repository's `ListPagedAsync` over the existing `Specification<T>` seam, which pages with checked arithmetic (the page cap keeps `OFFSET` bounded; an offset can never wrap negative). `GET /invoices` is ordered newest first (`CreatedAtUtc` descending, then id descending), the overdue list by due date, then by id: each ends with the unique tiebreaker every paged specification must end with (`ListPagedAsync` refuses one that does not, or that pages itself), so invoices created or due at the same instant never repeat or vanish across pages. Neither list is cached.
 
 **Optimistic concurrency**: `Invoice` carries the Postgres `xmin` concurrency token (`InvoiceConfiguration.UseXmin...`). A conflicting write is an expected outcome, not an exception: `IUnitOfWork.CommitAsync` (`AppDbContext`) turns EF's `DbUpdateConcurrencyException` into `UnitOfWorkErrors.ConcurrencyConflict` (`Concurrency.Conflict`), the UnitOfWork decorator returns it as the command's `Result`, and the endpoint maps it to **409** through `CustomResults` like any other conflict (logged at Information, no exception handler involved). The token guards the whole aggregate: adding a line changes only `InvoiceLines`, yet the save still writes the `Invoices` row (`AggregateConcurrencyInterceptor` marks a root column modified when only children changed), so two concurrent `AddLine`s on one invoice conflict rather than both committing (ADR-0006).
 
@@ -231,9 +245,11 @@ The read cache's 30 s L1 can hand a client that reloads from another replica the
 412 can repeat until the entry expires; and the idempotency fingerprint ignores headers, so a retry with
 the same key and another `If-Match` replays the first answer.
 
-**Wire types**: `InvoiceDto.Status` is the Contracts enum `InvoiceStatus` serialised by name
-(`"Draft" | "Issued" | "Paid" | "Voided"`, a string enum in the document; `ContractMirrorTests` keeps it
-equal to the domain enum) and money is `decimal` (`format: decimal`).
+**Wire types**: `InvoiceDto.Status` (and the list's `?status=`) is the Contracts enum `InvoiceStatus`
+serialised by name (`"Draft" | "Issued" | "Paid" | "Voided"`, a string enum in the document;
+`ContractMirrorTests` keeps it equal to the domain enum, and `ContractMappings.ToDomain` maps the query
+value by name), money is `decimal` (`format: decimal`) and `InvoiceDto.CreatedAtUtc` is the audit
+column the list orders by (`format: date-time`).
 
 **OpenAPI** (ADR-0025): `/openapi/v1.json` describes exactly the v1 operations with concrete `/api/v1/…`
 paths and no `servers`; every operation's `operationId` is its endpoint class (`CreateInvoice`,
@@ -250,11 +266,11 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
 
 ## UI (`src/Presentation/UI/Trellis.UI.Common/Pages/`)
 
-`Invoices` (paged list with pager controls), `InvoiceDetail` (the full lifecycle: add lines and issue while Draft, pay/void after; action errors are kept separate from load errors so they survive the post-action reload), `CreateInvoice` — via `IInvoiceApiClient` over the contracts. The create, add-line and issue forms validate before sending with DataAnnotations that mirror the command validators (`Forms/InvoiceForms.cs`: required, lengths, amount ≥ 0); the issue form's date picker starts at tomorrow (UTC), the first due date the API accepts (`Invoice.DueDateInPast`). What the API still rejects comes back as `errors[]`: each field error under its input, a whole-request error (`field: null`) in the form's alert (`ServerValidation`). Created, issued, paid and voided are announced as notifications. Every write on the detail page sends the version the page loaded as `If-Match`; a 412 reads "Someone else changed this in the meantime" over the reloaded invoice. The session outlives the 15-minute access token: `TokenAuthenticationStateProvider` checks `exp` and rotates through `POST /auth/refresh` (single-flight, since refresh tokens are single-use); `BearerTokenHandler` always attaches a currently-valid token via `IAccessTokenSource`.
+`Invoices` (every invoice, newest first, with a Created column and pager controls; a filter row of links — All, Draft, Issued, Paid, Voided, Overdue — keeps the filter in the address, `invoices?status=Draft`, so Back returns to the previous one and a filtered list can be bookmarked: All and the four statuses call `ListAsync`, Overdue calls `GetOverdueAsync`, the current link is `aria-current`, a new filter starts at page 1, and the empty state and the pager name it, "No overdue invoices.", "Page 1 of 3 (42 invoices)"), `InvoiceDetail` (the full lifecycle: add lines and issue while Draft, pay/void after; action errors are kept separate from load errors so they survive the post-action reload), `CreateInvoice` — via `IInvoiceApiClient` over the contracts. The detail and create pages open with a "Back to invoices" link above the heading (there while the invoice loads, and after a failed load); a successful create still lands on the new invoice's detail page. The create, add-line and issue forms validate before sending with DataAnnotations that mirror the command validators (`Forms/InvoiceForms.cs`: required, lengths, amount ≥ 0); the issue form's date picker starts at tomorrow (UTC), the first due date the API accepts (`Invoice.DueDateInPast`). What the API still rejects comes back as `errors[]`: each field error under its input, a whole-request error (`field: null`) in the form's alert (`ServerValidation`). Created, issued, paid and voided are announced as notifications. Every write on the detail page sends the version the page loaded as `If-Match`; a 412 reads "Someone else changed this in the meantime" over the reloaded invoice. The session outlives the 15-minute access token: `TokenAuthenticationStateProvider` checks `exp` and rotates through `POST /auth/refresh` (single-flight, since refresh tokens are single-use); `BearerTokenHandler` always attaches a currently-valid token via `IAccessTokenSource`.
 
 ## Tests
 
-- `Domain.UnitTests/Invoices`: invariants, events, the overdue specification, ID parsing.
+- `Domain.UnitTests/Invoices`: invariants, events, the list and overdue specifications, ID parsing.
 - `Application.UnitTests/Features/Invoices/<UseCase>` (one folder per use case, the event handlers under
   `EventHandlers/`): the handlers, and the validators' bounds at the Domain constants; every use case
   through the real pipeline.
@@ -271,8 +287,10 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
   the credited receipt not re-sent), `OutboxBackoffTests`
   (the 30 s → 15 min schedule and the derived lease) and `OutboxOptionsTests` (the `Outbox` section's
   defaults and limits). `IdempotencyStoreTests`: the three lookup states, the primary-key race and
-  retention. With multi-tenancy, `TenancyTests`: stamping, filtering, the aggregate-root convention,
-  outbox tenant restore.
+  retention. `InvoicePersistenceTests` and `SpecificationPagingTests` translate both list specifications
+  to SQL, the invoice list newest first with the id tiebreak against PostgreSQL. With multi-tenancy,
+  `TenancyTests`: stamping, filtering (the invoice list through the pipeline included), the
+  aggregate-root convention, outbox tenant restore.
 - `ApiTests` (in-process, the real HTTP pipeline): the lifecycle and error contracts;
   `CommitFailureTests` (a commit conflict is a 409 and a throwing commit an opaque 500, neither leaving
   a reservation); `IdempotencyReplayTests` (a retry replays the stored 201/204 with
@@ -284,13 +302,22 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
   ETag, a 404 is never cached); `InvoiceContractTests` (304 for every matching `If-None-Match` form,
   `private, no-cache` on the 200 and the 304 while other reads stay `no-store`, a current `If-Match`
   applies and a stale, weak, listed, zero-padded or foreign one is a 412 that changes nothing, a missing
-  invoice stays a 404 for a well-formed tag, paging bounds answer 400 naming the field, `Location`
-  resolves); `OpenApiSnapshotTests` +
+  invoice stays a 404 for a well-formed tag, paging bounds answer 400 naming the field on both lists,
+  `Location` resolves, a created-then-issued invoice heads `GET /invoices` for the admin and a reader
+  and is absent from the overdue list, a status narrows the list and one outside the enum is a 400);
+  `OpenApiSnapshotTests` +
   `OpenApiDocumentTests` (the committed document is the served one and says all of this); with
-  multi-tenancy, `TenantIsolationTests` (cross-tenant read/write 404, scoped overdue list, header
-  ignored, cache scoped; the all-options leg runs it). `InvoiceApiFlowTests` is the opt-in Aspire E2E.
+  multi-tenancy, `TenantIsolationTests` (cross-tenant read/write 404, scoped invoice and overdue lists,
+  header ignored, cache scoped; the all-options leg runs it). `InvoiceApiFlowTests` is the opt-in Aspire E2E.
 - `ApiTests/Ui`: the forms' validator mirrors and due-date floor, `errors[]` placed under their
-  inputs, success notifications, the loaded version sent as `If-Match` (`InvoiceApiClientTests`).
+  inputs, success notifications, the loaded version sent as `If-Match` and the list's query string per
+  filter (`InvoiceApiClientTests`); `InvoicePagesTests` renders the pages: the API call and the current
+  link for every filter in the address, the empty state and pager naming the filter, the Created column,
+  and the back link on the detail (loaded or not) and create pages.
+<!--#if (IncludeUiTests && IncludeUI) -->
+- `UiTests` (Playwright, opt-in): sign in, create, issue due in 30 days, return through the back link
+  and find the invoice heading the list under All and absent under Overdue.
+<!--#endif -->
 
 ## Endpoints
 
@@ -301,6 +328,7 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
 | POST | `/api/v1/invoices/{id}/issue` | invoices:write |
 | POST | `/api/v1/invoices/{id}/pay` | invoices:write |
 | POST | `/api/v1/invoices/{id}/void` | invoices:write |
+| GET | `/api/v1/invoices` | invoices:read |
 | GET | `/api/v1/invoices/{id}` | invoices:read |
 | GET | `/api/v1/invoices/overdue` | invoices:read |
 

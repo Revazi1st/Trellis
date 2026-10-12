@@ -308,6 +308,41 @@ public sealed class InvoiceTests
         spec.Evaluate([overdue, paid, draft]).ShouldBe([overdue]);
     }
 
+    [Fact]
+    public void All_spec_lists_every_invoice_newest_first_and_filters_by_status_only_when_given_one()
+    {
+        // Distinct creation times: the in-memory evaluation cannot order InvoiceId (PostgreSQL orders the
+        // uuid; IntegrationTests prove the tie-break there), so no two invoices here tie on CreatedAtUtc.
+        DateTimeOffset first = new(2026, 7, 1, 9, 0, 0, TimeSpan.Zero);
+        Invoice draft = CreatedAt(CreateDraft(), first);
+        Invoice issued = CreatedAt(CreateIssued(), first.AddHours(1));
+        Invoice paid = CreatedAt(CreatePaid(), first.AddDays(1));
+        Invoice voided = CreateDraft();
+        voided.Void().ShouldBeSuccess();
+        CreatedAt(voided, first.AddDays(2));
+        Invoice[] shuffled = [issued, voided, draft, paid];
+
+        InvoiceSpecs.All().Evaluate(shuffled).ShouldBe([voided, paid, issued, draft]);
+        InvoiceSpecs.All(status: null).Evaluate(shuffled).ShouldBe([voided, paid, issued, draft]);
+        InvoiceSpecs.All(InvoiceStatus.Draft).Evaluate(shuffled).ShouldBe([draft]);
+        InvoiceSpecs.All(InvoiceStatus.Issued).Evaluate(shuffled).ShouldBe([issued]);
+        InvoiceSpecs.All(InvoiceStatus.Paid).Evaluate(shuffled).ShouldBe([paid]);
+        InvoiceSpecs.All(InvoiceStatus.Voided).Evaluate(shuffled).ShouldBe([voided]);
+    }
+
+    [Fact]
+    public void All_spec_ends_with_the_id_tiebreaker_so_it_can_be_paged()
+    {
+        InvoiceSpecs.All().EndsWithIdTiebreaker.ShouldBeTrue();
+        InvoiceSpecs.All(InvoiceStatus.Issued).EndsWithIdTiebreaker.ShouldBeTrue();
+    }
+
+    private static Invoice CreatedAt(Invoice invoice, DateTimeOffset createdAtUtc)
+    {
+        invoice.CreatedAtUtc = createdAtUtc;   // the auditing interceptor's stamp, set by hand
+        return invoice;
+    }
+
     private static Result Attempt(Invoice invoice, string transition) => transition switch
     {
         nameof(Invoice.AddLine) => invoice.AddLine("Late line", Money.Create(1m, "USD").ShouldBeSuccess()),
