@@ -37,6 +37,9 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # KEEP IN SYNC with scripts/test-template.sh, which runs these legs on a maintainer's machine:
+      # it reads this list (one key per line, args in double quotes; a new key needs teaching there)
+      # and its run_leg mirrors the Instantiate, Regenerate, Build and Test steps below.
       matrix:
         include:
           - name: default
@@ -202,7 +205,8 @@ jobs:
             echo "::error::The generated README.md is not the consumer stub (it does not name $marker)."
             fail=1
           fi
-          for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md eng/readme; do
+          for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md eng/readme \
+                   scripts/check-template-toggles.sh scripts/test-template.sh; do
             if [ -e "$f" ]; then
               echo "::error::$f is the template repository's own material and must not ship."
               fail=1

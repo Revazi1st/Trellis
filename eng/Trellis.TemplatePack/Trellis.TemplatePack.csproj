@@ -55,6 +55,7 @@
       ..\..\.github\workflows\release.yml;
       ..\..\.claude\skills\add-toggle\**;
       ..\..\scripts\check-template-toggles.sh;
+      ..\..\scripts\test-template.sh;
       ..\..\docs\releasing.md;
       ..\..\README.md;
       ..\..\CHANGELOG.md;

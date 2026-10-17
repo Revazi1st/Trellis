@@ -240,6 +240,12 @@ If you generated a project from 0.1.0, read these before adopting this version w
   column and a filter row, All, Draft, Issued, Paid, Voided and Overdue, kept in the address
   (`invoices?status=Draft`) so the browser's Back returns to the previous filter. The invoice and
   new-invoice pages open with a "Back to invoices" link.
+- **`scripts/test-template.sh`** (not in generated projects): Template CI's legs on a maintainer's
+  machine before the push. It reads the legs from `template-ci.yml`'s matrix, packs the template once,
+  installs it into a private hive, then instantiates, builds and tests each named leg (or every leg),
+  prints a table of results and exits 1 on any failure (idea from
+  [jasontaylordev/CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture)'s `build/test.ps1`).
+  `CONTRIBUTING.md` and the `add-toggle` skill use it instead of the manual recipe.
 
 ### Changed
 

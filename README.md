@@ -616,7 +616,8 @@ describes planned work that is not in the template yet; the marker goes when it 
   - the error-code vocabulary fitness test and the value-object constructor test;
   - the build-time analyzer for a discarded `Result`.
 - [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT):
-  - booting the generated solution's AppHost from its own test suite in template CI, and a template-CI leg for every option value.
+  - booting the generated solution's AppHost from its own test suite in template CI, and a template-CI leg for every option value;
+  - a local script that instantiates, builds and tests every template leg and prints a results table (`build/test.ps1`).
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
