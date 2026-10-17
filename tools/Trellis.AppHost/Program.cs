@@ -3,10 +3,18 @@ using Trellis.ServiceDefaults;
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Image major pinned: postgres data volumes do not survive major-version bumps.
+// Persistent lifetime: the container outlives the AppHost, so the next run finds PostgreSQL already started and
+// healthy instead of waiting for a new one; the data volume keeps the data either way. pgAdmin stays
+// session-scoped: nothing waits for it. Removing the container and the volume gives a fresh database
+// (docs/development.md). ASPIREPERSISTENCE001: experimental in Aspire 13.6 and kept on purpose, it is the call
+// the API docs prefer over the older WithLifetime(ContainerLifetime.Persistent).
+#pragma warning disable ASPIREPERSISTENCE001
 var postgres = builder.AddPostgres(ServiceNames.Postgres)
     .WithImageTag("18")
     .WithDataVolume()
+    .WithPersistentLifetime()
     .WithPgAdmin();
+#pragma warning restore ASPIREPERSISTENCE001
 
 var database = postgres.AddDatabase(ServiceNames.Database, databaseName: "trellis");
 

@@ -306,6 +306,12 @@ If you generated a project from 0.1.0, read these before adopting this version w
   the web host and the tests find a resource through the same constant (`ServiceNames.Cache` with
   `--use-redis`). A renamed resource is one edit that compiles everywhere; a mistyped literal used to
   compile and fail at boot.
+- **PostgreSQL keeps running between runs**: the AppHost gives `postgres` a persistent lifetime
+  (Aspire's `WithPersistentLifetime`, as jasontaylordev/CleanArchitecture's AppHost applies it), so
+  `aspire run` and F5 find the database started and healthy instead of waiting for a new container; the
+  data volume is unchanged and pgAdmin stays session-scoped. The Aspire E2E test strips the lifetime with
+  the volume, so it never reuses or recreates your database. For a fresh database, remove the
+  `postgres-…` container and the `…-postgres-data` volume (`docs/development.md`).
 
 ### Removed
 
