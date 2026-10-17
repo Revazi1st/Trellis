@@ -294,7 +294,7 @@ look at, never a pass.
 | An invoice in a given state against PostgreSQL | `await Services.CreateInvoiceAsync()`, `IssuedInvoiceAsync()`, `PayInvoiceAsync(id)` (`InvoiceDriver`; on a fresh scope's `ServiceProvider` for a separate unit of work) | `OutboxTests` |
 | An invoice over HTTP in an arrange step | `await client.CreateInvoiceAsync()`, `AddInvoiceLineAsync(id)`, `IssueInvoiceAsync(id, dueDate)` (`InvoiceHttpDriver`) | `ProblemDetailsContractTests` |
 | A POST the drivers do not cover (a test about the create's own answer) | `PostWithIdempotencyKeyAsync` | `InvoiceContractTests` |
-| Acting as another user against PostgreSQL | `IntegrationTestBase.CurrentUser` (`TestCurrentUser`): set its `UserName` or `UserId` | `AuditingInterceptorTests` |
+| Acting as another user against PostgreSQL | `IntegrationTestBase.CurrentUser` (`TestCurrentUser`): set its `UserId` (`null` and a `UserName` for a caller without an id, like the migration job) | `AuditingInterceptorTests` |
 | A `Result` that must have succeeded | `ShouldBeSuccess()` (`tests/TestSupport/ResultAssertions.cs`), which returns a `Result<T>`'s value and on failure names the error | `InvoiceTests` (the message: `ResultAssertionsTests`) |
 | A problem response, header and body | `ShouldBeProblemJson()`, then read `ProblemResponse` | `ProblemDetailsContractTests` |
 | A new status or problem `code` | a row in `ProblemDetailsContractTests` | — |

@@ -12,6 +12,11 @@ namespace Trellis.Persistence.Interceptors;
 /// Registered after the outbox and soft-delete interceptors so it sees everything they changed. Writes go through the entry API —
 /// DetectChanges has already run by interception time, so plain property sets on Unchanged/Modified entries
 /// would not be picked up.
+/// <para>
+/// The user columns hold the acting user's id, not their name: the id never changes, and the name is the
+/// e-mail, which does and which a column copied into every row and backup should not hold. A caller without
+/// an id (the migration job's <c>SystemCurrentUser</c>) is stamped with its name, <c>system</c>.
+/// </para>
 /// </summary>
 public sealed class AuditingInterceptor(TimeProvider timeProvider, ICurrentUser currentUser) : SaveChangesInterceptor
 {
@@ -38,7 +43,7 @@ public sealed class AuditingInterceptor(TimeProvider timeProvider, ICurrentUser 
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
-        string? user = currentUser.UserName;
+        string? user = currentUser.UserId?.ToString() ?? currentUser.UserName;
 
         foreach (EntityEntry<IAuditable> entry in context.ChangeTracker.Entries<IAuditable>().ToList())
         {

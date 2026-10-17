@@ -92,6 +92,11 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   so outbox payloads hold personal data until processed and then for `Retention` windows (3 days
   processed, 30 days dead-lettered), longer in backups. Prefer ids over personal data in event
   payloads, or shorten the windows if your data-protection regime requires it.
+- **Personal data in audit columns** — *open*. `CreatedBy` and `ModifiedBy` hold the acting
+  user's id, a `Guid` (`system` for the migration job), never the e-mail: a dump of a business table does
+  not list its editors by address, and a changed e-mail leaves the trail joined to its user (ADR-0027
+  amendment). An id is still personal data: erasing a user leaves it in every row they created or
+  changed, and nothing removes it. Decide the erasure path and how long the columns are kept.
 - **No MFA**, and no password-breach check on registration — *open*.
 - **Access tokens cannot be revoked before expiry** — *open*. Revocation applies to refresh tokens;
   an access token stays valid for its (short) lifetime. Shorten `AccessTokenMinutes` if that window

@@ -4,6 +4,7 @@
 - **Date**: 2026-07-15
 - **Amended**: 2026-10-08 — account lockout, and why it stays visible (see *Amendment* below)
 - **Amended**: 2026-10-11 — adding or swapping the token issuer is not a contained change (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-10-18 — a missing user id never broke auditing; what it does to the audit columns now (see *Amendment (2026-10-18)* below)
 
 ## Context
 
@@ -65,9 +66,22 @@ permission seam. Tracing what a second bearer scheme touches shows it is not:
 - `ICurrentUser.UserId` is a `Guid` read from `NameIdentifier`, which a provider's `sub` rarely is, so
   external principals need a claims transformation to a local user, or auditing, ownership and the
   idempotency key's per-user scope all break;
+  *(Corrected 2026-10-18: auditing did not read the id; see the amendment below.)*
 - the Blazor UI signs in by posting a password, so external users need an authorization-code flow or a
   backend-for-frontend, which is a new package.
 
 The decision stands: the template stays self-contained, with no external IdP. `docs/features/auth.md`
 (*Adding an external identity provider*) is the checklist for a project that adds one, and a toggle that
 did it for every generated project would be a new ADR.
+
+## Amendment (2026-10-18): what a missing user id does to auditing
+
+The 2026-10-11 amendment counted auditing among what breaks when an external principal has no
+`ICurrentUser.UserId`. It did not break: `AuditingInterceptor` stamped `ICurrentUser.UserName` and never
+read the id. It reads the id now, because the audit columns hold the acting user's id instead of their
+e-mail (ADR-0027's amendment of the same date), and falls back to the name only for a caller without
+one, which is how the migration job's `SystemCurrentUser` stamps `system`. An external principal without
+the claims transformation is therefore stamped with its token's name claim, or with nothing when it has
+none: an audit trail that cannot be joined to a user, not a failure. Ownership and the idempotency key's
+per-user scope break as stated. `docs/features/auth.md` (*Adding an external identity provider*) says
+the same.

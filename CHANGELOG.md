@@ -45,6 +45,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   version adds that project to your solution and two pinned build-only packages.
 - **`GET /invoices/{id}` emits a strong ETag** (`"42"`, was `W/"42"`); `If-None-Match` still compares
   weakly, so a stored tag keeps answering 304.
+- **The audit columns hold the user id.** `CreatedBy` and `ModifiedBy` are stamped with the acting
+  user's id instead of their e-mail; the migration job still writes `system`. There is no migration:
+  rows written before keep the e-mail they were stamped with, so a report that matched the columns
+  against an address has to handle both, and an erasure request still finds the old rows by e-mail.
 
 ### Added
 
@@ -300,6 +304,11 @@ If you generated a project from 0.1.0, read these before adopting this version w
   `Idempotency.InvalidKey` once as `IdempotencyErrors.InvalidKeyCode`, shared by `BlankKey`, `KeyTooLong`
   and `MultipleKeys`; `Api.Common`'s `IdempotencyHeaderErrors` is gone. `RefreshTokenStore` returns
   `AuthErrors.InvalidRefreshToken` instead of a copy of it.
+- **Audit columns** (ADR-0027 amendment; jasontaylordev/CleanArchitecture): `AuditingInterceptor` stamps
+  `CreatedBy` and `ModifiedBy` with `ICurrentUser.UserId`, falling back to the name only for a caller
+  without an id (`system`), so the columns no longer copy each user's e-mail into every row they touch.
+  ADR-0007's 2026-10-11 amendment said a missing user id breaks auditing; it never did, and its
+  2026-10-18 amendment says what a missing id does now.
 
 ### Removed
 
