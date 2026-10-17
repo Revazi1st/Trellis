@@ -81,6 +81,11 @@ jobs:
       - name: Template toggle check
         run: ./scripts/check-template-toggles.sh
 
+      # Template source only: the README's pictures are drawn from this tree by
+      # eng/readme/render-diagrams.py; a stale one would show a project or a folder that no longer
+      # exists. Re-render with: python3 eng/readme/render-diagrams.py
+      - name: README pictures are current
+        run: python3 eng/readme/render-diagrams.py --check
 #endif
       - name: Build (warnings as errors)
         run: dotnet build Trellis.slnx --no-restore -c Release
