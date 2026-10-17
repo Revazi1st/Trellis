@@ -86,6 +86,10 @@
   </ItemGroup>
 
   <ItemGroup Label="Aspire / ServiceDefaults">
+    <!-- Transitive pin (via Aspire.Hosting and StreamJsonRpc): MessagePack 2.5.302 carries GHSA-qhrr-8q5h-9q3h
+         (nested arrays past the buffer limit, patched in 2.5.303); NuGetAudit fails every build until Aspire
+         moves. Stays in the 2.5 line StreamJsonRpc 2.25 requires; Dependabot moves it with the Aspire group. -->
+    <PackageVersion Include="MessagePack" Version="2.5.307" />
     <!-- Aspire.Hosting.AppHost is implicit via the Aspire.AppHost.Sdk (version pinned inline in the AppHost csproj);
          a PackageVersion entry for it here triggers NU1009. -->
     <PackageVersion Include="Aspire.Hosting.Docker" Version="13.6.1" />
