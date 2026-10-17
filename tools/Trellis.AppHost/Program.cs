@@ -51,7 +51,10 @@ var web = builder.AddProject<Projects.Trellis_UI_Web>(ServiceNames.Web, static o
     .WithHttpEndpoint()
     .WithReference(api)
     .WaitFor(api)
-    .WithExternalHttpEndpoints();
+    .WithExternalHttpEndpoints()
+    // Healthy once its own /health answers, as for the API: without a check, healthy means the process started,
+    // so whatever waits for web would wait for a host that may not serve a page yet.
+    .WithHttpHealthCheck("/health");
 #endif
 
 if (builder.ExecutionContext.IsRunMode)

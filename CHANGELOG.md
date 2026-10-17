@@ -316,6 +316,9 @@ If you generated a project from 0.1.0, read these before adopting this version w
   (jasontaylordev/CleanArchitecture), so the first F5 after opening the solution runs the whole app
   instead of failing on `Trellis.SharedKernel`, the first project and a class library. Rider still wants
   the AppHost picked by hand.
+- **The `web` resource has a health check**: the AppHost polls the web host's `/health`, as it does the
+  API's, so `web` turns healthy in the dashboard, and for anything that waits on it, once it serves
+  rather than once its process starts. The Aspire E2E test waits for it.
 
 ### Removed
 

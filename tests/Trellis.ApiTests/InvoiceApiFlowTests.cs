@@ -15,8 +15,9 @@ using Xunit;
 namespace Trellis.ApiTests;
 
 /// <summary>
-/// True end-to-end: boots the real AppHost (PostgreSQL container, migration worker, API) with
-/// randomized ports and drives the public HTTP contract exactly like a client would.
+/// True end-to-end: boots the real AppHost (PostgreSQL container, migration worker, API, and the web host
+/// when the UI is included) with randomized ports and drives the public HTTP contract exactly like a client
+/// would.
 ///
 /// Requires Aspire's orchestrator (DCP), which runs project resources as local processes alongside
 /// container resources — so it needs a real host environment: a local .NET SDK, or CI. It cannot run
@@ -37,11 +38,20 @@ public sealed class InvoiceApiFlowTests
 
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Trellis_AppHost>(ct);
         UseThrowawayDatabase(appHost);
+#if (IncludeUI)
+        // Without a health check a resource reports healthy as soon as its process runs.
+        appHost.Resources.Single(static r => r.Name == ServiceNames.Web).Annotations.OfType<HealthCheckAnnotation>()
+            .ShouldNotBeEmpty("the AppHost no longer checks the web host's /health");
+#endif
         await using DistributedApplication app = await appHost.BuildAsync(ct);
         await app.StartAsync(ct);
 
         // Healthy implies the migration worker already completed (api WaitsForCompletion on it).
         await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Api, ct);
+#if (IncludeUI)
+        // The web host is healthy once its own /health answers.
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Web, ct);
+#endif
         using HttpClient client = app.CreateHttpClient(ServiceNames.Api);
 
         // Invoice endpoints require permissions — anonymous access is rejected.
