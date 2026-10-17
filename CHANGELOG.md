@@ -246,6 +246,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   prints a table of results and exits 1 on any failure (idea from
   [jasontaylordev/CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture)'s `build/test.ps1`).
   `CONTRIBUTING.md` and the `add-toggle` skill use it instead of the manual recipe.
+- **Release notes on nuget.org** (not in generated projects): the package's release notes link to the
+  GitHub release of its version, whose notes are that version's CHANGELOG section
+  (`PackageReleaseNotes` in the pack project; idea from
+  [jasontaylordev/CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture)).
 
 ### Changed
 

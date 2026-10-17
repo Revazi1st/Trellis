@@ -99,7 +99,8 @@ and results vary between models and attempts: it is a smoke test of the guidance
    dry run's draft with its own.
 5. **Verify.** The GitHub release is published; the package page
    (<https://www.nuget.org/packages/Trellis.Templates>) shows X.Y.Z once nuget.org has indexed it
-   (minutes); and it installs:
+   (minutes), with a Release Notes link to that GitHub release (`PackageReleaseNotes` in the pack
+   project, built from the version); and it installs:
    `dotnet new install Trellis.Templates::X.Y.Z --debug:custom-hive "$(mktemp -d)"`.
 
 ## When something fails
