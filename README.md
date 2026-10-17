@@ -211,7 +211,7 @@ flowchart RL
 | `src/Presentation/Api` | Api.Contracts, Api.Common, Api | Feature-based Minimal API host + shared plumbing + public contracts |
 | `src/Presentation/UI` | UI.Common, UI.Web | Shared Blazor component library + the web host |
 | `src/Shared` | ServiceDefaults | Aspire service defaults (OTel, health, discovery, resilience) |
-| `tools` | AppHost, MigrationService | Aspire orchestration + DB migrate/seed worker |
+| `tools` | AppHost, MigrationService, Analyzers | Aspire orchestration, the DB migrate/seed worker, the RSLT001 analyzer (ADR-0030) |
 | `tests` | 6 projects | Domain and Application unit tests, architecture, integration (Testcontainers), API (the in-process HTTP pipeline + the opt-in Aspire E2E), and Playwright UI tests (only with `--include-ui-tests`) |
 
 What each test project proves, what it needs, and which one a new test belongs in is mapped in

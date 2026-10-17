@@ -31,8 +31,8 @@ render that changes nothing writes nothing.
 
 `--check` exits **0** when every SVG matches a fresh render, **1** when one is missing, differs (it prints
 the first lines of the difference) or is a left-over `-light.svg`/`-dark.svg` the script no longer draws,
-and **2** when it cannot render at all. [`ci-snippet.yml`](ci-snippet.yml) is the step proposed for
-`.github/workflows/ci.yml` that runs it on every pull request, so a picture can no longer drift from the code.
+and **2** when it cannot render at all. The "README pictures are current" step in `.github/workflows/ci.yml`
+runs it on every pull request (template source only), so a picture can no longer drift from the code.
 
 ## Why exit 2: what the script refuses to draw
 
