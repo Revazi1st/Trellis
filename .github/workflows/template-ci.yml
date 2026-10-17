@@ -58,6 +58,26 @@ jobs:
             regenerate-migration: true
             # Build alone missed a runtime-only DI failure once (ITenantContext); run the generated tests too.
             test: true
+          # Each option that is off by default, on alone with the UI off. Without these legs Redis,
+          # Serilog and multi-tenancy were only ever all off or all on, and never without the UI, so
+          # code that works only while another option is on too went unseen (ApiFactory's separate
+          # UseRedis and UseMultitenancy blocks had only ever compiled together). With the legs above,
+          # every pair of the five options meets in all four value combinations. Tested, not just
+          # built, for the reason above; they run on every pull request (a public repository's
+          # standard runners cost no Actions minutes).
+          - name: no-ui-with-redis
+            args: "--include-ui false --use-redis true"
+            out: Acme.Ledger
+            test: true
+          - name: no-ui-with-serilog
+            args: "--include-ui false --use-serilog true"
+            out: Acme.Journal
+            test: true
+          - name: no-ui-with-multitenancy
+            args: "--include-ui false --use-multitenancy true"
+            out: Acme.Tenants
+            regenerate-migration: true
+            test: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

@@ -448,10 +448,11 @@ violation it must catch (`PlantedViolations`).
   and relative link.
 - Line coverage has a floor per ring: Core 90 %, Infrastructure 85 %, Presentation 75 %, Shared 80 %.
 - Every pull request also tests what the template generates. Template CI creates a solution per toggle
-  leg (default, no UI, UI tests without the UI, all options), checks it for leftovers of the
-  template's name, builds it in Release and runs the tests of the default, no-UI and all-options legs,
-  the Aspire end-to-end test included, so each of them boots its generated AppHost. It repeats the
-  default on Windows and builds a project from the packed `.nupkg`.
+  leg (default, no UI, UI tests without the UI, all options, and Redis, Serilog and multi-tenancy each
+  on alone with the UI off), checks it for leftovers of the template's name, builds it in Release and
+  runs its tests on every leg but UI-tests-without-the-UI, the Aspire end-to-end test included, so each
+  of them boots its generated AppHost. It repeats the default on Windows and builds a project from the
+  packed `.nupkg`.
 
 ## Fun features 🎉
 
