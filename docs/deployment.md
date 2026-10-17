@@ -153,6 +153,10 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every host exports logs, metrics and trace
 - **Correlation**: every API response carries `X-Correlation-ID` — the caller's own value when it
   is short and safe, else the request's W3C trace id, the same trace a problem body's `traceId`
   names. The request span carries it as `trellis.correlation_id`.
+- **Who sent it**: in an authenticated request the request span carries `enduser.id`, the caller's user
+  id, and every log line written further in carries the same id as the `UserId` scope: the use-case
+  outcome line, the authorization failure behind a 403, whatever a handler logs. The id only, never the
+  e-mail; an anonymous request carries neither. Search logs by `UserId` and traces by `enduser.id`.
 <!--#if (UseSerilog) -->
 - **Serilog** (the `UseSerilog` toggle): Serilog writes the console and hands every event on to the
   OpenTelemetry log provider, so OTLP log export is unchanged. Its levels come from the `Serilog`
@@ -230,9 +234,9 @@ Change the two together.
 | `Trellis.UseCases` | one per use case, named after its message type (`CreateInvoiceCommand`), inside the request span | `trellis.usecase.outcome`: `success`, `failure`, `exception` or `cancelled`. A failed `Result` adds `trellis.usecase.error_code` (its code) and `trellis.usecase.error_type` (its `ErrorType`), not `error.type`, so a 404 does not count as an error. Only an exception sets `error.type` (its full type name), status Error with its message, and the exception event |
 | `Trellis.Outbox` | `outbox <event type>` (`outbox invoices.paid.v1`), one per dispatch attempt, under the trace of the request that raised the event | `trellis.outbox.message_id`, `trellis.outbox.event_type`, `trellis.outbox.attempt` (from 1), `trellis.outbox.outcome`: `processed`, `retry_scheduled`, `dead_lettered` or `lease_lost`; `trellis.outbox.reason` on a dead letter: `exhausted`, `unknown_type` or `poison`; `error.type`: the failing exception's full type name, or the `Outbox.*` code of an unreadable row |
 | `Trellis.MigrationService` | `Migrate and seed database`, once per run | — |
+| `Microsoft.AspNetCore` | the HTTP request (ASP.NET Core's span), the parent of its use-case span | `trellis.correlation_id`: the response's `X-Correlation-ID`; `enduser.id`: the authenticated caller's user id (the `Guid`, never the e-mail), absent on an anonymous request |
 
-The ASP.NET Core request span carries `trellis.correlation_id`, the response's `X-Correlation-ID`. Every
-signal's resource carries `service.version` and `deployment.environment.name` (*Who emits it*, above).
+Every signal's resource carries `service.version` and `deployment.environment.name` (*Who emits it*, above).
 
 **Metrics**
 
@@ -256,6 +260,11 @@ signal's resource carries `service.version` and `deployment.environment.name` (*
 | 11xx | the security events (`SecurityEventLog`) | 1101–1106, listed in [features/auth.md](features/auth.md) under *Security events* |
 | 12xx | e-mail (`Infrastructure/Email`) | 1201 not sent, the `Logging` stand-in (Information); 1202 discarded, `None` (Debug); 1203 the stand-in runs outside Development (Warning); 1204 e-mail switched off (Information); 1205 sent through the relay (Information, masked recipient); 1206 SMTP in clear outside Development (Warning) |
 | 13xx | the outbox processor (`OutboxLog`); a message's lines inside the `OutboxMessage {MessageId} {EventType}` scope | 1301–1309, listed under [Outbox operations](#outbox-operations) |
+
+**Log scopes** — every line written inside the API's pipeline carries `CorrelationId` (the response's
+`X-Correlation-ID`) and, for a signed-in caller, `UserId` from authentication on (their user id, the request
+span's `enduser.id`). A security event's own `UserId` field is the account the event is about, not the
+caller.
 
 ### Outbox operations
 

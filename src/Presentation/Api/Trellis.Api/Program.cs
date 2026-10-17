@@ -124,6 +124,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
+app.UseUserTelemetry();     // the caller's user id on every log line and the request span from here on
 app.UseApiRateLimiting();   // after authentication so partitions key on the real user, not "anonymous"
 app.UseAuthorization();
 

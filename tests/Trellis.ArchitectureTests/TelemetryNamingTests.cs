@@ -34,6 +34,7 @@ public sealed partial class TelemetryNamingTests
     private static readonly HashSet<string> SemanticConventionAttributes = new(StringComparer.Ordinal)
     {
         "deployment.environment.name",
+        "enduser.id",   // the authenticated caller an operation runs for; user.id is the generic user (an OS account, say)
         "error.type",
         "exception.message",
         "exception.stacktrace",

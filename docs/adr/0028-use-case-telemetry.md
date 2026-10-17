@@ -4,6 +4,8 @@
 - **Date**: 2026-10-08
 - **Amended**: 2026-10-11 — the span wraps the line, descriptions leave the line, stable event ids, final span attribute names, a validation-failure counter (see *Amendment* below)
 - **Amended**: 2026-10-11 — `ErrorType.PreconditionFailed` is a classified expected failure at Information; `ErrorType.Unavailable` stays at Warning (see *Second amendment* below)
+- **Amended**: 2026-10-18 — the caller's user id on every request signal (see *Third amendment* below)
+- **Prior art**: [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT): the acting user's id on every request's log line (`LoggingBehaviour`) (the 2026-10-18 amendment)
 
 ## Context
 
@@ -98,3 +100,18 @@ at Warning beside an unclassified `Failure`: the request did nothing wrong, but 
 is what the Warning channel is for, and the first line written after the retries, the circuit breaker and
 the limiter have given up should reach whoever is on call. `UseCaseOutcomeTests.Every_error_type_logs_one_line_at_its_level`
 pins both rows; `.claude/rules/application.md`'s pipeline line names both levels.
+
+## Third amendment (2026-10-18): the caller's user id
+
+- **The caller's user id on every request signal.** `UserTelemetryMiddleware` (Api.Common) runs right
+  after authentication and, for a signed-in caller, opens a `UserId` log scope and tags the request span
+  `enduser.id` with the caller's user id. The outcome line, the authorization failure behind a 403 and
+  whatever a handler logs then name the account; log records carry the scope because ServiceDefaults
+  sets `IncludeScopes`. The id only, never the name or the e-mail, for the reason descriptions left the
+  line: it is written for every request. `enduser.id` is the OpenTelemetry semantic convention for the
+  end user an operation runs for (deprecated in semantic conventions 1.26 and restored in 1.31 for
+  exactly that); `user.id` belongs to the generic user namespace, whose own example is an operating-system
+  account, so it does not carry exactly this meaning. Fitness: `UserTelemetryTests` (ApiTests: an
+  authenticated request's outcome record carries the id in its scope and its request span carries
+  `enduser.id`; an anonymous request's carry neither), `TelemetryNamingTests` (`enduser.id` on the
+  semantic-convention list).
