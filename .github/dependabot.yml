@@ -35,6 +35,7 @@ updates:
           - "Aspire.*"
           - "Npgsql.*"
           - "dotnet-ef"
+          - "MessagePack"   # transitive pin below Aspire.Hosting; must move with it
       opentelemetry:
         patterns: ["OpenTelemetry.*"]
       # Roslyn, for the in-repository analyzer (tools/Trellis.Analyzers, ADR-0030): Microsoft.CodeAnalysis.Common
