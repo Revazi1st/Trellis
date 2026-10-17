@@ -306,6 +306,13 @@ If you generated a project from 0.1.0, read these before adopting this version w
   `Idempotency.InvalidKey` once as `IdempotencyErrors.InvalidKeyCode`, shared by `BlankKey`, `KeyTooLong`
   and `MultipleKeys`; `Api.Common`'s `IdempotencyHeaderErrors` is gone. `RefreshTokenStore` returns
   `AuthErrors.InvalidRefreshToken` instead of a copy of it.
+- **Dependabot leaves the next .NET major to you**: `dependabot.yml` ignores major updates of the
+  packages numbered after .NET (`Microsoft.AspNetCore.*`, `Microsoft.EntityFrameworkCore*`,
+  `Microsoft.Extensions.*`, `Npgsql.*`, `dotnet-ef`, `Asp.Versioning.Http`, `Serilog.AspNetCore`) and of
+  the SDK image in `scripts/sdk-image`, as it already did for the SDK in `global.json`. When .NET 11
+  ships, its 11.0 packages no longer turn the weekly `microsoft` group into a major that waits for
+  review and holds back the 10.0.x patches; moving to a new .NET stays one change you make on purpose
+  (`docs/development.md`, *Bumping the SDK*). Their patch and minor updates arrive as before.
 - **Template CI boots the generated AppHost and tests each option alone** (not in generated projects):
   the legs that run the generated tests run its Aspire end-to-end test too (`RUN_ASPIRE_E2E=1` on Linux
   runners), so a renamed AppHost, the Redis wiring and the multi-tenant seed start in CI before a

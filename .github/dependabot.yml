@@ -71,6 +71,29 @@ updates:
       # PR, still within the compiler's version.
       - dependency-name: "Microsoft.CodeAnalysis.*"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # The packages whose major number is the .NET major (10.x on .NET 10) take their next major
+      # with the next .NET, which also moves the SDK in global.json, the target framework and the SDK
+      # image: a migration made by hand (docs/development.md, "Bumping the SDK"), not a bump. Proposed
+      # anyway, one such major would turn the microsoft group's weekly pull request into a major that
+      # waits for a person, holding back the patches that otherwise merge on their own. Patch and minor
+      # updates still arrive. Aspire, IdentityModel, Microsoft.OpenApi and MessagePack number their
+      # own majors, so they are not listed.
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Npgsql.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "dotnet-ef"
+        update-types: ["version-update:semver-major"]
+      # Outside the group, two more follow the .NET major: Asp.Versioning.Http 10.x targets net10.0
+      # only, and Serilog.AspNetCore 10.x builds on the 10.x Microsoft.Extensions packages.
+      - dependency-name: "Asp.Versioning.Http"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Serilog.AspNetCore"
+        update-types: ["version-update:semver-major"]
 
   # One weekly PR for all action bumps: they are SHA pins with version comments, reviewed together.
   - package-ecosystem: github-actions
@@ -109,6 +132,12 @@ updates:
     # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
     cooldown:
       default-days: 7
+    # The tag is the .NET major (10.0). Dependabot still moves the digest when 10.0 is republished,
+    # but not to 11.0, whose SDK global.json refuses: the image changes major with the SDK, by hand,
+    # like the dotnet-sdk block above.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # Dev-dependency images (postgres, redis) in docker-compose.yml.
   - package-ecosystem: docker-compose
