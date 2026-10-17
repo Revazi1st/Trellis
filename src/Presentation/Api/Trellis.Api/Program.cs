@@ -52,8 +52,8 @@ builder.Services.AddSingleton(new UseCaseLoggingOptions
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOutboundIntegrations(builder.Configuration);
-builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trellis-db")
-    ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
+builder.Services.AddPersistence(builder.Configuration.GetConnectionString(ServiceNames.Database)
+    ?? throw new InvalidOperationException($"Connection string '{ServiceNames.Database}' is not configured."));
 // AddPersistence already turned on Npgsql's retrying execution strategy, and the outbox claim and the identity
 // transactions run inside it, see ADR-0023. The Aspire enrichment therefore adds health checks, tracing and
 // metrics only, never a second retry policy on top.
@@ -96,8 +96,8 @@ builder.Services.AddHybridCache(static cache => cache.DefaultEntryOptions = new 
     LocalCacheExpiration = TimeSpan.FromSeconds(30),
 });
 #if (UseRedis)
-// Aspire registers an IDistributedCache backed by the "cache" Redis resource, which HybridCache uses as its L2.
-builder.AddRedisDistributedCache("cache");
+// Aspire registers an IDistributedCache backed by the cache Redis resource, which HybridCache uses as its L2.
+builder.AddRedisDistributedCache(ServiceNames.Cache);
 #endif
 
 var app = builder.Build();

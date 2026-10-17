@@ -8,6 +8,7 @@ paths: ["tools/**/*.{cs,csproj}", ".github/**/*.{yml,yaml}", "docker-compose.yml
 ## AppHost (`tools/Trellis.AppHost`)
 
 - Aspire orchestration: postgres (image major pinned — data volumes don't survive major bumps) → migrations (`WaitFor`) → api (`WaitForCompletion(migrations)`) → web. `aspire run` needs a real host, not the SDK container (ADR-0008).
+- **Resource names come from `ServiceNames`** (`src/Shared/Trellis.ServiceDefaults/ServiceNames.cs`), which the AppHost references with `IsAspireProjectResource="false"`: a library it compiles against, not a project it runs. Code that finds a resource by name uses the same constant (`GetConnectionString(ServiceNames.Database)`, `$"https+http://{ServiceNames.Api}"`, the E2E test's waits), so a rename is one edit; JSON, launch settings and YAML keep the literal. A new resource gets its constant first.
 - `AddDockerComposeEnvironment("compose")` backs `aspire publish`; images come from `dotnet publish /t:PublishContainer` — no Dockerfiles. The compose output has no restart policy, TLS, health checks or app secrets and publishes the Aspire dashboard: `docs/deployment.md` lists what to add, so keep it in step when the AppHost changes what it publishes.
 
 ## MigrationService (`tools/Trellis.MigrationService`)

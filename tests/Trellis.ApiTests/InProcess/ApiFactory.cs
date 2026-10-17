@@ -22,6 +22,7 @@ using Trellis.Application.Abstractions;
 using Trellis.Application.Authorization;
 using Trellis.Persistence;
 using Trellis.Persistence.Identity;
+using Trellis.ServiceDefaults;
 using Xunit;
 
 namespace Trellis.ApiTests.InProcess;
@@ -85,7 +86,7 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseSetting("ConnectionStrings:trellis-db", _postgres.GetConnectionString());
+        builder.UseSetting($"ConnectionStrings:{ServiceNames.Database}", _postgres.GetConnectionString());
         builder.UseSetting("Authentication:SigningKey", SigningKey);
         // Fixtures register throwaway members; do not depend on appsettings.Development.json opting in.
         builder.UseSetting("Registration:Mode", "Open");

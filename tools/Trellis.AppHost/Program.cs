@@ -1,28 +1,30 @@
+using Trellis.ServiceDefaults;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Image major pinned: postgres data volumes do not survive major-version bumps.
-var postgres = builder.AddPostgres("postgres")
+var postgres = builder.AddPostgres(ServiceNames.Postgres)
     .WithImageTag("18")
     .WithDataVolume()
     .WithPgAdmin();
 
-var database = postgres.AddDatabase("trellis-db", databaseName: "trellis");
+var database = postgres.AddDatabase(ServiceNames.Database, databaseName: "trellis");
 
 // Launch profiles are EXCLUDED for Aspire-launched resources on purpose: the IDE profiles carry a
 // hardcoded dev connection string as a command-line ARG (for the dev-container flow), and args
 // outrank the connection string Aspire injects — every resource would silently point at the
 // compose database instead of the provisioned one. Aspire assigns endpoints itself.
-var migrations = builder.AddProject<Projects.Trellis_MigrationService>("migrations", static options => options.ExcludeLaunchProfile = true)
+var migrations = builder.AddProject<Projects.Trellis_MigrationService>(ServiceNames.Migrations, static options => options.ExcludeLaunchProfile = true)
     .WithReference(database)
     .WaitFor(database);
 
 #if (UseRedis)
 // RedisInsight beside the cache, as pgAdmin sits beside PostgreSQL: a dashboard tile to look at the keys.
-var cache = builder.AddRedis("cache")
+var cache = builder.AddRedis(ServiceNames.Cache)
     .WithRedisInsight();
 #endif
 
-var api = builder.AddProject<Projects.Trellis_Api>("api", static options => options.ExcludeLaunchProfile = true)
+var api = builder.AddProject<Projects.Trellis_Api>(ServiceNames.Api, static options => options.ExcludeLaunchProfile = true)
     // With no launch profile, endpoints must be declared here; Aspire assigns the port.
     .WithHttpEndpoint()
     // The API is a public surface with or without the UI, so 'aspire publish' must expose it: without
@@ -37,7 +39,7 @@ var api = builder.AddProject<Projects.Trellis_Api>("api", static options => opti
     .WithHttpHealthCheck("/health");
 
 #if (IncludeUI)
-var web = builder.AddProject<Projects.Trellis_UI_Web>("web", static options => options.ExcludeLaunchProfile = true)
+var web = builder.AddProject<Projects.Trellis_UI_Web>(ServiceNames.Web, static options => options.ExcludeLaunchProfile = true)
     .WithHttpEndpoint()
     .WithReference(api)
     .WaitFor(api)

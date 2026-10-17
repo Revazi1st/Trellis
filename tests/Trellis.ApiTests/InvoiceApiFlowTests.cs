@@ -9,6 +9,7 @@ using Shouldly;
 using Trellis.Api.Contracts.Auth;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
+using Trellis.ServiceDefaults;
 using Xunit;
 
 namespace Trellis.ApiTests;
@@ -40,8 +41,8 @@ public sealed class InvoiceApiFlowTests
         await app.StartAsync(ct);
 
         // Healthy implies the migration worker already completed (api WaitsForCompletion on it).
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("api", ct);
-        using HttpClient client = app.CreateHttpClient("api");
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Api, ct);
+        using HttpClient client = app.CreateHttpClient(ServiceNames.Api);
 
         // Invoice endpoints require permissions — anonymous access is rejected.
         (await client.GetAsync("/api/v1/invoices/overdue", ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -157,7 +158,7 @@ public sealed class InvoiceApiFlowTests
     /// </summary>
     private static void UseThrowawayDatabase(IDistributedApplicationTestingBuilder appHost)
     {
-        IResource postgres = appHost.Resources.Single(static r => r.Name == "postgres");
+        IResource postgres = appHost.Resources.Single(static r => r.Name == ServiceNames.Postgres);
         List<ContainerMountAnnotation> volumes = [.. postgres.Annotations
             .OfType<ContainerMountAnnotation>()
             .Where(static m => m.Type == ContainerMountType.Volume)];
