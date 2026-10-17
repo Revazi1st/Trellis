@@ -78,8 +78,8 @@ The `add-toggle` skill covers adding a toggle; `docs/releasing.md` covers releas
 
 ## Commit style
 
-Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`). Keep each
-commit green and self-contained.
+Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `ci:`, `build:`; Dependabot's
+are `build(deps):`, set in `.github/dependabot.yml`). Keep each commit green and self-contained.
 
 ## Reporting security issues
 

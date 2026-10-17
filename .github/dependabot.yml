@@ -1,9 +1,16 @@
 version: 2
+# Every block titles its pull requests, and so the squash-merged commits, "build(deps): Bump ..."
+# ("build(deps-dev): ..." for a development dependency): the Conventional Commits form. Without the
+# setting Dependabot infers a style from the history, which can differ between ecosystems (a bare
+# "Bump ..." for NuGet beside "build(deps): ..." for the actions).
 updates:
   - package-ecosystem: nuget
     directory: "/"
     schedule:
       interval: weekly
+    commit-message:
+      prefix: "build"
+      include: "scope"
     # A new version waits a week before Dependabot proposes it (version updates only: a security
     # update still arrives at once), so a yanked or compromised release is usually gone by then.
     # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
@@ -100,6 +107,9 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    commit-message:
+      prefix: "build"
+      include: "scope"
     # A new version waits a week before Dependabot proposes it (version updates only: a security
     # update still arrives at once), so a yanked or compromised release is usually gone by then.
     # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
@@ -116,6 +126,9 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    commit-message:
+      prefix: "build"
+      include: "scope"
     cooldown:
       default-days: 7
     ignore:
@@ -127,6 +140,9 @@ updates:
     directory: "/scripts/sdk-image"
     schedule:
       interval: weekly
+    commit-message:
+      prefix: "build"
+      include: "scope"
     # A new version waits a week before Dependabot proposes it (version updates only: a security
     # update still arrives at once), so a yanked or compromised release is usually gone by then.
     # The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) counts on this.
@@ -144,6 +160,9 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    commit-message:
+      prefix: "build"
+      include: "scope"
     cooldown:
       default-days: 7
 
@@ -152,5 +171,8 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    commit-message:
+      prefix: "build"
+      include: "scope"
     cooldown:
       default-days: 7

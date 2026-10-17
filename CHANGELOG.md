@@ -317,6 +317,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   ships, its 11.0 packages no longer turn the weekly `microsoft` group into a major that waits for
   review and holds back the 10.0.x patches; moving to a new .NET stays one change you make on purpose
   (`docs/development.md`, *Bumping the SDK*). Their patch and minor updates arrive as before.
+- **Dependabot's titles follow Conventional Commits**: every update block in `dependabot.yml` sets
+  `commit-message` (`prefix: "build"`, `include: "scope"`), so its pull requests, and the commits
+  they are squash-merged into, read `build(deps): Bump …` in every ecosystem; NuGet's were a bare
+  `Bump …`.
 - **Template CI boots the generated AppHost and tests each option alone** (not in generated projects):
   the legs that run the generated tests run its Aspire end-to-end test too (`RUN_ASPIRE_E2E=1` on Linux
   runners), so a renamed AppHost, the Redis wiring and the multi-tenant seed start in CI before a
