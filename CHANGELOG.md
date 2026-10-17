@@ -110,10 +110,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   time (`port` generator symbols, as the Aspire starter does), so two solutions run side by side.
 - **Template repository** (not in generated projects): a Credits section in the README and the rule
   that keeps it current, a package icon and wider tags, a Discussions link for questions, and a
-  Windows leg in Template CI. A candidate front page, `README.redesign.md`, in the walkthrough style of
-  amantinband/clean-architecture, with pictures of the rings, the tree, a request's path and the test
-  suites drawn from the repository by `eng/readme/render-diagrams.py` (light and dark; CI fails when
-  they go stale); it stays beside `README.md`, kept in step by `eng/readme/SYNC.md`, until one is chosen.
+  Windows leg in Template CI. The README is now a walkthrough in the style of
+  amantinband/clean-architecture (credited there): the domain before the architecture, a request's
+  path, the toggles, and pictures of the rings, the tree, that path and the test suites, drawn from
+  the repository by `eng/readme/render-diagrams.py` (light and dark; CI fails when they go stale).
 - **503 `Unavailable` and 412 `PreconditionFailed`** (ideas from
   [xavierjohn/Trellis](https://github.com/xavierjohn/Trellis)): `ErrorType.Unavailable` with
   `Error.Unavailable(code, description)` is a dependency that is down for now; `CustomResults.Problem`
@@ -213,7 +213,7 @@ If you generated a project from 0.1.0, read these before adopting this version w
   `docs/features/auth.md` "Protecting an endpoint" with the ownership recipe (amantinband's authorization
   how-to) and an external identity-provider checklist; `docs/features/invoices.md` the path from a
   payment to its receipt (amantinband's eventual-consistency walkthrough) and the 412 step of the
-  walkthrough; the README shows the code in two excerpts. The rules gain handler rules, multi-aggregate
+  walkthrough; the README shows the code in three excerpts (the handler, the aggregate, the endpoint). The rules gain handler rules, multi-aggregate
   commands, the lifecycle rule and an `ErrorType` chooser (`application.md`, `domain.md`), the fitness
   suites and their controls (`tests.md`), the idempotency-key rules and the cache opt-in (`api.md`); the
   skills a webhook recipe (`add-integration`), a spec-first step and a keyset-paging recipe
