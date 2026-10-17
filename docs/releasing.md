@@ -17,7 +17,7 @@ prepare ──► test ─────────┐
 |---|---|---|
 | `prepare` | Resolve the version (from the tag, or on a branch from the `version` input or `<Version>` in `eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj`); fail unless the commit is on `main`; fail unless `CHANGELOG.md` has a `## [X.Y.Z]` section | runs; "not on main" is a warning |
 | `test` | `dotnet build -c Release` (warnings are errors) and every test, Aspire E2E included | runs |
-| `template` | the whole `template-ci.yml` matrix: every toggle leg instantiated, built and tested | runs |
+| `template` | the whole `template-ci.yml` matrix: every toggle leg instantiated and built in Release, and the legs flagged `test: true` tested, the Aspire E2E that boots the generated AppHost included (the browser tests stay opt-in); the default leg again on Windows; a project built from the packed template | runs |
 | `package` | pack with `-p:Version=X.Y.Z`, install the `.nupkg` and build an instance of it, attest its build provenance, create a **draft** GitHub release with the CHANGELOG section as notes and the `.nupkg` attached | runs; the draft stays |
 | `publish` | in the `nuget.org` environment: download the `.nupkg` from the draft, log in to nuget.org by trusted publishing, push, publish the release | runs up to the login; **push and publish are skipped** |
 

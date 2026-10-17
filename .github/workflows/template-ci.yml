@@ -204,11 +204,16 @@ jobs:
         working-directory: ../generated
         run: dotnet build ./*.slnx -c Release
 
+      # Everything runs for real: the Testcontainers suites and the Aspire E2E (InvoiceApiFlowTests),
+      # which boots the generated AppHost under its new name (PostgreSQL, the migration worker, the
+      # API, Redis with --use-redis) as a consumer's first push to their own CI would. The AppHost
+      # starts Linux images, so the E2E is switched on for Linux runners only and skips on any other
+      # (the Windows job below runs only the projects that need no Docker). Playwright stays opt-in.
       - name: Test generated solution
         if: ${{ matrix.test }}
         working-directory: ../generated
-        # Aspire E2E and Playwright stay opt-in (not set here); everything else runs for real,
-        # including the Testcontainers integration tests.
+        env:
+          RUN_ASPIRE_E2E: ${{ runner.os == 'Linux' && '1' || '0' }}
         run: dotnet test ./*.slnx -c Release --no-build
 
   # The default options on Windows: the template installs and instantiates there, the generated

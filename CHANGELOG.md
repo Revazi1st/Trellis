@@ -300,6 +300,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   `Idempotency.InvalidKey` once as `IdempotencyErrors.InvalidKeyCode`, shared by `BlankKey`, `KeyTooLong`
   and `MultipleKeys`; `Api.Common`'s `IdempotencyHeaderErrors` is gone. `RefreshTokenStore` returns
   `AuthErrors.InvalidRefreshToken` instead of a copy of it.
+- **Template CI boots the generated AppHost** (not in generated projects): the legs that run the
+  generated tests run its Aspire end-to-end test too (`RUN_ASPIRE_E2E=1` on Linux runners), so a renamed
+  AppHost, the Redis wiring and the multi-tenant seed start in CI before a release instead of on a
+  consumer's first push (idea from [jasontaylordev/CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture)).
 
 ### Removed
 
