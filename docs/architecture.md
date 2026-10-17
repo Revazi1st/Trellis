@@ -27,7 +27,7 @@ Rule of thumb: **dependencies point inward.** The Domain knows nothing about EF,
 | **Infrastructure** | Infrastructure, Persistence | Driven adapters (email/JWT; EF Core/Identity). Peers. |
 | **Presentation** | Api(.Common/.Contracts), UI(.Common/.Web) | Driving adapters: HTTP API + Blazor UI. |
 | **Shared** | ServiceDefaults | Aspire cross-cutting (OTel, health, discovery, resilience). |
-| **tools** | AppHost, MigrationService | Aspire orchestration + DB migrate/seed worker. |
+| **tools** | AppHost, MigrationService, Analyzers | Aspire orchestration, the DB migrate/seed worker, the RSLT001 analyzer (ADR-0030). |
 
 ## Key patterns
 

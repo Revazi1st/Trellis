@@ -110,7 +110,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   time (`port` generator symbols, as the Aspire starter does), so two solutions run side by side.
 - **Template repository** (not in generated projects): a Credits section in the README and the rule
   that keeps it current, a package icon and wider tags, a Discussions link for questions, and a
-  Windows leg in Template CI.
+  Windows leg in Template CI. A candidate front page, `README.redesign.md`, in the walkthrough style of
+  amantinband/clean-architecture, with pictures of the rings, the tree, a request's path and the test
+  suites drawn from the repository by `eng/readme/render-diagrams.py` (light and dark; CI fails when
+  they go stale); it stays beside `README.md`, kept in step by `eng/readme/SYNC.md`, until one is chosen.
 - **503 `Unavailable` and 412 `PreconditionFailed`** (ideas from
   [xavierjohn/Trellis](https://github.com/xavierjohn/Trellis)): `ErrorType.Unavailable` with
   `Error.Unavailable(code, description)` is a dependency that is down for now; `CustomResults.Problem`
