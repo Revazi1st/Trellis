@@ -615,7 +615,8 @@ describes planned work that is not in the template yet; the marker goes when it 
   - the build-time analyzer for a discarded `Result`.
 - [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT):
   - a persistent-lifetime database container in the AppHost, Aspire's guidance as his AppHost applies it;
-  - one resource-name constants class referenced by the AppHost through an `IsAspireProjectResource="false"` reference (`Shared/Services.cs`).
+  - one resource-name constants class referenced by the AppHost through an `IsAspireProjectResource="false"` reference (`Shared/Services.cs`);
+  - `DefaultStartup="true"` on the AppHost in the `.slnx`.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.

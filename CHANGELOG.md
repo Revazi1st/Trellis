@@ -312,6 +312,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   data volume is unchanged and pgAdmin stays session-scoped. The Aspire E2E test strips the lifetime with
   the volume, so it never reuses or recreates your database. For a fresh database, remove the
   `postgres-…` container and the `…-postgres-data` volume (`docs/development.md`).
+- **Visual Studio starts the AppHost**: `Trellis.slnx` marks it `DefaultStartup="true"`
+  (jasontaylordev/CleanArchitecture), so the first F5 after opening the solution runs the whole app
+  instead of failing on `Trellis.SharedKernel`, the first project and a class library. Rider still wants
+  the AppHost picked by hand.
 
 ### Removed
 

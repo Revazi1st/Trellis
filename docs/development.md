@@ -168,12 +168,14 @@ finds it ready; its data lives in a named volume. For a fresh database, stop the
 `docker rm -f` the `postgres-…` container and `docker volume rm` the `…-postgres-data` volume
 (`docker ps -a` and `docker volume ls` show their names).
 
-From Rider or Visual Studio, run the **Trellis.AppHost** project: its `Properties/launchSettings.json`
-has an `https` profile (the dashboard at `https://localhost:17171`) and an `http` profile
-(`http://localhost:15171`, no certificate involved); the ports are picked free when the solution is
-created, so this document names yours. The IDE's Aspire run configuration needs one of
-them; without a launch profile it refuses to start, while `dotnet run` and `aspire run` fall back to
-a dynamic dashboard URL. The `https` profile wants a trusted development certificate: run
+From Rider or Visual Studio, run the **Trellis.AppHost** project. Visual Studio makes it the startup
+project when it first opens the solution (`DefaultStartup="true"` in `Trellis.slnx`; a startup project
+you choose later is remembered instead); in Rider, pick it in the run configurations yourself. Its
+`Properties/launchSettings.json` has an `https` profile (the dashboard at `https://localhost:17171`)
+and an `http` profile (`http://localhost:15171`, no certificate involved); the ports are picked free
+when the solution is created, so this document names yours. The IDE's Aspire run configuration needs
+one of them; without a launch profile it refuses to start, while `dotnet run` and `aspire run` fall
+back to a dynamic dashboard URL. The `https` profile wants a trusted development certificate: run
 `dotnet dev-certs https --trust` once (macOS and Windows prompt for confirmation), or use `http`.
 The AppHost's own profile is the only one Aspire reads: the API, web and migration projects run
 with `ExcludeLaunchProfile = true` and get their endpoints and connection string from Aspire
