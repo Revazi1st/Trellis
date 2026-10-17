@@ -42,8 +42,7 @@ With a local SDK you can also `aspire run` the full app. See
   for the people who generate projects from the template.
 - A change that copies or adapts someone else's work (an idea, a pattern, a layout, text or code)
   adds a line to the README's [Credits](README.md#credits) in the same PR: project, author, license
-  and what was taken. While `README.redesign.md` exists beside it, the line goes into both
-  (`eng/readme/SYNC.md`). Projects we only compared against get no line. Verbatim MIT or BSD material
+  and what was taken. Projects we only compared against get no line. Verbatim MIT or BSD material
   also brings its copyright and permission notice into a `THIRD-PARTY-NOTICES.md`, listed beside
   `LICENSE` under `copyOnly` in `.template.config/template.json` so the rename never rewrites it.
 - Follow the layer conventions in `.claude/rules/` and the boundaries in

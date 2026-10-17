@@ -19,7 +19,7 @@ One PascalCase symbol (`UseThing`) everywhere; the kebab-case CLI flag (`--use-t
    - default-off toggle: fine — the on branch is compiled only by the template-CI leg that enables it.
    - default-on toggle (or code that must compile here): add the DefineConstants trick — a `<!--#if (UseThing) -->`-guarded `<DefineConstants>$(DefineConstants);UseThing</DefineConstants>` PropertyGroup, as in the AppHost and ArchitectureTests csproj. Removed at `dotnet new` time when the toggle is off; harmless when on.
 7. **`.github/workflows/template-ci.yml`** — add the flag to the `all-options` matrix leg; give a risky combination its own leg, with `test: true` if a failure could be runtime-only (a green build once hid the `ITenantContext` DI crash).
-8. **The READMEs** — the toggle table in `README.md` (and in `README.redesign.md` while both exist; `eng/readme/SYNC.md` lists what they share) and the toggle line in `eng/Trellis.TemplatePack/README.md` (that one ships to nuget.org).
+8. **The READMEs** — the toggle table in `README.md` and the toggle line in `eng/Trellis.TemplatePack/README.md` (that one ships to nuget.org).
 9. **Shipped YAML** (`.github/workflows/ci.yml`, `docker-compose.yml`, `.github/dependabot.yml`) — only if the toggle changes them; read the next section first.
 
 ## WARNING: YAML conditionals are live in both branches here

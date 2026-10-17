@@ -32,9 +32,9 @@
          output, packaging infra, machine-local and IDE state, OS litter, test/coverage output, and
          every pattern .gitignore treats as a secret. ".git" is listed as a file as well as a folder:
          a git worktree or submodule has a .git FILE, which "\.git\**" does not match.
-         The template's own governance files (README, the README.redesign.md candidate and its
-         eng/readme pictures, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, CODEOWNERS, issue
-         forms, the release runbook) are maintainer material: generated projects get the stubs in
+         The template's own governance files (README and its eng/readme pictures, CHANGELOG,
+         CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, CODEOWNERS, issue forms, the release runbook)
+         are maintainer material: generated projects get the stubs in
          .template.config/consumer/ instead. template.json itself is listed because the package
          carries the stamped copy (StampTemplateVersion below). -->
     <TemplateContentExclude>
@@ -57,7 +57,6 @@
       ..\..\scripts\check-template-toggles.sh;
       ..\..\docs\releasing.md;
       ..\..\README.md;
-      ..\..\README.redesign.md;
       ..\..\CHANGELOG.md;
       ..\..\CONTRIBUTING.md;
       ..\..\CODE_OF_CONDUCT.md;

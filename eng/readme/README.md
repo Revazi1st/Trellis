@@ -24,8 +24,9 @@ python3 eng/readme/render-diagrams.py --check   # writes nothing; exit 1 when a 
 ```
 
 Render after a change that the pictures show, and commit the SVGs in the same change: a project or a test
-project added, renamed or moved; any file added to or removed from `src/` or `tools/` (each folder shows
-its file count, so the architecture picture changes with it); the decorator order; an event handler of
+project added, renamed or moved; a folder or a top-level file added to or removed from a project under
+`src/` or `tools/` (a collapsed folder shows its name only, so a file inside one changes nothing); the
+decorator order; an event handler of
 `InvoicePaidDomainEvent`; a template option that adds or removes a file. The output is deterministic, so a
 render that changes nothing writes nothing.
 
@@ -57,7 +58,7 @@ The architecture trees are the files a default `dotnet new trellis` generates: w
 `template.json`'s exclude list and every modifier whose condition holds with the options' default values
 (so the multi-tenancy files are absent, the UI projects present and tagged `--include-ui`). Then one rule
 for every project: its folders, then its top-level files except the `.csproj`; each folder collapsed to
-`its name`, counting every file below it; the Invoices slice expanded two levels as the worked
+its name; the Invoices slice expanded two levels as the worked
 example, with the folders on the way to it; a tall tree split into columns, preferably where a folder
 starts, and a column that continues a folder opens with its path.
 
@@ -103,4 +104,3 @@ excluded by name, in both lists that decide what ships: `eng/readme/**` in `sour
 `..\..\eng\readme\**` in `TemplateContentExclude` of
 [`eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj`](../Trellis.TemplatePack/Trellis.TemplatePack.csproj)
 (the package). Template CI's consumer-files step fails if `eng/readme` appears in a generated project.
-[SYNC.md](SYNC.md) lists what the two candidate READMEs keep in step while both exist.

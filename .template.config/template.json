@@ -370,7 +370,6 @@
         "scripts/check-template-toggles.sh",
         "docs/releasing.md",
         "README.md",
-        "README.redesign.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
         "CODE_OF_CONDUCT.md",
