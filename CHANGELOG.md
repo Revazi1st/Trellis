@@ -49,6 +49,11 @@ If you generated a project from 0.1.0, read these before adopting this version w
   user's id instead of their e-mail; the migration job still writes `system`. There is no migration:
   rows written before keep the e-mail they were stamped with, so a report that matched the columns
   against an address has to handle both, and an erasure request still finds the old rows by e-mail.
+- **Log filters on the outcome line's category change.** Each use case now logs under its own
+  command or query type (`Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery`)
+  instead of `Trellis.SharedKernel.Decorators.LoggingDecorators.CommandHandler`/`.QueryHandler`. A
+  `Logging:LogLevel` or `Serilog:MinimumLevel:Override` entry, or a log query, that named the decorator
+  category no longer matches: key it on a feature's namespace, or match the event ids 1001–1099.
 
 ### Added
 
@@ -316,6 +321,11 @@ If you generated a project from 0.1.0, read these before adopting this version w
   without an id (`system`), so the columns no longer copy each user's e-mail into every row they touch.
   ADR-0007's 2026-10-11 amendment said a missing user id breaks auditing; it never did, and its
   2026-10-18 amendment says what a missing id does now.
+- **A log category per use case** (ADR-0028 third amendment; jasontaylordev/CleanArchitecture): the
+  logging decorators take `ILogger<TCommand>`/`ILogger<TQuery>`, so each outcome line is logged under its
+  use case's type and `Logging__LogLevel__Trellis.Application.Features.Invoices=Warning` quiets one
+  feature's success lines (`docs/deployment.md`, *Log levels per feature*). The unit tests'
+  `LogCapture.OutcomeLines` and `SerilogExportTests` match the use-case event ids instead of the category.
 
 ### Removed
 

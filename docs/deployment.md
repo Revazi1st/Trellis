@@ -157,12 +157,19 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every host exports logs, metrics and trace
   id, and every log line written further in carries the same id as the `UserId` scope: the use-case
   outcome line, the authorization failure behind a 403, whatever a handler logs. The id only, never the
   e-mail; an anonymous request carries neither. Search logs by `UserId` and traces by `enduser.id`.
+- **Log levels per feature**: a use case's outcome line is logged under its own command or query type
+  (`Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery`), and a handler that logs does
+  so under its own type in the same namespace, so a namespace prefix sets one feature's level:
+  `Logging__LogLevel__Trellis.Application.Features.Invoices=Warning` keeps the Invoices feature's Warning
+  and Error lines and drops its successes and expected failures (Information); its spans and metrics are
+  unaffected.
 <!--#if (UseSerilog) -->
 - **Serilog** (the `UseSerilog` toggle): Serilog writes the console and hands every event on to the
   OpenTelemetry log provider, so OTLP log export is unchanged. Its levels come from the `Serilog`
   section (`MinimumLevel:Default` and `MinimumLevel:Override:<category>`), which mirrors
   `Logging:LogLevel` but is not read from it: change both, e.g.
-  `Serilog__MinimumLevel__Override__Microsoft.AspNetCore=Information`.
+  `Serilog__MinimumLevel__Override__Microsoft.AspNetCore=Information`, or for the feature above
+  `Serilog__MinimumLevel__Override__Trellis.Application.Features.Invoices=Warning`.
 <!--#endif -->
 
 Worth alerting on:
@@ -256,7 +263,7 @@ Every signal's resource carries `service.version` and `deployment.environment.na
 
 | Range | Written by | Events |
 |---|---|---|
-| 10xx | the use-case outcome line (`LoggingDecorators`), one per invocation inside the `UseCase {UseCase}` scope, with `ElapsedMilliseconds` | 1001 succeeded (Information); 1002 failed, with `ErrorType` and `ErrorCode`; 1003 failed validation, adding the `ValidationFailures` field:code pairs; 1004 failed with `ErrorDescription`, only while `Telemetry__IncludeErrorDetail` is on; 1005 cancelled by the caller (Information); 1006 threw (Error, with the exception). 1002–1004 are Information for a classified 4xx outcome and Warning otherwise |
+| 10xx | the use-case outcome line (`LoggingDecorators`, category: the use case's command or query type), one per invocation inside the `UseCase {UseCase}` scope, with `ElapsedMilliseconds` | 1001 succeeded (Information); 1002 failed, with `ErrorType` and `ErrorCode`; 1003 failed validation, adding the `ValidationFailures` field:code pairs; 1004 failed with `ErrorDescription`, only while `Telemetry__IncludeErrorDetail` is on; 1005 cancelled by the caller (Information); 1006 threw (Error, with the exception). 1002–1004 are Information for a classified 4xx outcome and Warning otherwise |
 | 11xx | the security events (`SecurityEventLog`) | 1101–1106, listed in [features/auth.md](features/auth.md) under *Security events* |
 | 12xx | e-mail (`Infrastructure/Email`) | 1201 not sent, the `Logging` stand-in (Information); 1202 discarded, `None` (Debug); 1203 the stand-in runs outside Development (Warning); 1204 e-mail switched off (Information); 1205 sent through the relay (Information, masked recipient); 1206 SMTP in clear outside Development (Warning) |
 | 13xx | the outbox processor (`OutboxLog`); a message's lines inside the `OutboxMessage {MessageId} {EventType}` scope | 1301–1309, listed under [Outbox operations](#outbox-operations) |

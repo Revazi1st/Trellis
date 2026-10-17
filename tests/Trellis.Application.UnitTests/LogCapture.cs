@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using Trellis.SharedKernel.Decorators;
 
 namespace Trellis.Application.UnitTests;
 
@@ -22,9 +21,12 @@ internal sealed class LogCapture
 
     public IReadOnlyList<LogEntry> Entries => [.. _entries];
 
-    /// <summary>The lines the pipeline's logging stage wrote — one per use-case invocation.</summary>
+    /// <summary>
+    /// The lines the pipeline's logging stage wrote — one per use-case invocation — matched on the use-case
+    /// event ids (1001–1099, ADR-0028), not on the category: each use case logs under its own message type.
+    /// </summary>
     public IReadOnlyList<LogEntry> OutcomeLines
-        => [.. _entries.Where(static e => e.Category.IsGenericType && e.Category.DeclaringType == typeof(LoggingDecorators))];
+        => [.. _entries.Where(static e => e.EventId.Id is >= 1001 and <= 1099)];
 
     public void Add(LogEntry entry) => _entries.Enqueue(entry);
 }

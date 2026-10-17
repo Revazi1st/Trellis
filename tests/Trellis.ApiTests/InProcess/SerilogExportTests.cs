@@ -10,6 +10,7 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Trace;
 using Serilog.Extensions.Logging;
 using Shouldly;
+using Trellis.Application.Features.Auth.Login;
 using Trellis.SharedKernel.Decorators;
 using Xunit;
 
@@ -24,8 +25,6 @@ namespace Trellis.ApiTests.InProcess;
 /// </summary>
 public sealed class SerilogExportTests(SerilogExportTests.Factory factory) : IClassFixture<SerilogExportTests.Factory>
 {
-    private static readonly string UseCaseCategory = typeof(LoggingDecorators).FullName!;
-
     [Fact]
     public void Serilog_is_the_hosts_logger_factory()
         => factory.Services.GetRequiredService<ILoggerFactory>().ShouldBeOfType<SerilogLoggerFactory>();
@@ -33,11 +32,13 @@ public sealed class SerilogExportTests(SerilogExportTests.Factory factory) : ICl
     [Fact]
     public async Task Application_log_records_reach_the_OpenTelemetry_logger_provider()
     {
-        // Signing in runs the login use case, whose logging decorator writes one outcome line at Information.
+        // Signing in runs the login use case, whose logging decorator writes one outcome line at Information,
+        // under the use case's own category: what a Serilog:MinimumLevel:Override for a feature's namespace keys on.
         await factory.CreateAdminClientAsync(TestContext.Current.CancellationToken);
 
         factory.Exported.ShouldContain(
-            record => record.Category.StartsWith(UseCaseCategory, StringComparison.Ordinal)
+            record => IsUseCaseLine(record)
+                && record.Category == typeof(LoginCommand).FullName
                 && record.Level == LogLevel.Information
                 && record.Message.Contains("LoginCommand", StringComparison.Ordinal),
             $"exported: {string.Join(" | ", factory.Exported.Select(static r => r.Category).Distinct(StringComparer.Ordinal))}");
@@ -54,13 +55,15 @@ public sealed class SerilogExportTests(SerilogExportTests.Factory factory) : ICl
             .Where(static span => span.Name == "LoginCommand")
             .Select(static span => span.SpanId)];
         ExportedLog[] outcomes = [.. factory.Exported
-            .Where(static record => record.Category.StartsWith(UseCaseCategory, StringComparison.Ordinal)
-                                    && record.Message.Contains("LoginCommand", StringComparison.Ordinal))];
+            .Where(static record => IsUseCaseLine(record) && record.Message.Contains("LoginCommand", StringComparison.Ordinal))];
 
         loginSpans.ShouldNotBeEmpty();
         outcomes.ShouldNotBeEmpty();
         outcomes.ShouldAllBe(record => record.EventId == 1001 && loginSpans.Contains(record.SpanId));
     }
+
+    /// <summary>A line of the use-case logging stage, by its event id (1001–1099, ADR-0028): its category is the use case's own type.</summary>
+    private static bool IsUseCaseLine(ExportedLog record) => record.EventId is >= 1001 and <= 1099;
 
     /// <summary>One exported record, copied out: OpenTelemetry pools <see cref="LogRecord"/> instances once the processor returns.</summary>
     public sealed record ExportedLog(string Category, LogLevel Level, int EventId, string Message, ActivitySpanId SpanId);

@@ -26,15 +26,27 @@ namespace Trellis.SharedKernel.Decorators;
 /// stable event id (1001–1006) for alerts and queries to match on.
 /// Validation and the unit-of-work commit run INSIDE this stage, so a rejected request and a failing
 /// commit both still produce their use-case-named line.
+/// <para>
+/// Each use case logs under its own category, its command or query type
+/// (<c>Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery</c>), so a namespace prefix in
+/// <c>Logging:LogLevel</c> sets one feature's level. The logger is injected as <c>ILogger&lt;TCommand&gt;</c>,
+/// not built from an <c>ILoggerFactory</c>, so a container that registers the open generic
+/// <c>ILogger&lt;&gt;</c> (the unit-test harness's capturing logger) sees every line.
+/// </para>
 /// </summary>
 public static partial class LoggingDecorators
 {
     /// <summary>Caps the <c>field:code</c> list so a pathological payload cannot produce a pathological log line.</summary>
     private const int MaxLoggedValidationFailures = 10;
 
+    /// <summary>Why each decorator's logger is typed by the message it wraps, not by the decorator (Sonar S6672).</summary>
+    private const string CategoryPerUseCase =
+        "Each use case logs under its own message type, so a namespace prefix in Logging:LogLevel sets one feature's level (ADR-0028).";
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S6672:Generic logger injection should match enclosing type", Justification = CategoryPerUseCase)]
     public sealed class CommandHandler<TCommand>(
         ICommandHandler<TCommand> inner,
-        ILogger<CommandHandler<TCommand>> logger,
+        ILogger<TCommand> logger,
         UseCaseLoggingOptions options) : ICommandHandler<TCommand>
         where TCommand : ICommand
     {
@@ -42,9 +54,10 @@ public static partial class LoggingDecorators
             => Execute(logger, options, typeof(TCommand).Name, () => inner.Handle(command, cancellationToken), cancellationToken);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S6672:Generic logger injection should match enclosing type", Justification = CategoryPerUseCase)]
     public sealed class CommandHandler<TCommand, TResponse>(
         ICommandHandler<TCommand, TResponse> inner,
-        ILogger<CommandHandler<TCommand, TResponse>> logger,
+        ILogger<TCommand> logger,
         UseCaseLoggingOptions options) : ICommandHandler<TCommand, TResponse>
         where TCommand : ICommand<TResponse>
     {
@@ -52,9 +65,10 @@ public static partial class LoggingDecorators
             => Execute(logger, options, typeof(TCommand).Name, () => inner.Handle(command, cancellationToken), cancellationToken);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S6672:Generic logger injection should match enclosing type", Justification = CategoryPerUseCase)]
     public sealed class QueryHandler<TQuery, TResponse>(
         IQueryHandler<TQuery, TResponse> inner,
-        ILogger<QueryHandler<TQuery, TResponse>> logger,
+        ILogger<TQuery> logger,
         UseCaseLoggingOptions options) : IQueryHandler<TQuery, TResponse>
         where TQuery : IQuery<TResponse>
     {
