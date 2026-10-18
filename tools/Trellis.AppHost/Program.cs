@@ -60,7 +60,7 @@ var web = builder.AddProject<Projects.Trellis_UI_Web>(ServiceNames.Web, static o
 if (builder.ExecutionContext.IsRunMode)
 {
     // Local `aspire run` behaves like F5: Development settings — demo seed data, Scalar, the dev
-    // signing key. Publish mode deliberately sets nothing; the deployment environment decides.
+    // signing key. Publish mode sets no environment; the deployment decides.
     migrations.WithEnvironment("DOTNET_ENVIRONMENT", "Development");
     api.WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");
     // A second dashboard link straight to the API reference; the endpoint's own URL opens a 404.
@@ -70,7 +70,36 @@ if (builder.ExecutionContext.IsRunMode)
 #endif
 }
 
+if (builder.ExecutionContext.IsPublishMode)
+{
+    // The two secrets a deployment must supply, as parameters: the compose file reads them from .env
+    // (SIGNING_KEY, SEED_ADMIN_PASSWORD) instead of leaving them to hand edits of the YAML, and 'aspire publish'
+    // and 'aspire deploy' ask for them unless the AppHost's configuration holds them (Parameters:signing-key,
+    // Parameters:seed-admin-password). Run mode declares neither: F5 uses the Development key and password.
+    var signingKey = builder.AddParameter("signing-key", secret: true);
+    var seedAdminPassword = builder.AddParameter("seed-admin-password", secret: true);
+    api.WithEnvironment("Authentication__SigningKey", signingKey);
+    migrations.WithEnvironment("Seed__AdminPassword", seedAdminPassword);
+
+    // The long-running services come back after a crash or a reboot of the host. The migration job keeps no
+    // restart policy: it runs once per 'docker compose up'.
+    postgres.PublishAsDockerComposeService(static (_, service) => service.Restart = "unless-stopped");
+    api.PublishAsDockerComposeService(static (_, service) => service.Restart = "unless-stopped");
+#if (UseRedis)
+    cache.PublishAsDockerComposeService(static (_, service) => service.Restart = "unless-stopped");
+#endif
+#if (IncludeUI)
+    web.PublishAsDockerComposeService(static (_, service) => service.Restart = "unless-stopped");
+#endif
+}
+
 // 'aspire publish' target: docker-compose artifacts; images built via dotnet publish /t:PublishContainer — no Dockerfiles.
-builder.AddDockerComposeEnvironment("compose");
+// The Aspire dashboard shows every log line and trace, so its UI is published on the host's loopback only and
+// reached over an SSH tunnel (docs/deployment.md); its OTLP ports stay on the compose network.
+builder.AddDockerComposeEnvironment("compose")
+    .WithDashboard(static dashboard => dashboard
+        .WithHostPort(18888)
+        .PublishAsDockerComposeService(static (_, service) =>
+            service.Ports = [.. service.Ports.Select(static port => $"127.0.0.1:{port}")]));
 
 await builder.Build().RunAsync();

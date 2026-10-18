@@ -240,6 +240,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   column and a filter row, All, Draft, Issued, Paid, Voided and Overdue, kept in the address
   (`invoices?status=Draft`) so the browser's Back returns to the previous filter. The invoice and
   new-invoice pages open with a "Back to invoices" link.
+- **A one-host deploy quick start** at the top of `docs/deployment.md`, the short, ordered page
+  jasontaylordev/CleanArchitecture's documentation keeps: build the images tagged with the commit,
+  `aspire publish -o deploy`, fill `.env`, `docker compose up -d` (or `aspire deploy`), then probe
+  `/health` and sign in, each step linking the reference section that explains it.
 
 ### Changed
 
@@ -319,6 +323,15 @@ If you generated a project from 0.1.0, read these before adopting this version w
 - **The `web` resource has a health check**: the AppHost polls the web host's `/health`, as it does the
   API's, so `web` turns healthy in the dashboard, and for anything that waits on it, once it serves
   rather than once its process starts. The Aspire E2E test waits for it.
+- **What `aspire publish` writes**: the signing key and the first administrator's password are
+  parameters the AppHost declares in publish mode only, so the compose file reads them from `.env`
+  (`SIGNING_KEY`, `SEED_ADMIN_PASSWORD`) instead of needing hand edits, and `aspire publish` and
+  `aspire deploy` ask for them unless the AppHost's configuration holds them
+  (`Parameters:signing-key`, `Parameters:seed-admin-password`). PostgreSQL, the API and the web host
+  get `restart: unless-stopped` (the cache too, with `--use-redis`), and the Aspire dashboard's UI is
+  published on the host's loopback only (`127.0.0.1:18888`, reached over SSH) instead of on every
+  interface. Publish an existing `deploy/` folder again to pick these up: `aspire publish` keeps the
+  values already in `.env`.
 
 ### Removed
 

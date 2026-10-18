@@ -1,8 +1,60 @@
 # Deployment
 
-Production deployment of a generated solution: container images, what `aspire publish` produces,
-edge TLS, the migration job, the required configuration, probes, telemetry, and the outbox and
-idempotency runbooks.
+Production deployment of a generated solution: a quick start for one host, then the reference behind
+it: container images, what `aspire publish` produces, edge TLS, the migration job, the required
+configuration, probes, telemetry, and the outbox and idempotency runbooks.
+
+## Deploy to one host
+
+The shortest path to a running app on one Linux server with Docker. Steps 1 and 2 also need the .NET
+SDK and the Aspire CLI ([development.md](development.md#prerequisites)), on the server or on the
+machine you deploy from. Each step names the section further down that explains it.
+
+1. **Build the images**, tagged with the commit
+   ([Container images](#container-images--no-dockerfiles-by-design)):
+
+   ```bash
+   tag=$(git rev-parse --short HEAD)
+   dotnet publish src/Presentation/Api/Trellis.Api /t:PublishContainer -p:ContainerImageTag=$tag
+   dotnet publish tools/Trellis.MigrationService /t:PublishContainer -p:ContainerImageTag=$tag
+   dotnet publish src/Presentation/UI/Trellis.UI.Web /t:PublishContainer -p:ContainerImageTag=$tag   # if the UI is included
+   ```
+
+   On the server they land in its Docker as `trellis-api`, `trellis-migrationservice` and
+   `trellis-ui-web`. Built elsewhere, push them to a registry (`-p:ContainerRegistry=…`, plus
+   `--os linux --arch x64` on an Arm machine building for an x64 server) and let the server pull them.
+2. **Write the compose files**: `aspire publish -o deploy` writes `deploy/docker-compose.yaml` and
+   `deploy/.env` ([Docker Compose](#docker-compose-what-aspire-publish-produces)). It asks for the two
+   secret parameters, `signing-key` and `seed-admin-password`, unless the AppHost's configuration
+   holds them (`Parameters:signing-key`, `Parameters:seed-admin-password`), and remembers the answers
+   on that machine; either way, the files it writes leave every value for you to fill in.
+3. **Fill `deploy/.env`** ([Required configuration](#required-configuration)): the image names with
+   your tag (`API_IMAGE=trellis-api:<tag>`, `MIGRATIONS_IMAGE`, and `WEB_IMAGE` with the UI), the
+   container ports (`API_PORT=8080`, and `WEB_PORT=8080` with the UI), a strong `POSTGRES_PASSWORD`,
+   `SIGNING_KEY` (32 characters or more: `openssl rand -hex 32`) and `SEED_ADMIN_PASSWORD`, the first
+   administrator's password, which must pass Identity's rules (a digit, an upper-case letter and a
+   symbol). The file holds secrets: keep it out of version control.
+4. **Start it**: `docker compose -f deploy/docker-compose.yaml up -d`. The migration job runs once and
+   the API starts after it exits 0 ([Migrations](#migrations-a-one-shot-pre-deploy-job)); PostgreSQL, the
+   API and the web host restart with Docker. Run on the server instead, `aspire deploy` does steps 1 to
+   4 in one command: it builds the images, asks for the values it does not hold and runs
+   `docker compose up` itself.
+5. **Check it** ([Health probes](#health-probes)): `docker compose -f deploy/docker-compose.yaml port api 8080`
+   prints the API's host port; `curl http://localhost:<port>/health` answers `Healthy`, and
+   `POST /api/v1/auth/login` with `admin@example.com` and your `SEED_ADMIN_PASSWORD` answers with a
+   token.
+<!--#if (UseRedis) -->
+
+With `--use-redis`, `.env` also lists `CACHE_PASSWORD`, the password of the `cache` service, which
+stays on the internal network and restarts with Docker like the others.
+<!--#endif -->
+
+Before real traffic: TLS and the trusted-proxy lists at a reverse proxy in front of the API and the web
+host ([Edge TLS](#edge-tls-and-forwarded-headers)), real e-mail (`Email__Provider`), and backups of the
+PostgreSQL volume. The Aspire dashboard listens on the server's loopback only: open it through an SSH
+tunnel ([below](#docker-compose-what-aspire-publish-produces)). Another target, Azure Container Apps or
+Kubernetes, is an extension of your own: the Aspire hosting package for it in the AppHost, and the
+migration job as a step the rollout waits on ([Migrations](#migrations-a-one-shot-pre-deploy-job)).
 
 ## Container images — no Dockerfiles, by design
 
@@ -44,22 +96,28 @@ model `aspire run` uses. What the publish step of Aspire 13.6 writes, and what i
 
 | Service | As published | Before production |
 |---|---|---|
-| `postgres` | `postgres:18`, a named data volume, port 5432 on the internal `aspire` network only (`expose:`), password from `POSTGRES_PASSWORD` in `.env` | Set a strong `POSTGRES_PASSWORD`; plan backups of the volume. Keep the major version pinned: a data volume does not survive a major upgrade |
-| `migrations` | `${MIGRATIONS_IMAGE}`, no ports, starts once PostgreSQL has *started* (not once it is ready; the job's retrying execution strategy rides out a normal start-up) | Add `Seed__AdminPassword` (the job refuses the default outside Development). No restart policy: it is a one-shot job, and rerunning `docker compose up` reruns it safely |
-| `api` | `${API_IMAGE}`, published as `"${API_PORT}"` (the container port on an **ephemeral host port**), starts only after `migrations` exited 0, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` | Add `Authentication__SigningKey` (the API refuses to boot without it), `Email__Provider`, `Registration__Mode` if wanted, the `ForwardedHeaders__*` lists (below) and `restart: unless-stopped`; publish a fixed host port or none (behind the proxy) |
-| `web` (with the UI) | `${WEB_IMAGE}`, `"${WEB_PORT}"` on an ephemeral host port, service discovery pointed at `http://api:${API_PORT}`, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` | `restart: unless-stopped`; reach it only through the proxy (below) |
-| `compose-dashboard` | The Aspire dashboard (`mcr.microsoft.com/dotnet/nightly/aspire-dashboard`), UI port 18888 published, OTLP on 18889/18890 internal, `restart: always`; every .NET service exports its logs, metrics and traces to it | **Decide** (below) |
+| `postgres` | `postgres:18`, a named data volume, port 5432 on the internal `aspire` network only (`expose:`), password from `POSTGRES_PASSWORD` in `.env`, `restart: unless-stopped` | Set a strong `POSTGRES_PASSWORD`; plan backups of the volume. Keep the major version pinned: a data volume does not survive a major upgrade |
+| `migrations` | `${MIGRATIONS_IMAGE}`, no ports, starts once PostgreSQL has *started* (not once it is ready; the job's retrying execution strategy rides out a normal start-up), `Seed__AdminPassword` from `SEED_ADMIN_PASSWORD` in `.env` | Fill `SEED_ADMIN_PASSWORD` (the job refuses the default outside Development); consider `Seed__AdminEmail`. No restart policy: it is a one-shot job, and rerunning `docker compose up` reruns it safely |
+| `api` | `${API_IMAGE}`, published as `"${API_PORT}"` (the container port on an **ephemeral host port**), starts only after `migrations` exited 0, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, `Authentication__SigningKey` from `SIGNING_KEY` in `.env`, `restart: unless-stopped` | Fill `SIGNING_KEY` (the API refuses to boot without it); add `Email__Provider`, `Registration__Mode` if wanted and the `ForwardedHeaders__*` lists (below); publish a fixed host port or none (behind the proxy) |
+| `web` (with the UI) | `${WEB_IMAGE}`, `"${WEB_PORT}"` on an ephemeral host port, service discovery pointed at `http://api:${API_PORT}`, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, `restart: unless-stopped` | Reach it only through the proxy (below) |
+| `compose-dashboard` | The Aspire dashboard (`mcr.microsoft.com/dotnet/nightly/aspire-dashboard`), its UI published on the host's loopback only (`127.0.0.1:18888`), OTLP on 18889/18890 internal, `restart: always`; every .NET service exports its logs, metrics and traces to it | Reach it over an SSH tunnel, or replace it with your own collector (below) |
 
-`.env` holds the parameters: the three image names, the two container ports and the PostgreSQL
-password, empty until you fill them (or a deploy step does). Build the images with
+`.env` holds the parameters: the three image names, the two container ports, the PostgreSQL
+password, the signing key (`SIGNING_KEY`) and the first administrator's password
+(`SEED_ADMIN_PASSWORD`), empty until you fill them (`aspire deploy` writes a filled copy of its own
+beside it). The two secrets are
+parameters the AppHost declares only for publishing, so `aspire publish` asks for them unless the
+AppHost's configuration holds them; nothing it writes carries a value. Build the images with
 `PublishContainer` (above) and put their names in `.env`. Nothing in the file is TLS, a health check
 or a resource limit; nothing sets `ASPNETCORE_ENVIRONMENT`, so every host runs as Production.
 
 **The dashboard.** It is a development tool that also works in production, but it keeps telemetry in
-memory only, it shows every log line and trace (masked, but still operational detail), and its UI is
-published on a host port. Pick one before the first deploy: keep it and remove its `ports:` entry
-(reach it over an SSH tunnel; it asks for the browser token it prints at start-up), or delete the
-service and point `OTEL_EXPORTER_OTLP_ENDPOINT` of every service at your own collector.
+memory only and shows every log line and trace (masked, but still operational detail), so the AppHost
+publishes its UI on the server's loopback only. Reach it over an SSH tunnel,
+`ssh -L 18888:localhost:18888 <server>`, then <http://localhost:18888>; it asks for the browser token
+it prints at start-up (`docker compose logs compose-dashboard`). To keep telemetry beyond a restart,
+or across several servers, turn it off instead (`.WithDashboard(false)` on the compose environment in
+the AppHost) and point `OTEL_EXPORTER_OTLP_ENDPOINT` of every service at your own collector.
 
 ### Edge TLS and forwarded headers
 
@@ -110,8 +168,8 @@ fails the rollout, not the first request.
 | Setting | Required | Effect |
 |---|---|---|
 | `ConnectionStrings__trellis-db` | yes (API + migration job) | PostgreSQL connection string. The name contains a dash — settable in compose/k8s env maps, but not via POSIX `export`; use a `.env` file or manifest. |
-| `Authentication__SigningKey` | yes | JWT HMAC-SHA256 key, **≥ 32 characters or the API refuses to boot**. Store in a secret store; rotate by redeploying (outstanding access tokens die within `AccessTokenMinutes`). |
-| `Seed__AdminPassword` | yes (migration job, fresh DB) | Bootstrap admin credential; seeding refuses the default outside Development. |
+| `Authentication__SigningKey` | yes | JWT HMAC-SHA256 key, **≥ 32 characters or the API refuses to boot**. Store in a secret store; rotate by redeploying (outstanding access tokens die within `AccessTokenMinutes`). The published compose file reads it from `SIGNING_KEY` in `.env`. |
+| `Seed__AdminPassword` | yes (migration job, fresh DB) | Bootstrap admin credential; seeding refuses the default outside Development. The published compose file reads it from `SEED_ADMIN_PASSWORD` in `.env`. |
 | `Seed__TenantId` | no (multi-tenancy only) | Tenant of the bootstrap admin and the Development demo data; default `default`. |
 | `Registration__Mode` | no | `Closed` (default): `POST /auth/register` answers 403 and accounts come from an administrator or the seeder. `Open`: anyone can create a Member account, which can read business data — set it only when that is intended. Any other value stops the API at boot. |
 | `Email__Provider` / `Email__Smtp__*` | yes, in effect | `Smtp`: each message goes to the relay in `Email__Smtp__Host`, `__Port` (587), `__FromAddress` and, both or neither, `__UserName` / `__Password` (a secret), upgraded with STARTTLS — a relay that does not offer it fails the send. Checked at API boot only while `Smtp` is selected. A failed send is retried by the outbox, whose error records the status code and masked recipient, never the relay's reply; delivery is at least once, so a crash after the relay accepted can send a message twice. Not supported: implicit TLS (port 465 stops the API at boot) and OAuth2 (XOAUTH2) — either is a new adapter (`Infrastructure/Email`). `__UseStartTls=false` sends in clear, for a local mail catcher: refused with credentials, a startup warning outside Development. `Logging` (shipped): e-mail is **not sent** — each message becomes one log line (masked recipient, subject, length) and the API logs a startup warning outside Development. `None`: discard on purpose. Any other value stops the API at boot. |
