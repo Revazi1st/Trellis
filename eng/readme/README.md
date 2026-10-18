@@ -130,9 +130,10 @@ column shows at 9. Real names (projects, types, files, switches) are set in mono
 edge instead, and so does the stage itself in the dark variant, all round. Gradients sit on surfaces
 only, never on text.
 
-**Motifs.** The lattice, a 45° grid of 1 px lines 48 px apart at 4 %, lies on the stage and on every
-picture's background, where it shows between the cards. The leaf appears once, in the mark. The banner
-has one glow, behind the mark.
+**Motifs.** The lattice, a 45° grid of 1 px lines 48 px apart at 4 %, lies on the stage and on the
+background of the architecture, testing and pipeline pictures, where it shows between the cards; the
+rings mark, a transparent 160 px icon, has none. The leaf appears once, in the mark. The banner has one
+glow, behind the mark.
 
 **Composition.** At least 32 px of padding inside every picture but the 160 px rings mark, which the
 render enforces for text, the banner's included; one focal object per picture; the title top left at
@@ -182,15 +183,19 @@ Open an SVG in a browser, or screenshot both themes with a headless Chromium (Ed
 picture's own size, and look at the PNG:
 
 ```bash
+svg=eng/readme/architecture-light.svg
+height=$(grep -o 'height="[0-9]*"' "$svg" | head -1 | tr -dc '0-9')
 "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" --headless=new \
-  --screenshot=/tmp/architecture-light.png --window-size=1240,2000 \
-  "file://$PWD/eng/readme/architecture-light.svg"
+  --user-data-dir="$(mktemp -d)" --no-first-run --no-default-browser-check \
+  --screenshot=/tmp/architecture-light.png --window-size=1240,$((height + 40)) \
+  "file://$PWD/$svg"
 ```
 
-Size the window to the SVG's `height` (plus a margin); QuickLook (`qlmanage`) makes square thumbnails
-and crops a tall picture at the bottom, so it is no help here. Check both themes, on GitHub's page colours
-if you can (white and `#0d1117`): the light and dark palettes are designed separately and each needs its
-own look.
+The private profile (`--user-data-dir`) matters when Edge is already open: on the default profile the
+headless browser waits for the one in use, and a batch of screenshots stalls for minutes. The window is
+the SVG's `height` plus a margin; QuickLook (`qlmanage`) makes square thumbnails and crops a tall picture
+at the bottom, so it is no help here. Check both themes, on GitHub's page colours if you can (white and
+`#0d1117`): the light and dark palettes are designed separately and each needs its own look.
 
 ## Changing a picture
 
