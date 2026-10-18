@@ -53,8 +53,9 @@ instead of guessing:
   they are drawn; the banner's two commands must be lines of the root `README.md`.
 - **Text that would not read.** Each text is sized from Helvetica's advance widths plus 8 % (monospace at
   0.62 em), and the render fails when a text would leave its canvas, come closer to the edge than the
-  picture's 32 px padding, leave the card or pill it is drawn in, overlap another, or sit on a colour it
-  does not contrast with by at least 4.5:1 (WCAG 2). On the banner the colour under a text is worked out
+  picture's 32 px padding, leave the card or pill it is drawn in, be smaller than 10 px (the rings mark
+  alone keeps its 9 px arc labels), overlap another, or sit on a colour it does not contrast with by at
+  least 4.5:1 (WCAG 2). On the banner the colour under a text is worked out
   at the text's own place: the stage's gradient, the glow over it and a crossing of the lattice.
 - **A layout that no longer fits.** A row of cards wider than the picture, an arrow too short to show its
   head, a step's words reaching the connector that wraps to the next row, a legend with no room: each
