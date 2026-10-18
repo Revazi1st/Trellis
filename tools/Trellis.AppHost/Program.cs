@@ -63,7 +63,8 @@ if (builder.ExecutionContext.IsRunMode)
     // signing key. Publish mode sets no environment; the deployment decides.
     migrations.WithEnvironment("DOTNET_ENVIRONMENT", "Development");
     api.WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");
-    // A second dashboard link straight to the API reference; the endpoint's own URL opens a 404.
+    // A second dashboard link, named for what it opens: the API reference. The endpoint's own URL lands there too,
+    // through the API's Development-only root redirect.
     api.WithUrlForEndpoint("http", static _ => new() { Url = "/scalar/v1", DisplayText = "Scalar" });
 #if (IncludeUI)
     web.WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");

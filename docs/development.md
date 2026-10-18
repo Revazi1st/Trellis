@@ -120,7 +120,7 @@ Then in Rider/VS Code, using the **`http (dev container)`** launch profiles — 
 `host.docker.internal:5433`, because inside the dev container `localhost` is the container itself:
 
 1. Run **Trellis.MigrationService** (profile `migrate (dev container)`) once — applies migrations and seeds.
-2. Run **Trellis.Api** (profile `http (dev container)`) → <http://localhost:5171>, Scalar at `/scalar/v1`.
+2. Run **Trellis.Api** (profile `http (dev container)`) → <http://localhost:5171>, which opens Scalar (`/scalar/v1`).
 3. Run **Trellis.UI.Web** (profile `http (dev container)`) → <http://localhost:5170>.
 
 **Any run configuration works**, because `devcontainer.json` sets `ASPNETCORE_ENVIRONMENT` and the

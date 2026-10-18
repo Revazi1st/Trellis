@@ -125,6 +125,9 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+    // The API's own address opens its reference instead of a 404, from the Aspire dashboard's endpoint link or a
+    // bare URL. Outside the versioned group and the OpenAPI document, like the reference itself.
+    app.MapGet("/", static () => Results.Redirect("/scalar/v1")).ExcludeFromDescription();
 }
 
 app.UseAuthentication();

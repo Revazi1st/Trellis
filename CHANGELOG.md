@@ -244,6 +244,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   jasontaylordev/CleanArchitecture's documentation keeps: build the images tagged with the commit,
   `aspire publish -o deploy`, fill `.env`, `docker compose up -d` (or `aspire deploy`), then probe
   `/health` and sign in, each step linking the reference section that explains it.
+- **The API's root opens its reference in Development**: `GET /` redirects to `/scalar/v1`
+  (jasontaylordev/CleanArchitecture), so the Aspire dashboard's endpoint link and a bare address land on
+  the API reference instead of a 404. It sits outside `/api/` and out of the OpenAPI document, and
+  outside Development the root stays a 404 (`ApiRootTests`).
 
 ### Changed
 

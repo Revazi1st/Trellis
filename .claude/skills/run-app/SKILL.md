@@ -14,7 +14,7 @@ aspire run                                   # postgres + migrations + api + web
 dotnet run --project tools/Trellis.AppHost   # the same app without the Aspire CLI
 ```
 
-Then open the dashboard URL it prints; the API exposes Scalar at `/scalar/v1`, the web app serves the UI. Seeded admin: `admin@example.com` / `Admin123!`.
+Then open the dashboard URL it prints; the API exposes Scalar at `/scalar/v1` (its root redirects there in Development), the web app serves the UI. Seeded admin: `admin@example.com` / `Admin123!`.
 
 ## Containerized smoke (no local SDK)
 Aspire can't orchestrate from the container, but you can run the pieces as sibling containers on one network to verify a change end-to-end:
