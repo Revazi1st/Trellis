@@ -336,6 +336,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   published on the host's loopback only (`127.0.0.1:18888`, reached over SSH) instead of on every
   interface. Publish an existing `deploy/` folder again to pick these up: `aspire publish` keeps the
   values already in `.env`.
+- **The test databases run Debian `postgres:18`**, the image the AppHost, `docker-compose.yml` and a
+  deployment run, instead of `postgres:18-alpine` (`DatabaseFixture`, `ApiFactory`): Alpine's musl libc
+  collates text differently from glibc, so a text sort could pass in a test and differ in production.
+  The first test run pulls the larger image.
 
 ### Removed
 

@@ -70,8 +70,9 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
     public SettableClock Time { get; } = new();
 
     // One container per fixture, no reuse: reuse is experimental and the Ryuk reaper kills
-    // "reusable" containers when a parallel test assembly's session ends mid-run.
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18-alpine")
+    // "reusable" containers when a parallel test assembly's session ends mid-run. Debian postgres:18, the image
+    // the AppHost and a deployment run (IntegrationTests' DatabaseFixture says why not Alpine).
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
         .WithDatabase("trellis_apitests")
         .Build();
 

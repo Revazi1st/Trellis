@@ -18,7 +18,7 @@ Then open the dashboard URL it prints; the API exposes Scalar at `/scalar/v1` (i
 
 ## Containerized smoke (no local SDK)
 Aspire can't orchestrate from the container, but you can run the pieces as sibling containers on one network to verify a change end-to-end:
-1. `postgres:18-alpine` (POSTGRES_PASSWORD=postgres, POSTGRES_DB=trellis).
+1. `postgres:18`, the image the AppHost and `docker-compose.yml` run (POSTGRES_PASSWORD=postgres, POSTGRES_DB=trellis).
 2. Migration worker: `./scripts/dotnet.sh run --project tools/Trellis.MigrationService -- --ConnectionStrings:trellis-db="Host=<pg>;Database=trellis;Username=postgres;Password=postgres"` (applies migrations + seeds).
 3. API: same connection-string arg; hit `/api/v1/...` and `/scalar/v1`.
 4. Web: pass `services__api__http__0=http://<api-host>:8080` so service discovery resolves the API.
