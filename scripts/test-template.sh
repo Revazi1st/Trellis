@@ -3,7 +3,7 @@
 # .github/workflows/template-ci.yml does to each leg after a push, done before the push.
 # Maintainer-only: template.json and the pack csproj exclude it from generated projects.
 #
-#   scripts/test-template.sh                       every leg of the matrix (the better part of an hour)
+#   scripts/test-template.sh                       every leg of the matrix (a few minutes a leg)
 #   scripts/test-template.sh default all-options   the named legs only
 #   scripts/test-template.sh --list                the legs and their flags
 #   scripts/test-template.sh --keep [leg...]       keep the working folder even when every leg passes

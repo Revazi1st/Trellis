@@ -63,7 +63,7 @@ same legs on your machine (a local .NET SDK and a running Docker):
 ```bash
 ./scripts/test-template.sh --list                # the legs, read from template-ci.yml's matrix
 ./scripts/test-template.sh no-ui all-options     # the legs your change touches
-./scripts/test-template.sh                       # every leg (the better part of an hour)
+./scripts/test-template.sh                       # every leg (a few minutes each)
 ```
 
 It runs `scripts/check-template-toggles.sh` (toggle wiring, directive placement, exclude globs),
