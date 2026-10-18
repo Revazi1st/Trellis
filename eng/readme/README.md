@@ -156,9 +156,10 @@ reason); no emoji. Each picture's own layout:
   `RUN_ASPIRE_E2E=1`, `RUN_UI_TESTS=1`; beside the name, or under it on a narrow card), then what it
   proves, with the layers again as dots on a small rail along its foot; the legend goes where the
   staircase of cards leaves room.
-- `pipeline`: three rows of numbered nodes joined by a hairline that wraps from each row's end to the
-  next row's start; the last row's dashed line is the outbox boundary, the commit before it, the
-  dispatch after it.
+- `pipeline`: three rows of numbered nodes joined by hairline arrows; a fainter hairline, in the rail
+  colour of the testing picture, returns from each row's end to the next row's start, so the steps and
+  their arrows stay the strongest lines; the last row's dashed line is the outbox boundary, the commit
+  before it, the dispatch after it.
 
 ## Put a picture on a page
 

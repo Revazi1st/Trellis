@@ -102,10 +102,10 @@
   <path d="M629 531.5 L636 528 L629 524.5 Z" fill="#9db3a4" stroke="#9db3a4" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M676 528 L894 528" fill="none" stroke="#9db3a4" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M893 531.5 L900 528 L893 524.5 Z" fill="#9db3a4" stroke="#9db3a4" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M948 160 L1132 160 Q1144 160 1144 172 L1144 256 Q1144 268 1132 268 L60 268 Q48 268 48 280 L48 324 Q48 336 60 336 L102 336" fill="none" stroke="#9db3a4" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M101 339.5 L108 336 L101 332.5 Z" fill="#9db3a4" stroke="#9db3a4" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M1028 336 L1132 336 Q1144 336 1144 348 L1144 450 Q1144 462 1132 462 L60 462 Q48 462 48 474 L48 516 Q48 528 60 528 L102 528" fill="none" stroke="#9db3a4" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M101 531.5 L108 528 L101 524.5 Z" fill="#9db3a4" stroke="#9db3a4" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M948 160 L1132 160 Q1144 160 1144 172 L1144 256 Q1144 268 1132 268 L60 268 Q48 268 48 280 L48 324 Q48 336 60 336 L102 336" fill="none" stroke="#36502d" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M101 339.5 L108 336 L101 332.5 Z" fill="#36502d" stroke="#36502d" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M1028 336 L1132 336 Q1144 336 1144 348 L1144 450 Q1144 462 1132 462 L60 462 Q48 462 48 474 L48 516 Q48 528 60 528 L102 528" fill="none" stroke="#36502d" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M101 531.5 L108 528 L101 524.5 Z" fill="#36502d" stroke="#36502d" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="128" cy="160" r="14" fill="#121d16" stroke="#e6efe8" stroke-width="1" stroke-opacity="0.35"/>
   <text class="s12w700" x="128" y="164.3" fill="#e6efe8" text-anchor="middle">1</text>
   <circle cx="328" cy="160" r="14" fill="#1e2f45" stroke="#d8e6f5" stroke-width="1" stroke-opacity="0.35"/>

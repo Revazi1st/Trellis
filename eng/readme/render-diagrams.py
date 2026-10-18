@@ -2033,11 +2033,14 @@ def pipeline(theme: Theme, facts: Facts) -> Svg:
     for _, cy, _, steps in laid:
         for left, right in zip(steps, steps[1:]):
             arrow(svg, [(left.x + NODE_R + 6, cy), (right.x - NODE_R - 6, cy)], theme.muted)
+    # A row's end returns to the next row's start in the rail's own hairline colour, fainter than the
+    # step arrows, so the steps and their arrows stay the strongest lines in the picture.
+    quiet = mix(theme.bg, theme.line, theme.line_alpha * 2)
     for (_, cy, deepest, steps), (_, next_cy, _, next_steps) in zip(laid, laid[1:]):
         channel = deepest + 16
         arrow(svg, [(steps[-1].x + NODE_R + 6, cy), (wrap_x, cy), (wrap_x, channel),
                     (entry_x, channel), (entry_x, next_cy),
-                    (next_steps[0].x - NODE_R - 6, next_cy)], theme.muted, radius=12)
+                    (next_steps[0].x - NODE_R - 6, next_cy)], quiet, radius=12)
     for _, cy, _, steps in laid:
         for s in steps:
             ring = theme.rings[s.ring]
