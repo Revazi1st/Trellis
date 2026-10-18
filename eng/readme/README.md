@@ -54,10 +54,11 @@ instead of guessing:
 - **Text that would not read.** Each text is sized from Helvetica's advance widths plus 8 % (monospace at
   0.62 em), and the render fails when a text would leave its canvas, come closer to the edge than the
   picture's 32 px padding (every picture but the rings mark, a 160 px icon), leave the card or pill it
-  is drawn in, be smaller than 10 px (the rings mark alone keeps its 9 px arc labels), overlap another,
-  or sit on a colour it does not contrast with by at least 4.5:1 (WCAG 2). On the banner the colour
-  under a text is worked out at the text's own place: the stage's gradient, the glow over it and a
-  crossing of the lattice.
+  is drawn in, be smaller than 12 px, overlap another, or sit on a colour it does not contrast with by at
+  least 4.5:1 (WCAG 2). GitHub's README column is 896 px wide, so it shows a 1200 px picture at three
+  quarters of its size and 12 px reads as 9; the rings mark alone, shown at its own 160 px, keeps its
+  9 px arc labels. On the banner the colour under a text is worked out at the text's own place: the
+  stage's gradient, the glow over it and a crossing of the lattice.
 - **An edge that would not show.** The banner's edge must stand out from the page GitHub shows it on
   (white for the light file, `#0d1117` for the dark one) by at least 1.2:1, about GitHub's own muted
   border on its dark page, and a rim drawn round the stage must stand out from the stage as much; both
@@ -121,8 +122,8 @@ no pure grey.
 
 **Type.** GitHub blocks web fonts inside images, so the SVGs use the system stacks
 `ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif` (400, 600, 700) and
-`ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`, never below 10 px. Real names (projects,
-types, files, switches) are set in monospace.
+`ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`, never below 12 px, which GitHub's README
+column shows at 9. Real names (projects, types, files, switches) are set in monospace.
 
 **Shape.** Radius 16 on cards, 10 on chips, panels and the terminal, fully rounded pills; borders are
 1 px hairlines, never 2 px outlines. No shadows: on the dark stage the terminal gets a 1 px lighter top

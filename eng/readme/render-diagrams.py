@@ -174,7 +174,10 @@ MIN_CONTRAST = 4.5
 # GitHub's own muted border on its dark page stands out by 1.24:1.
 GITHUB_PAGE = {"light": "#ffffff", "dark": "#0d1117"}
 MIN_EDGE = 1.2
-MIN_SIZE = 10  # px; the rings mark alone keeps its smaller arc labels, unchanged since it was drawn
+# GitHub's README column is 896 px, so it shows a 1200 px picture at three quarters of its size: 12 px
+# reads as 9. The rings mark alone, shown at its own 160 px, keeps its smaller arc labels, unchanged
+# since it was drawn.
+MIN_SIZE = 12  # px
 
 
 @dataclass(frozen=True)
@@ -1924,13 +1927,13 @@ NODE_R = 14
 
 def step_lines(s: Step, theme: Theme, width: float) -> List[Span]:
     ring = theme.rings[s.ring]
-    lines = [Span(s.title, theme.ink, 13, 600)]
+    lines = [Span(s.title, theme.ink, 14, 600)]
     for code in s.code:
         lines.append(Span(code, ring.ink, 12, mono=True))
         if code in s.sub:
-            lines.append(Span(s.sub[code], theme.muted, 11, mono=True))
+            lines.append(Span(s.sub[code], theme.muted, 12, mono=True))
     if s.text:
-        lines += [Span(t, theme.muted, 12) for t in wrap(s.text, 12, width)]
+        lines += [Span(t, theme.muted, 13) for t in wrap(s.text, 13, width)]
     return lines
 
 
@@ -2017,7 +2020,7 @@ def pipeline(theme: Theme, facts: Facts) -> Svg:
             ty = cy + NODE_R + 20
             for span in step_lines(s, theme, room(s, pitch)):
                 svg.text(s.x, ty, [span], on=theme.page, anchor="middle")
-                ty += 18 if span.size >= 12 else 16
+                ty += 18
             deepest = max(deepest, ty - 14)
         last = steps[-1]
         widest = max(span.width for span in step_lines(last, theme, room(last, pitch)))
