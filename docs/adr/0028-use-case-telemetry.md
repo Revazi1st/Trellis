@@ -105,13 +105,15 @@ pins both rows; `.claude/rules/application.md`'s pipeline line names both levels
 
 - **The caller's user id on every request signal.** `UserTelemetryMiddleware` (Api.Common) runs right
   after authentication and, for a signed-in caller, opens a `CallerUserId` log scope and tags the request
-  span `enduser.id` with the caller's user id. The outcome line, the authorization failure behind a 403
-  and whatever a handler logs then name the account; log records carry the scope because ServiceDefaults
-  sets `IncludeScopes`. The scope is not called `UserId`: the security events already name the account
-  they are about `{UserId}`, which need not be the caller, and one record cannot hold both under one key
-  (an OTLP exporter writes both attributes, Serilog keeps the event's). The id only, never the name or
-  the e-mail, for the reason descriptions left the line: it is written for every request. `enduser.id` is
-  the OpenTelemetry semantic convention for the end user an operation runs for (deprecated in semantic
+  span `enduser.id` with the caller's user id. The outcome line and whatever a handler logs then name the
+  account; log records carry the scope because ServiceDefaults sets `IncludeScopes`. A 403 from
+  authorization is named by its request span alone at the shipped levels: ASP.NET Core writes the failure
+  at Information under `Microsoft.AspNetCore`, which `appsettings.json` holds at Warning, and nothing
+  else logs it. The scope is not called `UserId`: the security events already name the account they are
+  about `{UserId}`, which need not be the caller, and one record cannot hold both under one key (an OTLP
+  exporter writes both attributes, Serilog keeps the event's). The id only, never the name or the e-mail,
+  for the reason descriptions left the line: it is written for every request. `enduser.id` is the
+  OpenTelemetry semantic convention for the end user an operation runs for (deprecated in semantic
   conventions 1.26 and restored in 1.31 for exactly that); `user.id` belongs to the generic user
   namespace, whose own example is an operating-system account, so it does not carry exactly this meaning.
   Fitness: `UserTelemetryTests` (ApiTests: an authenticated request's outcome record carries the id in

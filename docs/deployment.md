@@ -156,8 +156,12 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every host exports logs, metrics and trace
   names. The request span carries it as `trellis.correlation_id`.
 - **Who sent it**: in an authenticated request the request span carries `enduser.id`, the caller's user
   id, and every log line written further in carries the same id in the `CallerUserId` scope: the use-case
-  outcome line, the authorization failure behind a 403, whatever a handler logs. The id only, never the
-  e-mail; an anonymous request carries neither. Search logs by `CallerUserId` and traces by `enduser.id`.
+  outcome line, a rejected command's included, and whatever a handler logs. A 403 from authorization
+  writes no line at the shipped levels (ASP.NET Core logs the failure at Information under
+  `Microsoft.AspNetCore`, which `appsettings.json` holds at Warning; Development lowers it, and there that
+  line carries the scope too), so its request span, with `enduser.id` and the status code, is the record.
+  The id only, never the e-mail; an anonymous request carries neither. Search logs by `CallerUserId` and
+  traces by `enduser.id`.
 - **Log levels per feature**: a use case's outcome line is logged under its own command or query type
   (`Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery`), and a handler that logs does
   so under its own type in the same namespace, so a namespace prefix sets one feature's level:
@@ -274,10 +278,12 @@ Every signal's resource carries `service.version` and `deployment.environment.na
 | 13xx | the outbox processor (`OutboxLog`); a message's lines inside the `OutboxMessage {MessageId} {EventType}` scope | 1301–1309, listed under [Outbox operations](#outbox-operations) |
 
 **Log scopes** — every line written inside the API's pipeline carries `CorrelationId` (the response's
-`X-Correlation-ID`), and every line after authentication in a signed-in caller's request carries
-`CallerUserId` (their user id, the request span's `enduser.id`). A `UserId` field, as in the security
-events, is the account a line is about, which need not be the caller; no message uses `CallerUserId`
-(`TelemetryNamingTests`), so a record never holds two user ids under one key.
+`X-Correlation-ID`), and every line written past authentication in a signed-in caller's request carries
+`CallerUserId` (their user id, the request span's `enduser.id`). The exception handler's line is written
+further out, so it has `CorrelationId` and the trace but not `CallerUserId`; a use case that throws has
+its own line inside the scope (1006). A `UserId` field, as in the security events, is the account a line
+is about, which need not be the caller; no message uses `CallerUserId` (`TelemetryNamingTests`), so a
+record never holds two user ids under one key.
 
 ### Outbox operations
 

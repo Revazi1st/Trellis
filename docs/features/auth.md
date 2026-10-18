@@ -56,9 +56,11 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
 - **The caller on every signal**: right after authentication, `UserTelemetryMiddleware` (Api.Common)
   puts the signed-in caller's user id in the log scope (`CallerUserId`; not `UserId`, which the security
   events above use for the account an event is about) and on the request span (`enduser.id`), so the
-  outcome line of a rejected command and the authorization line behind a 403 name the account. The id
-  only, never the e-mail; a request without a valid access token (a sign-in, a registration) carries
-  neither. `docs/deployment.md` lists both in its *Telemetry reference*.
+  outcome line of a rejected command names the account, and so does the request span of a 403 from a
+  missing permission, which writes no log line at the shipped levels (ASP.NET Core logs the failure at
+  Information under `Microsoft.AspNetCore`, held at Warning outside Development). The id only, never the
+  e-mail; a request without a valid access token (a sign-in, a registration) carries neither.
+  `docs/deployment.md` lists both in its *Telemetry reference*.
 - **Logout** revokes the presented refresh token (idempotent, anonymous — possession of the token is
   the authorization; never trips replay detection). **Revoke-all** signs the caller out everywhere.
 - **Tenant (multi-tenancy toggle)**: every user has exactly one `TenantId` (`AspNetUsers`, required,

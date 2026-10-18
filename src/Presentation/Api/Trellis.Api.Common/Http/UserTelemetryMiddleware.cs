@@ -7,14 +7,18 @@ using Trellis.Application.Abstractions;
 namespace Trellis.Api.Common.Http;
 
 /// <summary>
-/// Names the authenticated caller on every signal the rest of the request produces, so a 403, a rejected
-/// command or a failed write says which account sent it. Two places, one value, the caller's user id:
+/// Names the authenticated caller on the signals the rest of the request produces, so a rejected command,
+/// a failed write or a 403 says which account sent it. Two places, one value, the caller's user id:
 /// <list type="bullet">
 /// <item>a <see cref="ScopeProperty"/> log scope, which every line written further in inherits: the
-/// use-case outcome line, the authorization failure, whatever a handler logs. ServiceDefaults exports
-/// scopes as log attributes (<c>IncludeScopes</c>);</item>
+/// use-case outcome line and whatever a handler logs. ServiceDefaults exports scopes as log attributes
+/// (<c>IncludeScopes</c>). The exception handler runs further out, so its line carries the correlation id
+/// and the trace, not this;</item>
 /// <item>the <see cref="SpanAttribute"/> attribute on the request span, OpenTelemetry's name for the end user
-/// an operation runs for, so a trace search by user finds the request around its use-case span.</item>
+/// an operation runs for, so a trace search by user finds the request around its use-case span. A 403 from
+/// authorization has no use case and, at the shipped levels, no log line (ASP.NET Core writes the failure
+/// at Information under <c>Microsoft.AspNetCore</c>, which <c>appsettings.json</c> holds at Warning), so
+/// its span is what names the caller.</item>
 /// </list>
 /// The id only, never the name or the e-mail: the id is a pseudonymous key the database already uses, the
 /// e-mail is personal data that the log backend would keep for as long as it keeps logs (ADR-0028). An
