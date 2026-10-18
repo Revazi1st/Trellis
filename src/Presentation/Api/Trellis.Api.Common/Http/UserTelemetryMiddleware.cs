@@ -12,7 +12,7 @@ namespace Trellis.Api.Common.Http;
 /// <list type="bullet">
 /// <item>a <see cref="ScopeProperty"/> log scope, which every line written further in inherits: the
 /// use-case outcome line, the authorization failure, whatever a handler logs. ServiceDefaults exports
-/// scopes as log attributes (<c>IncludeScopes</c>), and Serilog reads them from the log context;</item>
+/// scopes as log attributes (<c>IncludeScopes</c>);</item>
 /// <item>the <see cref="SpanAttribute"/> attribute on the request span, OpenTelemetry's name for the end user
 /// an operation runs for, so a trace search by user finds the request around its use-case span.</item>
 /// </list>

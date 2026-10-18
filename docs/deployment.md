@@ -274,9 +274,9 @@ Every signal's resource carries `service.version` and `deployment.environment.na
 | 13xx | the outbox processor (`OutboxLog`); a message's lines inside the `OutboxMessage {MessageId} {EventType}` scope | 1301–1309, listed under [Outbox operations](#outbox-operations) |
 
 **Log scopes** — every line written inside the API's pipeline carries `CorrelationId` (the response's
-`X-Correlation-ID`) and, for a signed-in caller, `UserId` from authentication on (their user id, the request
-span's `enduser.id`). A security event's own `UserId` field is the account the event is about, not the
-caller.
+`X-Correlation-ID`), and every line after authentication in a signed-in caller's request carries `UserId`
+(their user id, the request span's `enduser.id`). A security event's own `UserId` field is the account the
+event is about, not the caller.
 
 ### Outbox operations
 
