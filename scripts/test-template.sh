@@ -23,8 +23,9 @@
 #
 # KEEP IN SYNC with .github/workflows/template-ci.yml. The legs and their flags are read from its
 # instantiate matrix (keys name, args, out, test and regenerate-migration, one per line, args in
-# double quotes), so a leg added there runs here with no edit, and a key this script does not know
-# stops it until it learns what the key means. The commands in run_leg mirror that job's steps.
+# double quotes), so a leg added there runs here with no edit, and a key this script does not know,
+# in a leg or beside include (an exclude list, a dimension such as os), stops it until it learns
+# what the key means. The commands in run_leg mirror that job's steps.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -35,7 +36,8 @@ usage() {
 }
 
 # One record per leg of the instantiate job's matrix: LEG|name|out|test|regenerate|args, test and
-# regenerate as 1 or 0. ERR|message when the matrix holds something this reader does not understand.
+# regenerate as 1 or 0. ERR|message when the matrix holds something this reader does not understand:
+# a key in a leg it does not know, or anything in the matrix beside include.
 read_legs() {
   awk '
     function indent(s) { match(s, /^ */); return RLENGTH }
@@ -46,14 +48,29 @@ read_legs() {
       name = ""; out = ""; args = ""; test = ""; regen = ""
     }
     /^  instantiate:[[:space:]]*$/ { job = 1; next }
-    job && /^  [^[:space:]#]/      { job = 0 }
+    job && /^  [^[:space:]#]/      { flush(); job = 0 }
     !job                           { next }
     /^[[:space:]]*(#.*)?$/         { next }
-    !list {
-      if ($0 ~ /^[[:space:]]+include:[[:space:]]*$/) { list = 1; base = indent($0) }
+    !matrix {
+      if ($0 ~ /^[[:space:]]+matrix:[[:space:]]*(#.*)?$/) { matrix = 1; mbase = indent($0) }
       next
     }
-    indent($0) <= base { flush(); list = 0; job = 0; next }
+    # A line no deeper than matrix: ends the matrix, and with it all this reader needs of the job.
+    indent($0) <= mbase { flush(); job = 0; next }
+    # The matrix keys sit one indent below it. include, which holds the legs, is the only one this
+    # reader knows; any other (an exclude list, a dimension such as os) changes the legs CI runs.
+    !kbase { kbase = indent($0) }
+    indent($0) <= kbase {
+      flush()
+      list = ($0 ~ /^[[:space:]]+include:[[:space:]]*(#.*)?$/)
+      if (!list) {
+        line = $0
+        sub(/^[[:space:]]+/, "", line)
+        printf "ERR|the matrix line \"%s\" is new to this script\n", line
+      }
+      next
+    }
+    !list { next }
     {
       line = $0
       sub(/^[[:space:]]+/, "", line)
@@ -69,7 +86,7 @@ read_legs() {
       else if (key == "regenerate-migration") regen = value
       else printf "ERR|the matrix key %s (leg %s) is new to this script\n", key, name
     }
-    END { if (list) flush() }
+    END { flush() }
   ' "$workflow"
 }
 
