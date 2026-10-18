@@ -169,6 +169,7 @@ DARK = make_theme("dark", False, bg="#0c1410", surface="#121d16", surface2="#172
                   accent="#a9dd8a", leaf="#8fd16a")
 THEMES = (LIGHT, DARK)
 MIN_CONTRAST = 4.5
+MIN_SIZE = 10  # px; the rings mark alone keeps its smaller arc labels, unchanged since it was drawn
 
 
 @dataclass(frozen=True)
@@ -343,10 +344,11 @@ def _paint(fill: str, fill_opacity: Optional[float], stroke: Optional[str], widt
 
 class Svg:
     def __init__(self, name: str, width: float, height: float, title: str, desc: str,
-                 pad: float = 0.0) -> None:
+                 pad: float = 0.0, min_size: float = MIN_SIZE) -> None:
         self.name = name
         self.width, self.height = width, height
         self.pad = pad  # no text closer to the edge than this
+        self.min_size = min_size  # no text smaller than this
         self.title, self.desc = title, desc
         self.body: List[str] = []
         self.defs: List[str] = []
@@ -355,6 +357,9 @@ class Svg:
 
     def font(self, size: float, weight: int = 400, mono: bool = False) -> str:
         """The class for one font; the <style> block declares each class once."""
+        if size < self.min_size:
+            raise RenderError(f"{self.name}: a {num(size)} px text is below the "
+                              f"{num(self.min_size)} px the pictures allow")
         name = ("m" if mono else "s") + num(size).replace(".", "_")
         if weight != 400:
             name += f"w{weight}"
@@ -2040,7 +2045,7 @@ def rings(theme: Theme, facts: Facts) -> Svg:
     svg = Svg(f"rings-{theme.name}", size, size, "Trellis rings",
               "Concentric rings: Domain and SharedKernel at the centre, Application around them, "
               "then Infrastructure and Persistence as two halves of one split ring, and "
-              "Presentation outside.")
+              "Presentation outside.", min_size=9)
     pres, app = theme.rings["presentation"], theme.rings["application"]
     centre = theme.rings["domain"]
     infra, persist = theme.rings["infrastructure"], theme.rings["persistence"]
