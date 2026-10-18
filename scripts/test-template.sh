@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs Template CI's legs on this machine: what the instantiate job of
-# .github/workflows/template-ci.yml does to each leg after a push, done before the push.
+# Runs Template CI's legs on this machine before the push: each leg of the instantiate job in
+# .github/workflows/template-ci.yml, instantiated from the packed template rather than the folder.
 # Maintainer-only: template.json and the pack csproj exclude it from generated projects.
 #
 #   scripts/test-template.sh                       every leg of the matrix (a few minutes a leg)
@@ -14,6 +14,12 @@
 # regenerates the initial migration where the leg says so, builds Release and, on the legs Template
 # CI tests, runs dotnet test. A table of results follows, and the exit code is 1 when anything
 # failed. The working folder (under $TMPDIR) keeps every log and generated solution after a failure.
+#
+# Because it packs, the legs get the package's content, as an install from nuget.org does and as the
+# last step of Template CI's pack job checks; the instantiate job installs the source folder instead.
+# The pack csproj's TemplateContentExclude decides what the package holds, template.json's
+# sources[0].exclude what a folder install holds, and the two lists are kept in step by hand: a file
+# missing from one of them ships by one route and not by the other.
 #
 # The generated tests include the Aspire E2E, which boots each generated AppHost as Template CI does
 # on its Linux runners; RUN_ASPIRE_E2E=0 skips it. The browser tests stay off, as in CI. Needs a .NET

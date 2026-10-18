@@ -72,8 +72,12 @@ into a private hive (`--debug:custom-hive`, so your real template list stays unt
 leg instantiates it with the leg's flags, regenerates the initial migration where the leg does,
 builds Release and runs the tests on the legs Template CI tests. It prints a table of results and
 exits 1 on any failure, keeping the logs and the generated solutions in the folder it names.
-`RUN_ASPIRE_E2E=0` skips the Aspire E2E. The content gates (leftovers of the template's name, the
-consumer files, actionlint over the generated workflows) and the Windows leg run only in Template CI.
+Because it packs, the legs get the package's content, as an install from nuget.org does, where
+Template CI's instantiate job installs the source folder; the two exclude lists that decide those
+contents (`TemplateContentExclude` in the pack project, `sources[0].exclude` in `template.json`) are
+kept in step by hand. `RUN_ASPIRE_E2E=0` skips the Aspire E2E. The content gates (leftovers of the
+template's name, the consumer files, actionlint over the generated workflows) and the Windows leg
+run only in Template CI.
 The `add-toggle` skill covers adding a toggle; `docs/releasing.md` covers releasing.
 
 ## Commit style
