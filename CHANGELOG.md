@@ -365,6 +365,12 @@ If you generated a project from 0.1.0, read these before adopting this version w
   request's span.
 - A lower-case quote currency (`usd`) came back from the exchange-rate client as
   `ExchangeRate.UnknownCurrency`; the quote is matched case-insensitively.
+- The Domain's dependency test named only the outer layers, EF Core and ASP.NET Core, so a Domain type
+  could derive from FluentValidation's `AbstractValidator` or take an `ILogger`, both of which the
+  SharedKernel brings along, and nothing failed. `LayerDependencyTests.Domain_depends_only_on_SharedKernel`
+  is now an allow-list (`System.*`, the SharedKernel, the Domain itself), and a planted validator and
+  logger prove it refuses them. The Domain csproj comment and the domain and SharedKernel rules name
+  the three packages the SharedKernel carries.
 
 ### Security
 - **MessagePack pinned to 2.5.307** ahead of Aspire 13.6.1, which still pulls 2.5.302 through `Aspire.Hosting` and
