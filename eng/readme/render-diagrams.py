@@ -37,10 +37,10 @@ read at render time:
 
 A fact the script cannot find stops it with a message (exit 2) instead of drawing a stale picture;
 so does text that would leave its canvas, its padding or its card, collide with other text or lose
-contrast, an arrow too short to read as one, and a banner whose edge would not show on the page
-GitHub puts it on. Text is sized from Helvetica's advance widths plus a margin, and every text
-colour is checked against the colour it sits on (WCAG 2, at least 4.5:1); on the banner's gradient,
-at the text's own place.
+contrast, a card off the 8 px grid, an arrow too short to read as one, and a banner whose edge
+would not show on the page GitHub puts it on. Text is sized from Helvetica's advance widths plus a
+margin, and every text colour is checked against the colour it sits on (WCAG 2, at least 4.5:1); on
+the banner's gradient, at the text's own place.
 """
 
 from __future__ import annotations
@@ -518,6 +518,14 @@ def ceil8(value: float) -> float:
 def floor8(value: float) -> float:
     """Down to the 8 px grid."""
     return math.floor(value / 8 + 1e-6) * 8
+
+
+def on_grid(svg: Svg, what: str, *values: float) -> None:
+    """Cards, chips, panels and the terminal sit on the 8 px grid, and so do the nodes' centres."""
+    off = [value for value in values if abs(value - round(value / 8) * 8) > 0.01]
+    if off:
+        raise RenderError(f"{svg.name}: {what} is off the 8 px grid, at "
+                          f"{', '.join(num(value) for value in off)}")
 
 
 def lattice_pattern(pattern_id: str, colour: str, alpha: float) -> str:
@@ -1428,6 +1436,7 @@ def make_panel(rel: str, facts: Facts) -> Panel:
 def draw_panel(svg: Svg, theme: Theme, panel: Panel) -> None:
     ring = theme.rings[panel.hue]
     box = Box(panel.x, panel.y, panel.w, panel.h)
+    on_grid(svg, f"{panel.name}'s card", box.x, box.y, box.w, box.h)
     svg.comment(panel.name)
     svg.rect(panel.x, panel.y, panel.w, panel.h, rx=CHIP_R, fill=ring.panel, stroke=ring.ink,
              opacity=0.2)
@@ -1513,6 +1522,7 @@ def card_need(card: str, content: float) -> float:
 def draw_card(svg: Svg, theme: Theme, card: str, box: Box) -> None:
     hue, title, _, _ = CARDS[card]
     ring = theme.rings[hue]
+    on_grid(svg, f"the {title} card", box.x, box.y, box.w, box.h)
     svg.comment(f"{title} card")
     svg.rect(box.x, box.y, box.w, box.h, rx=CARD_R, fill=ring.fill, stroke=ring.ink,
              opacity=HAIRLINE)
@@ -1725,7 +1735,8 @@ def architecture(theme: Theme, facts: Facts) -> Svg:
 # ==================================================================================================
 
 PITCH = 112   # a layer's column on the rail
-CHIP_H = 28
+INSET = 8     # a chip or a card inside its columns: 16 px between neighbours, as in a bento
+CHIP_H = 32
 
 
 def testing(theme: Theme, facts: Facts) -> Svg:
@@ -1758,7 +1769,7 @@ def testing(theme: Theme, facts: Facts) -> Svg:
         return STACK.index(f.suite.top), STACK.index(f.suite.bottom)
 
     def card_rect(a: int, b: int) -> Tuple[float, float]:
-        return col(a) + 4, (b - a + 1) * PITCH - 8
+        return col(a) + INSET, (b - a + 1) * PITCH - 2 * INSET
 
     # ArchitectureTests above the rail, a bracket over every layer its rules read
     arch = bands[0]
@@ -1775,15 +1786,16 @@ def testing(theme: Theme, facts: Facts) -> Svg:
 
     # the rail
     chip_y = bracket_y + 14
-    svg.line(col(0) + 4, chip_y + CHIP_H / 2, col(len(STACK) - 1) + PITCH - 4, chip_y + CHIP_H / 2,
-             stroke=theme.line, opacity=theme.line_alpha * 2)
+    svg.line(col(0) + INSET, chip_y + CHIP_H / 2, col(len(STACK) - 1) + PITCH - INSET,
+             chip_y + CHIP_H / 2, stroke=theme.line, opacity=theme.line_alpha * 2)
     for i, layer in enumerate(STACK):
         text, key = LAYERS[layer]
         ring = theme.rings[key]
-        chip = Box(col(i) + 4, chip_y, PITCH - 8, CHIP_H)
+        chip = Box(col(i) + INSET, chip_y, PITCH - 2 * INSET, CHIP_H)
+        on_grid(svg, f"the {text} chip", chip.x, chip.y, chip.w, chip.h)
         svg.rect(chip.x, chip.y, chip.w, chip.h, rx=CHIP_R, fill=ring.fill, stroke=ring.ink,
                  opacity=HAIRLINE)
-        svg.text(chip.cx, chip_y + 18.5, [Span(text, ring.ink, 12, 600)], on=ring.fill,
+        svg.text(chip.cx, chip.cy + 4.5, [Span(text, ring.ink, 12, 600)], on=ring.fill,
                  anchor="middle", within=chip)
 
     # the cards, measured first: each is as tall as its words
@@ -1806,7 +1818,7 @@ def testing(theme: Theme, facts: Facts) -> Svg:
         bottom = 54 + 18 * (len(lines) - 1) + 6 + (0 if inline else 8 + PILL_H)
         box = Box(x, y, w, ceil8(bottom + 14 + 4 + 14))
         laid.append((f, box, inline, lines))
-        y = box.bottom + 12
+        y = box.bottom + GUTTER
 
     cards_bottom = laid[-1][1].bottom
     for i in range(len(STACK)):  # each layer's guide, down to the last card that runs through it
@@ -1825,6 +1837,7 @@ def testing(theme: Theme, facts: Facts) -> Svg:
                      opacity=HAIRLINE * 1.6)
 
     for f, box, inline, lines in laid:
+        on_grid(svg, f"the {f.suite.name} card", box.x, box.y, box.w, box.h)
         svg.comment(f.suite.name)
         dashed = bool(f.opt_in)
         if dashed:
@@ -1997,7 +2010,7 @@ def pipeline(theme: Theme, facts: Facts) -> Svg:
             words = svg.text(x, y, spans, on=theme.page)
             if opens == 0 and len(captions) > 1 and words.right > boundary - 16:
                 raise RenderError(f"pipeline: the caption {caption!r} runs into the boundary")
-        cy = y + 36
+        cy = y + 40
         deepest = cy
         for s in steps:
             ty = cy + NODE_R + 20
@@ -2024,6 +2037,7 @@ def pipeline(theme: Theme, facts: Facts) -> Svg:
     for _, cy, _, steps in laid:
         for s in steps:
             ring = theme.rings[s.ring]
+            on_grid(svg, f"the {s.title} node's centre", s.x, cy)
             svg.circle(s.x, cy, NODE_R, fill=ring.fill, stroke=ring.ink, opacity=HAIRLINE)
             svg.text(s.x, cy + 4.3, [Span(str(s.number), ring.ink, 12, 700)], on=ring.fill,
                      anchor="middle", within=Box(s.x - NODE_R, cy - NODE_R, 2 * NODE_R,
@@ -2205,6 +2219,8 @@ def title(theme: Theme, facts: Facts) -> Svg:
     if max(words.right, tagline.right) + 40 > chip.x:
         raise RenderError("title: the wordmark and the tagline run into the terminal")
 
+    on_grid(svg, "the mark", mx, my, mark)
+    on_grid(svg, "the terminal", chip.x, chip.y, chip.w, chip.h)
     svg.comment("the terminal, with the install commands")
     svg.rect(chip.x, chip.y, chip.w, chip.h, rx=CHIP_R, fill="url(#terminal)",
              stroke=STAGE.line, opacity=0.16)

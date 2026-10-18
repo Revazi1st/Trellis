@@ -62,10 +62,10 @@ instead of guessing:
   (white for the light file, `#0d1117` for the dark one) by at least 1.2:1, about GitHub's own muted
   border on its dark page, and a rim drawn round the stage must stand out from the stage as much; both
   are measured all along the edge.
-- **A layout that no longer fits.** A row of cards wider than the picture, an arrow shorter than 24 px
-  (it would read as a tick on a card's edge) or too short to show its head, a step's words reaching the
-  connector that wraps to the next row, a legend with no room: each stops the render with the picture and
-  the part named.
+- **A layout that no longer fits.** A row of cards wider than the picture, a card, chip or panel off the
+  8 px grid (a node by its centre), an arrow shorter than 24 px (it would read as a tick on a card's
+  edge) or too short to show its head, a step's words reaching the connector that wraps to the next row,
+  a legend with no room: each stops the render with the picture and the part named.
 
 ## How the trees are cut
 
@@ -136,8 +136,9 @@ has one glow, behind the mark.
 **Composition.** At least 32 px of padding inside every picture but the 160 px rings mark, which the
 render enforces for text, the banner's included; one focal object per picture; the title top left at
 600 with a one-line muted subtitle; connectors are 1.25 px hairlines with small filled arrowheads;
-boxes on the 8 px grid; at most two accent hues beyond the ring hues (the terminal's traffic lights are
-monochrome for that reason); no emoji. Each picture's own layout:
+cards, chips, panels, the terminal and the nodes' centres on the 8 px grid, which the render checks; at
+most two accent hues beyond the ring hues (the terminal's traffic lights are monochrome for that
+reason); no emoji. Each picture's own layout:
 
 - `title`: the stage edge to edge, the mark with the wordmark and the tagline on the left, the terminal on
   the right. The two variants differ only at the edge: on white the stage's own edge shows, while
@@ -149,8 +150,8 @@ monochrome for that reason); no emoji. Each picture's own layout:
   Persistence sit side by side, the ∥ in the gutter between them, beside the lane where Presentation
   reaches Application directly; Application and Domain · SharedKernel follow, as the rings mark splits
   Core; Shared and tools close it.
-- `testing`: the layers from a browser to PostgreSQL as a rail of chips; each suite a card spanning the
-  layers it runs through, its needs as a pill (`nothing`, `Docker`, `RUN_ASPIRE_E2E=1`,
+- `testing`: the layers from a browser to PostgreSQL as a rail of chips, 16 px apart; each suite a card
+  spanning the layers it runs through, its needs as a pill (`nothing`, `Docker`, `RUN_ASPIRE_E2E=1`,
   `RUN_UI_TESTS=1`), the layers again as dots on a small rail along its foot; the legend goes where the
   staircase of cards leaves room.
 - `pipeline`: three rows of numbered nodes joined by a hairline that wraps from each row's end to the
