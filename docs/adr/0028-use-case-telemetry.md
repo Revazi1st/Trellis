@@ -4,8 +4,8 @@
 - **Date**: 2026-10-08
 - **Amended**: 2026-10-11 — the span wraps the line, descriptions leave the line, stable event ids, final span attribute names, a validation-failure counter (see *Amendment* below)
 - **Amended**: 2026-10-11 — `ErrorType.PreconditionFailed` is a classified expected failure at Information; `ErrorType.Unavailable` stays at Warning (see *Second amendment* below)
-- **Amended**: 2026-10-18 — the caller's user id on every request signal, and a log category per use case (see *Third amendment* below)
-- **Prior art**: [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT): logging each use case under its own request type's category (`ILogger<TRequest>`) and the acting user's id on every request's log line (`LoggingBehaviour`) (the 2026-10-18 amendment)
+- **Amended**: 2026-10-18 — the caller's user id on every request signal, a log category per use case, an opt-in slow-use-case Warning (see *Third amendment* below)
+- **Prior art**: [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT): logging each use case under its own request type's category (`ILogger<TRequest>`), the acting user's id on every request's log line, and a slow use case surfaced at Warning past a threshold (`LoggingBehaviour`, `PerformanceBehaviour`) (the 2026-10-18 amendment)
 
 ## Context
 
@@ -101,7 +101,7 @@ is what the Warning channel is for, and the first line written after the retries
 the limiter have given up should reach whoever is on call. `UseCaseOutcomeTests.Every_error_type_logs_one_line_at_its_level`
 pins both rows; `.claude/rules/application.md`'s pipeline line names both levels.
 
-## Third amendment (2026-10-18): the caller's user id, a log category per use case
+## Third amendment (2026-10-18): the caller's user id, a log category per use case, a slow-use-case Warning
 
 - **The caller's user id on every request signal.** `UserTelemetryMiddleware` (Api.Common) runs right
   after authentication and, for a signed-in caller, opens a `UserId` log scope and tags the request span
@@ -127,3 +127,15 @@ pins both rows; `.claude/rules/application.md`'s pipeline line names both levels
   something to match an outcome line by: match the event ids (1001–1099), as the tests now do.
   Fitness: `UseCaseOutcomeTests.Each_use_case_logs_under_its_own_message_type` (all three decorator
   shapes), `SerilogExportTests` (the category survives the Serilog bridge).
+- **A slow use case at Warning, when an operator asks.** `Telemetry:SlowUseCaseThreshold` (unset by
+  default, 1 ms to 1 hour, validated at boot with the rest of `UseCaseLoggingOptions`) makes a use case
+  that returns a result after at least that long write event 1007 `UseCaseSlow` at Warning after its
+  outcome line, carrying the use case's name and elapsed milliseconds and nothing else. The consequence
+  above stays true: a Warning still means something unexpected, because nothing is written until someone
+  says what slow is for this system. A use case that throws or is cancelled already has its own line with
+  its elapsed time, so it gets no second one. There is no duration histogram: ASP.NET Core's
+  `http.server.request.duration` by route already charts every HTTP use case; one is worth adding when a
+  use case runs outside HTTP (the scheduled-job recipe in `docs/architecture.md`). Fitness:
+  `UseCaseOutcomeTests` (past the threshold, a success and a failure each add one Warning under the use
+  case's category; under it or without one, none), `OptionsConventionTests` (out of range stops the boot),
+  `UseCaseLoggingOptionsTests` (bound from the section, off by default).

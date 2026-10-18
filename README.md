@@ -614,6 +614,7 @@ describes planned work that is not in the template yet; the marker goes when it 
   - the error-code vocabulary fitness test and the value-object constructor test;
   - the build-time analyzer for a discarded `Result`.
 - [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT):
+  - logging each use case under its own request type's category (`ILogger<TRequest>`), the acting user's id on every request's log line, and a slow use case surfaced at Warning past a threshold (`LoggingBehaviour`, `PerformanceBehaviour`);
   - stamping audit columns with the user's id rather than a display name (`AuditableEntityInterceptor`);
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).

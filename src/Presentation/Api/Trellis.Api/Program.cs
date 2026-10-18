@@ -2,6 +2,7 @@
 using Serilog;
 #endif
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using Trellis.Api.Common;
 using Trellis.Api.Common.Authentication;
@@ -41,14 +42,16 @@ builder.Services.AddSerilog(
     writeToProviders: true);
 #endif
 
-// The use-case outcome line names an error's type and code; its description joins only where
-// Telemetry:IncludeErrorDetail says so (appsettings.Development.json), because a description can carry what a
-// user typed (ADR-0028). Registered before AddApplication, whose TryAdd would otherwise register the default.
-builder.Services.AddSingleton(new UseCaseLoggingOptions
-{
-    IncludeErrorDetail = builder.Configuration.GetValue<bool>(
-        $"{UseCaseLoggingOptions.SectionName}:{nameof(UseCaseLoggingOptions.IncludeErrorDetail)}"),
-});
+// The use-case logging stage's settings, from the Telemetry section and checked at boot (ADR-0028). The outcome
+// line names an error's type and code; its description joins only where Telemetry:IncludeErrorDetail says so
+// (appsettings.Development.json), because a description can carry what a user typed. Telemetry:SlowUseCaseThreshold,
+// unset by default, adds a Warning for a use case slower than it. The bound instance is registered as the plain
+// type the decorators take, before AddApplication, whose TryAdd would otherwise register the defaults.
+builder.Services.AddOptions<UseCaseLoggingOptions>()
+    .BindConfiguration(UseCaseLoggingOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddSingleton(static services => services.GetRequiredService<IOptions<UseCaseLoggingOptions>>().Value);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOutboundIntegrations(builder.Configuration);

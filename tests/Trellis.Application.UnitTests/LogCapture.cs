@@ -21,12 +21,18 @@ internal sealed class LogCapture
 
     public IReadOnlyList<LogEntry> Entries => [.. _entries];
 
+    /// <summary>The slow-use-case Warning's id: a use-case line, but not the outcome line.</summary>
+    private const int UseCaseSlowEventId = 1007;
+
     /// <summary>
-    /// The lines the pipeline's logging stage wrote — one per use-case invocation — matched on the use-case
-    /// event ids (1001–1099, ADR-0028), not on the category: each use case logs under its own message type.
+    /// The outcome lines the pipeline's logging stage wrote — one per use-case invocation — matched on the
+    /// use-case event ids (1001–1099, ADR-0028), not on the category: each use case logs under its own message type.
     /// </summary>
     public IReadOnlyList<LogEntry> OutcomeLines
-        => [.. _entries.Where(static e => e.EventId.Id is >= 1001 and <= 1099)];
+        => [.. _entries.Where(static e => e.EventId.Id is >= 1001 and <= 1099 && e.EventId.Id != UseCaseSlowEventId)];
+
+    /// <summary>The slow-use-case Warnings (event 1007), written after the outcome line past <c>Telemetry:SlowUseCaseThreshold</c>.</summary>
+    public IReadOnlyList<LogEntry> SlowLines => [.. _entries.Where(static e => e.EventId.Id == UseCaseSlowEventId)];
 
     public void Add(LogEntry entry) => _entries.Enqueue(entry);
 }

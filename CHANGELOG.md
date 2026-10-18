@@ -256,6 +256,13 @@ If you generated a project from 0.1.0, read these before adopting this version w
   OpenTelemetry semantic convention. The id only, never the e-mail; a request without a valid token
   carries neither. A project of your own that rebuilt the API's pipeline adds `app.UseUserTelemetry()`
   after `app.UseAuthentication()`.
+- **An opt-in slow-use-case Warning** (ADR-0028 third amendment; jasontaylordev/CleanArchitecture):
+  set `Telemetry:SlowUseCaseThreshold` (a TimeSpan, 1 ms to 1 hour, validated at boot) and a use case
+  that takes at least that long writes event 1007 `UseCaseSlow` at Warning after its outcome line, with
+  its name and elapsed milliseconds only. Unset by default, so nothing changes until you name a
+  threshold. The API now binds the whole `Telemetry` section through the options pattern
+  (`ValidateDataAnnotations().ValidateOnStart()`), and `OptionsConventionTests` polices
+  `UseCaseLoggingOptions` like every other options class.
 
 ### Changed
 

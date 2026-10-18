@@ -156,6 +156,54 @@ public sealed class UseCaseOutcomeTests : IDisposable
         line.Message.ShouldContain("Failure (Test.Unclassified): Nobody classified this yet.");
     }
 
+    [Fact]
+    public async Task A_use_case_slower_than_the_threshold_adds_a_Warning_with_its_name_and_elapsed_time()
+    {
+        // An operator's opt-in. One tick: every invocation through the real pipeline takes longer than that.
+        using var pipeline = new PipelineHarness(static services =>
+        {
+            services.AddSingleton(new UseCaseLoggingOptions { SlowUseCaseThreshold = TimeSpan.FromTicks(1) });
+            services.AddScoped<ICommandHandler<ScriptedCommand>, ScriptedCommandHandler>();
+        });
+        var handler = pipeline.Resolve<ICommandHandler<ScriptedCommand>>();
+
+        (await handler.Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())), TestContext.Current.CancellationToken))
+            .ShouldBeSuccess();
+        // A slow failure is slow too; the scripted failure comes straight back, what this test reads is the lines.
+        _ = await handler.Handle(
+            new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.Conflict("Test.Conflict", "Already done.")))),
+            TestContext.Current.CancellationToken);
+
+        // The outcome lines keep their own levels; each invocation adds one Warning that names only the use
+        // case and its elapsed time, under the use case's category.
+        pipeline.Logs.OutcomeLines.Select(static line => line.Level).ShouldBe([LogLevel.Information, LogLevel.Information]);
+        pipeline.Logs.SlowLines.Count.ShouldBe(2);
+        pipeline.Logs.SlowLines.ShouldAllBe(static line => line.Level == LogLevel.Warning
+                                                            && line.EventId.Name == "UseCaseSlow"
+                                                            && line.Category == typeof(ScriptedCommand));
+        pipeline.Logs.SlowLines.ShouldAllBe(static line => line.Message.StartsWith("Use case ScriptedCommand took ", StringComparison.Ordinal)
+                                                            && line.Message.EndsWith("ms, past the slow-use-case threshold", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task No_slow_Warning_is_written_below_the_threshold_or_while_none_is_set()
+    {
+        using var pipeline = new PipelineHarness(static services =>
+        {
+            services.AddSingleton(new UseCaseLoggingOptions { SlowUseCaseThreshold = TimeSpan.FromHours(1) });
+            services.AddScoped<ICommandHandler<ScriptedCommand>, ScriptedCommandHandler>();
+        });
+
+        (await pipeline.Resolve<ICommandHandler<ScriptedCommand>>().Handle(
+            new ScriptedCommand(static _ => Task.FromResult(Result.Success())), TestContext.Current.CancellationToken)).ShouldBeSuccess();
+        (await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())))).ShouldBeSuccess();   // the default: no threshold
+
+        pipeline.Logs.SlowLines.ShouldBeEmpty();
+        pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+        _pipeline.Logs.SlowLines.ShouldBeEmpty();
+        _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+    }
+
     [Theory]
     [InlineData(ErrorType.Validation, LogLevel.Information)]
     [InlineData(ErrorType.NotFound, LogLevel.Information)]
