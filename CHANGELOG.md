@@ -316,7 +316,8 @@ If you generated a project from 0.1.0, read these before adopting this version w
   the SDK image in `scripts/sdk-image`, as it already did for the SDK in `global.json`. When .NET 11
   ships, its 11.0 packages no longer turn the weekly `microsoft` group into a major that waits for
   review and holds back the 10.0.x patches; moving to a new .NET stays one change you make on purpose
-  (`docs/development.md`, *Bumping the SDK*). Their patch and minor updates arrive as before.
+  (`docs/development.md`, *Bumping the SDK*; ADR-0029's amendment of 2026-10-18 records why). Their
+  patch and minor updates arrive as before.
 - **Dependabot's titles follow Conventional Commits**: every update block in `dependabot.yml` sets
   `commit-message` (`prefix: "build"`, `include: "scope"`), so its pull requests, and the commits
   they are squash-merged into, read `build(deps): Bump …` in every ecosystem; NuGet's were a bare
