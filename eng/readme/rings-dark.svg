@@ -14,18 +14,19 @@
     <path id="ring-split-2" d="M28.74 80 A51.26 51.26 0 0 1 131.26 80"/>
     <path id="ring-application" d="M37.08 80 A42.92 42.92 0 0 0 122.92 80"/>
   </defs>
-  <circle cx="80" cy="80" r="78" fill="#1e2f45" stroke="#5c84ae" stroke-width="1.5"/>
+  <circle cx="80" cy="80" r="78" fill="#1e2f45" stroke="#d8e6f5" stroke-width="1" stroke-opacity="0.35"/>
   <path d="M80 18 A62 62 0 0 0 80 142 Z" fill="#27331f"/>
+  <path d="M80 18 A62 62 0 0 0 80 142" fill="none" stroke="#deecd5" stroke-width="1" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M80 18 A62 62 0 0 1 80 142 Z" fill="#1b3431"/>
-  <circle cx="80" cy="80" r="62" fill="none" stroke="#5f9074" stroke-width="1"/>
+  <path d="M80 18 A62 62 0 0 1 80 142" fill="none" stroke="#d2ede9" stroke-width="1" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
   <line x1="80" y1="18.5" x2="80" y2="32.5" stroke="#1e2f45" stroke-width="3.5" stroke-linecap="round"/>
   <line x1="80" y1="127.5" x2="80" y2="141.5" stroke="#1e2f45" stroke-width="3.5" stroke-linecap="round"/>
-  <circle cx="80" cy="80" r="47" fill="#3a2f1b" stroke="#9e7e42" stroke-width="1"/>
-  <circle cx="80" cy="80" r="32" fill="#66522d" stroke="#9e7e42" stroke-width="1"/>
+  <circle cx="80" cy="80" r="47" fill="#2e2616" stroke="#f1e3c4" stroke-width="1" stroke-opacity="0.35"/>
+  <circle cx="80" cy="80" r="32" fill="#3a2f1b" stroke="#f5e5c3" stroke-width="1" stroke-opacity="0.35"/>
   <text class="s10w700" fill="#d8e6f5"><textPath href="#ring-presentation" startOffset="50%" text-anchor="middle">Presentation</textPath></text>
   <text class="s9w700" fill="#deecd5"><textPath href="#ring-split" startOffset="25%" text-anchor="middle">Infrastructure</textPath></text>
   <text class="s9w700" fill="#d2ede9"><textPath href="#ring-split-2" startOffset="75%" text-anchor="middle">Persistence</textPath></text>
-  <text class="s9_5w700" fill="#f5e5c3"><textPath href="#ring-application" startOffset="50%" text-anchor="middle">Application</textPath></text>
+  <text class="s9_5w700" fill="#f1e3c4"><textPath href="#ring-application" startOffset="50%" text-anchor="middle">Application</textPath></text>
   <text class="s11w700" x="80" y="79" fill="#f5e5c3" text-anchor="middle">Domain</text>
   <text class="s9w700" x="80" y="92" fill="#f5e5c3" text-anchor="middle">SharedKernel</text>
 </svg>
