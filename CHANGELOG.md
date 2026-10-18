@@ -251,7 +251,7 @@ If you generated a project from 0.1.0, read these before adopting this version w
   new-invoice pages open with a "Back to invoices" link.
 - **The caller's user id on every request signal** (ADR-0028 third amendment;
   jasontaylordev/CleanArchitecture): `UserTelemetryMiddleware`, right after `UseAuthentication`, puts a
-  signed-in caller's user id in a `UserId` log scope, which the use-case outcome line, a 403's
+  signed-in caller's user id in a `CallerUserId` log scope, which the use-case outcome line, a 403's
   authorization line and anything a handler logs inherit, and on the request span as `enduser.id`, the
   OpenTelemetry semantic convention. The id only, never the e-mail; a request without a valid token
   carries neither. A project of your own that rebuilt the API's pipeline adds `app.UseUserTelemetry()`

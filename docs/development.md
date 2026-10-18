@@ -342,8 +342,8 @@ which may be a value the caller chose: in the Aspire dashboard (or your OTLP bac
 request's trace, the use-case span with `trellis.usecase.outcome`, `trellis.usecase.error_code` and
 `trellis.usecase.error_type`, and the outcome line logged inside it (events 1001–1006, `docs/deployment.md`
 has the telemetry reference). A report without a `traceId` ("it failed for me this morning") starts from
-the user's id instead: a signed-in caller's lines carry it in the `UserId` scope and their request spans as
-`enduser.id`. Then let the `code` name the stage that refused the request (the stage table is in
+the user's id instead: a signed-in caller's lines carry it in the `CallerUserId` scope and their request
+spans as `enduser.id`. Then let the `code` name the stage that refused the request (the stage table is in
 [architecture.md](architecture.md#a-request-stage-by-stage)):
 
 | `code` | Refused by |

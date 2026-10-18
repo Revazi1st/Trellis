@@ -19,7 +19,7 @@ namespace Trellis.ApiTests.InProcess;
 
 /// <summary>
 /// An authenticated request names its caller on every signal (<see cref="UserTelemetryMiddleware"/>): the
-/// use-case outcome record inherits the <c>UserId</c> log scope, and the request span around the use case
+/// use-case outcome record inherits the <c>CallerUserId</c> log scope, and the request span around the use case
 /// carries <c>enduser.id</c>. Both are read where an OTLP exporter reads them, from processors on the
 /// OpenTelemetry logger and tracer providers. The id is in no message, only in the scope, and a scope
 /// reaches the exported record only because ServiceDefaults turns <c>IncludeScopes</c> on, so these tests

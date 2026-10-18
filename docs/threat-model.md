@@ -35,7 +35,7 @@ you build on top.
 | Token forged by algorithm confusion | Validation accepts HS256 only (`ValidAlgorithms`) | `AddApiAuthentication` |
 | Cross-tenant data access (`--use-multitenancy`) | The tenant comes only from the signed `tenant` claim, minted from the user's persisted membership (`AspNetUsers.TenantId`); request headers are ignored; every aggregate root is filtered and stamped by convention; cache keys carry the tenant; a valid token without the claim is rejected 401 (ADR-0022) | `TenantContext`, `AuthenticationExtensions`, `AppDbContext`, `CacheKeys` |
 | Client-supplied identifiers poisoning logs or response headers | The inbound correlation id is accepted only if short and restricted to an id-shaped charset; otherwise a server id is used | `CorrelationIdMiddleware` |
-| A request or a change nobody can attribute to an account | Every log line an authenticated request writes carries the caller's user id (`UserId` scope) and its request span `enduser.id`, so a 403 or a rejected write names the account behind it; the audit columns hold the id of whoever created and last changed a record. The id only, never the e-mail | `UserTelemetryMiddleware`, `AuditingInterceptor` |
+| A request or a change nobody can attribute to an account | Every log line an authenticated request writes carries the caller's user id (`CallerUserId` scope) and its request span `enduser.id`, so a 403 or a rejected write names the account behind it; the audit columns hold the id of whoever created and last changed a record. The id only, never the e-mail | `UserTelemetryMiddleware`, `AuditingInterceptor` |
 | Rate-limit evasion behind a proxy | `X-Forwarded-For` honoured only from explicitly configured trusted proxies/networks; the publish-mode `ASPNETCORE_FORWARDEDHEADERS_ENABLED` switch cannot widen it (loopback-only restored, startup warning) | `ApiHardeningExtensions` |
 | Duplicate submission of a write (double charge, double invoice) | `Idempotency-Key` reserved per (user, method, route, key) inside the command's unit of work — a concurrent duplicate loses at the primary key, a failed command leaves no reservation; a retry gets the stored response replayed, a reused key with a different body a 422 (ADR-0018); a repeated header or a list is a 400, never two keys joined into one, and `POST /invoices` requires a key (`RequireIdempotency(keyRequired: true)`) | `IdempotencyFilter`, `AppDbContext.CommitAsync` |
 | Lost update on concurrent edits | `xmin` concurrency token; a stale write is returned as `Concurrency.Conflict` and becomes 409 | `IUnitOfWork.CommitAsync`, `CustomResults` |
@@ -97,10 +97,10 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   acting user's id, a `Guid` (`system` for the migration job), never the e-mail: a dump of a business
   table does not list its editors by address, and a changed e-mail leaves the trail joined to its user
   (ADR-0027 amendment). Every authenticated request's log lines and request span carry the same id
-  (`UserId`, `enduser.id`). An id is still personal data: erasing a user leaves it in every row they
-  created or changed and in whatever their requests logged, for as long as the log and trace backends
-  keep it, and nothing removes it. Decide the erasure path and how long the columns and the telemetry
-  are kept.
+  (`CallerUserId`, `enduser.id`). An id is still personal data: erasing a user leaves it in every row
+  they created or changed and in whatever their requests logged, for as long as the log and trace
+  backends keep it, and nothing removes it. Decide the erasure path and how long the columns and the
+  telemetry are kept.
 - **No MFA**, and no password-breach check on registration — *open*.
 - **Access tokens cannot be revoked before expiry** — *open*. Revocation applies to refresh tokens;
   an access token stays valid for its (short) lifetime. Shorten `AccessTokenMinutes` if that window
@@ -115,8 +115,8 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
 - **The security-event log is partial** — *open*. Sign-in failures and lockouts are structured
   events (1101–1106); registration, revocation, refresh-token replay (an unstructured warning) and
   role or permission changes are ordinary application logs, and nothing ships them to a
-  tamper-evident store. A signed-in caller's lines carry their id (the `UserId` scope), so a 403 or a
-  rejected command can at least be traced to an account.
+  tamper-evident store. A signed-in caller's lines carry their id (the `CallerUserId` scope), so a 403
+  or a rejected command can at least be traced to an account.
 - **The seeded Development admin password is the same in every project** — *closed by default*.
   The seeder refuses the well-known default outside Development; set `Seed__AdminPassword`. A
   replacement Identity rejects fails the migration job (exit 1, errors named) instead of leaving the

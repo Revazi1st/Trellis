@@ -22,8 +22,12 @@ namespace Trellis.Api.Common.Http;
 /// </summary>
 public sealed class UserTelemetryMiddleware(RequestDelegate next, ILogger<UserTelemetryMiddleware> logger)
 {
-    /// <summary>The log scope property that carries the caller's user id.</summary>
-    public const string ScopeProperty = "UserId";
+    /// <summary>
+    /// The log scope property that carries the caller's user id. Not <c>UserId</c>: a message's <c>{UserId}</c>
+    /// is the account the line is about (the security events), which need not be the caller, and one record
+    /// cannot hold both under one key. <c>TelemetryNamingTests</c> keeps every message template off this name.
+    /// </summary>
+    public const string ScopeProperty = "CallerUserId";
 
     /// <summary>The span attribute that carries it: the OpenTelemetry semantic convention for the end user's id.</summary>
     public const string SpanAttribute = "enduser.id";

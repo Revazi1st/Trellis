@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Shouldly;
+using Trellis.Api.Common.Http;
 using Xunit;
 
 namespace Trellis.ArchitectureTests;
@@ -14,7 +15,10 @@ namespace Trellis.ArchitectureTests;
 /// <item>meter and <c>ActivitySource</c> names start with <c>Trellis.</c>;</item>
 /// <item>instrument names start with <c>trellis.</c> and every instrument declares its unit;</item>
 /// <item>a custom span or metric attribute starts with <c>trellis.</c>, unless it is an OpenTelemetry
-/// semantic-convention name used with its convention meaning (<see cref="SemanticConventionAttributes"/>).</item>
+/// semantic-convention name used with its convention meaning (<see cref="SemanticConventionAttributes"/>);</item>
+/// <item>no log message names the property of the caller's log scope
+/// (<see cref="UserTelemetryMiddleware.ScopeProperty"/>), which every record of a signed-in request already
+/// carries.</item>
 /// </list>
 /// A name passed as an identifier must be a <c>const string</c> declared in the same file (or in the file
 /// named after its qualifier, <c>Type.Name</c> → <c>Type.cs</c>); anything the scan cannot resolve fails.
@@ -109,6 +113,40 @@ public sealed partial class TelemetryNamingTests
     public void Every_name_passed_as_an_identifier_resolves_to_a_constant()
         => Found.Value.Unresolved.ShouldBeEmpty(
             "pass telemetry names as string literals or as const strings declared in the same file (or in Type.cs for Type.Name)");
+
+    /// <summary>
+    /// A signed-in request's records carry the caller's user id in a log scope. A message template naming the
+    /// same property would give one record two values under one key, and they need not be the same account
+    /// (an administrator acting on someone else): an OTLP exporter writes both attributes, Serilog keeps the
+    /// message's and drops the caller's. A message names the account it is about <c>{UserId}</c>, as the
+    /// security events do, so the scope's name is one no message uses.
+    /// </summary>
+    [Fact]
+    public void No_log_message_names_the_callers_scope_property()
+        => Found.Value.CallerScopeMessages.ShouldBeEmpty(
+            $"'{UserTelemetryMiddleware.ScopeProperty}' is the caller's log scope (UserTelemetryMiddleware): name the account a message is about "
+            + "{UserId}, or give the scope a name no message uses, so a record never carries two user ids under one key");
+
+    /// <summary>
+    /// Positive control for <see cref="No_log_message_names_the_callers_scope_property"/>, a scan that expects
+    /// zero hits: a template naming the scope's property (<c>NAME</c> below) is found in a plain or a verbatim
+    /// literal, with a destructuring or format specifier too; an interpolated string's hole is not, and neither
+    /// is another property or the bare name.
+    /// </summary>
+    [Theory]
+    [InlineData("""logger.LogWarning("User {NAME} locked out")""", true)]
+    [InlineData("""Message = "Changed by {@NAME}")]""", true)]
+    [InlineData("""logger.LogInformation("{NAME,12:D}")""", true)]
+    [InlineData("""logger.LogWarning(@"User {NAME} locked out")""", true)]
+    [InlineData("""logger.LogWarning("User {UserId} locked out")""", false)]
+    [InlineData("""logger.LogWarning($"User {NAME} locked out")""", false)]
+    [InlineData("""logger.LogWarning($@"User {NAME} locked out")""", false)]
+    [InlineData("""logger.LogWarning(@$"User {NAME} locked out")""", false)]
+    [InlineData("""scope[ScopeProperty] = "NAME";""", false)]
+    public void The_caller_scope_scan_tells_a_template_from_an_interpolation(string code, bool flagged)
+        => CallerScopePlaceholder()
+            .IsMatch(code.Replace("NAME", UserTelemetryMiddleware.ScopeProperty, StringComparison.Ordinal))
+            .ShouldBe(flagged);
 
     [Fact]
     public void Every_emitted_name_is_in_the_telemetry_reference()
@@ -232,6 +270,9 @@ public sealed partial class TelemetryNamingTests
                 .Select(match => new EventIdSite(
                     int.Parse(match.Groups["id"].Value, CultureInfo.InvariantCulture),
                     $"{file.RelativePath}:{file.LineOf(match.Index)}")));
+
+            scan.CallerScopeMessages.AddRange(CallerScopePlaceholder().Matches(file.Code)
+                .Select(match => $"{file.RelativePath}:{file.LineOf(match.Index)}: {match.Value}"));
         }
 
         return scan;
@@ -314,6 +355,13 @@ public sealed partial class TelemetryNamingTests
     [GeneratedRegex(@"\[\s*LoggerMessage\s*\(\s*EventId\s*=\s*(?<id>\d+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex LoggerMessageEventId();
 
+    /// <summary>
+    /// A message-template placeholder for the caller's scope property (<c>{Name}</c>, <c>{@Name}</c>,
+    /// <c>{Name:format}</c>) in a string literal that is not interpolated: in <c>$"…{Name}…"</c> it is a C# hole.
+    /// </summary>
+    [GeneratedRegex(@"(?<!\$)(?<!\$@)""[^""\n]*\{[@$]?" + UserTelemetryMiddleware.ScopeProperty + @"(?:[,:][^}""\n]*)?\}", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex CallerScopePlaceholder();
+
     /// <summary>The next heading of the same or a higher level ends the reference section.</summary>
     [GeneratedRegex(@"^#{1,3}\s", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex SectionEnd();
@@ -357,6 +405,9 @@ public sealed partial class TelemetryNamingTests
         public List<Name> Attributes { get; } = [];
 
         public List<EventIdSite> EventIds { get; } = [];
+
+        /// <summary>Each string literal whose template names the caller's scope property, with its location.</summary>
+        public List<string> CallerScopeMessages { get; } = [];
 
         public List<string> Unresolved { get; } = [];
     }

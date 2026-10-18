@@ -54,10 +54,11 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   writes report failure as an `IdentityResult`, never discarded). Never the password, never the
   e-mail as typed.
 - **The caller on every signal**: right after authentication, `UserTelemetryMiddleware` (Api.Common)
-  puts the signed-in caller's user id in the log scope (`UserId`) and on the request span
-  (`enduser.id`), so the outcome line of a rejected command and the authorization line behind a 403
-  name the account. The id only, never the e-mail; a request without a valid access token (a sign-in, a
-  registration) carries neither. `docs/deployment.md` lists both in its *Telemetry reference*.
+  puts the signed-in caller's user id in the log scope (`CallerUserId`; not `UserId`, which the security
+  events above use for the account an event is about) and on the request span (`enduser.id`), so the
+  outcome line of a rejected command and the authorization line behind a 403 name the account. The id
+  only, never the e-mail; a request without a valid access token (a sign-in, a registration) carries
+  neither. `docs/deployment.md` lists both in its *Telemetry reference*.
 - **Logout** revokes the presented refresh token (idempotent, anonymous — possession of the token is
   the authorization; never trips replay detection). **Revoke-all** signs the caller out everywhere.
 - **Tenant (multi-tenancy toggle)**: every user has exactly one `TenantId` (`AspNetUsers`, required,
@@ -204,7 +205,7 @@ Keycloak, Auth0) in front of it, beside the local sign-in or instead of it, is n
   provider's `sub` is rarely one, and without the mapping `ICurrentUser.UserId` is null for every external
   caller, which breaks ownership, puts them all in the idempotency filter's single `anonymous`
   partition, stamps the audit columns with the token's name claim (nothing, without one) instead of a
-  user id, and leaves their log lines and request spans without `UserId` and `enduser.id`.
+  user id, and leaves their log lines and request spans without `CallerUserId` and `enduser.id`.
 - **Leave out what the provider owns.** Registration, the lockout and refresh tokens belong to the local
   sign-in; an external user gets none of them.
 <!--#if (IncludeUI) -->

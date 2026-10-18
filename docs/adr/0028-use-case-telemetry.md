@@ -104,17 +104,20 @@ pins both rows; `.claude/rules/application.md`'s pipeline line names both levels
 ## Third amendment (2026-10-18): the caller's user id, a log category per use case, a slow-use-case Warning
 
 - **The caller's user id on every request signal.** `UserTelemetryMiddleware` (Api.Common) runs right
-  after authentication and, for a signed-in caller, opens a `UserId` log scope and tags the request span
-  `enduser.id` with the caller's user id. The outcome line, the authorization failure behind a 403 and
-  whatever a handler logs then name the account; log records carry the scope because ServiceDefaults
-  sets `IncludeScopes`. The id only, never the name or the e-mail, for the reason descriptions left the
-  line: it is written for every request. `enduser.id` is the OpenTelemetry semantic convention for the
-  end user an operation runs for (deprecated in semantic conventions 1.26 and restored in 1.31 for
-  exactly that); `user.id` belongs to the generic user namespace, whose own example is an operating-system
-  account, so it does not carry exactly this meaning. Fitness: `UserTelemetryTests` (ApiTests: an
-  authenticated request's outcome record carries the id in its scope and its request span carries
-  `enduser.id`; an anonymous request's carry neither), `TelemetryNamingTests` (`enduser.id` on the
-  semantic-convention list).
+  after authentication and, for a signed-in caller, opens a `CallerUserId` log scope and tags the request
+  span `enduser.id` with the caller's user id. The outcome line, the authorization failure behind a 403
+  and whatever a handler logs then name the account; log records carry the scope because ServiceDefaults
+  sets `IncludeScopes`. The scope is not called `UserId`: the security events already name the account
+  they are about `{UserId}`, which need not be the caller, and one record cannot hold both under one key
+  (an OTLP exporter writes both attributes, Serilog keeps the event's). The id only, never the name or
+  the e-mail, for the reason descriptions left the line: it is written for every request. `enduser.id` is
+  the OpenTelemetry semantic convention for the end user an operation runs for (deprecated in semantic
+  conventions 1.26 and restored in 1.31 for exactly that); `user.id` belongs to the generic user
+  namespace, whose own example is an operating-system account, so it does not carry exactly this meaning.
+  Fitness: `UserTelemetryTests` (ApiTests: an authenticated request's outcome record carries the id in
+  its scope and its request span carries `enduser.id`; an anonymous request's carry neither),
+  `TelemetryNamingTests` (`enduser.id` on the semantic-convention list; no message template names
+  `CallerUserId`).
 - **A log category per use case.** The three `LoggingDecorators` take `ILogger<TCommand>` or
   `ILogger<TQuery>` instead of a logger typed by the decorator, so each outcome line is logged under its
   use case's own type (`Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery`) and a
