@@ -151,8 +151,9 @@ reason); no emoji. Each picture's own layout:
   reaches Application directly; Application and Domain · SharedKernel follow, as the rings mark splits
   Core; Shared and tools close it.
 - `testing`: the layers from a browser to PostgreSQL as a rail of chips, 16 px apart; each suite a card
-  spanning the layers it runs through, its needs as a pill (`nothing`, `Docker`, `RUN_ASPIRE_E2E=1`,
-  `RUN_UI_TESTS=1`), the layers again as dots on a small rail along its foot; the legend goes where the
+  spanning the layers it runs through, reading its name, its needs as a pill (`nothing`, `Docker`,
+  `RUN_ASPIRE_E2E=1`, `RUN_UI_TESTS=1`; beside the name, or under it on a narrow card), then what it
+  proves, with the layers again as dots on a small rail along its foot; the legend goes where the
   staircase of cards leaves room.
 - `pipeline`: three rows of numbered nodes joined by a hairline that wraps from each row's end to the
   next row's start; the last row's dashed line is the outbox boundary, the commit before it, the

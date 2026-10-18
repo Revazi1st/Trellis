@@ -56,10 +56,10 @@
   <!-- UiTests -->
   <rect x="48" y="216" width="1104" height="112" rx="16" fill="#121d16" stroke="#9db3a4" stroke-width="1" stroke-opacity="0.75" stroke-dasharray="6 4"/>
   <text class="s14w600" x="64" y="246" fill="#e6efe8">UiTests</text>
-  <text class="s13" x="64" y="270" fill="#e6efe8">the pages in a real browser, against a running app (Playwright)</text>
-  <text class="s13" x="64" y="288" fill="#9db3a4">generated with --include-ui-tests; needs installed browsers and a running app</text>
   <rect x="128.61" y="229" width="125" height="22" rx="11" fill="#243622" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.24" stroke-dasharray="3 3"/>
   <text class="m12" x="191.11" y="244.2" fill="#e6efe8" text-anchor="middle">RUN_UI_TESTS=1</text>
+  <text class="s13" x="64" y="270" fill="#e6efe8">the pages in a real browser, against a running app (Playwright)</text>
+  <text class="s13" x="64" y="288" fill="#9db3a4">generated with --include-ui-tests; needs installed browsers and a running app</text>
   <line x1="96" y1="310" x2="1104" y2="310" stroke="#9db3a4" stroke-width="1.25" stroke-linecap="round" stroke-opacity="0.5"/>
   <circle cx="96" cy="310" r="4.5" fill="#121d16" stroke="#e6efe8" stroke-width="1" stroke-opacity="0.56"/>
   <circle cx="208" cy="310" r="4.5" fill="#1c2320" stroke="#d7ded9" stroke-width="1" stroke-opacity="0.56"/>
@@ -74,10 +74,10 @@
   <!-- Aspire E2E -->
   <rect x="160" y="344" width="992" height="112" rx="16" fill="#121d16" stroke="#9db3a4" stroke-width="1" stroke-opacity="0.75" stroke-dasharray="6 4"/>
   <text class="s14w600" x="176" y="374" fill="#e6efe8">Aspire E2E</text>
-  <text class="s13" x="176" y="398" fill="#e6efe8">InvoiceApiFlowTests: the AppHost starts PostgreSQL, the migration job and the API</text>
-  <text class="s13" x="176" y="416" fill="#9db3a4">needs a local SDK or CI</text>
   <rect x="265.83" y="357" width="140" height="22" rx="11" fill="#243622" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.24" stroke-dasharray="3 3"/>
   <text class="m12" x="335.83" y="372.2" fill="#e6efe8" text-anchor="middle">RUN_ASPIRE_E2E=1</text>
+  <text class="s13" x="176" y="398" fill="#e6efe8">InvoiceApiFlowTests: the AppHost starts PostgreSQL, the migration job and the API</text>
+  <text class="s13" x="176" y="416" fill="#9db3a4">needs a local SDK or CI</text>
   <line x1="208" y1="438" x2="1104" y2="438" stroke="#9db3a4" stroke-width="1.25" stroke-linecap="round" stroke-opacity="0.5"/>
   <circle cx="208" cy="438" r="4.5" fill="#1c2320" stroke="#d7ded9" stroke-width="1" stroke-opacity="0.56"/>
   <circle cx="320" cy="438" r="4.5" fill="#1c2320" stroke="#d7ded9" stroke-width="1" stroke-opacity="0.56"/>
@@ -91,10 +91,10 @@
   <!-- ApiTests -->
   <rect x="272" y="472" width="880" height="112" rx="16" fill="#121d16" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.16"/>
   <text class="s14w600" x="288" y="502" fill="#e6efe8">ApiTests</text>
-  <text class="s13" x="288" y="526" fill="#e6efe8">the HTTP contract through the real pipeline, in process; UI.Common's clients and pages, no browser</text>
-  <text class="s13" x="288" y="544" fill="#9db3a4">PostgreSQL in Testcontainers</text>
   <rect x="361.85" y="485" width="65" height="22" rx="11" fill="#243622" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.24"/>
   <text class="m12" x="394.35" y="500.2" fill="#e6efe8" text-anchor="middle">Docker</text>
+  <text class="s13" x="288" y="526" fill="#e6efe8">the HTTP contract through the real pipeline, in process; UI.Common's clients and pages, no browser</text>
+  <text class="s13" x="288" y="544" fill="#9db3a4">PostgreSQL in Testcontainers</text>
   <line x1="320" y1="566" x2="1104" y2="566" stroke="#9db3a4" stroke-width="1.25" stroke-linecap="round" stroke-opacity="0.5"/>
   <circle cx="320" cy="566" r="4.5" fill="#1c2320" stroke="#d7ded9" stroke-width="1" stroke-opacity="0.56"/>
   <circle cx="432" cy="566" r="4.5" fill="#1e2f45" stroke="#d8e6f5" stroke-width="1" stroke-opacity="0.56"/>
@@ -107,10 +107,10 @@
   <!-- IntegrationTests -->
   <rect x="608" y="600" width="544" height="112" rx="16" fill="#121d16" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.16"/>
   <text class="s14w600" x="624" y="630" fill="#e6efe8">IntegrationTests</text>
-  <text class="s13" x="624" y="654" fill="#e6efe8">Persistence against a real PostgreSQL: mappings, SQL, the outbox</text>
-  <text class="s13" x="624" y="672" fill="#9db3a4">PostgreSQL in Testcontainers</text>
   <rect x="751.62" y="613" width="65" height="22" rx="11" fill="#243622" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.24"/>
   <text class="m12" x="784.12" y="628.2" fill="#e6efe8" text-anchor="middle">Docker</text>
+  <text class="s13" x="624" y="654" fill="#e6efe8">Persistence against a real PostgreSQL: mappings, SQL, the outbox</text>
+  <text class="s13" x="624" y="672" fill="#9db3a4">PostgreSQL in Testcontainers</text>
   <line x1="656" y1="694" x2="1104" y2="694" stroke="#9db3a4" stroke-width="1.25" stroke-linecap="round" stroke-opacity="0.5"/>
   <circle cx="656" cy="694" r="4.5" fill="#1b3431" stroke="#d2ede9" stroke-width="1" stroke-opacity="0.56"/>
   <circle cx="768" cy="694" r="4.5" fill="#2e2616" stroke="#f1e3c4" stroke-width="1" stroke-opacity="0.56"/>
@@ -120,10 +120,10 @@
   <!-- Application.UnitTests -->
   <rect x="720" y="728" width="320" height="112" rx="16" fill="#121d16" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.16"/>
   <text class="s14w600" x="736" y="758" fill="#e6efe8">Application.UnitTests</text>
-  <text class="s13" x="736" y="782" fill="#e6efe8">handlers over faked ports,</text>
-  <text class="s13" x="736" y="800" fill="#e6efe8">validators, the decorator pipeline</text>
   <rect x="901.42" y="741" width="73" height="22" rx="11" fill="#243622" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.24"/>
   <text class="m12" x="937.92" y="756.2" fill="#e6efe8" text-anchor="middle">nothing</text>
+  <text class="s13" x="736" y="782" fill="#e6efe8">handlers over faked ports,</text>
+  <text class="s13" x="736" y="800" fill="#e6efe8">validators, the decorator pipeline</text>
   <line x1="768" y1="822" x2="992" y2="822" stroke="#9db3a4" stroke-width="1.25" stroke-linecap="round" stroke-opacity="0.5"/>
   <circle cx="768" cy="822" r="4.5" fill="#2e2616" stroke="#f1e3c4" stroke-width="1" stroke-opacity="0.56"/>
   <circle cx="880" cy="822" r="4.5" fill="#3a2f1b" stroke="#f5e5c3" stroke-width="1" stroke-opacity="0.56"/>
@@ -131,10 +131,10 @@
   <!-- Domain.UnitTests -->
   <rect x="832" y="856" width="208" height="144" rx="16" fill="#121d16" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.16"/>
   <text class="s14w600" x="848" y="886" fill="#e6efe8">Domain.UnitTests</text>
-  <text class="s13" x="848" y="910" fill="#e6efe8">invariants, events and the</text>
-  <text class="s13" x="848" y="928" fill="#e6efe8">Result kernel, in memory</text>
-  <rect x="848" y="942" width="73" height="22" rx="11" fill="#243622" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.24"/>
-  <text class="m12" x="884.5" y="957.2" fill="#e6efe8" text-anchor="middle">nothing</text>
+  <rect x="848" y="898" width="73" height="22" rx="11" fill="#243622" stroke="#8fd16a" stroke-width="1" stroke-opacity="0.24"/>
+  <text class="m12" x="884.5" y="913.2" fill="#e6efe8" text-anchor="middle">nothing</text>
+  <text class="s13" x="848" y="940" fill="#e6efe8">invariants, events and the</text>
+  <text class="s13" x="848" y="958" fill="#e6efe8">Result kernel, in memory</text>
   <line x1="880" y1="982" x2="992" y2="982" stroke="#9db3a4" stroke-width="1.25" stroke-linecap="round" stroke-opacity="0.5"/>
   <circle cx="880" cy="982" r="4.5" fill="#3a2f1b" stroke="#f5e5c3" stroke-width="1" stroke-opacity="0.56"/>
   <circle cx="992" cy="982" r="4.5" fill="#3a2f1b" stroke="#f5e5c3" stroke-width="1" stroke-opacity="0.56"/>

@@ -1798,7 +1798,8 @@ def testing(theme: Theme, facts: Facts) -> Svg:
         svg.text(chip.cx, chip.cy + 4.5, [Span(text, ring.ink, 12, 600)], on=ring.fill,
                  anchor="middle", within=chip)
 
-    # the cards, measured first: each is as tall as its words
+    # the cards, measured first: each is as tall as its words. Every card reads its name, what it
+    # needs, then what it proves: the needs pill sits beside the name, or on its own line under it.
     pad = 16
     laid: List[Tuple[SuiteFacts, Box, bool, List[Span]]] = []
     y = chip_y + CHIP_H + 24
@@ -1815,7 +1816,7 @@ def testing(theme: Theme, facts: Facts) -> Svg:
             needs.append(("needs " if f.suite.switch else "") + f.suite.needs)
         if needs:
             lines += [Span(t, theme.muted, 13) for t in wrap("; ".join(needs), 13, inner)]
-        bottom = 54 + 18 * (len(lines) - 1) + 6 + (0 if inline else 8 + PILL_H)
+        bottom = 54 + (0 if inline else PILL_H + 8) + 18 * (len(lines) - 1) + 6
         box = Box(x, y, w, ceil8(bottom + 14 + 4 + 14))
         laid.append((f, box, inline, lines))
         y = box.bottom + GUTTER
@@ -1848,14 +1849,14 @@ def testing(theme: Theme, facts: Facts) -> Svg:
                      opacity=theme.line_alpha)
         label = svg.text(box.x + pad, box.y + 30, [Span(f.suite.name, theme.ink, 14, 600)],
                          on=theme.surface, within=box)
-        ty = box.y + 54
-        for line in lines:
-            svg.text(box.x + pad, ty, [line], on=theme.surface, within=box)
-            ty += 18
-        pill_xy = (label.right + 10, box.y + 13) if inline else (box.x + pad, ty - 18 + 14)
+        pill_xy = (label.right + 10, box.y + 13) if inline else (box.x + pad, box.y + 42)
         pill(svg, pill_xy[0], pill_xy[1], f.pill, fill=theme.rings["outside"].band,
              ink=theme.ink, edge=theme.line, edge_alpha=theme.line_alpha * 1.5,
              dash="3 3" if dashed else None)
+        ty = box.y + 54 + (0 if inline else PILL_H + 8)
+        for line in lines:
+            svg.text(box.x + pad, ty, [line], on=theme.surface, within=box)
+            ty += 18
         stations(svg, *span(f), box.bottom - 18)
 
     def sample_dashed(s: Svg, x: float, y: float) -> float:
