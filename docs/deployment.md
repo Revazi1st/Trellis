@@ -183,7 +183,8 @@ fails the rollout, not the first request.
 
 ## Health probes
 
-- **`/health`** — readiness: all checks, including the database (`AddDbContextCheck`).
+- **`/health`** — readiness: all checks, including the database, queried once per probe by the
+  `database` check (`AddDbContextCheck`).
 - **`/alive`** — liveness: only checks tagged `"live"` (the self check) — stays green during a
   DB outage, so the orchestrator doesn't restart-loop a healthy process.
 

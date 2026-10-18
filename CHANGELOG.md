@@ -364,6 +364,9 @@ If you generated a project from 0.1.0, read these before adopting this version w
   request's span.
 - A lower-case quote currency (`usd`) came back from the exchange-rate client as
   `ExchangeRate.UnknownCurrency`; the quote is matched case-insensitively.
+- Every `/health` probe queried PostgreSQL twice: Aspire's `EnrichNpgsqlDbContext` registered its own
+  check of `AppDbContext` beside the API's `database` readiness check. The enrichment's copy is switched
+  off (`DisableHealthChecks`), and `HealthCheckTests` pins a single database check named `database`.
 
 ### Security
 - **MessagePack pinned to 2.5.307** ahead of Aspire 13.6.1, which still pulls 2.5.302 through `Aspire.Hosting` and

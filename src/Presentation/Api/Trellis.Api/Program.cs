@@ -55,9 +55,13 @@ builder.Services.AddOutboundIntegrations(builder.Configuration);
 builder.Services.AddPersistence(builder.Configuration.GetConnectionString(ServiceNames.Database)
     ?? throw new InvalidOperationException($"Connection string '{ServiceNames.Database}' is not configured."));
 // AddPersistence already turned on Npgsql's retrying execution strategy, and the outbox claim and the identity
-// transactions run inside it, see ADR-0023. The Aspire enrichment therefore adds health checks, tracing and
-// metrics only, never a second retry policy on top.
-builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
+// transactions run inside it, see ADR-0023. The Aspire enrichment therefore adds tracing and metrics only: no
+// second retry policy on top, and no second check of the database beside the "database" readiness check below.
+builder.EnrichNpgsqlDbContext<AppDbContext>(static settings =>
+{
+    settings.DisableRetry = true;
+    settings.DisableHealthChecks = true;
+});
 
 // The data-retention windows and the outbox knobs are checked at boot too: a zero Retention:SweepInterval
 // or Outbox:PollInterval would hot-loop its service. Persistence binds them but cannot run DataAnnotations
