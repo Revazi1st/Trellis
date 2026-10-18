@@ -309,7 +309,7 @@ If you generated a project from 0.1.0, read these before adopting this version w
   and `MultipleKeys`; `Api.Common`'s `IdempotencyHeaderErrors` is gone. `RefreshTokenStore` returns
   `AuthErrors.InvalidRefreshToken` instead of a copy of it.
 - **Aspire resource names live in `ServiceNames`** (ServiceDefaults), the one place they are spelled:
-  the AppHost declares every resource through it, referencing ServiceDefaults with
+  the AppHost declares the database and every service through it, referencing ServiceDefaults with
   `IsAspireProjectResource="false"` (jasontaylordev/CleanArchitecture), and the API, the migration job,
   the web host and the tests find a resource through the same constant (`ServiceNames.Cache` with
   `--use-redis`). A renamed resource is one edit that compiles everywhere; a mistyped literal used to
