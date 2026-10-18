@@ -114,6 +114,10 @@ If you generated a project from 0.1.0, read these before adopting this version w
   amantinband/clean-architecture (credited there): the domain before the architecture, a request's
   path, the toggles, and pictures of the rings, the tree, that path and the test suites, drawn from
   the repository by `eng/readme/render-diagrams.py` (light and dark; CI fails when they go stale).
+- **README pictures restyled** (not in generated projects): a dark banner with the install commands,
+  the rings as a bento of project cards, the test suites on a rail of the layers and a request as
+  fifteen numbered steps, in the visual language `eng/readme/README.md` describes; the README opens
+  with a centred hero.
 - **503 `Unavailable` and 412 `PreconditionFailed`** (ideas from
   [xavierjohn/Trellis](https://github.com/xavierjohn/Trellis)): `ErrorType.Unavailable` with
   `Error.Unavailable(code, description)` is a dependency that is down for now; `CustomResults.Problem`
