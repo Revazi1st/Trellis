@@ -57,9 +57,10 @@ instead of guessing:
   alone keeps its 9 px arc labels), overlap another, or sit on a colour it does not contrast with by at
   least 4.5:1 (WCAG 2). On the banner the colour under a text is worked out
   at the text's own place: the stage's gradient, the glow over it and a crossing of the lattice.
-- **A layout that no longer fits.** A row of cards wider than the picture, an arrow too short to show its
-  head, a step's words reaching the connector that wraps to the next row, a legend with no room: each
-  stops the render with the picture and the part named.
+- **A layout that no longer fits.** A row of cards wider than the picture, an arrow shorter than 24 px
+  (it would read as a tick on a card's edge) or too short to show its head, a step's words reaching the
+  connector that wraps to the next row, a legend with no room: each stops the render with the picture and
+  the part named.
 
 ## How the trees are cut
 
@@ -135,10 +136,11 @@ own layout:
 - `title`: the stage edge to edge, the mark with the wordmark and the tagline on the left, the terminal on
   the right; the light variant adds only a hairline round the stage, so it does not float on white.
 - `rings`: the mark's geometry, unchanged since the first README, in the ring hues.
-- `architecture`: a bento with 16 px gutters. Presentation spans the top; Infrastructure and Persistence
-  sit side by side, the ∥ in the gutter between them, beside the lane where Presentation reaches
-  Application directly; Application and Domain · SharedKernel follow, as the rings mark splits Core;
-  Shared and tools close it. References between rings cross the gutters as short arrows, all inward.
+- `architecture`: a bento, 16 px between the cards of a row and 40 px between rows, where the
+  references between rings run as arrows, all inward. Presentation spans the top; Infrastructure and
+  Persistence sit side by side, the ∥ in the gutter between them, beside the lane where Presentation
+  reaches Application directly; Application and Domain · SharedKernel follow, as the rings mark splits
+  Core; Shared and tools close it.
 - `testing`: the layers from a browser to PostgreSQL as a rail of chips; each suite a card spanning the
   layers it runs through, its needs as a pill (`nothing`, `Docker`, `RUN_ASPIRE_E2E=1`,
   `RUN_UI_TESTS=1`), the layers again as dots on a small rail along its foot; the legend goes where the

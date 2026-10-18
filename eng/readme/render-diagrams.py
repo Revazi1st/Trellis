@@ -494,12 +494,14 @@ class Svg:
 
 W = 1200
 PAD = 32       # inside every picture, all round
-GUTTER = 16    # between the cards of a bento
+GUTTER = 16    # between the cards of a bento's row
+ROW_GUTTER = 40  # between its rows, where the references between rings run as arrows
 CARD_R = 16    # cards
 CHIP_R = 10    # chips, panels, the terminal
 PILL_H = 22    # pills are fully rounded
 HEAD_LEN, HEAD_HALF = 7.0, 3.5  # a connector's filled arrowhead
 CONNECTOR = 1.25                # a connector's hairline
+MIN_ARROW = 24                  # a shorter connector reads as a tick on a card's edge, not an arrow
 
 
 def ceil8(value: float) -> float:
@@ -577,6 +579,10 @@ def arrow(svg: Svg, points: Sequence[Tuple[float, float]], colour: str, *,
                 continue
         kept.append(point)
     points = kept
+    total = sum(math.dist(a, b) for a, b in zip(points, points[1:]))
+    if total < MIN_ARROW:
+        raise RenderError(f"{svg.name}: an arrow of {num(total)} px reads as a tick, not an arrow; "
+                          f"give it at least {MIN_ARROW} px")
     (x1, y1), (x2, y2) = points[-2], points[-1]
     length = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
     if length < HEAD_LEN + 4:
@@ -1554,7 +1560,7 @@ def architecture(theme: Theme, facts: Facts) -> Svg:
 
     # The adapters, peers, beside the lane where Presentation reaches Application directly.
     infra, persist = p("Infrastructure"), p("Persistence")
-    y = pres_card.bottom + GUTTER
+    y = pres_card.bottom + ROW_GUTTER
     infra_need, persist_need = card_need("infrastructure", infra.w), card_need("persistence",
                                                                                persist.w)
     spare = full - LANE - GUTTER - infra_need - persist_need
@@ -1572,7 +1578,7 @@ def architecture(theme: Theme, facts: Facts) -> Svg:
 
     # Application, then Domain above SharedKernel.
     app, dom, kernel = p("Application"), p("Domain"), p("SharedKernel")
-    y = infra_card.bottom + GUTTER
+    y = infra_card.bottom + ROW_GUTTER
     app_need = card_need("application", app.w)
     dom_need = card_need("domain", max(dom.w, kernel.w))
     if app_need + GUTTER + dom_need > full:
@@ -1590,7 +1596,7 @@ def architecture(theme: Theme, facts: Facts) -> Svg:
     services = p("ServiceDefaults")
     tools = [p("AppHost"), p("MigrationService"), p("Analyzers")]
     tools_w = sum(t.w for t in tools) + GUTTER * (len(tools) - 1)
-    y = app_card.bottom + GUTTER
+    y = app_card.bottom + ROW_GUTTER
     shared_need, tools_need = card_need("shared", services.w), card_need("tools", tools_w)
     if shared_need + GUTTER + tools_need > full:
         raise RenderError("architecture: Shared and tools do not fit side by side")
