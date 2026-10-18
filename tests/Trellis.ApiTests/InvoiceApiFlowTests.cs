@@ -3,7 +3,9 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using Aspire.Hosting;
+#if (IncludeUI)
 using Aspire.Hosting.ApplicationModel;
+#endif
 using Aspire.Hosting.Testing;
 using Shouldly;
 using Trellis.Api.Contracts.Auth;
@@ -37,7 +39,7 @@ public sealed class InvoiceApiFlowTests
         CancellationToken ct = TestContext.Current.CancellationToken;
 
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Trellis_AppHost>(ct);
-        UseThrowawayDatabase(appHost);
+        appHost.UseThrowawayDatabase();
 #if (IncludeUI)
         // Without a health check a resource reports healthy as soon as its process runs.
         appHost.Resources.Single(static r => r.Name == ServiceNames.Web).Annotations.OfType<HealthCheckAnnotation>()
@@ -149,38 +151,6 @@ public sealed class InvoiceApiFlowTests
         conflict.StatusCode.ShouldBe(HttpStatusCode.Conflict);
     }
 
-    /// <summary>
-    /// Runs without <c>RUN_ASPIRE_E2E</c>: an app model of its own holds postgres the way the AppHost declares
-    /// it, and is never built or started. Both lifetime calls are covered because Aspire 13.6 records a persistent
-    /// lifetime in two annotations, and the newer one decides: dropping the older one alone leaves the container
-    /// persistent. The E2E runs the same step on the real AppHost, whose guards fail if the AppHost stops
-    /// declaring what is stripped here.
-    /// </summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void The_throwaway_database_keeps_neither_the_data_volume_nor_the_persistent_lifetime(bool olderLifetimeCall)
-    {
-        IDistributedApplicationBuilder appHost = DistributedApplication.CreateBuilder();
-        IResourceBuilder<PostgresServerResource> postgres = appHost.AddPostgres(ServiceNames.Postgres).WithDataVolume();
-#pragma warning disable ASPIREPERSISTENCE001 // experimental in Aspire 13.6, as in the AppHost
-        if (olderLifetimeCall)
-        {
-            postgres.WithLifetime(ContainerLifetime.Persistent);
-        }
-        else
-        {
-            postgres.WithPersistentLifetime();
-        }
-
-        UseThrowawayDatabase(appHost);
-
-        postgres.Resource.Annotations.OfType<ContainerMountAnnotation>().ShouldBeEmpty("the developer's data volume would be mounted");
-        postgres.Resource.Annotations.OfType<PersistenceAnnotation>().ShouldBeEmpty("the developer's persistent container would be reused or recreated");
-#pragma warning restore ASPIREPERSISTENCE001
-        postgres.Resource.Annotations.OfType<ContainerLifetimeAnnotation>().ShouldBeEmpty("the developer's persistent container would be reused or recreated");
-    }
-
     private static async Task<Guid> CreateDraftAsync(HttpClient client, string customerName, CancellationToken ct)
     {
         HttpResponseMessage createResponse = await client.PostWithIdempotencyKeyAsync(
@@ -190,35 +160,5 @@ public sealed class InvoiceApiFlowTests
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
         createResponse.Headers.Location.ShouldNotBeNull();
         return (await createResponse.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
-    }
-
-    /// <summary>
-    /// The AppHost gives postgres a named data volume and a persistent lifetime, so <c>aspire run</c> keeps the
-    /// data, and the running container, from one run to the next. Both are found by names derived from the AppHost
-    /// project (the volume's name, and the container's name plus a hash of the AppHost's path), so without this the
-    /// test would open, write to, or recreate the developer's database. Without them every run gets a container of
-    /// its own, removed when the test ends, and an empty database that the migration worker creates and seeds.
-    /// </summary>
-    private static void UseThrowawayDatabase(IDistributedApplicationBuilder appHost)
-    {
-        IResource postgres = appHost.Resources.Single(static r => r.Name == ServiceNames.Postgres);
-        List<IResourceAnnotation> volumes = [.. postgres.Annotations
-            .OfType<ContainerMountAnnotation>()
-            .Where(static m => m.Type == ContainerMountType.Volume)];
-        volumes.ShouldNotBeEmpty("the AppHost no longer mounts a data volume on postgres; drop that part of UseThrowawayDatabase");
-
-        // WithPersistentLifetime records a PersistenceAnnotation, experimental in Aspire 13.6 like the call itself;
-        // the older WithLifetime(ContainerLifetime.Persistent) records that and a ContainerLifetimeAnnotation.
-#pragma warning disable ASPIREPERSISTENCE001
-        List<IResourceAnnotation> lifetimes = [.. postgres.Annotations.Where(static a =>
-            a is PersistenceAnnotation { Mode: not PersistenceMode.Session }
-                or ContainerLifetimeAnnotation { Lifetime: ContainerLifetime.Persistent })];
-#pragma warning restore ASPIREPERSISTENCE001
-        lifetimes.ShouldNotBeEmpty("the AppHost no longer gives postgres a persistent lifetime; drop that part of UseThrowawayDatabase");
-
-        foreach (IResourceAnnotation annotation in volumes.Concat(lifetimes))
-        {
-            postgres.Annotations.Remove(annotation);
-        }
     }
 }
