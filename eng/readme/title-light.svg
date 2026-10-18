@@ -17,7 +17,6 @@
   <rect x="0" y="0" width="1200" height="320" rx="16" fill="url(#stage)"/>
   <rect x="0" y="0" width="1200" height="320" rx="16" fill="url(#glow)"/>
   <rect x="0" y="0" width="1200" height="320" rx="16" fill="url(#stage-lattice)"/>
-  <rect x="0.5" y="0.5" width="1199" height="319" rx="15.5" fill="none" stroke="#1f5c3d" stroke-width="1" stroke-opacity="0.14"/>
   <g transform="translate(72 96) scale(1)">
     <defs><clipPath id="trellis-mark-frame"><rect x="18" y="18" width="92" height="92" rx="8"/></clipPath></defs>
     <rect width="128" height="128" rx="28" fill="#1F5C3D"/>

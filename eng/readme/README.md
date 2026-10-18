@@ -57,6 +57,10 @@ instead of guessing:
   alone keeps its 9 px arc labels), overlap another, or sit on a colour it does not contrast with by at
   least 4.5:1 (WCAG 2). On the banner the colour under a text is worked out
   at the text's own place: the stage's gradient, the glow over it and a crossing of the lattice.
+- **An edge that would not show.** The banner's edge must stand out from the page GitHub shows it on
+  (white for the light file, `#0d1117` for the dark one) by at least 1.2:1, about GitHub's own muted
+  border on its dark page, and a rim drawn round the stage must stand out from the stage as much; both
+  are measured all along the edge.
 - **A layout that no longer fits.** A row of cards wider than the picture, an arrow shorter than 24 px
   (it would read as a tick on a card's edge) or too short to show its head, a step's words reaching the
   connector that wraps to the next row, a legend with no room: each stops the render with the picture and
@@ -121,7 +125,8 @@ types, files, switches) are set in monospace.
 
 **Shape.** Radius 16 on cards, 10 on chips, panels and the terminal, fully rounded pills; borders are
 1 px hairlines, never 2 px outlines. No shadows: on the dark stage the terminal gets a 1 px lighter top
-edge instead. Gradients sit on surfaces only, never on text.
+edge instead, and so does the stage itself in the dark variant, all round. Gradients sit on surfaces
+only, never on text.
 
 **Motifs.** The lattice, a 45° grid of 1 px lines 48 px apart at 4 %, lies on the stage and on every
 picture's background, where it shows between the cards. The leaf appears once, in the mark. The banner
@@ -134,7 +139,9 @@ the ring hues (the terminal's traffic lights are monochrome for that reason); no
 own layout:
 
 - `title`: the stage edge to edge, the mark with the wordmark and the tagline on the left, the terminal on
-  the right; the light variant adds only a hairline round the stage, so it does not float on white.
+  the right. The two variants differ only at the edge: on white the stage's own edge shows, while
+  GitHub's dark page is as dark as the stage's darkest part (1.06:1), so the dark variant gets a 1 px rim
+  of white at 12 % (1.49:1 against that page).
 - `rings`: the mark's geometry, unchanged since the first README, in the ring hues.
 - `architecture`: a bento, 16 px between the cards of a row and 40 px between rows, where the
   references between rings run as arrows, all inward. Presentation spans the top; Infrastructure and

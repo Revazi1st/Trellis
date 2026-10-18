@@ -37,9 +37,10 @@ read at render time:
 
 A fact the script cannot find stops it with a message (exit 2) instead of drawing a stale picture;
 so does text that would leave its canvas, its padding or its card, collide with other text or lose
-contrast. Text is sized from Helvetica's advance widths plus a margin, and every text colour is
-checked against the colour it sits on (WCAG 2, at least 4.5:1); on the banner's gradient, at the
-text's own place.
+contrast, an arrow too short to read as one, and a banner whose edge would not show on the page
+GitHub puts it on. Text is sized from Helvetica's advance widths plus a margin, and every text
+colour is checked against the colour it sits on (WCAG 2, at least 4.5:1); on the banner's gradient,
+at the text's own place.
 """
 
 from __future__ import annotations
@@ -169,6 +170,10 @@ DARK = make_theme("dark", False, bg="#0c1410", surface="#121d16", surface2="#172
                   accent="#a9dd8a", leaf="#8fd16a")
 THEMES = (LIGHT, DARK)
 MIN_CONTRAST = 4.5
+# The page GitHub shows each variant on, and how far an edge or a rim must stand out to show at all:
+# GitHub's own muted border on its dark page stands out by 1.24:1.
+GITHUB_PAGE = {"light": "#ffffff", "dark": "#0d1117"}
+MIN_EDGE = 1.2
 MIN_SIZE = 10  # px; the rings mark alone keeps its smaller arc labels, unchanged since it was drawn
 
 
@@ -182,6 +187,7 @@ class Stage:
     leaf: str = "#8fd16a"     # the glow, the prompt
     glow_alpha: float = 0.25  # at the glow's centre, fading to nothing at GLOW_FADE of its radius
     line: str = "#8fd16a"     # the terminal chip's hairline, at 0.16
+    rim: float = 0.12         # the dark variant's edge: white on the stage's outermost pixel
     terminal: Tuple[str, str] = ("#1c3026", "#132419")  # the terminal's own fill, top to bottom
 
 
@@ -2132,14 +2138,45 @@ def title(theme: Theme, facts: Facts) -> Svg:
               f"the line: {TAGLINE}; on the right a terminal with the two install commands, "
               f"{commands[0]} and {commands[1]}.")
 
-    def stage_at(x: float, y: float) -> str:
-        """The stage's colour at a point, at its lightest: the gradient, the glow over it, and a
-        lattice crossing (white at LATTICE_ALPHA, twice)."""
+    def stage_base(x: float, y: float) -> str:
+        """The stage's colour at a point: the gradient and the glow over it."""
         t = (x * w + y * h) / (w * w + h * h)
         colour = mix(STAGE.top, STAGE.bottom, min(max(t, 0.0), 1.0))
         reach = math.hypot(x - glow_x, y - glow_y) / (glow_r * GLOW_FADE)
-        colour = mix(colour, STAGE.leaf, STAGE.glow_alpha * max(0.0, 1 - reach))
-        return mix(colour, "#ffffff", 1 - (1 - LATTICE_ALPHA) ** 2)
+        return mix(colour, STAGE.leaf, STAGE.glow_alpha * max(0.0, 1 - reach))
+
+    def stage_at(x: float, y: float) -> str:
+        """The stage's colour at a point, at its lightest: with a lattice crossing (white at
+        LATTICE_ALPHA, twice)."""
+        return mix(stage_base(x, y), "#ffffff", 1 - (1 - LATTICE_ALPHA) ** 2)
+
+    # The stage's edge must show on the page GitHub puts the picture on, and a rim drawn round it
+    # must show on the stage; both are measured all along the edge, and the worst place counts. On
+    # white the stage's own edge shows; GitHub's dark page is as dark as the stage's darkest part,
+    # so the dark variant gets a rim of white, the device of the terminal's top edge.
+    rim: Optional[Tuple[str, float]] = ("#ffffff", STAGE.rim) if theme is DARK else None
+    page = GITHUB_PAGE[theme.name]
+    along = [(x, y) for x in range(CARD_R, w - CARD_R + 1, 8) for y in (0, h)]
+    along += [(x, y) for y in range(CARD_R, h - CARD_R + 1, 8) for x in (0, w)]
+
+    def edge_at(x: float, y: float) -> str:
+        base = stage_base(x, y)
+        return mix(base, rim[0], rim[1]) if rim else base
+
+    def worst(against: Callable[[float, float], str]) -> str:
+        """Where the edge stands out least from what is beside it, if that is too little."""
+        ratio, x, y = min((contrast(edge_at(x, y), against(x, y)), x, y) for x, y in along)
+        return "" if ratio >= MIN_EDGE else (f"{math.floor(ratio * 100) / 100:.2f}:1 at "
+                                             f"({x}, {y}), below {MIN_EDGE}:1")
+
+    faint = worst(stage_base) if rim else ""
+    if faint:
+        raise RenderError(f"{svg.name}: the rim round the stage ({rim[0]} at {num(rim[1])}) does "
+                          f"not show on it: {faint}")
+    faint = worst(lambda x, y: page)
+    if faint:
+        raise RenderError(f"{svg.name}: the stage's edge does not show on GitHub's {theme.name} "
+                          f"page ({page}): {faint}")
 
     svg.defs += [
         f'<linearGradient id="stage" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="{w}" '
@@ -2158,9 +2195,8 @@ def title(theme: Theme, facts: Facts) -> Svg:
     svg.rect(0, 0, w, h, rx=CARD_R, fill="url(#stage)")
     svg.rect(0, 0, w, h, rx=CARD_R, fill="url(#glow)")
     svg.rect(0, 0, w, h, rx=CARD_R, fill="url(#stage-lattice)")
-    if theme is LIGHT:  # the light page gets a hairline, so the stage does not float on white
-        svg.rect(0.5, 0.5, w - 1, h - 1, rx=CARD_R - 0.5, stroke=LIGHT.line,
-                 opacity=LIGHT.line_alpha)
+    if rim:
+        svg.rect(0.5, 0.5, w - 1, h - 1, rx=CARD_R - 0.5, stroke=rim[0], opacity=rim[1])
     for element in icon_markup(mark / 128, mx, my):
         svg.raw(element)
     tx = mx + mark + 40
