@@ -53,10 +53,11 @@ instead of guessing:
   they are drawn; the banner's two commands must be lines of the root `README.md`.
 - **Text that would not read.** Each text is sized from Helvetica's advance widths plus 8 % (monospace at
   0.62 em), and the render fails when a text would leave its canvas, come closer to the edge than the
-  picture's 32 px padding, leave the card or pill it is drawn in, be smaller than 10 px (the rings mark
-  alone keeps its 9 px arc labels), overlap another, or sit on a colour it does not contrast with by at
-  least 4.5:1 (WCAG 2). On the banner the colour under a text is worked out
-  at the text's own place: the stage's gradient, the glow over it and a crossing of the lattice.
+  picture's 32 px padding (every picture but the rings mark, a 160 px icon), leave the card or pill it
+  is drawn in, be smaller than 10 px (the rings mark alone keeps its 9 px arc labels), overlap another,
+  or sit on a colour it does not contrast with by at least 4.5:1 (WCAG 2). On the banner the colour
+  under a text is worked out at the text's own place: the stage's gradient, the glow over it and a
+  crossing of the lattice.
 - **An edge that would not show.** The banner's edge must stand out from the page GitHub shows it on
   (white for the light file, `#0d1117` for the dark one) by at least 1.2:1, about GitHub's own muted
   border on its dark page, and a rim drawn round the stage must stand out from the stage as much; both
@@ -132,11 +133,11 @@ only, never on text.
 picture's background, where it shows between the cards. The leaf appears once, in the mark. The banner
 has one glow, behind the mark.
 
-**Composition.** At least 32 px of padding inside every picture, which the render enforces for text; one
-focal object per picture; the title top left at 600 with a one-line muted subtitle; connectors are
-1.25 px hairlines with small filled arrowheads; boxes on the 8 px grid; at most two accent hues beyond
-the ring hues (the terminal's traffic lights are monochrome for that reason); no emoji. Each picture's
-own layout:
+**Composition.** At least 32 px of padding inside every picture but the 160 px rings mark, which the
+render enforces for text, the banner's included; one focal object per picture; the title top left at
+600 with a one-line muted subtitle; connectors are 1.25 px hairlines with small filled arrowheads;
+boxes on the 8 px grid; at most two accent hues beyond the ring hues (the terminal's traffic lights are
+monochrome for that reason); no emoji. Each picture's own layout:
 
 - `title`: the stage edge to edge, the mark with the wordmark and the tagline on the left, the terminal on
   the right. The two variants differ only at the edge: on white the stage's own edge shows, while

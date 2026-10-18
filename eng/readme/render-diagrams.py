@@ -2136,7 +2136,7 @@ def title(theme: Theme, facts: Facts) -> Svg:
     svg = Svg(f"title-{theme.name}", w, h, "Trellis",
               "The Trellis mark, a garden lattice with one leaf, beside the wordmark Trellis and "
               f"the line: {TAGLINE}; on the right a terminal with the two install commands, "
-              f"{commands[0]} and {commands[1]}.")
+              f"{commands[0]} and {commands[1]}.", pad=PAD)
 
     def stage_base(x: float, y: float) -> str:
         """The stage's colour at a point: the gradient and the glow over it."""
