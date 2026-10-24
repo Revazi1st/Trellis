@@ -1,4 +1,4 @@
-"""Render the README's diagrams from this repository's own source tree.
+"""Render the README's pictures from this repository's own source tree.
 
 Run it from the repository root (paths resolve from this file, so any working directory works):
 
@@ -6,33 +6,41 @@ Run it from the repository root (paths resolve from this file, so any working di
     python3 eng/readme/render-diagrams.py --check   # exit 1 when a committed SVG is stale
 
 Standard library only, Python 3.9 or later. The output is deterministic: the same tree renders the
-same bytes on every machine, so CI can compare them (eng/readme/ci-snippet.yml is the proposed step)
-and a picture that drifted from the code fails the build instead of misleading a reader.
+same bytes on every machine, so CI compares them (the "README pictures are current" step in
+.github/workflows/ci.yml) and a picture that drifted from the code fails the build instead of
+misleading a reader.
 
-Every diagram ships twice, for GitHub's light and dark themes, and each is drawn from facts read at
-render time:
+Every picture ships twice, for GitHub's light and dark themes, in the visual language that
+eng/readme/README.md describes (its tokens are the palette below), and each is drawn from facts
+read at render time:
 
-  architecture  The projects under src/ and tools/ with their files, as a default
-                `dotnet new trellis` generates them: .template.config/template.json's exclude list,
-                plus each modifier whose condition holds for the symbols' default values. One rule
-                abbreviates every tree: a project's folders, then its top-level files except the
-                .csproj; each folder collapsed to its name, except the Invoices slice,
+  title         The banner: a dark stage with the lattice, .template.config/icon.svg, the wordmark,
+                the tagline, and a terminal chip with the install commands, built from the package
+                id and the template's short name and checked against README.md.
+  rings         The rings as a mark that still reads at 160 px.
+  architecture  A bento of ring cards holding the projects under src/ and tools/ with their
+                files, as a default `dotnet new trellis` generates them: template.json's exclude
+                list, plus each modifier whose condition holds for the symbols' default values.
+                One rule abbreviates every tree: a project's folders, then its top-level files
+                except the .csproj; each folder collapsed to its name, except the Invoices slice,
                 expanded two levels as the worked example, and the folders on the way to it. The
                 arrows are AGENTS.md's dependency flow plus Presentation's direct reference to
                 Application, each checked against the ProjectReference items before it is drawn.
-  testing       The test projects under tests/, each placed by SUITES below; the opt-in switches
-                are read from the test code and from template.json.
-  pipeline      One request, paying an invoice: the endpoint's filters, the decorator order read
-                from the TryDecorate calls in Trellis.Application's DependencyInjection.cs, the
-                handler, the domain event and its outbox name, and the event handlers found by
-                their IDomainEventHandler<>.
-  rings         The rings as a mark that still reads at 160 px.
-  title         The README banner: .template.config/icon.svg beside the wordmark and the tagline.
+  testing       The test projects under tests/, each placed by SUITES below: a card that spans
+                the layers it runs through, under a rail of the layers; the opt-in switches are
+                read from the test code and from template.json.
+  pipeline      One request, paying an invoice, as a rail of numbered steps: the endpoint's filters,
+                the decorator order read from the TryDecorate calls in Trellis.Application's
+                DependencyInjection.cs, the handler, the domain event and its outbox name, the event
+                handlers found by their IDomainEventHandler<>, and the e-mail port the receipt
+                handler sends through.
 
 A fact the script cannot find stops it with a message (exit 2) instead of drawing a stale picture;
-so does text that would leave its canvas, collide with other text or lose contrast. Text is sized
-from Helvetica's advance widths plus a margin, and every text colour is checked against the colour
-it sits on (WCAG 2, at least 4.5:1).
+so does text that would leave its canvas, its padding or its card, collide with other text or lose
+contrast, a card off the 8 px grid, an arrow too short to read as one, and a banner whose edge
+would not show on the page GitHub puts it on. Text is sized from Helvetica's advance widths plus a
+margin, and every text colour is checked against the colour it sits on (WCAG 2, at least 4.5:1); on
+the banner's gradient, at the text's own place.
 """
 
 from __future__ import annotations
@@ -47,7 +55,7 @@ import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 from xml.sax.saxutils import escape
 
 HERE = Path(__file__).resolve().parent
@@ -62,67 +70,132 @@ class RenderError(Exception):
 
 
 # ==================================================================================================
-# Palette, written once. One hue per ring: honey for Core, sage for Infrastructure, teal for
-# Persistence, sky for Presentation, lavender for Shared and tools, and a grey for what lies outside
-# the solution (a client, a browser, the database). Light mode puts dark text on desaturated fills;
-# dark mode deepens the same hues under light text. Every text colour is checked against the colour
-# it sits on as the diagrams render, so an edit here that loses contrast stops the render.
+# Colour arithmetic and the contrast check
 # ==================================================================================================
 
+def _channels(colour: str) -> Tuple[int, int, int]:
+    return int(colour[1:3], 16), int(colour[3:5], 16), int(colour[5:7], 16)
+
+
+def mix(a: str, b: str, t: float) -> str:
+    """The colour t of the way from a to b, which is also b laid over a at alpha t."""
+    pairs = zip(_channels(a), _channels(b))
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in pairs)
+
+
+def _luminance(colour: str) -> float:
+    def linear(channel: int) -> float:
+        c = channel / 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (linear(c) for c in _channels(colour))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(a: str, b: str) -> float:
+    la, lb = _luminance(a), _luminance(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+# ==================================================================================================
+# Palette: the visual language's tokens, written once. One hue per ring, the same in every picture:
+# gold for Domain and SharedKernel, ochre for Application, moss for Infrastructure, teal for
+# Persistence, slate for Presentation, and a neutral with the palette's green bias for Shared and
+# tools; what lies outside the solution (a client, a browser, the database) sits on the plain
+# surface. Light and dark are drawn separately, not inverted: a project's card is white on its
+# ring in light mode and a deeper shade of the ring in dark mode. Every text colour is checked
+# against the colour it sits on as the pictures render, so an edit here that loses contrast stops
+# the render.
+# ==================================================================================================
+
+HAIRLINE = 0.35       # a ring's fill is edged with its own ink at this alpha
+LATTICE_ALPHA = 0.04  # the lattice: a 45-degree grid of 1 px lines, LATTICE_PITCH apart
+LATTICE_PITCH = 48
+
+# Per ring: (light fill, dark fill, light ink, dark ink).
+RING_HUES: Dict[str, Tuple[str, str, str, str]] = {
+    "domain": ("#f3e6c9", "#3a2f1b", "#4a3511", "#f5e5c3"),
+    "application": ("#f8efd9", "#2e2616", "#5a431a", "#f1e3c4"),
+    "infrastructure": ("#dfe9d6", "#27331f", "#2b4022", "#deecd5"),
+    "persistence": ("#d3e9e6", "#1b3431", "#163e39", "#d2ede9"),
+    "presentation": ("#d9e6f3", "#1e2f45", "#1c3654", "#d8e6f5"),
+    "shared": ("#e9ecea", "#1c2320", "#2a332d", "#d7ded9"),
+}
+
+
 @dataclass(frozen=True)
-class Hue:
-    fill: str    # the ring's card
-    stroke: str  # the card's border, tree guides, file glyphs
-    title: str   # ring and project names, chip text
-    muted: str   # paths and descriptions on the card
-    panel: str   # a project's panel inside the card
-    glyph: str   # folder glyphs
+class Ring:
+    fill: str   # the ring's card, node, chip and swatch
+    ink: str    # names on the fill and on the page; the fill's hairline, at HAIRLINE
+    muted: str  # paths and descriptions on the fill
+    panel: str  # a project's card inside the ring's card
+    glyph: str  # folder glyphs, a suite card's layer marks
+    band: str   # behind the Invoices slice's rows, on the panel
 
 
 @dataclass(frozen=True)
 class Theme:
     name: str
-    bg: str          # the diagram's own background
-    frame: str       # its border
-    ink: str         # body text: file names, labels
-    muted: str       # secondary text: counts, captions, the legend
-    arrow: str       # arrows, brackets, the peer mark
-    slice_band: str  # behind the rows of the Invoices slice
-    slice_bar: str   # the slice band's left edge
-    brand: str       # the wordmark
-    hues: Dict[str, Hue]
+    bg: str
+    surface: str
+    line: str           # hairlines, at line_alpha; the lattice, at LATTICE_ALPHA
+    line_alpha: float
+    ink: str
+    muted: str
+    accent: str         # connectors and the slice's bar
+    rings: Dict[str, Ring]
+    page: Tuple[str, ...]  # what text on the background sits on: it, and it under the lattice
 
 
-LIGHT = Theme(
-    name="light",
-    bg="#fbfaf7", frame="#e4dfd4", ink="#1f2328", muted="#57606a", arrow="#4b5563",
-    slice_band="#e3f0d8", slice_bar="#4f9a3a", brand="#1f5c3d",
-    hues={
-        "core": Hue("#f3e6c9", "#c39a52", "#4a3511", "#634d27", "#fcf7ec", "#d9b36b"),
-        "infrastructure": Hue("#dfe9d6", "#88a879", "#2b4022", "#435a39", "#f5f9f1", "#9ebd8d"),
-        "persistence": Hue("#d3e9e6", "#5f9f97", "#163e39", "#2f5852", "#f0f8f7", "#79b5ad"),
-        "presentation": Hue("#d9e6f3", "#7399c2", "#1c3654", "#38526f", "#f2f7fc", "#8bafd6"),
-        "shared": Hue("#e6e1f3", "#9486c4", "#33295c", "#4e4476", "#f7f5fc", "#ab9fd5"),
-        "neutral": Hue("#eceef1", "#959ea8", "#24292f", "#4a535d", "#f7f8f9", "#b0b8c1"),
-    },
-)
+def make_theme(name: str, light: bool, *, bg: str, surface: str, surface2: str, line: str,
+               line_alpha: float, ink: str, muted: str, accent: str, leaf: str) -> Theme:
+    rings: Dict[str, Ring] = {}
+    for key, (light_fill, dark_fill, light_ink, dark_ink) in RING_HUES.items():
+        fill, ring_ink = (light_fill, light_ink) if light else (dark_fill, dark_ink)
+        panel = surface if light else mix(fill, bg, 0.45)
+        rings[key] = Ring(fill, ring_ink, mix(ring_ink, fill, 0.2 if light else 0.3), panel,
+                          mix(fill, ring_ink, 0.5 if light else 0.45),
+                          surface2 if light else mix(panel, leaf, 0.14))
+    rings["outside"] = Ring(surface, ink, muted, surface, mix(surface, ink, 0.45),
+                            surface2 if light else mix(surface, leaf, 0.14))
+    crossing = 1 - (1 - LATTICE_ALPHA) ** 2
+    return Theme(name, bg, surface, line, line_alpha, ink, muted, accent, rings,
+                 (bg, mix(bg, line, crossing)))
 
-DARK = Theme(
-    name="dark",
-    bg="#0f1318", frame="#2b323b", ink="#e6edf3", muted="#a3aeba", arrow="#a8b3bf",
-    slice_band="#1f331b", slice_bar="#7dbd5c", brand="#d5ebc9",
-    hues={
-        "core": Hue("#3a2f1b", "#9e7e42", "#f5e5c3", "#dbc8a2", "#251e12", "#b8924f"),
-        "infrastructure": Hue("#27331f", "#6f9161", "#deecd5", "#bfd0b5", "#192114", "#7fa36e"),
-        "persistence": Hue("#1b3431", "#4f9088", "#d2ede9", "#accfca", "#11221f", "#5fa39a"),
-        "presentation": Hue("#1e2f45", "#5c84ae", "#d8e6f5", "#b3c7dd", "#131e2d", "#6f97c2"),
-        "shared": Hue("#2d2641", "#7f70ad", "#e5dff5", "#c6bde1", "#1d182b", "#9183c2"),
-        "neutral": Hue("#252b33", "#6e7781", "#e6edf3", "#b4bec9", "#181d23", "#7d8590"),
-    },
-)
 
+LIGHT = make_theme("light", True, bg="#f6f9f4", surface="#ffffff", surface2="#eef6e8",
+                   line="#1f5c3d", line_alpha=0.14, ink="#14231b", muted="#566b5f",
+                   accent="#1f5c3d", leaf="#8fd16a")
+DARK = make_theme("dark", False, bg="#0c1410", surface="#121d16", surface2="#172520",
+                  line="#8fd16a", line_alpha=0.16, ink="#e6efe8", muted="#9db3a4",
+                  accent="#a9dd8a", leaf="#8fd16a")
 THEMES = (LIGHT, DARK)
 MIN_CONTRAST = 4.5
+# The page GitHub shows each variant on, and how far an edge or a rim must stand out to show at all:
+# GitHub's own muted border on its dark page stands out by 1.24:1.
+GITHUB_PAGE = {"light": "#ffffff", "dark": "#0d1117"}
+MIN_EDGE = 1.2
+# GitHub's README column is 896 px, so it shows a 1200 px picture at three quarters of its size: 12 px
+# reads as 9. The rings mark alone, shown at its own 160 px, keeps its smaller arc labels, unchanged
+# since it was drawn.
+MIN_SIZE = 12  # px
+
+
+@dataclass(frozen=True)
+class Stage:
+    """The banner's dark stage, the same in both themes: a gradient, a white lattice, one glow."""
+    top: str = "#0b1510"      # the gradient's start, top left
+    bottom: str = "#10261b"   # its end, bottom right
+    ink: str = "#f2f7f0"
+    muted: str = "#a9bbae"
+    leaf: str = "#8fd16a"     # the glow, the prompt
+    glow_alpha: float = 0.25  # at the glow's centre, fading to nothing at GLOW_FADE of its radius
+    line: str = "#8fd16a"     # the terminal chip's hairline, at 0.16
+    rim: float = 0.12         # the dark variant's edge: white on the stage's outermost pixel
+    terminal: Tuple[str, str] = ("#1c3026", "#132419")  # the terminal's own fill, top to bottom
+
+
+STAGE = Stage()
+GLOW_FADE = 0.6
 
 
 # ==================================================================================================
@@ -130,7 +203,7 @@ MIN_CONTRAST = 4.5
 # ==================================================================================================
 
 SANS = 'ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
-MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace'
+MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 
 # Helvetica's advance widths in 1/1000 em for ASCII 32..126, regular then bold. Sans text is sized
 # from these times SANS_MARGIN, which covers the wider faces of the stack (Segoe UI, Roboto, DejaVu
@@ -151,23 +224,26 @@ _BOLD = (
     333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611,
     611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584,
 )
-NBSP = "\u00a0"
+NBSP = " "
 _OTHER = {NBSP: 278, "·": 278, "→": 1000, "←": 1000, "∥": 600,
           "…": 1000, "—": 1000, "–": 556, "’": 222}
 SANS_MARGIN = 1.08
 MONO_EM = 0.62
 
 
-def measure(text: str, size: float, weight: int = 400, mono: bool = False) -> float:
-    """The estimated advance width of one line of text, in px."""
+def measure(text: str, size: float, weight: int = 400, mono: bool = False,
+            tracking: float = 0.0) -> float:
+    """The estimated advance width of one line of text, in px; tracking is the letter-spacing."""
     if mono:
-        return len(text) * size * MONO_EM
-    table = _BOLD if weight >= 600 else _REGULAR
-    units = 0
-    for char in text:
-        code = ord(char)
-        units += table[code - 32] if 32 <= code <= 126 else _OTHER.get(char, 1000)
-    return units / 1000 * size * SANS_MARGIN
+        width = len(text) * size * MONO_EM
+    else:
+        table = _BOLD if weight >= 600 else _REGULAR
+        units = 0
+        for char in text:
+            code = ord(char)
+            units += table[code - 32] if 32 <= code <= 126 else _OTHER.get(char, 1000)
+        width = units / 1000 * size * SANS_MARGIN
+    return width + tracking * len(text)
 
 
 def wrap(text: str, size: float, width: float, weight: int = 400,
@@ -212,33 +288,6 @@ def num(value: float) -> str:
 
 
 # ==================================================================================================
-# Colour arithmetic and the contrast check
-# ==================================================================================================
-
-def _channels(colour: str) -> Tuple[int, int, int]:
-    return int(colour[1:3], 16), int(colour[3:5], 16), int(colour[5:7], 16)
-
-
-def mix(a: str, b: str, t: float) -> str:
-    """The colour t of the way from a to b."""
-    pairs = zip(_channels(a), _channels(b))
-    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in pairs)
-
-
-def _luminance(colour: str) -> float:
-    def linear(channel: int) -> float:
-        c = channel / 255
-        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-    r, g, b = (linear(c) for c in _channels(colour))
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def contrast(a: str, b: str) -> float:
-    la, lb = _luminance(a), _luminance(b)
-    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
-
-
-# ==================================================================================================
 # The SVG builder: flat elements, font classes in one <style>, every text checked as it is added
 # ==================================================================================================
 
@@ -249,10 +298,11 @@ class Span:
     size: float = 13
     weight: int = 400
     mono: bool = False
+    tracking: float = 0.0  # letter-spacing, px
 
     @property
     def width(self) -> float:
-        return measure(self.text, self.size, self.weight, self.mono)
+        return measure(self.text, self.size, self.weight, self.mono, self.tracking)
 
 
 @dataclass(frozen=True)
@@ -278,11 +328,36 @@ class Box:
     def cy(self) -> float:
         return self.y + self.h / 2
 
+    def holds(self, other: "Box") -> bool:
+        return (self.x - 0.5 <= other.x and other.right <= self.right + 0.5
+                and self.y - 0.5 <= other.y and other.bottom <= self.bottom + 0.5)
+
+
+# What a text sits on: one colour, several (it must read on each), or the colour under a point.
+Backdrop = Union[str, Sequence[str], Callable[[float, float], str]]
+
+
+def _paint(fill: str, fill_opacity: Optional[float], stroke: Optional[str], width: float,
+           opacity: Optional[float], dash: Optional[str]) -> str:
+    attrs = f' fill="{fill}"'
+    if fill_opacity is not None:
+        attrs += f' fill-opacity="{num(fill_opacity)}"'
+    if stroke:
+        attrs += f' stroke="{stroke}" stroke-width="{num(width)}"'
+        if opacity is not None:
+            attrs += f' stroke-opacity="{num(opacity)}"'
+    if dash:
+        attrs += f' stroke-dasharray="{dash}"'
+    return attrs
+
 
 class Svg:
-    def __init__(self, name: str, width: float, height: float, title: str, desc: str) -> None:
+    def __init__(self, name: str, width: float, height: float, title: str, desc: str,
+                 pad: float = 0.0, min_size: float = MIN_SIZE) -> None:
         self.name = name
         self.width, self.height = width, height
+        self.pad = pad  # no text closer to the edge than this
+        self.min_size = min_size  # no text smaller than this
         self.title, self.desc = title, desc
         self.body: List[str] = []
         self.defs: List[str] = []
@@ -291,6 +366,9 @@ class Svg:
 
     def font(self, size: float, weight: int = 400, mono: bool = False) -> str:
         """The class for one font; the <style> block declares each class once."""
+        if size < self.min_size:
+            raise RenderError(f"{self.name}: a {num(size)} px text is below the "
+                              f"{num(self.min_size)} px the pictures allow")
         name = ("m" if mono else "s") + num(size).replace(".", "_")
         if weight != 400:
             name += f"w{weight}"
@@ -306,71 +384,89 @@ class Svg:
 
     def rect(self, x: float, y: float, w: float, h: float, *, fill: str = "none",
              stroke: Optional[str] = None, width: float = 1.0, rx: float = 0.0,
-             dash: Optional[str] = None) -> None:
+             dash: Optional[str] = None, opacity: Optional[float] = None,
+             fill_opacity: Optional[float] = None) -> None:
         attrs = f'x="{num(x)}" y="{num(y)}" width="{num(w)}" height="{num(h)}"'
         if rx:
             attrs += f' rx="{num(rx)}"'
-        attrs += f' fill="{fill}"'
-        if stroke:
-            attrs += f' stroke="{stroke}" stroke-width="{num(width)}"'
-        if dash:
-            attrs += f' stroke-dasharray="{dash}"'
+        attrs += _paint(fill, fill_opacity, stroke, width, opacity, dash)
         self.body.append(f"<rect {attrs}/>")
 
     def line(self, x1: float, y1: float, x2: float, y2: float, *, stroke: str,
-             width: float = 1.0, dash: Optional[str] = None) -> None:
-        extra = f' stroke-dasharray="{dash}"' if dash else ""
+             width: float = 1.0, dash: Optional[str] = None,
+             opacity: Optional[float] = None) -> None:
+        extra = f' stroke-opacity="{num(opacity)}"' if opacity is not None else ""
+        extra += f' stroke-dasharray="{dash}"' if dash else ""
         self.body.append(f'<line x1="{num(x1)}" y1="{num(y1)}" x2="{num(x2)}" y2="{num(y2)}" '
                          f'stroke="{stroke}" stroke-width="{num(width)}" stroke-linecap="round"'
                          f'{extra}/>')
 
     def path(self, d: str, *, fill: str = "none", stroke: Optional[str] = None,
-             width: float = 1.0, dash: Optional[str] = None, linejoin: str = "round") -> None:
-        attrs = f'd="{d}" fill="{fill}"'
+             width: float = 1.0, dash: Optional[str] = None, linejoin: str = "round",
+             opacity: Optional[float] = None, fill_opacity: Optional[float] = None) -> None:
+        attrs = f'd="{d}"' + _paint(fill, fill_opacity, stroke, width, opacity, dash)
         if stroke:
-            attrs += (f' stroke="{stroke}" stroke-width="{num(width)}" stroke-linecap="round"'
-                      f' stroke-linejoin="{linejoin}"')
-        if dash:
-            attrs += f' stroke-dasharray="{dash}"'
+            attrs += f' stroke-linecap="round" stroke-linejoin="{linejoin}"'
         self.body.append(f"<path {attrs}/>")
 
     def circle(self, cx: float, cy: float, r: float, *, fill: str, stroke: Optional[str] = None,
-               width: float = 1.0) -> None:
-        extra = f' stroke="{stroke}" stroke-width="{num(width)}"' if stroke else ""
-        self.body.append(f'<circle cx="{num(cx)}" cy="{num(cy)}" r="{num(r)}" fill="{fill}"'
-                         f'{extra}/>')
+               width: float = 1.0, opacity: Optional[float] = None,
+               fill_opacity: Optional[float] = None) -> None:
+        attrs = _paint(fill, fill_opacity, stroke, width, opacity, None)
+        self.body.append(f'<circle cx="{num(cx)}" cy="{num(cy)}" r="{num(r)}"{attrs}/>')
 
-    def text(self, x: float, y: float, spans: Sequence[Span], *, on: str, anchor: str = "start",
-             extra: str = "") -> Box:
-        """One line of text at baseline y, spans one after another; returns its estimated box."""
-        for span in spans:
-            ratio = contrast(span.fill, on)
-            if ratio < MIN_CONTRAST:
-                raise RenderError(f"{self.name}: text {span.text!r} ({span.fill} on {on}) has "
-                                  f"contrast {ratio:.2f}:1, below {MIN_CONTRAST}:1; adjust the "
-                                  "palette")
+    @staticmethod
+    def _backdrops(on: Backdrop, box: Box) -> List[str]:
+        if callable(on):  # sampled at the box's corners, edge midpoints and centre
+            return [on(x, y) for x in (box.x, box.cx, box.right)
+                    for y in (box.y, box.cy, box.bottom)]
+        return [on] if isinstance(on, str) else list(on)
+
+    def text(self, x: float, y: float, spans: Sequence[Span], *, on: Backdrop,
+             anchor: str = "start", within: Optional[Box] = None) -> Box:
+        """One line of text at baseline y, spans one after another; returns its estimated box.
+        It must contrast with everything it sits on (on), and stay inside within when given."""
         width = sum(span.width for span in spans)
         size = max(span.size for span in spans)
         left = x if anchor == "start" else x - width if anchor == "end" else x - width / 2
         box = Box(left, y - size * 0.8, width, size * 1.05)
-        self.text_boxes.append((box, "".join(span.text for span in spans)))
+        label = "".join(span.text for span in spans)
+        for colour in self._backdrops(on, box):
+            for span in spans:
+                ratio = contrast(span.fill, colour)
+                if ratio < MIN_CONTRAST:
+                    raise RenderError(f"{self.name}: text {span.text!r} ({span.fill} on {colour}) "
+                                      f"has contrast {ratio:.2f}:1, below {MIN_CONTRAST}:1; adjust "
+                                      "the palette")
+        if within is not None and not within.holds(box):
+            raise RenderError(f"{self.name}: text {label!r} does not fit the box it is drawn in")
+        self.text_boxes.append((box, label))
         first = spans[0]
+        tracked = any(span.tracking for span in spans)
+
+        def spacing(span: Span) -> str:
+            return f' letter-spacing="{num(span.tracking)}"' if tracked else ""
+
         anchor_attr = "" if anchor == "start" else f' text-anchor="{anchor}"'
         cls = self.font(first.size, first.weight, first.mono)
         out = (f'<text class="{cls}" x="{num(x)}" y="{num(y)}" fill="{first.fill}"'
-               f'{anchor_attr}{extra}>{escape(first.text)}')
+               f'{anchor_attr}{spacing(first)}>{escape(first.text)}')
         for span in spans[1:]:
             cls = self.font(span.size, span.weight, span.mono)
-            out += f'<tspan class="{cls}" fill="{span.fill}">{escape(span.text)}</tspan>'
+            out += (f'<tspan class="{cls}" fill="{span.fill}"{spacing(span)}>'
+                    f'{escape(span.text)}</tspan>')
         self.body.append(out + "</text>")
         return box
 
     def check_layout(self) -> None:
-        """Every text inside the canvas, no two texts overlapping."""
+        """Every text inside the canvas and its padding, no two texts overlapping."""
+        p = self.pad
         for box, label in self.text_boxes:
-            if box.x < 0 or box.right > self.width or box.y < 0 or box.bottom > self.height:
+            if box.x < p - 0.5 or box.right > self.width - p + 0.5 or box.y < p - 0.5 \
+                    or box.bottom > self.height - p + 0.5:
                 raise RenderError(f"{self.name}: text {label!r} leaves the "
-                                  f"{num(self.width)}x{num(self.height)} canvas")
+                                  f"{num(self.width)}x{num(self.height)} canvas or its "
+                                  f"{num(p)} px padding")
         boxes = sorted(self.text_boxes, key=lambda item: (item[0].y, item[0].x))
         for i, (a, label_a) in enumerate(boxes):
             for b, label_b in boxes[i + 1:]:
@@ -401,17 +497,74 @@ class Svg:
         return "\n".join(lines) + "\n"
 
 
-def background(svg: Svg, theme: Theme) -> None:
-    svg.rect(0.5, 0.5, svg.width - 1, svg.height - 1, fill=theme.bg, stroke=theme.frame, rx=18)
+# ==================================================================================================
+# Shared drawing pieces
+# ==================================================================================================
+
+W = 1200
+PAD = 32       # inside every picture, all round
+GUTTER = 16    # between the cards of a bento's row
+ROW_GUTTER = 40  # between its rows, where the references between rings run as arrows
+CARD_R = 16    # cards
+CHIP_R = 10    # chips, panels, the terminal
+PILL_H = 22    # pills are fully rounded
+HEAD_LEN, HEAD_HALF = 7.0, 3.5  # a connector's filled arrowhead
+CONNECTOR = 1.25                # a connector's hairline
+MIN_ARROW = 24                  # a shorter connector reads as a tick on a card's edge, not an arrow
+
+
+def ceil8(value: float) -> float:
+    """Up to the 8 px grid."""
+    return math.ceil(value / 8 - 1e-6) * 8
+
+
+def floor8(value: float) -> float:
+    """Down to the 8 px grid."""
+    return math.floor(value / 8 + 1e-6) * 8
+
+
+def on_grid(svg: Svg, what: str, *values: float) -> None:
+    """Cards, chips, panels and the terminal sit on the 8 px grid, and so do the nodes' centres."""
+    off = [value for value in values if abs(value - round(value / 8) * 8) > 0.01]
+    if off:
+        raise RenderError(f"{svg.name}: {what} is off the 8 px grid, at "
+                          f"{', '.join(num(value) for value in off)}")
+
+
+def lattice_pattern(pattern_id: str, colour: str, alpha: float) -> str:
+    """The lattice as a pattern: 1 px lines LATTICE_PITCH apart, turned 45 degrees."""
+    p = LATTICE_PITCH
+    return (f'<pattern id="{pattern_id}" width="{p}" height="{p}" patternUnits="userSpaceOnUse" '
+            f'patternTransform="rotate(45)"><path d="M0 0.5 H{p} M0.5 0 V{p}" fill="none" '
+            f'stroke="{colour}" stroke-opacity="{num(alpha)}" stroke-width="1"/></pattern>')
+
+
+def frame(svg: Svg, theme: Theme) -> None:
+    """The picture's own ground: the background with its hairline edge, the lattice over it."""
+    svg.defs.append(lattice_pattern("lattice", theme.line, LATTICE_ALPHA))
+    svg.rect(0.5, 0.5, svg.width - 1, svg.height - 1, rx=CARD_R, fill=theme.bg,
+             stroke=theme.line, opacity=theme.line_alpha)
+    svg.rect(1, 1, svg.width - 2, svg.height - 2, rx=CARD_R - 0.5, fill="url(#lattice)")
 
 
 def finish(svg: Svg, theme: Theme, height: float) -> Svg:
-    """Fix the height once the content is laid out, and put the background under everything."""
+    """Fix the height once the content is laid out, and put the ground under everything."""
     svg.height = height
     body, svg.body = svg.body, []
-    background(svg, theme)
+    frame(svg, theme)
     svg.body += body
     return svg
+
+
+def heading(svg: Svg, theme: Theme, title: str, subtitle: str) -> float:
+    """The title top left at 600 weight, a one-line muted subtitle under it; returns where the
+    content starts. From here on no text comes closer to the picture's edge than PAD."""
+    svg.pad = PAD
+    if measure(subtitle, 14) > W - 2 * PAD:
+        raise RenderError(f"{svg.name}: the subtitle {subtitle!r} needs more than one line")
+    svg.text(PAD, PAD + 22, [Span(title, theme.ink, 22, 600, tracking=-0.44)], on=theme.page)
+    svg.text(PAD, PAD + 48, [Span(subtitle, theme.muted, 14)], on=theme.page)
+    return PAD + 80
 
 
 def rounded_path(points: Sequence[Tuple[float, float]], radius: float) -> str:
@@ -429,9 +582,9 @@ def rounded_path(points: Sequence[Tuple[float, float]], radius: float) -> str:
     return " ".join(out)
 
 
-def arrow(svg: Svg, points: Sequence[Tuple[float, float]], colour: str, *, width: float = 2.0,
-          dashed: bool = False, radius: float = 10.0) -> None:
-    """A polyline ending in a filled head; repeated and in-line points are dropped."""
+def arrow(svg: Svg, points: Sequence[Tuple[float, float]], colour: str, *,
+          width: float = CONNECTOR, dashed: bool = False, radius: float = 10.0) -> None:
+    """A hairline polyline ending in a small filled head; repeated and in-line points go."""
     kept: List[Tuple[float, float]] = []
     for point in points:
         if kept and abs(point[0] - kept[-1][0]) < 0.01 and abs(point[1] - kept[-1][1]) < 0.01:
@@ -443,18 +596,23 @@ def arrow(svg: Svg, points: Sequence[Tuple[float, float]], colour: str, *, width
                 continue
         kept.append(point)
     points = kept
-    head_len, head_half = 9.0, 4.8
+    total = sum(math.dist(a, b) for a, b in zip(points, points[1:]))
+    if total < MIN_ARROW:
+        raise RenderError(f"{svg.name}: an arrow of {num(total)} px reads as a tick, not an arrow; "
+                          f"give it at least {MIN_ARROW} px")
     (x1, y1), (x2, y2) = points[-2], points[-1]
     length = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+    if length < HEAD_LEN + 4:
+        raise RenderError(f"{svg.name}: an arrow is too short to show its head")
     ux, uy = (x2 - x1) / length, (y2 - y1) / length
-    shaft = list(points[:-1]) + [(x2 - ux * (head_len - 1), y2 - uy * (head_len - 1))]
-    dash = "6 5" if dashed else None
-    svg.path(rounded_path(shaft, radius), stroke=colour, width=width, dash=dash)
-    bx, by = x2 - ux * head_len, y2 - uy * head_len
+    shaft = list(points[:-1]) + [(x2 - ux * (HEAD_LEN - 1), y2 - uy * (HEAD_LEN - 1))]
+    svg.path(rounded_path(shaft, radius), stroke=colour, width=width,
+             dash="5 4" if dashed else None)
+    bx, by = x2 - ux * HEAD_LEN, y2 - uy * HEAD_LEN
     nx, ny = -uy, ux
-    head = (f"M{num(bx + nx * head_half)} {num(by + ny * head_half)} L{num(x2)} {num(y2)} "
-            f"L{num(bx - nx * head_half)} {num(by - ny * head_half)} Z")
-    svg.path(head, fill=colour, stroke=colour, width=1)
+    head = (f"M{num(bx + nx * HEAD_HALF)} {num(by + ny * HEAD_HALF)} L{num(x2)} {num(y2)} "
+            f"L{num(bx - nx * HEAD_HALF)} {num(by - ny * HEAD_HALF)} Z")
+    svg.path(head, fill=colour, stroke=colour, width=0.75)
 
 
 def folder_glyph(svg: Svg, x: float, y: float, fill: str, stroke: Optional[str] = None) -> None:
@@ -480,6 +638,64 @@ def file_glyph(svg: Svg, x: float, y: float, stroke: str, fill: str) -> None:
     svg.path(f"M{at(8.4, 0.8)} V{num(y + 4)} H{num(x + 11.6)}", stroke=stroke, width=1.1)
 
 
+def pill_width(text: str, size: float = 12, mono: bool = True) -> float:
+    return math.ceil(measure(text, size, mono=mono) + 20)
+
+
+def pill(svg: Svg, x: float, y: float, text: str, *, fill: str, ink: str, edge: str,
+         edge_alpha: float, size: float = 12, mono: bool = True, dash: Optional[str] = None) -> Box:
+    """A fully rounded pill whose top-left corner is (x, y); the text must fit inside it."""
+    box = Box(x, y, pill_width(text, size, mono), PILL_H)
+    svg.rect(box.x, box.y, box.w, box.h, rx=PILL_H / 2, fill=fill, stroke=edge,
+             opacity=edge_alpha, dash=dash)
+    svg.text(box.cx, y + PILL_H / 2 + size * 0.35, [Span(text, ink, size, mono=mono)], on=fill,
+             anchor="middle", within=box)
+    return box
+
+
+LegendItem = Tuple[Callable[[Svg, float, float], float], str]
+
+
+def legend(svg: Svg, theme: Theme, x: float, y: float, width: float, items: List[LegendItem],
+           note: Optional[str] = None) -> float:
+    """Items flow left to right and wrap; each sample draws itself at (x, y-centre) and returns its
+    width. Returns the legend's height."""
+    cx, line_y = x, y
+    for draw, text in items:
+        sample_w = draw(Svg("measure", 1, 1, "", ""), 0, 0)
+        item_w = sample_w + 8 + measure(text, 13)
+        if cx > x and cx + item_w > x + width:
+            cx, line_y = x, line_y + 28
+        draw(svg, cx, line_y)
+        svg.text(cx + sample_w + 8, line_y + 4.5, [Span(text, theme.muted, 13)], on=theme.page)
+        cx += item_w + 28
+    height = line_y - y + 14
+    if note:
+        for line in wrap(note, 13, width):
+            height += 22
+            svg.text(x, y + height - 4, [Span(line, theme.muted, 13)], on=theme.page)
+    return height
+
+
+# The ring legend: one swatch per ring, wherever a picture relies on the ring hues.
+RING_LEGEND: Tuple[Tuple[str, str], ...] = (
+    ("domain", "Domain · SharedKernel"), ("application", "Application"),
+    ("infrastructure", "Infrastructure"), ("persistence", "Persistence"),
+    ("presentation", "Presentation"),
+)
+
+
+def ring_items(theme: Theme) -> List[LegendItem]:
+    items: List[LegendItem] = []
+    for key, label in RING_LEGEND:
+        def draw(s: Svg, x: float, y: float, key: str = key) -> float:
+            ring = theme.rings[key]
+            s.rect(x, y - 7, 14, 14, rx=4, fill=ring.fill, stroke=ring.ink, opacity=HAIRLINE)
+            return 14
+        items.append((draw, label))
+    return items
+
+
 # ==================================================================================================
 # Repository facts
 # ==================================================================================================
@@ -494,7 +710,7 @@ def read_text(rel: str) -> str:
 def find(rel: str, pattern: str, what: str) -> "re.Match[str]":
     match = re.search(pattern, read_text(rel), re.S)
     if not match:
-        raise RenderError(f"{rel}: cannot find {what}; the diagrams name it, so update "
+        raise RenderError(f"{rel}: cannot find {what}; the pictures name it, so update "
                           f"{HERE_REL}/render-diagrams.py with the code")
     return match
 
@@ -778,9 +994,9 @@ def agents_flow() -> List[Tuple[str, str]]:
     return edges
 
 
-# --- The architecture diagram's projects and arrows -----------------------------------------------
+# --- The architecture picture's projects and arrows -----------------------------------------------
 
-# Each project the architecture diagram draws, with its card's hue and how many columns its tree
+# Each project the architecture picture draws, with its ring's hue and how many columns its tree
 # takes. The script compares this list with the projects a default generation ships under src/ and
 # tools/: a project added, renamed or moved stops the render until it is placed here.
 ARCH_PROJECTS: Dict[str, Tuple[str, int]] = {
@@ -790,17 +1006,17 @@ ARCH_PROJECTS: Dict[str, Tuple[str, int]] = {
     "src/Presentation/UI/Trellis.UI.Common": ("presentation", 1),
     "src/Presentation/UI/Trellis.UI.Web": ("presentation", 1),
     "src/Infrastructure/Trellis.Infrastructure": ("infrastructure", 1),
-    "src/Infrastructure/Trellis.Persistence": ("persistence", 2),
-    "src/Core/Trellis.Application": ("core", 2),
-    "src/Core/Trellis.Domain": ("core", 1),
-    "src/Core/Trellis.SharedKernel": ("core", 1),
+    "src/Infrastructure/Trellis.Persistence": ("persistence", 3),
+    "src/Core/Trellis.Application": ("application", 2),
+    "src/Core/Trellis.Domain": ("domain", 1),
+    "src/Core/Trellis.SharedKernel": ("domain", 1),
     "src/Shared/Trellis.ServiceDefaults": ("shared", 1),
     "tools/Trellis.AppHost": ("shared", 1),
     "tools/Trellis.MigrationService": ("shared", 1),
     "tools/Trellis.Analyzers": ("shared", 1),
 }
 
-# The arrows the architecture diagram draws, each with the ProjectReference items it stands for.
+# The arrows the architecture picture draws, each with the ProjectReference items it stands for.
 # Every edge of AGENTS.md's dependency flow must be one of them, and every edge listed here must be
 # a real reference. Presentation -> Application is the one arrow AGENTS.md's line leaves implicit:
 # the endpoints inject the handlers, so Trellis.Api and Trellis.Api.Common reference
@@ -820,7 +1036,8 @@ ARCH_ARROWS: Dict[str, List[Tuple[str, str]]] = {
     "Domain -> SharedKernel": [("Domain", "SharedKernel")],
 }
 
-# The ring cards: hue, title, folder, and a line from docs/architecture.md's table of the rings.
+# The ring cards: hue, title, folder, and a line worded after docs/architecture.md's table of the
+# rings (whose Core ring is drawn as two cards, as the rings mark draws it).
 CARDS: Dict[str, Tuple[str, str, str, str]] = {
     "presentation": ("presentation", "Presentation", "src/Presentation",
                      "driving adapters: the HTTP API and the Blazor UI"),
@@ -828,7 +1045,8 @@ CARDS: Dict[str, Tuple[str, str, str, str]] = {
                        "driven adapters: JWT, e-mail, outbound HTTP"),
     "persistence": ("persistence", "Persistence", "src/Infrastructure",
                     "driven adapters: EF Core, Identity, the outbox"),
-    "core": ("core", "Core", "src/Core", "business rules and use cases, in plain C#"),
+    "application": ("application", "Application", "src/Core", "the use cases, in plain C#"),
+    "domain": ("domain", "Domain · SharedKernel", "src/Core", "the business rules, in plain C#"),
     "shared": ("shared", "Shared", "src/Shared",
                "Aspire defaults: telemetry, health, discovery, resilience"),
     "tools": ("shared", "tools", "tools",
@@ -836,51 +1054,61 @@ CARDS: Dict[str, Tuple[str, str, str, str]] = {
 }
 
 
-# --- The testing diagram's suites -----------------------------------------------------------------
+# --- The testing picture's suites -----------------------------------------------------------------
 
-# The rows of the testing diagram's stack, outside in; a suite's bracket spans its first to its last
-# row.
-STACK = ("browser", "tools", "shared", "presentation", "adapters", "application", "domain",
-         "sharedkernel", "database")
+# The layers of the testing picture's rail, outside in; a suite's card spans its first to its last.
+STACK = ("browser", "tools", "shared", "presentation", "infrastructure", "persistence",
+         "application", "domain", "sharedkernel", "database")
+
+# Each layer's label on the rail and its ring's hue.
+LAYERS: Dict[str, Tuple[str, str]] = {
+    "browser": ("Browser", "outside"),
+    "tools": ("tools", "shared"),
+    "shared": ("Shared", "shared"),
+    "presentation": ("Presentation", "presentation"),
+    "infrastructure": ("Infrastructure", "infrastructure"),
+    "persistence": ("Persistence", "persistence"),
+    "application": ("Application", "application"),
+    "domain": ("Domain", "domain"),
+    "sharedkernel": ("SharedKernel", "domain"),
+    "database": ("PostgreSQL", "outside"),
+}
 
 
 @dataclass(frozen=True)
 class Suite:
     name: str     # as the Tests table in docs/development.md writes it
     project: str  # the test project's folder
-    top: str      # the first STACK row it runs through
+    top: str      # the first STACK layer it runs through
     bottom: str   # the last
-    side: str     # "left", "right", or "frame" (ArchitectureTests: around everything)
+    role: str     # "card", or "band" (ArchitectureTests: rules over every project, above the rail)
     proves: str   # condensed from the Tests table
-    needs: str    # what it needs to run; an opt-in suite's switches are added
+    needs: Optional[str] = None  # what it needs beyond its pill
     switch: Optional[Tuple[str, str]] = None  # (file, environment variable) that opts it in
     container: bool = False  # it starts PostgreSQL with Testcontainers
     browser: bool = False    # it drives a browser with Playwright
 
 
 SUITES: Tuple[Suite, ...] = (
-    Suite("UiTests", "tests/Trellis.UiTests", "browser", "database", "left",
+    Suite("UiTests", "tests/Trellis.UiTests", "browser", "database", "card",
           "the pages in a real browser, against a running app (Playwright)",
           "installed browsers and a running app",
           ("tests/Trellis.UiTests/UiTestEnvironment.cs", "RUN_UI_TESTS"), browser=True),
-    Suite("ApiTests", "tests/Trellis.ApiTests", "shared", "database", "left",
-          "the HTTP contract through the real pipeline, in process; UI.Common's clients and "
-          "pages, no browser",
-          "Docker (Testcontainers)", container=True),
-    Suite("Domain.UnitTests", "tests/Trellis.Domain.UnitTests", "domain", "sharedkernel", "left",
-          "the Domain and the SharedKernel in memory: invariants, events, the Result kernel",
-          "nothing"),
-    Suite("Aspire E2E", "tests/Trellis.ApiTests", "tools", "database", "right",
+    Suite("Aspire E2E", "tests/Trellis.ApiTests", "tools", "database", "card",
           "InvoiceApiFlowTests: the AppHost starts PostgreSQL, the migration job and the API",
           "a local SDK or CI", ("tests/Trellis.ApiTests/InvoiceApiFlowTests.cs", "RUN_ASPIRE_E2E")),
-    Suite("IntegrationTests", "tests/Trellis.IntegrationTests", "adapters", "database", "right",
+    Suite("ApiTests", "tests/Trellis.ApiTests", "shared", "database", "card",
+          "the HTTP contract through the real pipeline, in process; UI.Common's clients and "
+          "pages, no browser", "PostgreSQL in Testcontainers", container=True),
+    Suite("IntegrationTests", "tests/Trellis.IntegrationTests", "persistence", "database", "card",
           "Persistence against a real PostgreSQL: mappings, SQL, the outbox",
-          "Docker (Testcontainers)", container=True),
+          "PostgreSQL in Testcontainers", container=True),
     Suite("Application.UnitTests", "tests/Trellis.Application.UnitTests", "application",
-          "sharedkernel", "right",
-          "handlers over faked ports, validators, the decorator pipeline", "nothing"),
-    Suite("ArchitectureTests", "tests/Trellis.ArchitectureTests", "tools", "sharedkernel", "frame",
-          "fitness rules over every project", "nothing"),
+          "sharedkernel", "card", "handlers over faked ports, validators, the decorator pipeline"),
+    Suite("Domain.UnitTests", "tests/Trellis.Domain.UnitTests", "domain", "sharedkernel", "card",
+          "invariants, events and the Result kernel, in memory"),
+    Suite("ArchitectureTests", "tests/Trellis.ArchitectureTests", "tools", "sharedkernel", "band",
+          "fitness rules over every project"),
 )
 
 
@@ -888,6 +1116,18 @@ SUITES: Tuple[Suite, ...] = (
 class SuiteFacts:
     suite: Suite
     opt_in: List[str]  # what switches it on: template flags, then the environment variable
+
+    @property
+    def flags(self) -> List[str]:
+        return [s for s in self.opt_in if s.startswith("--")]
+
+    @property
+    def pill(self) -> str:
+        """What it needs, in one word or one switch."""
+        switches = [s for s in self.opt_in if not s.startswith("--")]
+        if switches:
+            return switches[-1]
+        return "Docker" if self.suite.container else "nothing"
 
 
 # --- The pipeline's names -------------------------------------------------------------------------
@@ -906,7 +1146,8 @@ class PipelineFacts:
     event: str
     event_name: str
     outbox_table: str
-    event_handlers: List[Tuple[str, str]]  # (class, stable handler name)
+    event_handlers: List[Tuple[str, str]]  # (class, stable handler name), the receipt's first
+    email_port: str
 
 
 # Named for what the folder holds: a constant called API with a path value trips the secret
@@ -915,6 +1156,7 @@ ENDPOINTS = "src/Presentation/Api"
 APP = "src/Core/Trellis.Application"
 DOMAIN = "src/Core/Trellis.Domain"
 PERSISTENCE = "src/Infrastructure/Trellis.Persistence"
+EMAIL = "src/Infrastructure/Trellis.Infrastructure/Email"
 
 
 def pipeline_facts() -> PipelineFacts:
@@ -931,6 +1173,8 @@ def pipeline_facts() -> PipelineFacts:
                       "the permission's value").group(1)
     find(endpoint_rel, r"\.RequireIdempotency\(", "RequireIdempotency")
     find(endpoint_rel, r"CustomResults\.Problem\(", "CustomResults.Problem")
+    find(endpoint_rel, r"Results<NoContent, ProblemHttpResult>",
+         "the endpoint's answer, a 204 or a problem")
     find(f"{ENDPOINTS}/Trellis.Api/Program.cs", r"\.UseApiHardening\(\)", "UseApiHardening")
     find(f"{ENDPOINTS}/Trellis.Api.Common/Idempotency/IdempotencyFilter.cs",
          r"class IdempotencyFilter\b", "IdempotencyFilter")
@@ -965,16 +1209,54 @@ def pipeline_facts() -> PipelineFacts:
                  "the outbox table").group(1)
     find(f"{PERSISTENCE}/Outbox/OutboxProcessor.cs", r"class OutboxProcessor\b", "OutboxProcessor")
 
-    handlers = []
+    # The e-mail the walk ends in: the event handler that takes the e-mail port sends the receipt;
+    # the port's adapters live in Infrastructure, logging by default until Email:Provider is Smtp.
+    port = "IEmailSender"
+    find(f"{APP}/Abstractions/{port}.cs", rf"interface {port}\b", port)
+    find(f"{EMAIL}/SmtpEmailSender.cs", rf"class SmtpEmailSender\b[^{{]*{port}", "SmtpEmailSender")
+    find(f"{EMAIL}/EmailOptions.cs", r"Provider \{ get; init; \} = EmailProvider\.Logging;",
+         "Logging as the default e-mail provider")
+
+    handlers: List[Tuple[str, str, bool]] = []
     handler_pattern = (r'\[DomainEventHandlerName\("([^"]+)"\)\]\s*(?:internal|public)?\s*'
-                       rf"sealed class (\w+)[^{{]*IDomainEventHandler<{event}>")
+                       rf"sealed class (\w+)\(([^)]*)\)[^{{]*IDomainEventHandler<{event}>")
     for source in sorted((ROOT / APP).rglob("*.cs")):
         for match in re.finditer(handler_pattern, source.read_text(encoding="utf-8")):
-            handlers.append((match.group(2), match.group(1)))
+            takes_port = re.search(rf"\b{port}\b", match.group(3)) is not None
+            handlers.append((match.group(2), match.group(1), takes_port))
     if not handlers:
         raise RenderError(f"{APP}: no IDomainEventHandler<{event}>")
+    senders = [h for h in handlers if h[2]]
+    if len(senders) != 1:
+        raise RenderError(f"{APP}: the pipeline ends in the receipt e-mail, so exactly one "
+                          f"handler of {event} must take {port}; found {len(senders)}")
+    ordered = senders + sorted(h for h in handlers if not h[2])
     return PipelineFacts(method, path, endpoint, permission, decorators, command, handler,
-                         "Invoice", call, event, event_name, table, sorted(handlers))
+                         "Invoice", call, event, event_name, table,
+                         [(cls, name) for cls, name, _ in ordered], port)
+
+
+# --- The banner's install commands ----------------------------------------------------------------
+
+PROJECT_PLACEHOLDER = "Your.Project"
+
+
+def install_commands() -> List[str]:
+    """The two lines that install the template and create a solution, from the package id and the
+    template's short name; README.md must show the same two."""
+    package = find("eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj",
+                   r"<PackageId>([^<]+)</PackageId>", "the package id").group(1)
+    short_name = json.loads(read_text(".template.config/template.json")).get("shortName")
+    if not short_name:
+        raise RenderError(".template.config/template.json has no shortName")
+    commands = [f"dotnet new install {package}",
+                f"dotnet new {short_name} -n {PROJECT_PLACEHOLDER}"]
+    readme = read_text("README.md").splitlines()
+    for command in commands:
+        if command not in readme:
+            raise RenderError(f"README.md has no line {command!r}, which the banner shows; "
+                              "keep the banner and the install block alike")
+    return commands
 
 
 # --- Everything together --------------------------------------------------------------------------
@@ -986,6 +1268,7 @@ class Facts:
     options: Dict[str, Tuple[List[str], List[str]]]
     suites: List[SuiteFacts]
     pipeline: PipelineFacts
+    install: List[str]
 
 
 def mentions(project: str, text: str) -> bool:
@@ -1010,7 +1293,7 @@ def gather_facts() -> Facts:
     trees = {rel: tree_rows(scan(rel, template)) for rel in ARCH_PROJECTS}
     for rel in (DOMAIN, APP):
         if not any(row.slice_root for row in trees[rel]):
-            raise RenderError(f"{rel} has no {SLICE} folder: the architecture diagram expands "
+            raise RenderError(f"{rel} has no {SLICE} folder: the architecture picture expands "
                               "that slice")
     options = {rel: template.options(rel) for rel in ARCH_PROJECTS}
 
@@ -1018,12 +1301,12 @@ def gather_facts() -> Facts:
     drawn = {edge for edges in ARCH_ARROWS.values() for edge in edges}
     for a, b in sorted(drawn):
         if b not in references.get(a, []):
-            raise RenderError(f"the architecture diagram draws {a} -> {b}, but Trellis.{a} has "
+            raise RenderError(f"the architecture picture draws {a} -> {b}, but Trellis.{a} has "
                               f"no ProjectReference to Trellis.{b}")
     for a, b in agents_flow():
         if (a, b) not in drawn:
             raise RenderError(f"AGENTS.md's dependency flow has {a} -> {b}, which the "
-                              "architecture diagram does not draw")
+                              "architecture picture does not draw")
         if b not in references.get(a, []):
             raise RenderError(f"AGENTS.md's dependency flow has {a} -> {b}, but Trellis.{a} "
                               "has no ProjectReference to it")
@@ -1035,44 +1318,43 @@ def gather_facts() -> Facts:
                           f"in SUITES in {HERE_REL}/render-diagrams.py")
     suites = []
     for suite in SUITES:
-        for row in (suite.top, suite.bottom):
-            if row not in STACK:
-                raise RenderError(f"SUITES: {suite.name} names the row {row!r}, which STACK "
+        for layer in (suite.top, suite.bottom):
+            if layer not in STACK:
+                raise RenderError(f"SUITES: {suite.name} names the layer {layer!r}, which STACK "
                                   "does not have")
+        if STACK.index(suite.top) > STACK.index(suite.bottom):
+            raise RenderError(f"SUITES: {suite.name} starts below the layer it ends at")
         if suite.container and not mentions(suite.project, "PostgreSqlBuilder"):
-            raise RenderError(f"{suite.project}: no PostgreSqlBuilder, yet the testing diagram "
+            raise RenderError(f"{suite.project}: no PostgreSqlBuilder, yet the testing picture "
                               "says it needs Docker")
         if suite.browser and not mentions(suite.project, "Microsoft.Playwright"):
             raise RenderError(f"{suite.project}: no Microsoft.Playwright, yet the testing "
-                              "diagram says it drives a browser")
+                              "picture says it drives a browser")
         _, opt_in = template.options(suite.project)
         switches = list(opt_in)
         if suite.switch:
             find(suite.switch[0], re.escape(suite.switch[1]), f"the {suite.switch[1]} switch")
             switches.append(f"{suite.switch[1]}=1")
         suites.append(SuiteFacts(suite, switches))
-    return Facts(template, trees, options, suites, pipeline_facts())
+    return Facts(template, trees, options, suites, pipeline_facts(), install_commands())
 
 
 # ==================================================================================================
-# Shared drawing pieces
+# 1. architecture: a bento of ring cards, each project a card with its real tree
 # ==================================================================================================
 
-W = 1200
-MARGIN = 24
-ROW_H = 20
+ROW_H = 20         # a tree row
 INDENT = 16
 GLYPH_W = 14
 GLYPH_GAP = 6
-TREE = 13
-PANEL_PAD = 12
-PANEL_TITLE_H = 34
+TREE = 13          # the trees' type size
+PANEL_PAD = 12     # a project card's side padding
+PANEL_HEAD = 40    # its title row
 PANEL_BOTTOM = 10
-COL_GAP = 22
-CARD_PAD = 16
-ARROW_GAP = 40
-STACK_GAP = 16
-ROW_GAP = 60
+COL_GAP = 22       # between the columns of a tall tree
+CARD_PAD = 16      # a ring card's padding round its project cards
+ARROW_GAP = 32     # between two project cards an arrow joins
+LANE = 48          # the column beside the adapters where Presentation -> Application runs
 
 
 def row_spans(row: Row, theme: Theme) -> List[Span]:
@@ -1131,9 +1413,13 @@ class Panel:
     x: float = 0.0
     y: float = 0.0
 
+    @property
+    def right(self) -> float:
+        return self.x + self.w
 
-def tag_width(tag: str) -> float:
-    return measure(tag, 13, mono=True) + 14
+    @property
+    def bottom(self) -> float:
+        return self.y + self.h
 
 
 def make_panel(rel: str, facts: Facts) -> Panel:
@@ -1143,34 +1429,33 @@ def make_panel(rel: str, facts: Facts) -> Panel:
     on, opt_in = facts.options[rel]
     tag = " ".join(on + opt_in) or None
     name = rel.rsplit("/", 1)[-1]
-    title_w = measure(name, 14, 600) + (10 + tag_width(tag) if tag else 0)
+    title_w = measure(name, 14, 600) + (10 + pill_width(tag) if tag else 0)
     inner = sum(widths) + COL_GAP * (len(columns) - 1)
-    w = 2 * PANEL_PAD + max(inner, title_w)
-    h = PANEL_TITLE_H + max(len(c) for c in columns) * ROW_H + PANEL_BOTTOM
+    w = ceil8(2 * PANEL_PAD + max(inner, title_w))
+    h = ceil8(PANEL_HEAD + max(len(c) for c in columns) * ROW_H + PANEL_BOTTOM)
     return Panel(name, hue, columns, widths, tag, w, h)
 
 
 def draw_panel(svg: Svg, theme: Theme, panel: Panel) -> None:
-    hue = theme.hues[panel.hue]
+    ring = theme.rings[panel.hue]
+    box = Box(panel.x, panel.y, panel.w, panel.h)
+    on_grid(svg, f"{panel.name}'s card", box.x, box.y, box.w, box.h)
     svg.comment(panel.name)
-    border = mix(hue.stroke, hue.panel, 0.35)
-    svg.rect(panel.x, panel.y, panel.w, panel.h, fill=hue.panel, stroke=border, rx=10)
-    svg.text(panel.x + PANEL_PAD, panel.y + 22, [Span(panel.name, hue.title, 14, 600)],
-             on=hue.panel)
+    svg.rect(panel.x, panel.y, panel.w, panel.h, rx=CHIP_R, fill=ring.panel, stroke=ring.ink,
+             opacity=0.2)
+    svg.text(panel.x + PANEL_PAD, panel.y + 25, [Span(panel.name, ring.ink, 14, 600)],
+             on=ring.panel, within=box)
     if panel.tag:
-        tw = tag_width(panel.tag)
-        fill = mix(hue.panel, hue.stroke, 0.22)
-        svg.rect(panel.x + panel.w - PANEL_PAD - tw, panel.y + 8, tw, 20, fill=fill, rx=10)
-        svg.text(panel.x + panel.w - PANEL_PAD - tw / 2, panel.y + 22,
-                 [Span(panel.tag, hue.title, 13, mono=True)], on=fill, anchor="middle")
+        pill(svg, panel.right - PANEL_PAD - pill_width(panel.tag), panel.y + 9, panel.tag,
+             fill=ring.fill, ink=ring.ink, edge=ring.ink, edge_alpha=HAIRLINE)
     x = panel.x + PANEL_PAD
     for column, width in zip(panel.columns, panel.widths):
-        draw_tree(svg, theme, hue, column, x, panel.y + PANEL_TITLE_H, width)
+        draw_tree(svg, theme, ring, column, x, panel.y + PANEL_HEAD, width, box)
         x += width + COL_GAP
 
 
-def draw_tree(svg: Svg, theme: Theme, hue: Hue, rows: List[Row], x0: float, y0: float,
-              width: float) -> None:
+def draw_tree(svg: Svg, theme: Theme, ring: Ring, rows: List[Row], x0: float, y0: float,
+              width: float, box: Box) -> None:
     i = 0
     while i < len(rows):  # the slice's band
         if rows[i].in_slice:
@@ -1178,8 +1463,8 @@ def draw_tree(svg: Svg, theme: Theme, hue: Hue, rows: List[Row], x0: float, y0: 
             while j + 1 < len(rows) and rows[j + 1].in_slice:
                 j += 1
             top, bottom = y0 + i * ROW_H + 1, y0 + (j + 1) * ROW_H - 1
-            svg.rect(x0 - 7, top, width + 12, bottom - top, fill=theme.slice_band, rx=5)
-            svg.rect(x0 - 7, top, 3, bottom - top, fill=theme.slice_bar, rx=1.5)
+            svg.rect(x0 - 7, top, width + 12, bottom - top, fill=ring.band, rx=5)
+            svg.rect(x0 - 7, top, 3, bottom - top, fill=theme.accent, rx=1.5)
             i = j + 1
         else:
             i += 1
@@ -1187,7 +1472,7 @@ def draw_tree(svg: Svg, theme: Theme, hue: Hue, rows: List[Row], x0: float, y0: 
     def guided(index: int, level: int) -> bool:
         return rows[index].kind != "context" and rows[index].depth >= level
 
-    guide = mix(hue.stroke, hue.panel, 0.4)
+    guide = mix(ring.panel, ring.ink, 0.22)
     deepest = max(r.depth for r in rows)
     for level in range(1, deepest + 1):  # indent guides
         i = 0
@@ -1204,94 +1489,69 @@ def draw_tree(svg: Svg, theme: Theme, hue: Hue, rows: List[Row], x0: float, y0: 
     for index, row in enumerate(rows):
         y = y0 + index * ROW_H
         gx = x0 + row.depth * INDENT
-        on = theme.slice_band if row.in_slice else hue.panel
+        on = ring.band if row.in_slice else ring.panel
         if row.kind == "file":
-            file_glyph(svg, gx, y + 3.5, mix(hue.stroke, theme.ink, 0.25), on)
+            file_glyph(svg, gx, y + 3.5, mix(ring.glyph, theme.ink, 0.2), on)
         elif row.kind == "context":
-            folder_glyph(svg, gx, y + 4, "none", stroke=hue.stroke)
+            folder_glyph(svg, gx, y + 4, "none", stroke=ring.glyph)
         else:
-            folder_glyph(svg, gx, y + 4, hue.glyph)
-        svg.text(gx + GLYPH_W + GLYPH_GAP, y + 14.5, row_spans(row, theme), on=on)
+            folder_glyph(svg, gx, y + 4, ring.glyph)
+        svg.text(gx + GLYPH_W + GLYPH_GAP, y + 14.5, row_spans(row, theme), on=on, within=box)
 
 
-def card_header_lines(card: str, inner_w: float) -> List[str]:
-    return wrap(CARDS[card][3], 13, inner_w)
-
-
-def card_header_height(card: str, inner_w: float) -> float:
-    return 60 + 18 * (len(card_header_lines(card, inner_w)) - 1)
-
-
-def card_title_spans(card: str, hue: Hue) -> List[Span]:
+def card_title_spans(card: str, ring: Ring) -> List[Span]:
     _, title, folder, _ = CARDS[card]
-    spans = [Span(title, hue.title, 17, 700)]
+    spans = [Span(title, ring.ink, 16, 600)]
     if folder != title:
-        spans.append(Span(NBSP * 3 + folder, hue.muted, 13, mono=True))
+        spans.append(Span(NBSP * 3 + folder, ring.muted, 12, mono=True))
     return spans
 
 
-def card_title_width(card: str) -> float:
-    return sum(span.width for span in card_title_spans(card, LIGHT.hues["core"]))
+def card_lines(card: str, inner_w: float) -> List[str]:
+    return wrap(CARDS[card][3], 13, inner_w)
 
 
-def card_inner_width(card: str, content: float, cap: float) -> float:
-    """Wide enough for the content and the title line, and for the description on one line when
-    the row has room for it (cap)."""
-    return max(content, card_title_width(card), min(measure(CARDS[card][3], 13), cap))
+def card_head(card: str, inner_w: float) -> float:
+    """The height of a ring card's header: its title line, its description, the gap below."""
+    return ceil8(64 + 18 * (len(card_lines(card, inner_w)) - 1))
+
+
+def card_need(card: str, content: float) -> float:
+    """The width a ring card needs: its content, its title line, and its description on one line."""
+    title_w = sum(span.width for span in card_title_spans(card, LIGHT.rings["shared"]))
+    return ceil8(2 * CARD_PAD + max(content, title_w, measure(CARDS[card][3], 13)))
 
 
 def draw_card(svg: Svg, theme: Theme, card: str, box: Box) -> None:
-    hue_key, title, _, _ = CARDS[card]
-    hue = theme.hues[hue_key]
+    hue, title, _, _ = CARDS[card]
+    ring = theme.rings[hue]
+    on_grid(svg, f"the {title} card", box.x, box.y, box.w, box.h)
     svg.comment(f"{title} card")
-    svg.rect(box.x, box.y, box.w, box.h, fill=hue.fill, stroke=hue.stroke, width=1.5, rx=16)
+    svg.rect(box.x, box.y, box.w, box.h, rx=CARD_R, fill=ring.fill, stroke=ring.ink,
+             opacity=HAIRLINE)
     x = box.x + CARD_PAD
-    svg.text(x, box.y + 30, card_title_spans(card, hue), on=hue.fill)
-    for i, line in enumerate(card_header_lines(card, box.w - 2 * CARD_PAD)):
-        svg.text(x, box.y + 50 + 18 * i, [Span(line, hue.muted, 13)], on=hue.fill)
+    svg.text(x + 2, box.y + 30, card_title_spans(card, ring), on=ring.fill, within=box)
+    for i, line in enumerate(card_lines(card, box.w - 2 * CARD_PAD)):
+        svg.text(x + 2, box.y + 50 + 18 * i, [Span(line, ring.muted, 13)], on=ring.fill,
+                 within=box)
 
-
-def peer_mark(svg: Svg, theme: Theme, cx: float, cy: float, label: Optional[str] = None,
-              on: Optional[str] = None) -> None:
-    for dx in (-3.5, 3.5):
-        svg.line(cx + dx, cy - 13, cx + dx, cy + 13, stroke=theme.arrow, width=2.5)
-    if label:
-        svg.text(cx, cy + 32, [Span(label, theme.muted, 13)], on=on or theme.bg, anchor="middle")
-
-
-LegendItem = Tuple[Callable[[Svg, float, float], float], str]
-
-
-def legend(svg: Svg, theme: Theme, x: float, y: float, width: float, items: List[LegendItem],
-           note: Optional[str] = None) -> float:
-    """Items flow left to right and wrap; each glyph draws itself at (x, y-centre) and returns its
-    width. Returns the legend's height."""
-    cx, line_y = x, y
-    for draw, text in items:
-        sample_w = draw(Svg("measure", 1, 1, "", ""), 0, 0)
-        item_w = sample_w + 8 + measure(text, 13)
-        if cx > x and cx + item_w > x + width:
-            cx, line_y = x, line_y + 26
-        draw(svg, cx, line_y)
-        svg.text(cx + sample_w + 8, line_y + 4.5, [Span(text, theme.muted, 13)], on=theme.bg)
-        cx += item_w + 28
-    height = line_y - y + 14
-    if note:
-        for line in wrap(note, 13, width):
-            height += 22
-            svg.text(x, y + height - 4, [Span(line, theme.muted, 13)], on=theme.bg)
-    return height
-
-
-# ==================================================================================================
-# 1. architecture: the rings as cards, with the real project trees inside
-# ==================================================================================================
 
 def architecture(theme: Theme, facts: Facts) -> Svg:
     panels = {short(rel): make_panel(rel, facts) for rel in ARCH_PROJECTS}
     p = panels.__getitem__
-    full_w = W - 2 * MARGIN
-    inner_full = full_w - 2 * CARD_PAD
+    svg = Svg(f"architecture-{theme.name}", W, 1000,
+              "Trellis architecture: the rings and their projects",
+              "A bento of the rings of a default Trellis solution, each project a card holding "
+              "its folders and files: Presentation (Api, Api.Common, Api.Contracts, UI.Common, "
+              "UI.Web); Infrastructure and Persistence, peers that never reference each other; "
+              "Application; Domain and SharedKernel; Shared (ServiceDefaults) and tools (AppHost, "
+              "MigrationService, Analyzers). Arrows show references, all pointing inward. The "
+              "Invoices slice is expanded in every project that has it.")
+    top = heading(svg, theme, "Projects and folders, ring by ring",
+                  "Every project a default dotnet new trellis generates, in its ring, with its "
+                  "real folders; every reference points inward.")
+    full = W - 2 * PAD
+    inner = full - 2 * CARD_PAD
 
     # Presentation: Api -> Api.Common -> Api.Contracts <- UI.Common <- UI.Web, and Api ->
     # Api.Contracts under Api.Common.
@@ -1299,101 +1559,81 @@ def architecture(theme: Theme, facts: Facts) -> Svg:
     ui_common, ui_web = p("UI.Common"), p("UI.Web")
     ui_w = max(ui_common.w, ui_web.w)
     pres_w = api.w + common.w + contracts.w + ui_w + 3 * ARROW_GAP
+    if pres_w > inner:
+        raise RenderError(f"architecture: the Presentation card needs {pres_w:.0f}px, more than "
+                          f"{inner}px")
+    pres_head = card_head("presentation", inner)
     pres_h = max(api.h, common.h, contracts.h, ui_common.h + ARROW_GAP + ui_web.h)
-    elbow_dy = max(common.h, contracts.h) + 28
-    if elbow_dy + 12 > api.h:
+    pres_card = Box(PAD, top, full, ceil8(pres_head + pres_h + CARD_PAD))
+    py = top + pres_head
+    api.x, api.y = PAD + CARD_PAD, py
+    common.x, common.y = api.right + ARROW_GAP, py
+    contracts.x, contracts.y = common.right + ARROW_GAP, py
+    ui_common.x, ui_common.y = contracts.right + ARROW_GAP, py
+    ui_web.x, ui_web.y = ui_common.x, ui_common.bottom + ARROW_GAP
+    elbow_y = py + max(common.h, contracts.h) + 24
+    if elbow_y + 12 > api.bottom:
         raise RenderError("architecture: Trellis.Api's tree is too short for the Api -> "
                           "Api.Contracts arrow to pass under Trellis.Api.Common; rearrange the "
                           "Presentation card")
-    if pres_w > inner_full:
-        raise RenderError(f"architecture: the Presentation card needs {pres_w:.0f}px, more than "
-                          f"{inner_full}px")
 
-    # Core: Application -> Domain, Domain above SharedKernel.
+    # The adapters, peers, beside the lane where Presentation reaches Application directly.
+    infra, persist = p("Infrastructure"), p("Persistence")
+    y = pres_card.bottom + ROW_GUTTER
+    infra_need, persist_need = card_need("infrastructure", infra.w), card_need("persistence",
+                                                                               persist.w)
+    spare = full - LANE - GUTTER - infra_need - persist_need
+    if spare < 0:
+        raise RenderError("architecture: Infrastructure and Persistence do not fit side by side")
+    infra_w = infra_need + floor8(spare * infra_need / (infra_need + persist_need))
+    persist_w = full - LANE - GUTTER - infra_w
+    adapters_head = max(card_head("infrastructure", infra_w - 2 * CARD_PAD),
+                        card_head("persistence", persist_w - 2 * CARD_PAD))
+    adapters_h = ceil8(adapters_head + max(infra.h, persist.h) + CARD_PAD)
+    infra_card = Box(PAD + LANE, y, infra_w, adapters_h)
+    persist_card = Box(infra_card.right + GUTTER, y, persist_w, adapters_h)
+    infra.x, infra.y = infra_card.x + CARD_PAD, y + adapters_head
+    persist.x, persist.y = persist_card.x + CARD_PAD, y + adapters_head
+
+    # Application, then Domain above SharedKernel.
     app, dom, kernel = p("Application"), p("Domain"), p("SharedKernel")
-    core_w = app.w + ARROW_GAP + max(dom.w, kernel.w)
-    core_h = max(app.h, dom.h + ARROW_GAP + kernel.h)
-    if core_w > inner_full:
-        raise RenderError(f"architecture: the Core card needs {core_w:.0f}px, more than "
-                          f"{inner_full}px")
+    y = infra_card.bottom + ROW_GUTTER
+    app_need = card_need("application", app.w)
+    dom_need = card_need("domain", max(dom.w, kernel.w))
+    if app_need + GUTTER + dom_need > full:
+        raise RenderError("architecture: Application and Domain do not fit side by side")
+    core_head = max(card_head("application", app_need - 2 * CARD_PAD),
+                    card_head("domain", full - app_need - GUTTER - 2 * CARD_PAD))
+    core_h = ceil8(core_head + max(app.h, dom.h + ARROW_GAP + kernel.h) + CARD_PAD)
+    app_card = Box(PAD, y, app_need, core_h)
+    dom_card = Box(app_card.right + GUTTER, y, full - app_need - GUTTER, core_h)
+    app.x, app.y = app_card.x + CARD_PAD, y + core_head
+    dom.x, dom.y = dom_card.x + CARD_PAD, y + core_head
+    kernel.x, kernel.y = dom.x, dom.bottom + ARROW_GAP
 
     # Shared and tools along the bottom.
     services = p("ServiceDefaults")
     tools = [p("AppHost"), p("MigrationService"), p("Analyzers")]
-    tools_w = sum(t.w for t in tools) + STACK_GAP * (len(tools) - 1)
-    tools_h = max(t.h for t in tools)
-
-    # --- vertical layout --------------------------------------------------------------------------
-    y = MARGIN
-    pres_hdr = card_header_height("presentation", inner_full)
-    pres_card = Box(MARGIN, y, full_w, pres_hdr + pres_h + CARD_PAD)
-    px = pres_card.x + (full_w - pres_w) / 2
-    py = pres_card.y + pres_hdr
-    api.x, api.y = px, py
-    common.x, common.y = api.x + api.w + ARROW_GAP, py
-    contracts.x, contracts.y = common.x + common.w + ARROW_GAP, py
-    ui_common.x, ui_common.y = contracts.x + contracts.w + ARROW_GAP, py
-    ui_web.x, ui_web.y = ui_common.x, py + ui_common.h + ARROW_GAP
-
-    core_hdr = card_header_height("core", inner_full)
-    core_x = MARGIN + (full_w - core_w) / 2
-    lane_x = core_x + 24  # Presentation -> Application lands on Application's panel
-
-    infra, persist = p("Infrastructure"), p("Persistence")
-    infra_inner = card_inner_width("infrastructure", infra.w, 320)
-    persist_inner = card_inner_width("persistence", persist.w, 480)
-    adapters_hdr = max(card_header_height("infrastructure", infra_inner),
-                       card_header_height("persistence", persist_inner))
-    adapters_h = adapters_hdr + max(infra.h, persist.h) + CARD_PAD
-    y = pres_card.bottom + ROW_GAP
-    infra_card = Box(lane_x + 34, y, infra_inner + 2 * CARD_PAD, adapters_h)
-    peer_gap = 78
-    persist_card = Box(infra_card.right + peer_gap, y, persist_inner + 2 * CARD_PAD, adapters_h)
-    if persist_card.right > W - MARGIN:
-        raise RenderError("architecture: Infrastructure and Persistence do not fit side by side")
-    infra.x = infra_card.x + CARD_PAD + (infra_inner - infra.w) / 2
-    persist.x = persist_card.x + CARD_PAD + (persist_inner - persist.w) / 2
-    infra.y = persist.y = y + adapters_hdr
-
-    y = infra_card.bottom + ROW_GAP
-    core_card = Box(MARGIN, y, full_w, core_hdr + core_h + CARD_PAD)
-    app.x, app.y = core_x, y + core_hdr
-    dom.x, dom.y = app.x + app.w + ARROW_GAP, app.y
-    kernel.x, kernel.y = dom.x, dom.y + dom.h + ARROW_GAP
-    for landing in (lane_x, infra_card.cx, persist_card.cx):
-        if not app.x + 8 <= landing <= app.x + app.w - 8:
-            raise RenderError("architecture: an arrow into Core would not land above "
-                              "Trellis.Application")
-
-    y = core_card.bottom + 36
-    shared_inner = card_inner_width("shared", services.w, 380)
-    tools_inner = card_inner_width("tools", tools_w, 660)
-    bottom_hdr = max(card_header_height("shared", shared_inner),
-                     card_header_height("tools", tools_inner))
-    bottom_h = bottom_hdr + max(services.h, tools_h) + CARD_PAD
-    pair_w = shared_inner + tools_inner + 4 * CARD_PAD + 24
-    shared_card = Box(MARGIN + (full_w - pair_w) / 2, y, shared_inner + 2 * CARD_PAD, bottom_h)
-    tools_card = Box(shared_card.right + 24, y, tools_inner + 2 * CARD_PAD, bottom_h)
-    services.x = shared_card.x + CARD_PAD + (shared_inner - services.w) / 2
-    services.y = y + bottom_hdr
-    tx = tools_card.x + CARD_PAD + (tools_inner - tools_w) / 2
+    tools_w = sum(t.w for t in tools) + GUTTER * (len(tools) - 1)
+    y = app_card.bottom + ROW_GUTTER
+    shared_need, tools_need = card_need("shared", services.w), card_need("tools", tools_w)
+    if shared_need + GUTTER + tools_need > full:
+        raise RenderError("architecture: Shared and tools do not fit side by side")
+    shared_w = shared_need + floor8((full - GUTTER - shared_need - tools_need) / 2)
+    bottom_head = max(card_head("shared", shared_w - 2 * CARD_PAD),
+                      card_head("tools", full - GUTTER - shared_w - 2 * CARD_PAD))
+    bottom_h = ceil8(bottom_head + max([services.h] + [t.h for t in tools]) + CARD_PAD)
+    shared_card = Box(PAD, y, shared_w, bottom_h)
+    tools_card = Box(shared_card.right + GUTTER, y, full - GUTTER - shared_w, bottom_h)
+    services.x, services.y = shared_card.x + CARD_PAD, y + bottom_head
+    tx = tools_card.x + CARD_PAD
     for tool in tools:
-        tool.x, tool.y = tx, y + bottom_hdr
-        tx += tool.w + STACK_GAP
-
-    legend_y = shared_card.bottom + 40
-    svg = Svg(f"architecture-{theme.name}", W, legend_y,
-              "Trellis architecture: the rings and their projects",
-              "The rings of a default Trellis solution as cards holding each project's folders "
-              "and files: Presentation (Api, Api.Common, Api.Contracts, UI.Common, UI.Web); "
-              "Infrastructure and Persistence, peers that never reference each other; Core "
-              "(Application, Domain, SharedKernel); Shared (ServiceDefaults) and tools (AppHost, "
-              "MigrationService, Analyzers). Arrows show references, all pointing inward. The "
-              "Invoices slice is expanded in every project that has it.")
+        tool.x, tool.y = tx, y + bottom_head
+        tx = tool.right + GUTTER
 
     cards = (("presentation", pres_card), ("infrastructure", infra_card),
-             ("persistence", persist_card), ("core", core_card), ("shared", shared_card),
-             ("tools", tools_card))
+             ("persistence", persist_card), ("application", app_card), ("domain", dom_card),
+             ("shared", shared_card), ("tools", tools_card))
     for card, box in cards:
         draw_card(svg, theme, card, box)
     for panel in panels.values():
@@ -1408,466 +1648,425 @@ def architecture(theme: Theme, facts: Facts) -> Svg:
             raise RenderError(f"architecture: the arrow {key!r} is not in ARCH_ARROWS, or is "
                               "drawn twice")
         drawn.append(key)
-        arrow(svg, list(points), theme.arrow)
+        arrow(svg, list(points), theme.accent)
 
-    dy = 17  # the arrows between panels meet their titles
-    reference("Api -> Api.Common", (api.x + api.w, api.y + dy), (common.x, common.y + dy))
+    def landing(source: Box, target: Box) -> float:
+        """Where a vertical arrow from source to target runs: the middle of their overlap."""
+        left, right = max(source.x, target.x) + 24, min(source.right, target.right) - 24
+        if left > right:
+            raise RenderError("architecture: a ring's card does not sit above the card it "
+                              "references")
+        return ceil8((left + right) / 2)
+
+    dy = 20  # the arrows between project cards meet their titles
+    reference("Api -> Api.Common", (api.right, api.y + dy), (common.x, common.y + dy))
     reference("Api.Common -> Api.Contracts",
-              (common.x + common.w, common.y + dy), (contracts.x, contracts.y + dy))
+              (common.right, common.y + dy), (contracts.x, contracts.y + dy))
     reference("UI.Common -> Api.Contracts",
-              (ui_common.x, ui_common.y + dy), (contracts.x + contracts.w, contracts.y + dy))
+              (ui_common.x, ui_common.y + dy), (contracts.right, contracts.y + dy))
     up_x = ui_common.x + min(ui_common.w, ui_web.w) / 2
-    reference("UI.Web -> UI.Common", (up_x, ui_web.y), (up_x, ui_common.y + ui_common.h))
-    elbow_y = py + elbow_dy
+    reference("UI.Web -> UI.Common", (up_x, ui_web.y), (up_x, ui_common.bottom))
     under_contracts = contracts.x + contracts.w / 2
-    reference("Api -> Api.Contracts", (api.x + api.w, elbow_y), (under_contracts, elbow_y),
-              (under_contracts, contracts.y + contracts.h))
-    reference("Presentation -> Application", (lane_x, pres_card.bottom), (lane_x, core_card.y))
+    reference("Api -> Api.Contracts", (api.right, elbow_y), (under_contracts, elbow_y),
+              (under_contracts, contracts.bottom))
+    lane_x = PAD + LANE / 2
+    if not app.x + 8 <= lane_x <= app.right - 8:
+        raise RenderError("architecture: the Presentation -> Application lane would not land "
+                          "above Trellis.Application")
+    reference("Presentation -> Application", (lane_x, pres_card.bottom), (lane_x, app_card.y))
+    infra_x, persist_x = landing(infra_card, app_card), landing(persist_card, app_card)
     reference("Presentation -> Infrastructure",
-              (infra_card.cx, pres_card.bottom), (infra_card.cx, infra_card.y))
+              (infra_x, pres_card.bottom), (infra_x, infra_card.y))
     reference("Presentation -> Persistence",
-              (persist_card.cx, pres_card.bottom), (persist_card.cx, persist_card.y))
-    reference("Infrastructure -> Application",
-              (infra_card.cx, infra_card.bottom), (infra_card.cx, core_card.y))
+              (persist_x, pres_card.bottom), (persist_x, persist_card.y))
+    reference("Infrastructure -> Application", (infra_x, infra_card.bottom), (infra_x, app_card.y))
     reference("Persistence -> Application",
-              (persist_card.cx, persist_card.bottom), (persist_card.cx, core_card.y))
-    reference("Application -> Domain", (app.x + app.w, dom.y + dy), (dom.x, dom.y + dy))
+              (persist_x, persist_card.bottom), (persist_x, app_card.y))
+    reference("Application -> Domain", (app.right, dom.y + dy), (dom.x, dom.y + dy))
     down_x = dom.x + min(dom.w, kernel.w) / 2
-    reference("Domain -> SharedKernel", (down_x, dom.y + dom.h), (down_x, kernel.y))
+    reference("Domain -> SharedKernel", (down_x, dom.bottom), (down_x, kernel.y))
     if sorted(drawn) != sorted(ARCH_ARROWS):
-        raise RenderError("architecture: ARCH_ARROWS lists arrows the diagram does not draw: "
+        raise RenderError("architecture: ARCH_ARROWS lists arrows the picture does not draw: "
                           f"{sorted(set(ARCH_ARROWS) - set(drawn))}")
-    peer_mark(svg, theme, (infra_card.right + persist_card.x) / 2, infra_card.cy - 10, "peers")
+
+    def peers(s: Svg, cx: float, cy: float) -> None:
+        for dx in (-2.5, 2.5):
+            s.line(cx + dx, cy - 11, cx + dx, cy + 11, stroke=theme.muted, width=CONNECTOR)
+
+    peers(svg, (infra_card.right + persist_card.x) / 2, infra_card.cy)
 
     def sample_arrow(s: Svg, x: float, y: float) -> float:
-        arrow(s, [(x, y), (x + 30, y)], theme.arrow)
-        return 30
+        arrow(s, [(x, y), (x + 28, y)], theme.accent)
+        return 28
 
     def sample_peer(s: Svg, x: float, y: float) -> float:
-        for dx in (4, 11):
-            s.line(x + dx, y - 9, x + dx, y + 9, stroke=theme.arrow, width=2.5)
-        return 15
+        peers(s, x + 4, y)
+        return 8
 
     def sample_folder(s: Svg, x: float, y: float) -> float:
-        folder_glyph(s, x, y - 6, theme.hues["core"].glyph)
+        folder_glyph(s, x, y - 6, theme.rings["application"].glyph)
         return 14
 
     def sample_slice(s: Svg, x: float, y: float) -> float:
-        s.rect(x, y - 8, 28, 16, fill=theme.slice_band, rx=4)
-        s.rect(x, y - 8, 3, 16, fill=theme.slice_bar, rx=1.5)
+        s.rect(x, y - 8, 28, 16, fill=theme.rings["application"].band, rx=4)
+        s.rect(x, y - 8, 3, 16, fill=theme.accent, rx=1.5)
         return 28
 
-    items: List[LegendItem] = [
-        (sample_arrow, "references: every arrow points inward"),
+    keys: List[LegendItem] = [
+        (sample_arrow, "a reference: every arrow points inward"),
         (sample_peer, "peers that never reference each other (ADR-0002)"),
         (sample_folder, "a folder, collapsed"),
-        (sample_slice, f"the {SLICE} slice, expanded two levels as the worked example"),
+        (sample_slice, f"the {SLICE} slice, expanded two levels"),
     ]
     for tag in sorted({panel.tag for panel in panels.values() if panel.tag}):
         def sample_tag(s: Svg, x: float, y: float, tag: str = tag) -> float:
-            hue = theme.hues["presentation"]
-            tw = tag_width(tag)
-            fill = mix(hue.panel, hue.stroke, 0.22)
-            s.rect(x, y - 10, tw, 20, fill=fill, rx=10)
-            s.text(x + tw / 2, y + 4.5, [Span(tag, hue.title, 13, mono=True)], on=fill,
-                   anchor="middle")
-            return tw
-        items.append((sample_tag, "generated with that template option, on by default"))
-    note = ("Trees as a default dotnet new trellis generates them, read from this repository by "
-            f"{HERE_REL}/render-diagrams.py: each project's folders and top-level files, every "
-            f"folder collapsed except the {SLICE} slice.")
-    used = legend(svg, theme, MARGIN + 8, legend_y, full_w - 16, items, note)
-    return finish(svg, theme, legend_y + used + MARGIN)
+            ring = theme.rings["presentation"]
+            return pill(s, x, y - PILL_H / 2, tag, fill=ring.fill, ink=ring.ink, edge=ring.ink,
+                        edge_alpha=HAIRLINE).w
+        keys.append((sample_tag, "generated with that option, on by default"))
+    legend_y = tools_card.bottom + 36
+    used = legend(svg, theme, PAD, legend_y, full, ring_items(theme))
+    used += 14 + legend(svg, theme, PAD, legend_y + used + 14, full, keys,
+                        f"Read from this repository by {HERE_REL}/render-diagrams.py: each "
+                        "project's folders and top-level files, every folder collapsed except the "
+                        f"{SLICE} slice.")
+    return finish(svg, theme, ceil8(legend_y + used + PAD))
 
 
 # ==================================================================================================
-# 2. testing: the rings reduced to names, each test suite a bracket around what it runs through
+# 2. testing: six suite cards on the rail of the layers, each spanning what it runs through
 # ==================================================================================================
 
-def chip(svg: Svg, theme: Theme, hue_key: str, x: float, y: float, w: float, text: str,
-         h: float = 28) -> None:
-    hue = theme.hues[hue_key]
-    svg.rect(x, y, w, h, fill=hue.panel, stroke=mix(hue.stroke, hue.panel, 0.2), rx=8)
-    svg.text(x + w / 2, y + h / 2 + 4.5, [Span(text, hue.title, 13, 600)], on=hue.panel,
-             anchor="middle")
-
-
-def chip_width(text: str) -> float:
-    return measure(text, 13, 600) + 22
-
-
-def bracket_path(x: float, top: float, bottom: float, toward: float) -> str:
-    """A bracket at x from top to bottom, its ends turned 7 px toward the stack (+1 or -1)."""
-    end = x + 7 * toward
-    return (f"M{num(end)} {num(top)} Q{num(x)} {num(top)} {num(x)} {num(top + 7)} "
-            f"V{num(bottom - 7)} Q{num(x)} {num(bottom)} {num(end)} {num(bottom)}")
+PITCH = 112   # a layer's column on the rail
+INSET = 8     # a chip or a card inside its columns: 16 px between neighbours, as in a bento
+CHIP_H = 32
 
 
 def testing(theme: Theme, facts: Facts) -> Svg:
-    stack_x, stack_w = 350, 500
-    stack_r = stack_x + stack_w
-    rows: Dict[str, Tuple[float, float]] = {}
+    cards = sorted((f for f in facts.suites if f.suite.role == "card"),
+                   key=lambda f: (STACK.index(f.suite.top), f.suite.name))
+    bands = [f for f in facts.suites if f.suite.role == "band"]
+    if len(bands) != 1 or len(cards) + 1 != len(facts.suites):
+        raise RenderError("testing: SUITES needs one band (the fitness rules) and cards for the "
+                          "rest")
+    core = [short(rel).lower() for rel in ARCH_PROJECTS if rel.startswith("src/Core/")]
+    if [layer for layer in STACK if LAYERS[layer][1] in ("application", "domain")] != core:
+        raise RenderError(f"testing: STACK's Core layers no longer match the Core projects {core}")
     svg = Svg(f"testing-{theme.name}", W, 1000, "Trellis test suites and the layers each one runs",
-              "The rings of Trellis reduced to their names, with each test project drawn as a "
-              "bracket around the layers it exercises: Domain.UnitTests, Application.UnitTests, "
-              "IntegrationTests against PostgreSQL, ApiTests over HTTP in process, the opt-in "
-              "UiTests in a browser and the opt-in Aspire end-to-end test, all inside the "
-              "ArchitectureTests frame.")
-    neutral = theme.hues["neutral"]
+              "The layers of a Trellis solution as a rail, from a browser to PostgreSQL, with "
+              "ArchitectureTests above it as rules over every project; under it each test suite "
+              "is a card spanning the layers it runs through, with what it needs: "
+              + "; ".join(f"{f.suite.name} needs {f.pill}" for f in cards)
+              + ". The two opt-in suites are dashed.")
+    top = heading(svg, theme, "Test suites, and the layers each one runs",
+                  "Each suite is a card as wide as the layers it runs through; a dashed one is "
+                  "opt-in, skipped until switched on.")
+    x0 = PAD + (W - 2 * PAD - PITCH * len(STACK)) / 2
+    if x0 < PAD:
+        raise RenderError("testing: the rail is wider than the picture")
 
-    # browser
-    y = MARGIN + 8
-    rows["browser"] = (y, y + 44)
-    bx, by = stack_x + 4, y + 7
-    svg.rect(bx, by, 44, 30, fill=neutral.panel, stroke=neutral.stroke, width=1.5, rx=5)
-    svg.line(bx, by + 8, bx + 44, by + 8, stroke=neutral.stroke, width=1.5)
-    for i in range(3):
-        svg.circle(bx + 6 + i * 5, by + 4, 1.3, fill=neutral.stroke)
-    svg.text(bx + 56, y + 27, [Span("a real browser, driven by Playwright", theme.ink, 13)],
-             on=theme.bg)
+    def col(i: int) -> float:
+        return x0 + i * PITCH
 
-    frame_top = y + 44 + 18
-    y = frame_top + 38
+    def span(f: SuiteFacts) -> Tuple[int, int]:
+        return STACK.index(f.suite.top), STACK.index(f.suite.bottom)
 
-    def members(folder: str) -> List[str]:
-        """The projects ARCH_PROJECTS places under a folder, in its order: the cards' chips."""
-        return [short(rel) for rel in ARCH_PROJECTS if rel.startswith(folder + "/")]
+    def card_rect(a: int, b: int) -> Tuple[float, float]:
+        return col(a) + INSET, (b - a + 1) * PITCH - 2 * INSET
 
-    def ring_card(card: str, names: List[str], y: float) -> float:
-        hue_key, title, _, _ = CARDS[card]
-        hue = theme.hues[hue_key]
-        if not names:
-            svg.rect(stack_x, y, stack_w, 44, fill=hue.fill, stroke=hue.stroke, width=1.5, rx=12)
-            svg.text(stack_x + stack_w / 2, y + 27, [Span(title, hue.title, 14, 700)],
-                     on=hue.fill, anchor="middle")
-            return 44
-        widths = [chip_width(n) for n in names]
-        if sum(widths) + 8 * (len(widths) - 1) > stack_w - 28:
-            raise RenderError(f"testing: the {title} chips do not fit in one line")
-        svg.rect(stack_x, y, stack_w, 74, fill=hue.fill, stroke=hue.stroke, width=1.5, rx=12)
-        svg.text(stack_x + 14, y + 22, [Span(title, hue.title, 14, 700)], on=hue.fill)
-        cx = stack_x + 14
-        for name, w in zip(names, widths):
-            chip(svg, theme, hue_key, cx, y + 34, w, name)
-            cx += w + 8
-        return 74
+    # ArchitectureTests above the rail, a bracket over every layer its rules read
+    arch = bands[0]
+    a, b = span(arch)
+    bx, bw = card_rect(a, b)
+    name = [Span(arch.suite.name, theme.ink, 13, 600),
+            Span(NBSP * 2 + arch.suite.proves, theme.muted, 13)]
+    label = svg.text(bx, top + 14, name, on=theme.page)
+    pill(svg, label.right + 10, top - 1, arch.pill, fill=theme.rings["outside"].band,
+         ink=theme.ink, edge=theme.line, edge_alpha=theme.line_alpha)
+    bracket_y = top + 34
+    svg.path(f"M{num(bx)} {num(bracket_y + 6)} V{num(bracket_y)} H{num(bx + bw)} "
+             f"V{num(bracket_y + 6)}", stroke=theme.muted, width=CONNECTOR)
 
-    for row, card, folder in (("tools", "tools", "tools"), ("shared", "shared", "src/Shared"),
-                              ("presentation", "presentation", "src/Presentation")):
-        h = ring_card(card, members(folder), y)
-        rows[row] = (y, y + h)
-        y += h + 12
-    half = (stack_w - 16) / 2
-    for card, x in (("infrastructure", stack_x), ("persistence", stack_x + half + 16)):
-        hue_key, title, _, _ = CARDS[card]
-        hue = theme.hues[hue_key]
-        svg.rect(x, y, half, 44, fill=hue.fill, stroke=hue.stroke, width=1.5, rx=12)
-        svg.text(x + half / 2, y + 27, [Span(title, hue.title, 14, 700)], on=hue.fill,
-                 anchor="middle")
-    peer_mark(svg, theme, stack_x + stack_w / 2, y + 22)
-    rows["adapters"] = (y, y + 44)
-    y += 44 + 12
-    core = theme.hues["core"]
-    core_h = 34 + 3 * 28 + 2 * 8 + 14
-    svg.rect(stack_x, y, stack_w, core_h, fill=core.fill, stroke=core.stroke, width=1.5, rx=12)
-    svg.text(stack_x + 14, y + 22, [Span("Core", core.title, 14, 700)], on=core.fill)
-    core_projects = members("src/Core")
-    core_rows = [r for r in STACK if r in ("application", "domain", "sharedkernel")]
-    if [n.lower() for n in core_projects] != core_rows:
-        raise RenderError("testing: STACK's Core rows no longer match the Core projects "
-                          f"{core_projects}")
-    for i, name in enumerate(core_projects):
-        cy = y + 34 + i * 36
-        chip(svg, theme, "core", stack_x + 14, cy, stack_w - 28, name)
-        rows[name.lower()] = (cy, cy + 28)
-    y += core_h
-    frame_bottom = y + 14
+    # the rail
+    chip_y = bracket_y + 14
+    svg.line(col(0) + INSET, chip_y + CHIP_H / 2, col(len(STACK) - 1) + PITCH - INSET,
+             chip_y + CHIP_H / 2, stroke=theme.line, opacity=theme.line_alpha * 2)
+    for i, layer in enumerate(STACK):
+        text, key = LAYERS[layer]
+        ring = theme.rings[key]
+        chip = Box(col(i) + INSET, chip_y, PITCH - 2 * INSET, CHIP_H)
+        on_grid(svg, f"the {text} chip", chip.x, chip.y, chip.w, chip.h)
+        svg.rect(chip.x, chip.y, chip.w, chip.h, rx=CHIP_R, fill=ring.fill, stroke=ring.ink,
+                 opacity=HAIRLINE)
+        svg.text(chip.cx, chip.cy + 4.5, [Span(text, ring.ink, 12, 600)], on=ring.fill,
+                 anchor="middle", within=chip)
 
-    # the database
-    y = frame_bottom + 24
-    db_w, db_h = 220, 62
-    dx = stack_x + (stack_w - db_w) / 2
-    rx_, ry_ = db_w / 2, 9
-    body = (f"M{num(dx)} {num(y + ry_)} V{num(y + db_h - ry_)} A{num(rx_)} {num(ry_)} 0 0 0 "
-            f"{num(dx + db_w)} {num(y + db_h - ry_)} V{num(y + ry_)}")
-    svg.path(body + " Z", fill=neutral.fill, stroke=neutral.stroke, width=1.5)
-    svg.raw(f'<ellipse cx="{num(dx + rx_)}" cy="{num(y + ry_)}" rx="{num(rx_)}" ry="{num(ry_)}" '
-            f'fill="{neutral.panel}" stroke="{neutral.stroke}" stroke-width="1.5"/>')
-    svg.text(dx + rx_, y + 42, [Span("PostgreSQL", neutral.title, 14, 700)], on=neutral.fill,
-             anchor="middle")
-    rows["database"] = (y, y + db_h)
-    svg.text(stack_x + stack_w / 2, y + db_h + 22,
-             [Span("a real database: Testcontainers, or the running app's own", theme.muted, 13)],
-             on=theme.bg, anchor="middle")
+    # the cards, measured first: each is as tall as its words. Every card reads its name, what it
+    # needs, then what it proves: the needs pill sits beside the name, or on its own line under it.
+    pad = 16
+    laid: List[Tuple[SuiteFacts, Box, bool, List[Span]]] = []
+    y = chip_y + CHIP_H + 24
+    for f in cards:
+        a, b = span(f)
+        x, w = card_rect(a, b)
+        inner = w - 2 * pad
+        inline = measure(f.suite.name, 14, 600) + 10 + pill_width(f.pill) <= inner
+        lines = [Span(t, theme.ink, 13) for t in wrap(f.suite.proves, 13, inner)]
+        needs = []
+        if f.flags:
+            needs.append(f"generated with {', '.join(f.flags)}")
+        if f.suite.needs:
+            needs.append(("needs " if f.suite.switch else "") + f.suite.needs)
+        if needs:
+            lines += [Span(t, theme.muted, 13) for t in wrap("; ".join(needs), 13, inner)]
+        bottom = 54 + (0 if inline else PILL_H + 8) + 18 * (len(lines) - 1) + 6
+        box = Box(x, y, w, ceil8(bottom + 14 + 4 + 14))
+        laid.append((f, box, inline, lines))
+        y = box.bottom + GUTTER
 
-    # the ArchitectureTests frame
-    arch = next(f for f in facts.suites if f.suite.side == "frame")
-    svg.rect(stack_x - 14, frame_top, stack_w + 28, frame_bottom - frame_top, stroke=theme.arrow,
-             width=1.5, rx=16, dash="7 5")
-    rest = f"{NBSP}{NBSP}{arch.suite.proves} · needs {arch.suite.needs}"
-    svg.text(stack_x, frame_top + 25,
-             [Span(arch.suite.name, theme.ink, 14, 700), Span(rest, theme.muted, 13)], on=theme.bg)
+    cards_bottom = laid[-1][1].bottom
+    for i in range(len(STACK)):  # each layer's guide, down to the last card that runs through it
+        gx = col(i) + PITCH / 2
+        lowest = max(box.bottom for f, box, _, _ in laid if span(f)[0] <= i <= span(f)[1])
+        svg.line(gx, chip_y + CHIP_H + 6, gx, lowest, stroke=theme.line,
+                 opacity=theme.line_alpha * 1.5, dash="2 5")
 
-    # the brackets, staircased: on each side the suite reaching highest sits nearest the stack
-    for side in ("left", "right"):
-        side_suites = sorted((f for f in facts.suites if f.suite.side == side),
-                             key=lambda f: STACK.index(f.suite.top))
-        for depth, suite_facts in enumerate(side_suites):
-            suite = suite_facts.suite
-            top, bottom = rows[suite.top][0], rows[suite.bottom][1]
-            dashed = bool(suite_facts.opt_in)
-            if side == "left":
-                x = stack_x - 32 - depth * 20
-                d = bracket_path(x, top, bottom, +1)
-                text_x, anchor, room = x - 10, "end", x - 10 - MARGIN
-            else:
-                x = stack_r + 32 + depth * 20
-                d = bracket_path(x, top, bottom, -1)
-                text_x, anchor, room = x + 10, "start", W - MARGIN - (x + 10)
-            svg.path(d, stroke=theme.arrow, width=2.5, dash="6 5" if dashed else None)
-            ty = top + 13
-            name_spans = [Span(suite.name, theme.ink, 14, 700)]
-            if dashed:
-                name_spans.append(Span(f"{NBSP}{NBSP}opt-in", theme.ink, 13, 600))
-            svg.text(text_x, ty, name_spans, on=theme.bg, anchor=anchor)
-            for line in wrap(suite.proves, 13, room):
-                ty += 18
-                svg.text(text_x, ty, [Span(line, theme.ink, 13)], on=theme.bg, anchor=anchor)
-            needs = f"needs {suite.needs}"
-            if dashed:
-                needs = f"switch on: {', '.join(suite_facts.opt_in)}; needs {suite.needs}"
-            for line in wrap(needs, 13, room):
-                ty += 18
-                svg.text(text_x, ty, [Span(line, theme.muted, 13)], on=theme.bg, anchor=anchor)
+    def stations(s: Svg, a: int, b: int, y: float) -> None:
+        """The layers a suite runs through: the rail's chips again, as dots on a hairline."""
+        s.line(col(a) + PITCH / 2, y, col(b) + PITCH / 2, y, stroke=theme.muted,
+               width=CONNECTOR, opacity=0.5)
+        for i in range(a, b + 1):
+            ring = theme.rings[LAYERS[STACK[i]][1]]
+            s.circle(col(i) + PITCH / 2, y, 4.5, fill=ring.fill, stroke=ring.ink,
+                     opacity=HAIRLINE * 1.6)
 
-    legend_y = rows["database"][1] + 64
+    for f, box, inline, lines in laid:
+        on_grid(svg, f"the {f.suite.name} card", box.x, box.y, box.w, box.h)
+        svg.comment(f.suite.name)
+        dashed = bool(f.opt_in)
+        if dashed:
+            svg.rect(box.x, box.y, box.w, box.h, rx=CARD_R, fill=theme.surface, stroke=theme.muted,
+                     opacity=0.75, dash="6 4")
+        else:
+            svg.rect(box.x, box.y, box.w, box.h, rx=CARD_R, fill=theme.surface, stroke=theme.line,
+                     opacity=theme.line_alpha)
+        label = svg.text(box.x + pad, box.y + 30, [Span(f.suite.name, theme.ink, 14, 600)],
+                         on=theme.surface, within=box)
+        pill_xy = (label.right + 10, box.y + 13) if inline else (box.x + pad, box.y + 42)
+        pill(svg, pill_xy[0], pill_xy[1], f.pill, fill=theme.rings["outside"].band,
+             ink=theme.ink, edge=theme.line, edge_alpha=theme.line_alpha * 1.5,
+             dash="3 3" if dashed else None)
+        ty = box.y + 54 + (0 if inline else PILL_H + 8)
+        for line in lines:
+            svg.text(box.x + pad, ty, [line], on=theme.surface, within=box)
+            ty += 18
+        stations(svg, *span(f), box.bottom - 18)
 
-    def sample_bracket(s: Svg, x: float, y: float, dashed: bool = False) -> float:
-        s.path(f"M{num(x + 8)} {num(y - 10)} Q{num(x + 1)} {num(y - 10)} {num(x + 1)} "
-               f"{num(y - 3)} V{num(y + 3)} Q{num(x + 1)} {num(y + 10)} {num(x + 8)} "
-               f"{num(y + 10)}", stroke=theme.arrow, width=2.5, dash="4 3" if dashed else None)
-        return 10
+    def sample_dashed(s: Svg, x: float, y: float) -> float:
+        s.rect(x, y - 9, 28, 18, rx=6, fill=theme.surface, stroke=theme.muted, opacity=0.75,
+               dash="4 3")
+        return 28
 
-    def sample_frame(s: Svg, x: float, y: float) -> float:
-        s.rect(x, y - 9, 26, 18, stroke=theme.arrow, width=1.5, rx=5, dash="5 3")
-        return 26
+    def sample_stations(s: Svg, x: float, y: float) -> float:
+        s.line(x + 4, y, x + 40, y, stroke=theme.muted, width=CONNECTOR, opacity=0.5)
+        for i, key in enumerate(("presentation", "application", "domain")):
+            ring = theme.rings[key]
+            s.circle(x + 4 + i * 18, y, 4.5, fill=ring.fill, stroke=ring.ink,
+                     opacity=HAIRLINE * 1.6)
+        return 44
 
-    items: List[LegendItem] = [
-        (sample_bracket, "a suite and the layers it runs through"),
-        (lambda s, x, y: sample_bracket(s, x, y, True), "opt-in: skipped until switched on"),
-        (sample_frame, "ArchitectureTests: rules over the whole solution"),
+    keys: List[LegendItem] = [
+        (sample_dashed, "opt-in: skipped until switched on"),
+        (sample_stations, "the layers a suite runs through"),
     ]
-    used = legend(svg, theme, MARGIN + 8, legend_y, W - 2 * MARGIN - 16, items,
-                  "Suites from tests/ and the Tests table in docs/development.md; a bracket that "
-                  "stops above PostgreSQL needs no database.")
-    return finish(svg, theme, legend_y + used + MARGIN)
+    note = ("Suites from tests/ and the Tests table in docs/development.md; a card that stops at "
+            "SharedKernel needs no database.")
+
+    def legend_height(width: float) -> float:
+        scratch = Svg("measure", W, 4000, "", "")
+        used = legend(scratch, theme, 0, 0, width, ring_items(theme))
+        return used + 14 + legend(scratch, theme, 0, used + 14, width, keys, note)
+
+    # The legend goes where the staircase of cards leaves room, below one card and left of every
+    # card after it, wherever the picture comes out shortest.
+    best: Optional[Tuple[float, float, float]] = None  # (picture bottom, legend y, legend width)
+    for k, (_, box, _, _) in enumerate(laid):
+        later = [b.x for _, b, _, _ in laid[k + 1:]]
+        width = (min(later) - 32 - PAD) if later else W - 2 * PAD
+        if width < 480:
+            continue
+        y = box.bottom + 32
+        bottom = max(cards_bottom, y + legend_height(width))
+        if best is None or bottom < best[0]:
+            best = (bottom, y, width)
+    if best is None:
+        raise RenderError("testing: the legend has no room")
+    _, legend_y, legend_w = best
+    used = legend(svg, theme, PAD, legend_y, legend_w, ring_items(theme))
+    used += 14 + legend(svg, theme, PAD, legend_y + used + 14, legend_w, keys, note)
+    return finish(svg, theme, ceil8(max(cards_bottom, legend_y + used) + PAD))
 
 
 # ==================================================================================================
-# 3. pipeline: one request, from the HTTP call to the receipt
+# 3. pipeline: one request, a rail of numbered steps from the HTTP call to the receipt e-mail
 # ==================================================================================================
 
 @dataclass
 class Step:
-    hue: str
+    ring: str
     title: str
-    lines: List[Span]
-    w: float = 0.0
-    x: float = 0.0
-    y: float = 0.0
-    h: float = 0.0
+    code: List[str]                     # its real names, in monospace
+    text: str = ""                      # what it does, wrapped
+    sub: Dict[str, str] = field(default_factory=dict)  # a code line's own muted line under it
+    x: float = 0.0                      # the node's centre
+    number: int = 0
 
 
-def step(hue: str, title: str, *lines: Tuple[str, str], theme: Theme, mono_title: bool = False,
-         min_w: float = 110) -> Step:
-    """A step box: a title, then lines tagged 'code' (monospace) or 'text' (prose, wrapped)."""
-    h = theme.hues[hue]
-    spans: List[Span] = []
-    code_w = max([measure(t, 13, mono=True) for kind, t in lines if kind == "code"] + [0])
-    title_w = measure(title, 14, 600, mono=mono_title)
-    width = max(code_w, title_w, min_w)
-    for kind, text in lines:
-        if kind == "code":
-            spans.append(Span(text, h.title, 13, mono=True))
-        else:
-            spans += [Span(line, h.muted, 13) for line in wrap(text, 13, width)]
-    return Step(hue, title, spans, width + 28)
+NODE_R = 14
 
 
-def draw_step(svg: Svg, theme: Theme, s: Step, mono_title: bool = False) -> None:
-    hue = theme.hues[s.hue]
-    svg.rect(s.x, s.y, s.w, s.h, fill=hue.fill, stroke=hue.stroke, width=1.5, rx=12)
-    svg.text(s.x + 14, s.y + 24, [Span(s.title, hue.title, 14, 600, mono=mono_title)],
-             on=hue.fill)
-    ty = s.y + 24
-    for span in s.lines:
-        ty += 18
-        svg.text(s.x + 14, ty, [span], on=hue.fill)
+def step_lines(s: Step, theme: Theme, width: float) -> List[Span]:
+    ring = theme.rings[s.ring]
+    lines = [Span(s.title, theme.ink, 14, 600)]
+    for code in s.code:
+        lines.append(Span(code, ring.ink, 12, mono=True))
+        if code in s.sub:
+            lines.append(Span(s.sub[code], theme.muted, 12, mono=True))
+    if s.text:
+        lines += [Span(t, theme.muted, 13) for t in wrap(s.text, 13, width)]
+    return lines
 
 
 def pipeline(theme: Theme, facts: Facts) -> Svg:
     f = facts.pipeline
-    handlers_named = " and ".join(c for c, _ in f.event_handlers)
+    receipt = f.event_handlers[0][0]
     svg = Svg(f"pipeline-{theme.name}", W, 1000, "One request through Trellis: paying an invoice",
-              f"{f.method} {f.path} passes the host's hardening, the permission check and the "
-              f"idempotency filter, then the decorators {', '.join(f.decorators)} around "
-              f"{f.handler}, which calls {f.aggregate}.{f.method_call} and gets a Result. The "
-              f"commit writes the {f.event_name} event to the outbox in the same transaction; "
-              f"after the commit OutboxProcessor hands it to {handlers_named}. A failed Result "
-              "becomes an RFC 9457 problem.")
-    x0 = MARGIN + 44
-    gap = 30
-
+              f"A rail of numbered steps. {f.method} {f.path} passes the host's hardening, the "
+              f"permission check and the idempotency filter to the {f.endpoint} endpoint, then "
+              f"the decorators {', '.join(f.decorators)} around {f.handler}, which calls "
+              f"{f.aggregate}.{f.method_call} and gets a Result. The commit writes the "
+              f"{f.event_name} event to {f.outbox_table} in the same transaction; past the outbox "
+              f"boundary, OutboxProcessor hands it to "
+              f"{' and '.join(c for c, _ in f.event_handlers)}, and {receipt} sends the receipt "
+              f"through {f.email_port}.")
+    top = heading(svg, theme, "One request: paying an invoice",
+                  f"{f.method} {f.path}, from the HTTP call to the receipt e-mail; every name "
+                  "is read from the code.")
     describe = {
         "Tracing": "opens the use case's span",
         "Logging": "writes its outcome line",
         "Validation": "a 400 before the handler runs",
         "UnitOfWork": "commits a success, once",
     }
-    row1 = [
-        step("neutral", "HTTP request", ("code", f.method), ("code", f.path), theme=theme),
-        step("presentation", "Hardening", ("code", "UseApiHardening"),
-             ("text", "headers, timeout, CORS"), theme=theme, min_w=170),
-        step("presentation", "Permission", ("code", "RequirePermission"), ("code", f.permission),
-             theme=theme),
-        step("presentation", "Idempotency", ("code", "IdempotencyFilter"),
-             ("code", "Idempotency-Key"), theme=theme),
-        step("presentation", "Endpoint", ("code", f.endpoint), ("text", "maps the Result"),
-             theme=theme),
+    # Each row: its captions (the step each one opens at, its words), its steps, their pitch. The
+    # last row's second caption opens past the outbox boundary.
+    Caption = Tuple[int, str, str]
+    rows: List[Tuple[List[Caption], List[Step], float]] = [
+        ([(0, "The request", "the API host and the endpoint: Trellis.Api, Trellis.Api.Common")], [
+            Step("outside", "HTTP request", [f.method, f.path]),
+            Step("presentation", "Hardening", ["UseApiHardening"], "headers, timeout, CORS"),
+            Step("presentation", "Permission", ["RequirePermission", f.permission]),
+            Step("presentation", "Idempotency", ["IdempotencyFilter", "Idempotency-Key"]),
+            Step("presentation", "Endpoint", [f.endpoint],
+                 "maps the Result: a 204, or an RFC 9457 problem"),
+        ], 200),
+        ([(0, "The use case", "the decorators, outermost first, around the handler")], [
+            *[Step("domain", name, [f"{name}Decorators"], describe.get(name, ""))
+              for name in f.decorators],
+            Step("application", "Handler", [f.handler], "loads the invoice"),
+            Step("domain", "Aggregate", [f"{f.aggregate}.{f.method_call}"],
+                 "changes state, raises the event, returns a Result"),
+        ], 176),
+        ([(0, "The commit", ""),
+          (1, "After the commit", "at least once: the outbox, then the event's handlers")], [
+            Step("persistence", "Commit", ["OutboxWriteInterceptor"],
+                 f"writes {f.event_name} to {f.outbox_table} with the invoice"),
+            Step("persistence", "Dispatch", ["OutboxProcessor"],
+                 "claims the row, retries a failure"),
+            Step("application", "Event handlers", [c for c, _ in f.event_handlers],
+                 sub=dict(f.event_handlers)),
+            Step("infrastructure", "Receipt e-mail", [f.email_port],
+                 "logged until Email:Provider is Smtp"),
+        ], 264),
     ]
-    row2 = [step("core", name, ("text", describe.get(name, "")), theme=theme, min_w=112)
-            for name in f.decorators]
-    row2 += [
-        step("core", "Handler", ("code", f.handler), ("text", "loads the invoice"), theme=theme),
-        step("core", "Aggregate", ("code", f"{f.aggregate}.{f.method_call}"),
-             ("text", "changes state, raises the event, returns a Result"), theme=theme),
-    ]
-    outbox = step("persistence", "Outbox row", ("code", f.outbox_table), ("code", f.event_name),
-                  ("text", "written by the same commit"), theme=theme)
-    processor = step("persistence", "OutboxProcessor", ("text", "after the commit, at least once"),
-                     theme=theme, min_w=150)
-    hints = {"SendReceiptOnInvoicePaid": "e-mails the receipt",
-             "RecordMetricsOnInvoicePaid": "counts the payment"}
-    handlers = []
-    for cls, name in f.event_handlers:
-        s = step("core", cls, ("code", name), ("text", hints.get(cls, "")), theme=theme,
-                 mono_title=True)
-        width = max(s.w, measure(s.title, 14, 600, True) + 28)
-        handlers.append(Step(s.hue, s.title, [line for line in s.lines if line.text], width))
+    first_x = PAD + 96      # the first node of every row
+    entry_x = PAD + 16      # where a wrap comes down to the next row
+    caption_x = PAD + 48
+    wrap_x = W - PAD - 24   # where a wrap goes down from a row's last node
 
-    # both rows end at the same right edge, so the endpoint sits above the aggregate and the
-    # failure path can run straight up between them
-    span = max(sum(s.w for s in row) + gap * (len(row) - 1) for row in (row1, row2))
-    if x0 + span > W - MARGIN - 16:
-        raise RenderError(f"pipeline: a row needs {span:.0f}px from x={x0}")
+    def room(s: Step, pitch: float) -> float:
+        """How wide a step's words may wrap: its pitch, and never into the picture's padding."""
+        return min(pitch - 24, 2 * (min(s.x - PAD, W - PAD - s.x) - 4))
 
-    def place(row: List[Step], y: float) -> float:
-        h = 24 + 18 * max(len(s.lines) for s in row) + 16
-        spread = (span - sum(s.w for s in row)) / (len(row) - 1)
-        x = x0
-        for s in row:
-            s.x, s.y, s.h = x, y, h
-            x += s.w + spread
-        return y + h
+    number = 0
+    y = top + 8
+    laid: List[Tuple[float, float, float, List[Step]]] = []  # caption baseline, node line, bottom
+    for captions, steps, pitch in rows:
+        for i, s in enumerate(steps):
+            number += 1
+            s.number, s.x = number, first_x + i * pitch
+        boundary = (steps[0].x + steps[1].x) / 2
+        for opens, caption, rest in captions:
+            x = caption_x if opens == 0 else boundary + 16
+            spans = [Span(caption.upper(), theme.ink, 12, 600, tracking=0.96)]
+            if rest:
+                spans.append(Span(NBSP * 3 + rest, theme.muted, 12))
+            words = svg.text(x, y, spans, on=theme.page)
+            if opens == 0 and len(captions) > 1 and words.right > boundary - 16:
+                raise RenderError(f"pipeline: the caption {caption!r} runs into the boundary")
+        cy = y + 40
+        deepest = cy
+        for s in steps:
+            ty = cy + NODE_R + 20
+            for span in step_lines(s, theme, room(s, pitch)):
+                svg.text(s.x, ty, [span], on=theme.page, anchor="middle")
+                ty += 18
+            deepest = max(deepest, ty - 14)
+        last = steps[-1]
+        widest = max(span.width for span in step_lines(last, theme, room(last, pitch)))
+        if last.x + widest / 2 + 16 > wrap_x:
+            raise RenderError(f"pipeline: the {last.title} step's words reach the wrap on the "
+                              "right")
+        laid.append((y, cy, deepest, steps))
+        y = ceil8(deepest + 40)
 
-    caption_y = MARGIN + 22
-    row1_y = caption_y + 16
-    row1_bottom = place(row1, row1_y)
-    gutter1 = 104
-    row2_y = row1_bottom + gutter1
-    row2_bottom = place(row2, row2_y)
-    gutter2 = 84
-    row3_y = row2_bottom + gutter2
-    row3_h = 24 + 18 * max(len(outbox.lines), len(processor.lines)) + 16
-    outbox.x, outbox.y, outbox.h = x0, row3_y, row3_h
-    processor.x, processor.y, processor.h = outbox.x + outbox.w + gap + 20, row3_y, row3_h
-    hx = processor.x + processor.w + 64
-    handler_h = 24 + 18 * max(len(h.lines) for h in handlers) + 16
-    hy = row3_y
-    for h in handlers:
-        h.x, h.y, h.h = hx, hy, handler_h
-        hy += handler_h + 12
-    row3_bottom = max(row3_y + row3_h, hy - 12)
+    for _, cy, _, steps in laid:
+        for left, right in zip(steps, steps[1:]):
+            arrow(svg, [(left.x + NODE_R + 6, cy), (right.x - NODE_R - 6, cy)], theme.muted)
+    # A row's end returns to the next row's start in the rail's own hairline colour, fainter than the
+    # step arrows, so the steps and their arrows stay the strongest lines in the picture.
+    quiet = mix(theme.bg, theme.line, theme.line_alpha * 2)
+    for (_, cy, deepest, steps), (_, next_cy, _, next_steps) in zip(laid, laid[1:]):
+        channel = deepest + 16
+        arrow(svg, [(steps[-1].x + NODE_R + 6, cy), (wrap_x, cy), (wrap_x, channel),
+                    (entry_x, channel), (entry_x, next_cy),
+                    (next_steps[0].x - NODE_R - 6, next_cy)], quiet, radius=12)
+    for _, cy, _, steps in laid:
+        for s in steps:
+            ring = theme.rings[s.ring]
+            on_grid(svg, f"the {s.title} node's centre", s.x, cy)
+            svg.circle(s.x, cy, NODE_R, fill=ring.fill, stroke=ring.ink, opacity=HAIRLINE)
+            svg.text(s.x, cy + 4.3, [Span(str(s.number), ring.ink, 12, 700)], on=ring.fill,
+                     anchor="middle", within=Box(s.x - NODE_R, cy - NODE_R, 2 * NODE_R,
+                                                 2 * NODE_R))
 
-    def caption(y: float, number: str, title: str, rest: str) -> None:
-        svg.text(x0, y, [Span(f"{number}{NBSP}{NBSP}{title}", theme.ink, 14, 700),
-                         Span(f"{NBSP}{NBSP}{rest}", theme.muted, 13)], on=theme.bg)
+    # the outbox boundary: the commit before it, in one transaction; after it, at least once
+    caption_y, cy, deepest, steps = laid[-1]
+    bx = (steps[0].x + steps[1].x) / 2
+    svg.line(bx, caption_y - 14, bx, deepest + 4, stroke=theme.accent, width=CONNECTOR,
+             dash="5 4")
 
-    caption(caption_y, "1", "The request",
-            "the API host and the endpoint (Trellis.Api, Trellis.Api.Common)")
-    caption(row2_y - 14, "2", "The use case",
-            "the decorators in SharedKernel/Decorators, outermost first, around the handler")
-    caption(row3_y - 14, "3", "After the commit",
-            "Trellis.Persistence/Outbox, then the event's handlers")
+    def sample_boundary(s: Svg, x: float, y: float) -> float:
+        s.line(x + 6, y - 9, x + 6, y + 9, stroke=theme.accent, width=CONNECTOR, dash="5 4")
+        return 12
 
-    for s in row1 + row2 + [outbox, processor]:
-        draw_step(svg, theme, s)
-    for h in handlers:
-        draw_step(svg, theme, h, mono_title=True)
-
-    a = theme.arrow
-    for row in (row1, row2):
-        for left, right in zip(row, row[1:]):
-            arrow(svg, [(left.x + left.w, left.y + 22), (right.x, right.y + 22)], a)
-    # 1 -> 2: the endpoint calls the decorated handler
-    endpoint, tracing = row1[-1], row2[0]
-    wrap1_y = row1_bottom + 26
-    arrow(svg, [(endpoint.x + 26, row1_bottom), (endpoint.x + 26, wrap1_y), (x0 - 22, wrap1_y),
-                (x0 - 22, tracing.y + 22), (tracing.x, tracing.y + 22)], a)
-    svg.text(endpoint.x + 16, wrap1_y - 8,
-             [Span("handler.Handle(command)", theme.muted, 13, mono=True)], on=theme.bg,
-             anchor="end")
-    # the failure path, back up to the endpoint
-    aggregate = row2[-1]
-    fail_x = min(endpoint.x + endpoint.w, aggregate.x + aggregate.w) - 24
-    if fail_x < max(endpoint.x, aggregate.x) + 40:
-        raise RenderError("pipeline: the failure path has no room between the aggregate and the "
-                          "endpoint")
-    arrow(svg, [(fail_x, aggregate.y), (fail_x, row1_bottom)], a, dashed=True)
-    svg.text(fail_x - 12, row1_bottom + 50,
-             [Span("Result → RFC 9457 problem", theme.ink, 14, 700)], on=theme.bg, anchor="end")
-    svg.text(fail_x - 12, row1_bottom + 68,
-             [Span("a failed Result, via CustomResults.Problem, with a stable code", theme.muted,
-                   13)], on=theme.bg, anchor="end")
-    # 2 -> 3: the unit of work's commit writes the outbox row
-    unit = next(s for s in row2 if s.title == "UnitOfWork")
-    wrap2_y = row2_bottom + 26
-    arrow(svg, [(unit.x + 26, row2_bottom), (unit.x + 26, wrap2_y), (x0 - 22, wrap2_y),
-                (x0 - 22, outbox.y + 22), (outbox.x, outbox.y + 22)], a)
-    svg.text(unit.x + 16, wrap2_y - 8,
-             [Span("the commit: the invoice and its outbox row in one transaction", theme.muted,
-                   13)], on=theme.bg, anchor="end")
-    arrow(svg, [(outbox.x + outbox.w, outbox.y + 22), (processor.x, processor.y + 22)], a)
-    fork_x = processor.x + processor.w + 32
-    for h in handlers:
-        arrow(svg, [(processor.x + processor.w, processor.y + 22), (fork_x, processor.y + 22),
-                    (fork_x, h.y + 22), (h.x, h.y + 22)], a)
-
-    legend_y = row3_bottom + 44
-
-    def sample_line(s: Svg, x: float, y: float, dashed: bool = False) -> float:
-        arrow(s, [(x, y), (x + 30, y)], theme.arrow, dashed=dashed)
-        return 30
-
-    def swatch(hue_key: str) -> Callable[[Svg, float, float], float]:
-        def draw(s: Svg, x: float, y: float) -> float:
-            hue = theme.hues[hue_key]
-            s.rect(x, y - 8, 22, 16, fill=hue.fill, stroke=hue.stroke, width=1.5, rx=4)
-            return 22
-        return draw
-
-    items: List[LegendItem] = [
-        (sample_line, "the call"),
-        (lambda s, x, y: sample_line(s, x, y, True), "the failure path"),
-        (swatch("presentation"), "Presentation"),
-        (swatch("core"), "Core"),
-        (swatch("persistence"), "Persistence"),
-    ]
-    used = legend(svg, theme, MARGIN + 8, legend_y, W - 2 * MARGIN - 16, items,
-                  "Names read from the code: the decorator order from the TryDecorate calls, the "
-                  "event's outbox name from its DomainEventName, the handlers from their "
-                  "IDomainEventHandler<>.")
-    return finish(svg, theme, legend_y + used + MARGIN)
+    legend_y = deepest + 48
+    used = legend(svg, theme, PAD, legend_y, W - 2 * PAD, ring_items(theme))
+    used += 14 + legend(svg, theme, PAD, legend_y + used + 14, W - 2 * PAD, [
+        (sample_boundary, "the outbox boundary: one transaction before it, at least once after"),
+    ], "Names read from the code: the decorator order from the TryDecorate calls, the event's "
+       "outbox name from its DomainEventName, the handlers from their IDomainEventHandler<>.")
+    return finish(svg, theme, ceil8(legend_y + used + PAD))
 
 
 # ==================================================================================================
@@ -1879,24 +2078,22 @@ def rings(theme: Theme, facts: Facts) -> Svg:
     svg = Svg(f"rings-{theme.name}", size, size, "Trellis rings",
               "Concentric rings: Domain and SharedKernel at the centre, Application around them, "
               "then Infrastructure and Persistence as two halves of one split ring, and "
-              "Presentation outside.")
-    core, pres = theme.hues["core"], theme.hues["presentation"]
-    infra, persist = theme.hues["infrastructure"], theme.hues["persistence"]
+              "Presentation outside.", min_size=9)
+    pres, app = theme.rings["presentation"], theme.rings["application"]
+    centre = theme.rings["domain"]
+    infra, persist = theme.rings["infrastructure"], theme.rings["persistence"]
     r_outer, r_split, r_app, r_centre = 78, 62, 47, 32
-    svg.circle(c, c, r_outer, fill=pres.fill, stroke=pres.stroke, width=1.5)
-    for sweep, fill in ((0, infra.fill), (1, persist.fill)):  # the split ring's two halves
-        svg.path(f"M{c} {c - r_split} A{r_split} {r_split} 0 0 {sweep} {c} {c + r_split} Z",
-                 fill=fill)
-    svg.circle(c, c, r_split, fill="none", stroke=mix(infra.stroke, persist.stroke, 0.5), width=1)
+    svg.circle(c, c, r_outer, fill=pres.fill, stroke=pres.ink, opacity=HAIRLINE)
+    for sweep, ring in ((0, infra), (1, persist)):  # the split ring's two halves
+        half = f"M{c} {c - r_split} A{r_split} {r_split} 0 0 {sweep} {c} {c + r_split}"
+        svg.path(half + " Z", fill=ring.fill)
+        svg.path(half, stroke=ring.ink, opacity=HAIRLINE)
     for y1, y2 in ((c - r_split, c - r_app), (c + r_app, c + r_split)):
         svg.line(c, y1 + 0.5, c, y2 - 0.5, stroke=pres.fill, width=3.5)
-    # the centre a step deeper than the Application band: further towards the glyph colour in light
-    # mode, less far in dark mode, where the glyph colour is lighter than the band
-    centre_fill = mix(core.fill, core.glyph, 0.55 if theme is LIGHT else 0.35)
-    svg.circle(c, c, r_app, fill=core.fill, stroke=core.stroke, width=1)
-    svg.circle(c, c, r_centre, fill=centre_fill, stroke=core.stroke, width=1)
+    svg.circle(c, c, r_app, fill=app.fill, stroke=app.ink, opacity=HAIRLINE)
+    svg.circle(c, c, r_centre, fill=centre.fill, stroke=centre.ink, opacity=HAIRLINE)
 
-    def label(path_id: str, r: float, top: bool, text: str, hue_fill: str, ink: str,
+    def label(path_id: str, r: float, top: bool, text: str, ring: Ring,
               offset: str = "50%", text_size: float = 9) -> None:
         cap = text_size * 0.36  # half the cap height: centres the letters on the band
         rr = r - cap if top else r + cap
@@ -1906,29 +2103,30 @@ def rings(theme: Theme, facts: Facts) -> Svg:
         sweep = 1 if top else 0
         svg.defs.append(f'<path id="{path_id}" d="M{num(c - rr)} {c} A{num(rr)} {num(rr)} 0 0 '
                         f'{sweep} {num(c + rr)} {c}"/>')
-        ratio = contrast(ink, hue_fill)
+        ratio = contrast(ring.ink, ring.fill)
         if ratio < MIN_CONTRAST:
             raise RenderError(f"rings: {text!r} has contrast {ratio:.2f}:1")
-        svg.raw(f'<text class="{svg.font(text_size, 700)}" fill="{ink}"><textPath '
+        svg.raw(f'<text class="{svg.font(text_size, 700)}" fill="{ring.ink}"><textPath '
                 f'href="#{path_id}" startOffset="{offset}" text-anchor="middle">{escape(text)}'
                 "</textPath></text>")
 
-    band = (r_outer + r_split) / 2
-    label("ring-presentation", band, False, "Presentation", pres.fill, pres.title, text_size=10)
+    label("ring-presentation", (r_outer + r_split) / 2, False, "Presentation", pres, text_size=10)
     split = (r_split + r_app) / 2
-    label("ring-split", split, True, "Infrastructure", infra.fill, infra.title, "25%", 9)
-    label("ring-split-2", split, True, "Persistence", persist.fill, persist.title, "75%", 9)
-    app_band = (r_app + r_centre) / 2
-    label("ring-application", app_band, False, "Application", core.fill, core.title,
-          text_size=9.5)
+    label("ring-split", split, True, "Infrastructure", infra, "25%", 9)
+    label("ring-split-2", split, True, "Persistence", persist, "75%", 9)
+    label("ring-application", (r_app + r_centre) / 2, False, "Application", app, text_size=9.5)
     for text, y, text_size in (("Domain", c - 1, 11), ("SharedKernel", c + 12, 9)):
-        svg.text(c, y, [Span(text, core.title, text_size, 700)], on=centre_fill, anchor="middle")
+        svg.text(c, y, [Span(text, centre.ink, text_size, 700)], on=centre.fill, anchor="middle")
     return svg
 
 
 # ==================================================================================================
-# 5. title: the banner
+# 5. title: the banner on its stage
 # ==================================================================================================
+
+TAGLINE = "A best-practices .NET 10 solution template"
+BANNER_H = 320
+
 
 def icon_markup(scale: float, x: float, y: float) -> List[str]:
     """.template.config/icon.svg, embedded: its elements in a group, its ids prefixed."""
@@ -1951,38 +2149,101 @@ def icon_markup(scale: float, x: float, y: float) -> List[str]:
 
 
 def title(theme: Theme, facts: Facts) -> Svg:
-    height = 260
-    tagline = "A best-practices .NET 10 solution template"
-    svg = Svg(f"title-{theme.name}", W, height, "Trellis",
-              "The Trellis mark, a garden lattice with one leaf, beside the wordmark Trellis "
-              f"and the line: {tagline}.")
-    background(svg, theme)
-    mark = 168
-    mx, my = 72, (height - mark) / 2
-    # a faint lattice behind the right half, at the mark's own 45 degrees
-    lattice = mix(theme.bg, theme.brand, 0.07)
-    svg.defs.append(f'<clipPath id="banner-clip"><rect x="0.5" y="0.5" width="{W - 1}" '
-                    f'height="{height - 1}" rx="18"/></clipPath>')
-    lines = []
-    reach = height + 40
-    for i in range(-8, 16):
-        x = 700 + i * 46
-        lines.append(f"M{x} -20 L{x + reach} {height + 20}")
-        lines.append(f"M{x + reach} -20 L{x} {height + 20}")
-    svg.raw(f'<g clip-path="url(#banner-clip)"><path d="{" ".join(lines)}" stroke="{lattice}" '
-            'stroke-width="7" fill="none"/></g>')
-    fade = "banner-fade"
-    svg.defs.append(f'<linearGradient id="{fade}" x1="0" x2="1" y1="0" y2="0">'
-                    f'<stop offset="0.42" stop-color="{theme.bg}"/>'
-                    f'<stop offset="0.78" stop-color="{theme.bg}" stop-opacity="0"/>'
-                    "</linearGradient>")
-    svg.rect(1, 1, W - 2, height - 2, fill=f"url(#{fade})", rx=18)
+    w, h = W, BANNER_H
+    mark, mx, my = 128, 72, 96
+    glow_x, glow_y, glow_r = mx + mark / 2, my + mark / 2, 520
+    chip = Box(744, 96, 384, 128)
+    commands = facts.install
+    svg = Svg(f"title-{theme.name}", w, h, "Trellis",
+              "The Trellis mark, a garden lattice with one leaf, beside the wordmark Trellis and "
+              f"the line: {TAGLINE}; on the right a terminal with the two install commands, "
+              f"{commands[0]} and {commands[1]}.", pad=PAD)
+
+    def stage_base(x: float, y: float) -> str:
+        """The stage's colour at a point: the gradient and the glow over it."""
+        t = (x * w + y * h) / (w * w + h * h)
+        colour = mix(STAGE.top, STAGE.bottom, min(max(t, 0.0), 1.0))
+        reach = math.hypot(x - glow_x, y - glow_y) / (glow_r * GLOW_FADE)
+        return mix(colour, STAGE.leaf, STAGE.glow_alpha * max(0.0, 1 - reach))
+
+    def stage_at(x: float, y: float) -> str:
+        """The stage's colour at a point, at its lightest: with a lattice crossing (white at
+        LATTICE_ALPHA, twice)."""
+        return mix(stage_base(x, y), "#ffffff", 1 - (1 - LATTICE_ALPHA) ** 2)
+
+    # The stage's edge must show on the page GitHub puts the picture on, and a rim drawn round it
+    # must show on the stage; both are measured all along the edge, and the worst place counts. On
+    # white the stage's own edge shows; GitHub's dark page is as dark as the stage's darkest part,
+    # so the dark variant gets a rim of white, the device of the terminal's top edge.
+    rim: Optional[Tuple[str, float]] = ("#ffffff", STAGE.rim) if theme is DARK else None
+    page = GITHUB_PAGE[theme.name]
+    along = [(x, y) for x in range(CARD_R, w - CARD_R + 1, 8) for y in (0, h)]
+    along += [(x, y) for y in range(CARD_R, h - CARD_R + 1, 8) for x in (0, w)]
+
+    def edge_at(x: float, y: float) -> str:
+        base = stage_base(x, y)
+        return mix(base, rim[0], rim[1]) if rim else base
+
+    def worst(against: Callable[[float, float], str]) -> str:
+        """Where the edge stands out least from what is beside it, if that is too little."""
+        ratio, x, y = min((contrast(edge_at(x, y), against(x, y)), x, y) for x, y in along)
+        return "" if ratio >= MIN_EDGE else (f"{math.floor(ratio * 100) / 100:.2f}:1 at "
+                                             f"({x}, {y}), below {MIN_EDGE}:1")
+
+    faint = worst(stage_base) if rim else ""
+    if faint:
+        raise RenderError(f"{svg.name}: the rim round the stage ({rim[0]} at {num(rim[1])}) does "
+                          f"not show on it: {faint}")
+    faint = worst(lambda x, y: page)
+    if faint:
+        raise RenderError(f"{svg.name}: the stage's edge does not show on GitHub's {theme.name} "
+                          f"page ({page}): {faint}")
+
+    svg.defs += [
+        f'<linearGradient id="stage" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="{w}" '
+        f'y2="{h}"><stop offset="0" stop-color="{STAGE.top}"/>'
+        f'<stop offset="1" stop-color="{STAGE.bottom}"/></linearGradient>',
+        f'<radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="{num(glow_x)}" '
+        f'cy="{num(glow_y)}" r="{glow_r}"><stop offset="0" stop-color="{STAGE.leaf}" '
+        f'stop-opacity="{num(STAGE.glow_alpha)}"/><stop offset="{num(GLOW_FADE)}" '
+        f'stop-color="{STAGE.leaf}" stop-opacity="0"/></radialGradient>',
+        lattice_pattern("stage-lattice", "#ffffff", LATTICE_ALPHA),
+        f'<linearGradient id="terminal" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0" stop-color="{STAGE.terminal[0]}"/>'
+        f'<stop offset="1" stop-color="{STAGE.terminal[1]}"/></linearGradient>',
+    ]
+    svg.comment("the stage: the gradient, one glow behind the mark, the lattice")
+    svg.rect(0, 0, w, h, rx=CARD_R, fill="url(#stage)")
+    svg.rect(0, 0, w, h, rx=CARD_R, fill="url(#glow)")
+    svg.rect(0, 0, w, h, rx=CARD_R, fill="url(#stage-lattice)")
+    if rim:
+        svg.rect(0.5, 0.5, w - 1, h - 1, rx=CARD_R - 0.5, stroke=rim[0], opacity=rim[1])
     for element in icon_markup(mark / 128, mx, my):
         svg.raw(element)
-    tx = mx + mark + 44
-    svg.text(tx, 148, [Span("Trellis", theme.brand, 100, 700)], on=theme.bg,
-             extra=' letter-spacing="-1"')
-    svg.text(tx + 4, 196, [Span(tagline, theme.muted, 26)], on=theme.bg)
+    tx = mx + mark + 40
+    words = svg.text(tx, 172, [Span("Trellis", STAGE.ink, 88, 700, tracking=-1.76)], on=stage_at)
+    tagline = svg.text(tx + 4, 216, [Span(TAGLINE, STAGE.muted, 22)], on=stage_at)
+    if max(words.right, tagline.right) + 40 > chip.x:
+        raise RenderError("title: the wordmark and the tagline run into the terminal")
+
+    on_grid(svg, "the mark", mx, my, mark)
+    on_grid(svg, "the terminal", chip.x, chip.y, chip.w, chip.h)
+    svg.comment("the terminal, with the install commands")
+    svg.rect(chip.x, chip.y, chip.w, chip.h, rx=CHIP_R, fill="url(#terminal)",
+             stroke=STAGE.line, opacity=0.16)
+    r = CHIP_R
+    svg.path(f"M{num(chip.x + 0.5)} {num(chip.y + r)} A{r - 0.5} {r - 0.5} 0 0 1 "
+             f"{num(chip.x + r)} {num(chip.y + 0.5)} H{num(chip.right - r)} A{r - 0.5} {r - 0.5} "
+             f"0 0 1 {num(chip.right - 0.5)} {num(chip.y + r)}", stroke="#ffffff", opacity=0.12)
+    for i in range(3):  # the traffic lights, in the stage's own muted green
+        svg.circle(chip.x + 20 + i * 18, chip.y + 18, 5, fill=STAGE.muted, fill_opacity=0.45)
+    svg.line(chip.x + 1, chip.y + 36, chip.right - 1, chip.y + 36, stroke=STAGE.line,
+             opacity=0.16)
+    for i, command in enumerate(commands):
+        svg.text(chip.x + 24, chip.y + 73 + i * 28,
+                 [Span("$" + NBSP, STAGE.leaf, 14, mono=True), Span(command, STAGE.ink, 14,
+                                                                     mono=True)],
+                 on=STAGE.terminal, within=chip)
     return svg
 
 
@@ -2035,7 +2296,7 @@ def check(rendered: Dict[str, str]) -> int:
             stale += 1
     if stale:
         return 1
-    print(f"README diagrams are current: {len(rendered)} SVGs in {HERE_REL}/ match the "
+    print(f"README pictures are current: {len(rendered)} SVGs in {HERE_REL}/ match the "
           "repository.")
     return 0
 
@@ -2055,7 +2316,7 @@ def write(rendered: Dict[str, str]) -> int:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Render the README's diagrams from the repository.")
+        description="Render the README's pictures from the repository.")
     parser.add_argument("--check", action="store_true",
                         help="write nothing; exit 1 when a committed SVG differs from a fresh "
                              "render")
@@ -2063,7 +2324,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         rendered = render_all()
     except RenderError as error:
-        annotate(f"cannot render the README diagrams: {error}")
+        annotate(f"cannot render the README pictures: {error}")
         return 2
     return check(rendered) if args.check else write(rendered)
 
