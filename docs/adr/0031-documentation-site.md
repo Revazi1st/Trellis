@@ -52,7 +52,7 @@ project as plain GitHub Markdown, with template conditionals in HTML comments (`
 
 ## Consequences
 
-- A Node toolchain beside .NET: about 3,000 lines in `site/` (800 of them CSS), a 240 KB lockfile,
+- A Node toolchain beside .NET: about 3,300 lines in `site/` (1,000 of them CSS), a 240 KB lockfile,
   per CI run an `npm ci` of seconds from the npm cache (about a minute cold) and 5 to 15 seconds of
   build, and an 8 MB artifact, most of it mermaid's chunks, which only diagram pages fetch.
 - The build leans on internals a minor release can change: `glob()` deleting entries it did not touch
