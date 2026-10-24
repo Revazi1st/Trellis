@@ -14,6 +14,7 @@
 //      the reader sees (it would otherwise derive the page from the path under src/content/docs)
 //   7. a lead picture above the first paragraph of a page that has one (leadFigures): the rings on
 //      Architecture, which the doc cannot embed itself (they live in eng/readme/, which never ships)
+//   8. code in table cells gets break opportunities after / and . (narrow columns wrap at the seams)
 // For site pages under src/content/docs (.mdx):
 //   root-relative links and JSX href props get the base (/Trellis), so pages are written base-free, and
 //   a {/* trellis:option-sections */} comment becomes one section per template option (options.mjs).
@@ -146,6 +147,13 @@ function docsPlugin(rel) {
       if (resolved !== kids) {
         kids = resolved;
         changed = true;
+      }
+
+      // 8. Code in table cells breaks after a slash or a dot first (`/api/v1/<wbr>invoices`), so a narrow
+      //    column wraps a path or a type name at its seams rather than mid-word. The first column holds
+      //    identifiers and stays whole (lattice.css).
+      for (const table of kids.filter((n) => n.type === 'table')) {
+        for (const row of table.children) row.children.forEach((cell, i) => i > 0 && breakCodeIn(cell, ctx));
       }
 
       if (changed) ctx.setProperty(root, 'children', kids);
@@ -299,6 +307,21 @@ function renderBranches(branches, ctx, rel) {
     });
   }
   return out;
+}
+
+/** Replaces the inline code under a node by the same code with <wbr> after each / and each . before a letter. */
+function breakCodeIn(node, ctx) {
+  if (!Array.isArray(node.children) || !node.children.some((c) => c.type === 'inlineCode' || Array.isArray(c.children))) return;
+  let changed = false;
+  const next = node.children.map((c) => {
+    if (c.type !== 'inlineCode' || !/[/.]/.test(c.value)) {
+      breakCodeIn(c, ctx);
+      return c;
+    }
+    changed = true;
+    return { type: 'html', value: `<code>${escapeHtml(c.value).replace(/\//g, '/<wbr>').replace(/\.(?=[A-Za-z])/g, '.<wbr>')}</code>` };
+  });
+  if (changed) ctx.setProperty(node, 'children', next);
 }
 
 /** The directive HTML nodes anywhere in a tree. */

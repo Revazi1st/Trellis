@@ -132,7 +132,6 @@ h1[data-page-title],
 /* ---- chrome: header, sidebar, table of contents --------------------------------------------------- */
 .header {
   border-bottom: 1px solid var(--lt-line);
-  backdrop-filter: blur(10px);
 }
 .site-title {
   font-weight: 600;
@@ -208,10 +207,17 @@ starlight-toc a[aria-current='true'] {
 :root {
   --sl-color-banner-bg: #3a2f1b;
   --sl-color-banner-text: #f5e5c3;
+  /* Starlight's tip asides are purple; here they take the teal ring hue. */
+  --sl-color-purple-low: #1b3431;
+  --sl-color-purple: #5fb3a8;
+  --sl-color-purple-high: #d2ede9;
 }
 :root[data-theme='light'] {
   --sl-color-banner-bg: #f3e6c9;
   --sl-color-banner-text: #4a3511;
+  --sl-color-purple-low: #d3e9e6;
+  --sl-color-purple: #2b7a6f;
+  --sl-color-purple-high: #163e39;
 }
 .sl-banner {
   padding-block: 0.45rem;
@@ -371,8 +377,9 @@ starlight-toc a[aria-current='true'] {
 [data-has-hero] main {
   overflow-x: clip; /* the stage paints edge to edge without a horizontal scrollbar */
 }
-[data-has-hero] .content-panel:first-of-type {
-  padding-top: 0;
+[data-has-hero] .content-panel:first-of-type,
+[data-has-hero] .sl-banner + .content-panel {
+  padding-top: 0; /* the stage starts right under the header, or under a preview's banner */
 }
 
 .stage {
