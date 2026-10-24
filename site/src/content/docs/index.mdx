@@ -31,7 +31,6 @@ import { facts, quickstart, sdkVersion, toggles } from '../../data/repo.mjs';
 import ringsDark from '@repo/eng/readme/rings-dark.svg?url';
 import ringsLight from '@repo/eng/readme/rings-light.svg?url';
 
-export const words = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
 
 <div class="facts not-content">
   {facts.map((fact) => (
@@ -145,7 +144,7 @@ Architecture tests pin the layer rules, integration tests run on a real PostgreS
 
 <p class="label">Options</p>
 
-## {words[toggles.length] ?? toggles.length} toggles, one table
+## The options, one table
 
 <p class="sub">Generated from <code>template.json</code> at build time, so it cannot drift from what <code>dotnet new trellis --help</code> prints.</p>
 

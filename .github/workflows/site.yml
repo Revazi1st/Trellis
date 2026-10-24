@@ -148,7 +148,9 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.event_name != 'pull_request'
+    # Outside a pull request the 'changes' job is skipped, and a plain condition inherits success(),
+    # which is false once any job up the chain was skipped (actions/runner#2205): name the status.
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
