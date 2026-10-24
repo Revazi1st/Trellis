@@ -2,6 +2,8 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-08
+- **Amended**: 2026-10-18 — the audit columns hold the acting user's id, not their e-mail (see *Amendment (2026-10-18)* below)
+- **Prior art**: [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT): stamping audit columns with the user's id rather than a display name (the 2026-10-18 amendment)
 
 ## Context
 
@@ -35,6 +37,7 @@ revoke its family, a dead letter nobody has looked at yet).
   kept; an erasure or export path for personal data, and retention of the audit columns that hold the
   acting user's e-mail, are product decisions each project makes for its own jurisdiction
   (`docs/threat-model.md`).
+  *(Amended 2026-10-18: the audit columns hold the acting user's id, not their e-mail; see the amendment below.)*
 
 ## Consequences
 
@@ -45,3 +48,15 @@ revoke its family, a dead letter nobody has looked at yet).
 - Fitness: `DataRetentionJanitorTests` (every predicate one second either side of its cutoff, pending
   rows survive), `OptionsConventionTests` (the ranges are attributes and an out-of-range value stops the
   API at boot).
+
+## Amendment (2026-10-18): the audit columns hold the user id
+
+`AuditingInterceptor` stamps `CreatedBy` and `ModifiedBy` with the acting user's id
+(`ICurrentUser.UserId`) instead of their user name, which is their e-mail; a caller without an id, the
+migration job, is stamped with its name (`system`). The id is the key the rest of the system already
+uses for a user (refresh tokens, the idempotency partition, the security events), it does not change
+when the e-mail does, and the columns, copied into every auditable row and every backup of it, no
+longer spell out an address. No DDL: the columns stay `varchar(256)`, and rows written before keep the
+e-mail they were stamped with until a project rewrites them. An id is still personal data, pseudonymous
+rather than anonymous, so the decision above stands: an erasure or export path, and how long the columns
+are kept, remain each project's (`docs/threat-model.md`).

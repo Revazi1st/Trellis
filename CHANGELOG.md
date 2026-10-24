@@ -45,6 +45,15 @@ If you generated a project from 0.1.0, read these before adopting this version w
   version adds that project to your solution and two pinned build-only packages.
 - **`GET /invoices/{id}` emits a strong ETag** (`"42"`, was `W/"42"`); `If-None-Match` still compares
   weakly, so a stored tag keeps answering 304.
+- **The audit columns hold the user id.** `CreatedBy` and `ModifiedBy` are stamped with the acting
+  user's id instead of their e-mail; the migration job still writes `system`. There is no migration:
+  rows written before keep the e-mail they were stamped with, so a report that matched the columns
+  against an address has to handle both, and an erasure request still finds the old rows by e-mail.
+- **Log filters on the outcome line's category change.** Each use case now logs under its own
+  command or query type (`Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery`)
+  instead of `Trellis.SharedKernel.Decorators.LoggingDecorators.CommandHandler`/`.QueryHandler`. A
+  `Logging:LogLevel` or `Serilog:MinimumLevel:Override` entry, or a log query, that named the decorator
+  category no longer matches: key it on a feature's namespace, or match the event ids 1001–1099.
 
 ### Added
 
@@ -244,6 +253,39 @@ If you generated a project from 0.1.0, read these before adopting this version w
   column and a filter row, All, Draft, Issued, Paid, Voided and Overdue, kept in the address
   (`invoices?status=Draft`) so the browser's Back returns to the previous filter. The invoice and
   new-invoice pages open with a "Back to invoices" link.
+- **The caller's user id on every request signal** (ADR-0028 third amendment;
+  jasontaylordev/CleanArchitecture): `UserTelemetryMiddleware`, right after `UseAuthentication`, puts a
+  signed-in caller's user id in a `CallerUserId` log scope, which the use-case outcome line and anything
+  a handler logs inherit, and on the request span as `enduser.id`, the OpenTelemetry semantic
+  convention. A 403 from a missing permission writes no log line at the shipped levels, so its span is
+  what names the caller. The id only, never the e-mail; a request without a valid token carries neither.
+  A project of your own that rebuilt the API's pipeline adds `app.UseUserTelemetry()` after
+  `app.UseAuthentication()`.
+- **An opt-in slow-use-case Warning** (ADR-0028 third amendment; jasontaylordev/CleanArchitecture):
+  set `Telemetry:SlowUseCaseThreshold` (a TimeSpan, 1 ms to 1 hour, validated at boot) and a use case
+  that takes at least that long writes event 1007 `UseCaseSlow` at Warning after its outcome line, with
+  its name and elapsed milliseconds only. Unset by default, so nothing changes until you name a
+  threshold. The API now binds the whole `Telemetry` section through the options pattern
+  (`ValidateDataAnnotations().ValidateOnStart()`), and `OptionsConventionTests` polices
+  `UseCaseLoggingOptions` like every other options class.
+- **A one-host deploy quick start** at the top of `docs/deployment.md`, the short, ordered page
+  jasontaylordev/CleanArchitecture's documentation keeps: build the images tagged with the commit,
+  `aspire publish -o deploy`, fill `.env`, `docker compose up -d` (or `aspire deploy`), then probe
+  `/health` and sign in, each step linking the reference section that explains it.
+- **The API's root opens its reference in Development**: `GET /` redirects to `/scalar/v1`
+  (jasontaylordev/CleanArchitecture), so the Aspire dashboard's endpoint link and a bare address land on
+  the API reference instead of a 404. It sits outside `/api/` and out of the OpenAPI document, and
+  outside Development the root stays a 404 (`ApiRootTests`).
+- **`scripts/test-template.sh`** (not in generated projects): Template CI's legs on a maintainer's
+  machine before the push. It reads the legs from `template-ci.yml`'s matrix, packs the template once,
+  installs it into a private hive, then instantiates, builds and tests each named leg (or every leg),
+  prints a table of results and exits 1 on any failure (idea from
+  [jasontaylordev/CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture)'s `build/test.ps1`).
+  `CONTRIBUTING.md` and the `add-toggle` skill use it instead of the manual recipe.
+- **Release notes on nuget.org** (not in generated projects): the package's release notes link to the
+  GitHub release of its version, whose notes are that version's CHANGELOG section
+  (`PackageReleaseNotes` in the pack project; idea from
+  [jasontaylordev/CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture)).
 
 ### Changed
 
@@ -304,6 +346,68 @@ If you generated a project from 0.1.0, read these before adopting this version w
   `Idempotency.InvalidKey` once as `IdempotencyErrors.InvalidKeyCode`, shared by `BlankKey`, `KeyTooLong`
   and `MultipleKeys`; `Api.Common`'s `IdempotencyHeaderErrors` is gone. `RefreshTokenStore` returns
   `AuthErrors.InvalidRefreshToken` instead of a copy of it.
+- **Audit columns** (ADR-0027 amendment; jasontaylordev/CleanArchitecture): `AuditingInterceptor` stamps
+  `CreatedBy` and `ModifiedBy` with `ICurrentUser.UserId`, falling back to the name only for a caller
+  without an id (`system`), so the columns no longer copy each user's e-mail into every row they touch.
+  ADR-0007's 2026-10-11 amendment said a missing user id breaks auditing; it never did, and its
+  2026-10-18 amendment says what a missing id does now.
+- **A log category per use case** (ADR-0028 third amendment; jasontaylordev/CleanArchitecture): the
+  logging decorators take `ILogger<TCommand>`/`ILogger<TQuery>`, so each outcome line is logged under its
+  use case's type and `Logging__LogLevel__Trellis.Application.Features.Invoices=Warning` quiets one
+  feature's success lines (`docs/deployment.md`, *Log levels per feature*). The unit tests'
+  `LogCapture.OutcomeLines` and `SerilogExportTests` match the use-case event ids instead of the category.
+- **Aspire resource names live in `ServiceNames`** (ServiceDefaults), the one place they are spelled:
+  the AppHost declares the database and every service through it, referencing ServiceDefaults with
+  `IsAspireProjectResource="false"` (jasontaylordev/CleanArchitecture), and the API, the migration job,
+  the web host and the tests find a resource through the same constant (`ServiceNames.Cache` with
+  `--use-redis`). A renamed resource is one edit that compiles everywhere; a mistyped literal used to
+  compile and fail at boot.
+- **PostgreSQL keeps running between runs**: the AppHost gives `postgres` a persistent lifetime
+  (Aspire's `WithPersistentLifetime`, as jasontaylordev/CleanArchitecture's AppHost applies it), so
+  `aspire run` and F5 find the database started and healthy instead of waiting for a new container; the
+  data volume is unchanged and pgAdmin stays session-scoped. The Aspire E2E test strips the lifetime with
+  the volume, so it never reuses or recreates your database: the step is `appHost.UseThrowawayDatabase()`
+  (`ApiTests/AppHostTestingExtensions.cs`), which `remove-feature` keeps, so an E2E of your own starts
+  with it too. For a fresh database, remove the `postgres-…` container and the `…-postgres-data` volume
+  (`docs/development.md`).
+- **Visual Studio starts the AppHost**: `Trellis.slnx` marks it `DefaultStartup="true"`
+  (jasontaylordev/CleanArchitecture), so the first F5 after opening the solution runs the whole app
+  instead of failing on `Trellis.SharedKernel`, the first project and a class library. Rider still wants
+  the AppHost picked by hand.
+- **The `web` resource has a health check**: the AppHost polls the web host's `/health`, as it does the
+  API's, so `web` turns healthy in the dashboard, and for anything that waits on it, once it serves
+  rather than once its process starts. The Aspire E2E test waits for it.
+- **What `aspire publish` writes**: the signing key and the first administrator's password are
+  parameters the AppHost declares in publish mode only, so the compose file reads them from `.env`
+  (`SIGNING_KEY`, `SEED_ADMIN_PASSWORD`) instead of needing hand edits, and `aspire publish` and
+  `aspire deploy` ask for them unless the AppHost's configuration holds them
+  (`Parameters:signing-key`, `Parameters:seed-admin-password`). PostgreSQL, the API and the web host
+  get `restart: unless-stopped` (the cache too, with `--use-redis`), and the Aspire dashboard's UI is
+  published on the host's loopback only (`127.0.0.1:18888`, reached over SSH) instead of on every
+  interface. Publish an existing `deploy/` folder again to pick these up: `aspire publish` keeps the
+  values already in `.env`.
+- **The test databases run Debian `postgres:18`**, the image the AppHost, `docker-compose.yml` and a
+  deployment run, instead of `postgres:18-alpine` (`DatabaseFixture`, `ApiFactory`): Alpine's musl libc
+  collates text differently from glibc, so a text sort could pass in a test and differ in production.
+  The first test run pulls the larger image.
+- **Dependabot leaves the next .NET major to you**: `dependabot.yml` ignores major updates of the
+  packages numbered after .NET (`Microsoft.AspNetCore.*`, `Microsoft.EntityFrameworkCore*`,
+  `Microsoft.Extensions.*`, `Npgsql.*`, `dotnet-ef`, `Asp.Versioning.Http`, `Serilog.AspNetCore`) and of
+  the SDK image in `scripts/sdk-image`, as it already did for the SDK in `global.json`. When .NET 11
+  ships, its 11.0 packages no longer turn the weekly `microsoft` group into a major that waits for
+  review and holds back the 10.0.x patches; moving to a new .NET stays one change you make on purpose
+  (`docs/development.md`, *Bumping the SDK*; ADR-0029's amendment of 2026-10-18 records why). Their
+  patch and minor updates arrive as before.
+- **Dependabot's titles follow Conventional Commits**: every update block in `dependabot.yml` sets
+  `commit-message` (`prefix: "build"`, `include: "scope"`), so its pull requests, and the commits
+  they are squash-merged into, read `build(deps): Bump …` in every ecosystem; NuGet's were a bare
+  `Bump …`.
+- **Template CI boots the generated AppHost and tests each option alone** (not in generated projects):
+  the legs that run the generated tests run its Aspire end-to-end test too (`RUN_ASPIRE_E2E=1` on Linux
+  runners), so a renamed AppHost, the Redis wiring and the multi-tenant seed start in CI before a
+  release instead of on a consumer's first push; and three new tested legs switch Redis, Serilog and
+  multi-tenancy on one at a time with the UI off, so every pair of the five options meets in all four
+  value combinations (idea from [jasontaylordev/CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture)).
 
 ### Removed
 
@@ -336,6 +440,15 @@ If you generated a project from 0.1.0, read these before adopting this version w
   request's span.
 - A lower-case quote currency (`usd`) came back from the exchange-rate client as
   `ExchangeRate.UnknownCurrency`; the quote is matched case-insensitively.
+- The Domain's dependency test named only the outer layers, EF Core and ASP.NET Core, so a Domain type
+  could derive from FluentValidation's `AbstractValidator` or take an `ILogger`, both of which the
+  SharedKernel brings along, and nothing failed. `LayerDependencyTests.Domain_depends_only_on_SharedKernel`
+  is now an allow-list (`System.*`, the SharedKernel, the Domain itself), and a planted validator and
+  logger prove it refuses them. The Domain csproj comment and the domain and SharedKernel rules name
+  the three packages the SharedKernel carries.
+- Every `/health` probe queried PostgreSQL twice: Aspire's `EnrichNpgsqlDbContext` registered its own
+  check of `AppDbContext` beside the API's `database` readiness check. The enrichment's copy is switched
+  off (`DisableHealthChecks`), and `HealthCheckTests` pins a single database check named `database`.
 
 ### Security
 - **MessagePack pinned to 2.5.307** ahead of Aspire 13.6.1, which still pulls 2.5.302 through `Aspire.Hosting` and

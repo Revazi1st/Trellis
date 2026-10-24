@@ -10,7 +10,9 @@ namespace Trellis.ApiTests.InProcess;
 /// <summary>
 /// The API host binds the outcome line's opt-in from <c>Telemetry:IncludeErrorDetail</c> (ADR-0028): on in
 /// Development, where <c>appsettings.Development.json</c> turns it on, and off everywhere else, because an
-/// error's description can carry what a user typed and the line is written for every request.
+/// error's description can carry what a user typed and the line is written for every request. The
+/// slow-use-case Warning is off unless <c>Telemetry:SlowUseCaseThreshold</c> names a threshold; an
+/// out-of-range one stops the boot (<c>OptionsConventionTests</c>).
 /// </summary>
 public sealed class UseCaseLoggingOptionsTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
@@ -32,5 +34,17 @@ public sealed class UseCaseLoggingOptionsTests(ApiFactory factory) : IClassFixtu
         using var turnedOff = factory.WithWebHostBuilder(static builder => builder.UseSetting("Telemetry:IncludeErrorDetail", "false"));
 
         turnedOff.Services.GetRequiredService<UseCaseLoggingOptions>().IncludeErrorDetail.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void No_slow_use_case_threshold_is_set_by_default()
+        => factory.Services.GetRequiredService<UseCaseLoggingOptions>().SlowUseCaseThreshold.ShouldBeNull();
+
+    [Fact]
+    public void A_slow_use_case_threshold_is_bound_from_the_Telemetry_section()
+    {
+        using var slow = factory.WithWebHostBuilder(static builder => builder.UseSetting("Telemetry:SlowUseCaseThreshold", "00:00:02"));
+
+        slow.Services.GetRequiredService<UseCaseLoggingOptions>().SlowUseCaseThreshold.ShouldBe(TimeSpan.FromSeconds(2));
     }
 }

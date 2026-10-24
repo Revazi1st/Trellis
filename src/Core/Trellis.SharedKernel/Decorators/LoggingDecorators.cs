@@ -23,18 +23,32 @@ namespace Trellis.SharedKernel.Decorators;
 /// A failure line names the error's type and code, and a <see cref="ValidationError"/> its
 /// <c>field:code</c> pairs; never the description, which can carry what a user typed, unless
 /// <see cref="UseCaseLoggingOptions.IncludeErrorDetail"/> is on (Development). Each kind of line has a
-/// stable event id (1001–1006) for alerts and queries to match on.
+/// stable event id (1001–1006) for alerts and queries to match on. While
+/// <see cref="UseCaseLoggingOptions.SlowUseCaseThreshold"/> is set, a use case that returns a result after at
+/// least that long adds a Warning (1007) after its outcome line; a throw or a cancellation is already its own line.
 /// Validation and the unit-of-work commit run INSIDE this stage, so a rejected request and a failing
 /// commit both still produce their use-case-named line.
+/// <para>
+/// Each use case logs under its own category, its command or query type
+/// (<c>Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery</c>), so a namespace prefix in
+/// <c>Logging:LogLevel</c> sets one feature's level. The logger is injected as <c>ILogger&lt;TCommand&gt;</c>,
+/// not built from an <c>ILoggerFactory</c>, so a container that registers the open generic
+/// <c>ILogger&lt;&gt;</c> (the unit-test harness's capturing logger) sees every line.
+/// </para>
 /// </summary>
 public static partial class LoggingDecorators
 {
     /// <summary>Caps the <c>field:code</c> list so a pathological payload cannot produce a pathological log line.</summary>
     private const int MaxLoggedValidationFailures = 10;
 
+    /// <summary>Why each decorator's logger is typed by the message it wraps, not by the decorator (Sonar S6672).</summary>
+    private const string CategoryPerUseCase =
+        "Each use case logs under its own message type, so a namespace prefix in Logging:LogLevel sets one feature's level (ADR-0028).";
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S6672:Generic logger injection should match enclosing type", Justification = CategoryPerUseCase)]
     public sealed class CommandHandler<TCommand>(
         ICommandHandler<TCommand> inner,
-        ILogger<CommandHandler<TCommand>> logger,
+        ILogger<TCommand> logger,
         UseCaseLoggingOptions options) : ICommandHandler<TCommand>
         where TCommand : ICommand
     {
@@ -42,9 +56,10 @@ public static partial class LoggingDecorators
             => Execute(logger, options, typeof(TCommand).Name, () => inner.Handle(command, cancellationToken), cancellationToken);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S6672:Generic logger injection should match enclosing type", Justification = CategoryPerUseCase)]
     public sealed class CommandHandler<TCommand, TResponse>(
         ICommandHandler<TCommand, TResponse> inner,
-        ILogger<CommandHandler<TCommand, TResponse>> logger,
+        ILogger<TCommand> logger,
         UseCaseLoggingOptions options) : ICommandHandler<TCommand, TResponse>
         where TCommand : ICommand<TResponse>
     {
@@ -52,9 +67,10 @@ public static partial class LoggingDecorators
             => Execute(logger, options, typeof(TCommand).Name, () => inner.Handle(command, cancellationToken), cancellationToken);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S6672:Generic logger injection should match enclosing type", Justification = CategoryPerUseCase)]
     public sealed class QueryHandler<TQuery, TResponse>(
         IQueryHandler<TQuery, TResponse> inner,
-        ILogger<QueryHandler<TQuery, TResponse>> logger,
+        ILogger<TQuery> logger,
         UseCaseLoggingOptions options) : IQueryHandler<TQuery, TResponse>
         where TQuery : IQuery<TResponse>
     {
@@ -74,7 +90,13 @@ public static partial class LoggingDecorators
         try
         {
             TResult result = await handle();
-            LogOutcome(logger, options, useCase, result, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
+            LogOutcome(logger, options, useCase, result, elapsed.TotalMilliseconds);
+            if (options.SlowUseCaseThreshold is { } threshold && elapsed >= threshold)
+            {
+                UseCaseSlow(logger, useCase, elapsed.TotalMilliseconds);
+            }
+
             return result;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -171,4 +193,9 @@ public static partial class LoggingDecorators
     [LoggerMessage(EventId = 1006, EventName = "UseCaseThrew", Level = LogLevel.Error,
         Message = "Use case {UseCase} threw after {ElapsedMilliseconds}ms")]
     private static partial void UseCaseThrew(ILogger logger, Exception exception, string useCase, double elapsedMilliseconds);
+
+    /// <summary>Written after the outcome line while <see cref="UseCaseLoggingOptions.SlowUseCaseThreshold"/> is set and the use case took at least that long.</summary>
+    [LoggerMessage(EventId = 1007, EventName = "UseCaseSlow", Level = LogLevel.Warning,
+        Message = "Use case {UseCase} took {ElapsedMilliseconds}ms, past the slow-use-case threshold")]
+    private static partial void UseCaseSlow(ILogger logger, string useCase, double elapsedMilliseconds);
 }

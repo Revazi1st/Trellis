@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Shouldly;
 using Trellis.Infrastructure.Email;
+using Trellis.ServiceDefaults;
 using Xunit;
 
 namespace Trellis.ArchitectureTests;
@@ -25,6 +26,7 @@ public sealed partial class OptionsConventionTests
 
     private static readonly Assembly[] OptionsAssemblies =
     [
+        Architecture.SharedKernelAssembly,
         Architecture.ApplicationAssembly,
         Architecture.InfrastructureAssembly,
         Architecture.PersistenceAssembly,
@@ -143,6 +145,8 @@ public sealed partial class OptionsConventionTests
     [InlineData("Outbox", "PollInterval", "00:00:00")]
     // In range on its own (1 s .. 1 day) but below the default BaseRetryDelay of 30 s: only the cross-field rule rejects it.
     [InlineData("Outbox", "MaxRetryDelay", "00:00:10", "Outbox:MaxRetryDelay must be >= Outbox:BaseRetryDelay")]
+    [InlineData("Telemetry", "SlowUseCaseThreshold", "00:00:00")]
+    [InlineData("Telemetry", "SlowUseCaseThreshold", "1.00:00:00")]
     public async Task An_out_of_range_setting_stops_the_api_at_boot_naming_the_key(string section, string key, string value, string? expected = null)
     {
         await using BuiltHost host = BuiltHost.Of(typeof(Program).Assembly, [.. ValidArguments(), $"--{section}:{key}={value}"]);
@@ -215,8 +219,10 @@ public sealed partial class OptionsConventionTests
     private static string[] ValidArguments() =>
     [
         "--environment=Production",
-        "--ConnectionStrings:trellis-db=Host=localhost;Database=architecture_tests",
-        "--ConnectionStrings:cache=localhost:6379",
+        $"--ConnectionStrings:{ServiceNames.Database}=Host=localhost;Database=architecture_tests",
+#if (UseRedis)
+        $"--ConnectionStrings:{ServiceNames.Cache}=localhost:6379",
+#endif
         $"--Authentication:SigningKey={SigningKey}",
     ];
 

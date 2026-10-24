@@ -16,8 +16,8 @@ builder.Services.AddSingleton<Trellis.Application.Abstractions.ICurrentUser, Sys
 // AppDbContext and the TenantInterceptor require an ITenantContext; outside an HTTP request there is no tenant.
 builder.Services.AddSingleton<Trellis.Application.Abstractions.ITenantContext, SystemTenantContext>();
 #endif
-builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trellis-db")
-    ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
+builder.Services.AddPersistence(builder.Configuration.GetConnectionString(ServiceNames.Database)
+    ?? throw new InvalidOperationException($"Connection string '{ServiceNames.Database}' is not configured."));
 // AddPersistence already turned on Npgsql's retrying execution strategy, which rides out a database that is
 // still starting. The Aspire enrichment adds health checks, tracing and metrics only, never a second retry
 // policy on top.

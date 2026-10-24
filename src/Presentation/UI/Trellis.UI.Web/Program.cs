@@ -39,10 +39,9 @@ builder.Services.AddRazorComponents()
 // Per-circuit token store (Blazor Server) + shared UI services pointing at the API via service discovery.
 builder.Services.AddScoped<ITokenStore, CircuitTokenStore>();
 builder.Services.AddSharedUi(static (_, client) =>
-    // Not a hardcoded URL: "https+http://api" is an Aspire service-discovery reference resolved to the API's real endpoint at runtime.
-#pragma warning disable S1075
-    client.BaseAddress = new Uri("https+http://api"));
-#pragma warning restore S1075
+    // Not a hardcoded URL: "https+http://" plus the API's resource name is an Aspire service-discovery reference,
+    // resolved to the API's real endpoint at runtime.
+    client.BaseAddress = new Uri($"https+http://{ServiceNames.Api}"));
 
 // A closed circuit takes its tokens with it; this revokes its refresh token at the API as well.
 builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, RevokeSessionOnCircuitClose>());

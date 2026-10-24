@@ -54,28 +54,36 @@ With a local SDK you can also `aspire run` the full app. See
 
 The repository builds and tests itself, but a change can still break the projects the template
 generates: a conditional block, a renamed file, a toggle's off-branch. Template CI
-(`.github/workflows/template-ci.yml`) instantiates every toggle leg, gates the generated content and
-builds and tests the generated solutions, and repeats the default leg on Windows (build and the tests
-that need no Docker). Before pushing a change to `.template.config/`, a
-conditional block, or anything a toggle touches:
+(`.github/workflows/template-ci.yml`) instantiates every toggle leg, gates the generated content,
+builds the generated solutions and tests them (the Aspire E2E that boots each generated AppHost
+included), and repeats the default leg on Windows (build and the tests that need no Docker). Before
+pushing a change to `.template.config/`, a conditional block, or anything a toggle touches, run the
+same legs on your machine (a local .NET SDK and a running Docker):
 
 ```bash
-./scripts/check-template-toggles.sh                       # toggle wiring, directive placement, exclude globs
-dotnet pack eng/Trellis.TemplatePack -c Release -o /tmp/trellis-nupkg
-dotnet new install /tmp/trellis-nupkg/*.nupkg --debug:custom-hive /tmp/trellis-hive
-dotnet new trellis -n Acme.Shop -o /tmp/acme --debug:custom-hive /tmp/trellis-hive \
-    --use-redis true --use-serilog true --use-multitenancy true --include-ui-tests true
-dotnet build /tmp/acme/Acme.Shop.slnx -c Release
+./scripts/test-template.sh --list                # the legs, read from template-ci.yml's matrix
+./scripts/test-template.sh no-ui all-options     # the legs your change touches
+./scripts/test-template.sh                       # every leg (a few minutes each)
 ```
 
-The private hive (`--debug:custom-hive`) keeps the experiment out of your real template list. The
-all-options leg also regenerates the initial migration before building (as `template-ci.yml` does).
+It runs `scripts/check-template-toggles.sh` (toggle wiring, directive placement, exclude globs),
+packs the template once (the working tree as it is, untracked files included), installs the package
+into a private hive (`--debug:custom-hive`, so your real template list stays untouched), and for each
+leg instantiates it with the leg's flags, regenerates the initial migration where the leg does,
+builds Release and runs the tests on the legs Template CI tests. It prints a table of results and
+exits 1 on any failure, keeping the logs and the generated solutions in the folder it names.
+Because it packs, the legs get the package's content, as an install from nuget.org does, where
+Template CI's instantiate job installs the source folder; the two exclude lists that decide those
+contents (`TemplateContentExclude` in the pack project, `sources[0].exclude` in `template.json`) are
+kept in step by hand. `RUN_ASPIRE_E2E=0` skips the Aspire E2E. The content gates (leftovers of the
+template's name, the consumer files, actionlint over the generated workflows) and the Windows leg
+run only in Template CI.
 The `add-toggle` skill covers adding a toggle; `docs/releasing.md` covers releasing.
 
 ## Commit style
 
-Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`). Keep each
-commit green and self-contained.
+Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `ci:`, `build:`; Dependabot's
+are `build(deps):`, set in `.github/dependabot.yml`). Keep each commit green and self-contained.
 
 ## Reporting security issues
 
