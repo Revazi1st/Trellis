@@ -3,7 +3,9 @@
 // becomes <pre class="mermaid"> in markdown-plugins.mjs). The loader is a few hundred bytes on every page;
 // mermaid itself is a chunk of this build, fetched only by a page that has a diagram, never from a CDN.
 // Each diagram is drawn with the Lattice palette of the current theme and redrawn when the theme
-// changes; without JavaScript its source stays readable as text.
+// changes; without JavaScript its source stays readable as text. A diagram fills the column but shrinks
+// to no less than 80 % of its own size: a wider one (the eight lifelines of a sequence diagram) scrolls
+// sideways in its frame rather than shrink its labels past reading.
 import Default from '@astrojs/starlight/components/MarkdownContent.astro';
 ---
 
@@ -50,6 +52,9 @@ import Default from '@astrojs/starlight/components/MarkdownContent.astro';
           theme: 'base',
           fontFamily: "'Geist Variable', system-ui, sans-serif",
           themeVariables: palette(dark),
+          // A long message wraps over a few lines instead of pushing the lifelines apart: unwrapped, the
+          // Invoices sequence diagram is 2,600 px wide, wrapped 1,400.
+          sequence: { wrap: true, width: 170 },
         });
         for (const el of nodes) {
           el.removeAttribute('data-processed');
@@ -57,6 +62,11 @@ import Default from '@astrojs/starlight/components/MarkdownContent.astro';
         }
         // A diagram that fails shows mermaid's error drawing in its place; the others still draw.
         await mermaid.run({ nodes, suppressErrors: true });
+        for (const el of nodes) {
+          const svg = el.querySelector('svg');
+          const width = svg?.viewBox.baseVal?.width; // the diagram's own size, which mermaid caps it at
+          if (svg && width) svg.style.minWidth = `${Math.round(width * 0.8)}px`;
+        }
       }));
     await draw();
     new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

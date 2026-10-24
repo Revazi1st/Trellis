@@ -280,7 +280,9 @@ starlight-toc a[aria-current='true'] {
   color: var(--lt-muted);
 }
 
-/* Mermaid: the source until the script has drawn it. */
+/* Mermaid: the source until the script has drawn it. A drawn diagram fills the column and shrinks to
+   80 % of its own size at most (MarkdownContent.astro sets that floor); a wider one scrolls sideways
+   inside its frame instead of shrinking its labels out of reach. */
 .trellis-mermaid {
   margin-block: 1.25rem;
   padding: 1rem;
@@ -298,11 +300,11 @@ starlight-toc a[aria-current='true'] {
 }
 .trellis-mermaid pre.mermaid[data-processed] {
   display: flex;
-  justify-content: center;
   color: inherit;
 }
 .trellis-mermaid svg {
-  max-width: 100%;
+  flex: none;
+  margin-inline: auto; /* centred while it fits; wider, it starts at the left edge, so all of it scrolls into view */
   height: auto;
 }
 
@@ -568,7 +570,10 @@ starlight-toc a[aria-current='true'] {
   font-size: 13px;
   color: var(--stage-muted);
 }
-.legend {
+/* The ring legends of the stage and the landing's rule. These class names (legend, label, sub) stay
+   scoped to the landing: mermaid draws with the same ones (<g class="label">, a pie chart's legend), and
+   a bare rule would restyle every diagram's text. */
+:is(.glass, .arch) .legend {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -578,12 +583,12 @@ starlight-toc a[aria-current='true'] {
   list-style: none;
   font-size: 12px;
 }
-.legend li {
+:is(.glass, .arch) .legend li {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-.legend i {
+:is(.glass, .arch) .legend i {
   display: inline-block;
   width: 12px;
   height: 12px;
@@ -623,7 +628,7 @@ starlight-toc a[aria-current='true'] {
 .sl-markdown-content section.block {
   padding-block: 40px 8px;
 }
-.sl-markdown-content .label,
+.sl-markdown-content section.block > .label,
 .arch .label {
   margin: 0;
   font-size: 11px;
@@ -638,7 +643,7 @@ starlight-toc a[aria-current='true'] {
 .sl-markdown-content section.block > .sl-heading-wrapper h2 {
   font-size: clamp(1.6rem, 3vw, 2.2rem);
 }
-.sl-markdown-content .sub,
+.sl-markdown-content section.block > .sub,
 .arch .sub {
   max-width: 62ch;
   color: var(--lt-muted);

@@ -49,7 +49,9 @@ derive what frontmatter would have held and adapt the rest:
 - **Architecture** opens with the rings picture, both themes, read from `eng/readme/rings-*.svg` at build
   time (`docs/architecture.md` cannot embed it: `eng/readme/` never ships).
 - **Mermaid**: a `mermaid` fence is drawn as a diagram in the browser, by mermaid from this build: a
-  chunk fetched only by a page that has a diagram.
+  chunk fetched only by a page that has a diagram. A diagram shrinks to fit the column down to 80 % of
+  its own size and scrolls sideways in its frame past that, so its labels stay readable; a sequence
+  diagram's long messages wrap.
 
 The site makes no request to a third party: mermaid, the Geist and Geist Mono fonts and the search index
 are all served from the site itself (the fonts' licence is at `/Trellis/fonts-license.txt`).
