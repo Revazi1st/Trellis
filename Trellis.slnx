@@ -36,7 +36,7 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Trellis.Analyzers/Trellis.Analyzers.csproj" />
-    <Project Path="tools/Trellis.AppHost/Trellis.AppHost.csproj" />
+    <Project Path="tools/Trellis.AppHost/Trellis.AppHost.csproj" DefaultStartup="true" />
     <Project Path="tools/Trellis.MigrationService/Trellis.MigrationService.csproj" />
   </Folder>
   <Folder Name="/tests/">

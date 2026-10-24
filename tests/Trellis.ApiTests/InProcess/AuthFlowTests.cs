@@ -19,6 +19,7 @@ using Shouldly;
 using Trellis.Api.Contracts.Auth;
 using Trellis.Application.Options;
 using Trellis.Persistence.Identity;
+using Trellis.ServiceDefaults;
 using Xunit;
 
 namespace Trellis.ApiTests.InProcess;
@@ -76,7 +77,7 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     public async Task Register_WithTheShippedProductionConfiguration_IsClosed()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
-        string database = factory.Services.GetRequiredService<IConfiguration>().GetConnectionString("trellis-db")!;
+        string database = factory.Services.GetRequiredService<IConfiguration>().GetConnectionString(ServiceNames.Database)!;
 
         // Deliberately not an ApiFactory: every fixture states Registration:Mode=Open, and a host setting
         // cannot be unset (a null value reaches the app as an empty string). This host is Production,
@@ -85,7 +86,7 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         await using var unconfigured = new WebApplicationFactory<apihost::Program>();
         WebApplicationFactory<apihost::Program> shipped = unconfigured.WithWebHostBuilder(builder => builder
             .UseEnvironment(Environments.Production)
-            .UseSetting("ConnectionStrings:trellis-db", database)
+            .UseSetting($"ConnectionStrings:{ServiceNames.Database}", database)
             .UseSetting("Authentication:SigningKey", ApiFactory.SigningKey));
 
         // The committed value, not merely the enum's default: deleting the line from appsettings.json fails here.

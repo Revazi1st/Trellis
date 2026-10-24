@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Shouldly;
 using Trellis.Infrastructure.Email;
+using Trellis.ServiceDefaults;
 using Xunit;
 
 namespace Trellis.ArchitectureTests;
@@ -215,8 +216,10 @@ public sealed partial class OptionsConventionTests
     private static string[] ValidArguments() =>
     [
         "--environment=Production",
-        "--ConnectionStrings:trellis-db=Host=localhost;Database=architecture_tests",
-        "--ConnectionStrings:cache=localhost:6379",
+        $"--ConnectionStrings:{ServiceNames.Database}=Host=localhost;Database=architecture_tests",
+#if (UseRedis)
+        $"--ConnectionStrings:{ServiceNames.Cache}=localhost:6379",
+#endif
         $"--Authentication:SigningKey={SigningKey}",
     ];
 

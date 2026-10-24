@@ -29,6 +29,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- A library, not a resource: IsAspireProjectResource="false" makes this an ordinary reference the
+         AppHost compiles against (the ServiceNames constants), where every other reference here is a
+         project Aspire runs. -->
+    <ProjectReference Include="..\..\src\Shared\Trellis.ServiceDefaults\Trellis.ServiceDefaults.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api\Trellis.Api.csproj" />
     <!--#if (IncludeUI) -->
     <ProjectReference Include="..\..\src\Presentation\UI\Trellis.UI.Web\Trellis.UI.Web.csproj" />
