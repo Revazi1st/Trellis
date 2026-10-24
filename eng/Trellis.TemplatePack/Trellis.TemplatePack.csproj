@@ -41,7 +41,8 @@
          CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, CODEOWNERS, issue forms, the release runbook)
          are maintainer material: generated projects get the stubs in
          .template.config/consumer/ instead. So is the documentation site (site/, its node_modules
-         and build output included, and the site.yml workflow that deploys it). template.json
+         and build output included, the site.yml workflow that deploys it, and its decision
+         record, ADR-0031, whose docs/INDEX.md line is a TemplateSource block). template.json
          itself is listed because the package carries the stamped copy (StampTemplateVersion
          below). -->
     <TemplateContentExclude>
@@ -66,6 +67,7 @@
       ..\..\scripts\check-template-toggles.sh;
       ..\..\scripts\test-template.sh;
       ..\..\docs\releasing.md;
+      ..\..\docs\adr\0031-documentation-site.md;
       ..\..\README.md;
       ..\..\CHANGELOG.md;
       ..\..\CONTRIBUTING.md;

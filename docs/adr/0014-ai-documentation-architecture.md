@@ -2,6 +2,9 @@
 
 - **Status**: accepted
 - **Date**: 2026-07-15
+<!--#if (TemplateSource) -->
+- **Amended**: 2026-10-25 — the one doc set is also rendered as the template's website, from `docs/` in place (see *Amendment* below)
+<!--#endif -->
 
 ## Context
 
@@ -22,3 +25,13 @@ The repo must be first-class for AI coding agents (Claude Code especially) witho
 - Instructions work across Claude Code and other agents from one source.
 - Feature docs can't silently drift from feature code (CI gate; override via the `docs-not-needed` label).
 - Adding a convention means adding or editing a rule file, not enlarging a monolith.
+<!--#if (TemplateSource) -->
+
+## Amendment (2026-10-25): the website renders the same doc set
+
+The template's repository publishes `docs/` as its documentation website (ADR-0031). Astro and
+Starlight render the files where they are, with no copy and nothing added to them, so the rule above
+still holds: one doc set, which people read on GitHub and on the site and agents read in the repository.
+A doc stays plain GitHub Markdown; the site's build adapts it (titles, links, the conditionals) and fails
+on a link or an anchor that points nowhere. A generated project gets neither the site nor this amendment.
+<!--#endif -->

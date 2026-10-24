@@ -372,6 +372,7 @@
         "scripts/check-template-toggles.sh",
         "scripts/test-template.sh",
         "docs/releasing.md",
+        "docs/adr/0031-documentation-site.md",
         "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",

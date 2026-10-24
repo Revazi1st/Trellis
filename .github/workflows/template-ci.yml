@@ -207,7 +207,8 @@ jobs:
             fail=1
           fi
           for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md eng/readme \
-                   scripts/check-template-toggles.sh scripts/test-template.sh site .github/workflows/site.yml; do
+                   scripts/check-template-toggles.sh scripts/test-template.sh site .github/workflows/site.yml \
+                   docs/adr/0031-documentation-site.md; do
             if [ -e "$f" ]; then
               echo "::error::$f is the template repository's own material and must not ship."
               fail=1
