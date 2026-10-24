@@ -622,6 +622,8 @@ describes planned work that is not in the template yet; the marker goes when it 
   - a persistent-lifetime database container in the AppHost, Aspire's guidance as his AppHost applies it;
   - one resource-name constants class referenced by the AppHost through an `IsAspireProjectResource="false"` reference (`Shared/Services.cs`);
   - `DefaultStartup="true"` on the AppHost in the `.slnx`;
+  - logging each use case under its own request type's category (`ILogger<TRequest>`), the acting user's id on every request's log line, and a slow use case surfaced at Warning past a threshold (`LoggingBehaviour`, `PerformanceBehaviour`);
+  - stamping audit columns with the user's id rather than a display name (`AuditableEntityInterceptor`);
   - opening the API's root on its Scalar reference;
   - a short, ordered deployment page in Getting started.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).

@@ -45,6 +45,15 @@ If you generated a project from 0.1.0, read these before adopting this version w
   version adds that project to your solution and two pinned build-only packages.
 - **`GET /invoices/{id}` emits a strong ETag** (`"42"`, was `W/"42"`); `If-None-Match` still compares
   weakly, so a stored tag keeps answering 304.
+- **The audit columns hold the user id.** `CreatedBy` and `ModifiedBy` are stamped with the acting
+  user's id instead of their e-mail; the migration job still writes `system`. There is no migration:
+  rows written before keep the e-mail they were stamped with, so a report that matched the columns
+  against an address has to handle both, and an erasure request still finds the old rows by e-mail.
+- **Log filters on the outcome line's category change.** Each use case now logs under its own
+  command or query type (`Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery`)
+  instead of `Trellis.SharedKernel.Decorators.LoggingDecorators.CommandHandler`/`.QueryHandler`. A
+  `Logging:LogLevel` or `Serilog:MinimumLevel:Override` entry, or a log query, that named the decorator
+  category no longer matches: key it on a feature's namespace, or match the event ids 1001–1099.
 
 ### Added
 
@@ -240,6 +249,21 @@ If you generated a project from 0.1.0, read these before adopting this version w
   column and a filter row, All, Draft, Issued, Paid, Voided and Overdue, kept in the address
   (`invoices?status=Draft`) so the browser's Back returns to the previous filter. The invoice and
   new-invoice pages open with a "Back to invoices" link.
+- **The caller's user id on every request signal** (ADR-0028 third amendment;
+  jasontaylordev/CleanArchitecture): `UserTelemetryMiddleware`, right after `UseAuthentication`, puts a
+  signed-in caller's user id in a `CallerUserId` log scope, which the use-case outcome line and anything
+  a handler logs inherit, and on the request span as `enduser.id`, the OpenTelemetry semantic
+  convention. A 403 from a missing permission writes no log line at the shipped levels, so its span is
+  what names the caller. The id only, never the e-mail; a request without a valid token carries neither.
+  A project of your own that rebuilt the API's pipeline adds `app.UseUserTelemetry()` after
+  `app.UseAuthentication()`.
+- **An opt-in slow-use-case Warning** (ADR-0028 third amendment; jasontaylordev/CleanArchitecture):
+  set `Telemetry:SlowUseCaseThreshold` (a TimeSpan, 1 ms to 1 hour, validated at boot) and a use case
+  that takes at least that long writes event 1007 `UseCaseSlow` at Warning after its outcome line, with
+  its name and elapsed milliseconds only. Unset by default, so nothing changes until you name a
+  threshold. The API now binds the whole `Telemetry` section through the options pattern
+  (`ValidateDataAnnotations().ValidateOnStart()`), and `OptionsConventionTests` polices
+  `UseCaseLoggingOptions` like every other options class.
 - **A one-host deploy quick start** at the top of `docs/deployment.md`, the short, ordered page
   jasontaylordev/CleanArchitecture's documentation keeps: build the images tagged with the commit,
   `aspire publish -o deploy`, fill `.env`, `docker compose up -d` (or `aspire deploy`), then probe
@@ -318,6 +342,16 @@ If you generated a project from 0.1.0, read these before adopting this version w
   `Idempotency.InvalidKey` once as `IdempotencyErrors.InvalidKeyCode`, shared by `BlankKey`, `KeyTooLong`
   and `MultipleKeys`; `Api.Common`'s `IdempotencyHeaderErrors` is gone. `RefreshTokenStore` returns
   `AuthErrors.InvalidRefreshToken` instead of a copy of it.
+- **Audit columns** (ADR-0027 amendment; jasontaylordev/CleanArchitecture): `AuditingInterceptor` stamps
+  `CreatedBy` and `ModifiedBy` with `ICurrentUser.UserId`, falling back to the name only for a caller
+  without an id (`system`), so the columns no longer copy each user's e-mail into every row they touch.
+  ADR-0007's 2026-10-11 amendment said a missing user id breaks auditing; it never did, and its
+  2026-10-18 amendment says what a missing id does now.
+- **A log category per use case** (ADR-0028 third amendment; jasontaylordev/CleanArchitecture): the
+  logging decorators take `ILogger<TCommand>`/`ILogger<TQuery>`, so each outcome line is logged under its
+  use case's type and `Logging__LogLevel__Trellis.Application.Features.Invoices=Warning` quiets one
+  feature's success lines (`docs/deployment.md`, *Log levels per feature*). The unit tests'
+  `LogCapture.OutcomeLines` and `SerilogExportTests` match the use-case event ids instead of the category.
 - **Aspire resource names live in `ServiceNames`** (ServiceDefaults), the one place they are spelled:
   the AppHost declares the database and every service through it, referencing ServiceDefaults with
   `IsAspireProjectResource="false"` (jasontaylordev/CleanArchitecture), and the API, the migration job,
@@ -402,6 +436,12 @@ If you generated a project from 0.1.0, read these before adopting this version w
   request's span.
 - A lower-case quote currency (`usd`) came back from the exchange-rate client as
   `ExchangeRate.UnknownCurrency`; the quote is matched case-insensitively.
+- The Domain's dependency test named only the outer layers, EF Core and ASP.NET Core, so a Domain type
+  could derive from FluentValidation's `AbstractValidator` or take an `ILogger`, both of which the
+  SharedKernel brings along, and nothing failed. `LayerDependencyTests.Domain_depends_only_on_SharedKernel`
+  is now an allow-list (`System.*`, the SharedKernel, the Domain itself), and a planted validator and
+  logger prove it refuses them. The Domain csproj comment and the domain and SharedKernel rules name
+  the three packages the SharedKernel carries.
 - Every `/health` probe queried PostgreSQL twice: Aspire's `EnrichNpgsqlDbContext` registered its own
   check of `AppDbContext` beside the API's `database` readiness check. The enrichment's copy is switched
   off (`DisableHealthChecks`), and `HealthCheckTests` pins a single database check named `database`.

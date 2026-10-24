@@ -1,3 +1,5 @@
+using FluentValidation;
+using Microsoft.Extensions.Logging;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Messaging;
 using Trellis.SharedKernel.Results;
@@ -24,6 +26,18 @@ internal static class PlantedViolations
                 await next.Handle(command, cancellationToken),
                 await later().Handle(command, cancellationToken),
                 await unitOfWork.CommitAsync(cancellationToken));
+    }
+
+    /// <summary>
+    /// A domain-shaped rule written as a FluentValidation validator: the SharedKernel references FluentValidation,
+    /// so the Domain compiles against it, and only the dependency rule keeps it out.
+    /// </summary>
+    internal sealed class ValidatorInTheDomain : AbstractValidator<Command>;
+
+    /// <summary>A domain-shaped type that logs: Microsoft.Extensions.Logging reaches the Domain through the SharedKernel too.</summary>
+    internal sealed class LoggerInTheDomain(ILogger<LoggerInTheDomain> logger)
+    {
+        public ILogger Logger { get; } = logger;
     }
 
     /// <summary>A value object whose factory a positional constructor and init accessors let callers bypass.</summary>

@@ -301,7 +301,7 @@ look at, never a pass.
 | An invoice in a given state against PostgreSQL | `await Services.CreateInvoiceAsync()`, `IssuedInvoiceAsync()`, `PayInvoiceAsync(id)` (`InvoiceDriver`; on a fresh scope's `ServiceProvider` for a separate unit of work) | `OutboxTests` |
 | An invoice over HTTP in an arrange step | `await client.CreateInvoiceAsync()`, `AddInvoiceLineAsync(id)`, `IssueInvoiceAsync(id, dueDate)` (`InvoiceHttpDriver`) | `ProblemDetailsContractTests` |
 | A POST the drivers do not cover (a test about the create's own answer) | `PostWithIdempotencyKeyAsync` | `InvoiceContractTests` |
-| Acting as another user against PostgreSQL | `IntegrationTestBase.CurrentUser` (`TestCurrentUser`): set its `UserName` or `UserId` | `AuditingInterceptorTests` |
+| Acting as another user against PostgreSQL | `IntegrationTestBase.CurrentUser` (`TestCurrentUser`): set its `UserId` (`null` and a `UserName` for a caller without an id, like the migration job) | `AuditingInterceptorTests` |
 | A `Result` that must have succeeded | `ShouldBeSuccess()` (`tests/TestSupport/ResultAssertions.cs`), which returns a `Result<T>`'s value and on failure names the error | `InvoiceTests` (the message: `ResultAssertionsTests`) |
 | A problem response, header and body | `ShouldBeProblemJson()`, then read `ProblemResponse` | `ProblemDetailsContractTests` |
 | A new status or problem `code` | a row in `ProblemDetailsContractTests` | — |
@@ -348,8 +348,10 @@ Every problem response carries `traceId` and `code`. Start from the `traceId`, n
 which may be a value the caller chose: in the Aspire dashboard (or your OTLP backend) it finds the
 request's trace, the use-case span with `trellis.usecase.outcome`, `trellis.usecase.error_code` and
 `trellis.usecase.error_type`, and the outcome line logged inside it (events 1001–1006, `docs/deployment.md`
-has the telemetry reference). Then let the `code` name the stage that refused the request (the stage
-table is in [architecture.md](architecture.md#a-request-stage-by-stage)):
+has the telemetry reference). A report without a `traceId` ("it failed for me this morning") starts from
+the user's id instead: a signed-in caller's lines carry it in the `CallerUserId` scope and their request
+spans as `enduser.id`. Then let the `code` name the stage that refused the request (the stage table is in
+[architecture.md](architecture.md#a-request-stage-by-stage)):
 
 | `code` | Refused by |
 |---|---|

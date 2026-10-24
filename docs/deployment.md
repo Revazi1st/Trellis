@@ -178,6 +178,7 @@ fails the rollout, not the first request.
 | `Kestrel__Limits__MaxRequestBodySize` / `Kestrel__Limits__MaxRequestHeadersTotalSize` | no | Request caps in bytes: 1 MB body (larger → 413) and 32 KB of headers by default. Raise per endpoint for a real upload, not globally. |
 | `Cors__AllowedOrigins__0…` | if browsers call cross-origin | Allowed origins; **none by default** (same-origin only). |
 | `Telemetry__IncludeErrorDetail` | no — Development only | `true` appends `Error.Description` to the use-case outcome line of a failure (event 1004 instead of 1002). Only `appsettings.Development.json` sets it; leave it unset elsewhere, because a description can repeat what a user typed or what a third party wrote, and the line is written at Information for every request. The error type and code identify the failure without it, and the response carries the text. |
+| `Telemetry__SlowUseCaseThreshold` | no — off by default | A TimeSpan (`00:00:02`): a use case that takes at least this long writes a Warning after its outcome line, event 1007 `UseCaseSlow`, with its name and elapsed milliseconds and nothing else. Unset, none is written: a Warning means something unexpected, and only you know what slow means here. Timed like the outcome line's `ElapsedMilliseconds`, from validation through the handler to the commit; a use case that throws or is cancelled already has its own line with the time. 1 ms to 1 hour; anything else stops the API at boot, naming the key. |
 | `Retention__*` | no | Janitor windows for the bookkeeping tables: `SweepInterval` (1h; 1 s – 1 day), `InitialDelay` before the first sweep (1m; 0 – 1h), `ProcessedOutboxAge` (3d; ≥ 1h), `DeadLetteredOutboxAge` (30d; ≥ 1 day), `IdempotencyKeyAge` (2d; ≥ 1h), `DeadRefreshTokenAge` (30d; ≥ 1 day — keep it ≥ `Authentication__RefreshTokenDays`, a consumed token is what makes a replay detectable). Every window is capped at 365 days. TimeSpan format, e.g. `7.00:00:00`. A value out of range stops the API at boot, naming the key. |
 | `Outbox__*` | no | The outbox processor (ADR-0023): `PollInterval` (5 s; 100 ms – 10 min) between polls once a batch came back short, `BatchSize` (20; 1 – 1000) rows per claim, `MaxAttempts` (8; 1 – 50) failures before a message is dead-lettered, `BaseRetryDelay` (30 s; 1 s – 1 h) doubling per failure up to `MaxRetryDelay` (15 min; 1 s – 1 day, and ≥ `BaseRetryDelay`), `DispatchTimeout` (30 s; 1 s – 10 min) per message's handlers. Defaults retry after 30 s, 1 m, 2 m, 4 m, 8 m, 15 m, 15 m and dead-letter about 45 minutes after the first failure. A claimed row is leased for `DispatchTimeout × (BatchSize + 1)` (10.5 min): after a **crash** its in-flight rows reappear within that long (a graceful stop releases them at once) — shorten `BatchSize` or `DispatchTimeout` to shorten it. The lease is also the fence: a processor still working on a row after its lease was claimed again writes nothing more to it (the attempt is booked `lease_lost`), so a stale replica cannot undo the new owner's bookkeeping. TimeSpan format. A value out of range stops the API at boot, naming the key. |
 
@@ -212,12 +213,27 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every host exports logs, metrics and trace
 - **Correlation**: every API response carries `X-Correlation-ID` — the caller's own value when it
   is short and safe, else the request's W3C trace id, the same trace a problem body's `traceId`
   names. The request span carries it as `trellis.correlation_id`.
+- **Who sent it**: in an authenticated request the request span carries `enduser.id`, the caller's user
+  id, and every log line written further in carries the same id in the `CallerUserId` scope: the use-case
+  outcome line, a rejected command's included, and whatever a handler logs. A 403 from authorization
+  writes no line at the shipped levels (ASP.NET Core logs the failure at Information under
+  `Microsoft.AspNetCore`, which `appsettings.json` holds at Warning; Development lowers it, and there that
+  line carries the scope too), so its request span, with `enduser.id` and the status code, is the record.
+  The id only, never the e-mail; an anonymous request carries neither. Search logs by `CallerUserId` and
+  traces by `enduser.id`.
+- **Log levels per feature**: a use case's outcome line is logged under its own command or query type
+  (`Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery`), and a handler that logs does
+  so under its own type in the same namespace, so a namespace prefix sets one feature's level:
+  `Logging__LogLevel__Trellis.Application.Features.Invoices=Warning` keeps the Invoices feature's Warning
+  and Error lines and drops its successes and expected failures (Information); its spans and metrics are
+  unaffected.
 <!--#if (UseSerilog) -->
 - **Serilog** (the `UseSerilog` toggle): Serilog writes the console and hands every event on to the
   OpenTelemetry log provider, so OTLP log export is unchanged. Its levels come from the `Serilog`
   section (`MinimumLevel:Default` and `MinimumLevel:Override:<category>`), which mirrors
   `Logging:LogLevel` but is not read from it: change both, e.g.
-  `Serilog__MinimumLevel__Override__Microsoft.AspNetCore=Information`.
+  `Serilog__MinimumLevel__Override__Microsoft.AspNetCore=Information`, or for the feature above
+  `Serilog__MinimumLevel__Override__Trellis.Application.Features.Invoices=Warning`.
 <!--#endif -->
 
 Worth alerting on:
@@ -247,6 +263,10 @@ Worth alerting on:
   circuit opened; calls fail fast until it closes.
 - `microsoft.entityframeworkcore.optimistic_concurrency_failures` — a rising rate means clients
   keep writing stale versions (each one is a 409).
+- Event 1007 `UseCaseSlow` (Warning), once you have set `Telemetry__SlowUseCaseThreshold` — a use
+  case took at least that long; the line names it, and the outcome line beside it says how it ended.
+  Without a metrics backend this is how a use case that slowed from 50 ms to 5 s gets noticed; with one,
+  ASP.NET Core's `http.server.request.duration` by route already charts it.
 - Outbox dispatch spans rejoin the originating request's trace (`traceparent` is persisted with
   the message), so a failed handler is visible under the request that caused it.
 
@@ -289,9 +309,9 @@ Change the two together.
 | `Trellis.UseCases` | one per use case, named after its message type (`CreateInvoiceCommand`), inside the request span | `trellis.usecase.outcome`: `success`, `failure`, `exception` or `cancelled`. A failed `Result` adds `trellis.usecase.error_code` (its code) and `trellis.usecase.error_type` (its `ErrorType`), not `error.type`, so a 404 does not count as an error. Only an exception sets `error.type` (its full type name), status Error with its message, and the exception event |
 | `Trellis.Outbox` | `outbox <event type>` (`outbox invoices.paid.v1`), one per dispatch attempt, under the trace of the request that raised the event | `trellis.outbox.message_id`, `trellis.outbox.event_type`, `trellis.outbox.attempt` (from 1), `trellis.outbox.outcome`: `processed`, `retry_scheduled`, `dead_lettered` or `lease_lost`; `trellis.outbox.reason` on a dead letter: `exhausted`, `unknown_type` or `poison`; `error.type`: the failing exception's full type name, or the `Outbox.*` code of an unreadable row |
 | `Trellis.MigrationService` | `Migrate and seed database`, once per run | — |
+| `Microsoft.AspNetCore` | the HTTP request (ASP.NET Core's span), the parent of its use-case span | `trellis.correlation_id`: the response's `X-Correlation-ID`; `enduser.id`: the authenticated caller's user id (the `Guid`, never the e-mail), absent on an anonymous request |
 
-The ASP.NET Core request span carries `trellis.correlation_id`, the response's `X-Correlation-ID`. Every
-signal's resource carries `service.version` and `deployment.environment.name` (*Who emits it*, above).
+Every signal's resource carries `service.version` and `deployment.environment.name` (*Who emits it*, above).
 
 **Metrics**
 
@@ -311,10 +331,18 @@ signal's resource carries `service.version` and `deployment.environment.name` (*
 
 | Range | Written by | Events |
 |---|---|---|
-| 10xx | the use-case outcome line (`LoggingDecorators`), one per invocation inside the `UseCase {UseCase}` scope, with `ElapsedMilliseconds` | 1001 succeeded (Information); 1002 failed, with `ErrorType` and `ErrorCode`; 1003 failed validation, adding the `ValidationFailures` field:code pairs; 1004 failed with `ErrorDescription`, only while `Telemetry__IncludeErrorDetail` is on; 1005 cancelled by the caller (Information); 1006 threw (Error, with the exception). 1002–1004 are Information for a classified 4xx outcome and Warning otherwise |
+| 10xx | the use-case logging stage (`LoggingDecorators`, category: the use case's command or query type): one outcome line per invocation inside the `UseCase {UseCase}` scope, with `ElapsedMilliseconds` | 1001 succeeded (Information); 1002 failed, with `ErrorType` and `ErrorCode`; 1003 failed validation, adding the `ValidationFailures` field:code pairs; 1004 failed with `ErrorDescription`, only while `Telemetry__IncludeErrorDetail` is on; 1005 cancelled by the caller (Information); 1006 threw (Error, with the exception). 1002–1004 are Information for a classified 4xx outcome and Warning otherwise. 1007 slow (Warning, after the outcome line, only while `Telemetry__SlowUseCaseThreshold` is set): the use case took at least that long |
 | 11xx | the security events (`SecurityEventLog`) | 1101–1106, listed in [features/auth.md](features/auth.md) under *Security events* |
 | 12xx | e-mail (`Infrastructure/Email`) | 1201 not sent, the `Logging` stand-in (Information); 1202 discarded, `None` (Debug); 1203 the stand-in runs outside Development (Warning); 1204 e-mail switched off (Information); 1205 sent through the relay (Information, masked recipient); 1206 SMTP in clear outside Development (Warning) |
 | 13xx | the outbox processor (`OutboxLog`); a message's lines inside the `OutboxMessage {MessageId} {EventType}` scope | 1301–1309, listed under [Outbox operations](#outbox-operations) |
+
+**Log scopes** — every line written inside the API's pipeline carries `CorrelationId` (the response's
+`X-Correlation-ID`), and every line written past authentication in a signed-in caller's request carries
+`CallerUserId` (their user id, the request span's `enduser.id`). The exception handler's line is written
+further out, so it has `CorrelationId` and the trace but not `CallerUserId`; a use case that throws has
+its own line inside the scope (1006). A `UserId` field, as in the security events, is the account a line
+is about, which need not be the caller; no message uses `CallerUserId` (`TelemetryNamingTests`), so a
+record never holds two user ids under one key.
 
 ### Outbox operations
 
