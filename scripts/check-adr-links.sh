@@ -15,10 +15,11 @@ fail=0
 
 # --- every ADR reference resolves to a file ---
 # The same prune list as the link check below: a git worktree under .claude/worktrees (an agent
-# working on another branch) or a build folder must not make this checkout's references fail.
+# working on another branch), a build folder or the template repository's documentation site (site/,
+# which links the site's own routes and never ships) must not make this checkout's references fail.
 refs=$(grep -rhoE 'ADR-[0-9]{4}' --include='*.md' --include='*.cs' --include='*.props' \
   --exclude-dir=.git --exclude-dir=worktrees --exclude-dir=artifacts --exclude-dir=bin --exclude-dir=obj \
-  --exclude-dir=node_modules --exclude-dir=TestResults . \
+  --exclude-dir=node_modules --exclude-dir=TestResults --exclude-dir=site . \
   | sed 's/ADR-//' | sort -u)
 
 existing=$(find docs/adr -name '*.md' -exec basename {} \; | grep -oE '^[0-9]{4}' | sort -u)
@@ -148,7 +149,7 @@ md_links() {  # prints "line<TAB>target" for each link in one Markdown file
 }
 
 md_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./.template.config/consumer \
-    -o -path ./artifacts -o -name node_modules -o -name bin -o -name obj -o -name TestResults \) -prune \
+    -o -path ./site -o -path ./artifacts -o -name node_modules -o -name bin -o -name obj -o -name TestResults \) -prune \
     -o -type f -name '*.md' -print | sed 's|^\./||' | sort)
 
 while IFS= read -r f; do
