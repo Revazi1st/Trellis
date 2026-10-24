@@ -80,7 +80,9 @@ jobs:
   build:
     name: Build and validate
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.site == 'true') }}
+    # Skipped only on an explicit "no": when the comparison itself fails (or did not run, outside a pull
+    # request), the site is built, so a broken changes job can never pass the required check as skipped.
+    if: ${{ !cancelled() && needs.changes.outputs.site != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
