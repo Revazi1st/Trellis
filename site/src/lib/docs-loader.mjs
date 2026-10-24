@@ -130,13 +130,15 @@ function scopedStore(store, prefix) {
 }
 
 /**
- * Newest commit date per file under docs/, in one `git log` (what Starlight does for src/content/docs).
+ * Newest commit date per file under docs/, in one `git log`, as Starlight does for src/content/docs (its
+ * own lookup covers only that folder). --first-parent dates a change by when it reached the branch being
+ * built (a merge commit's date, not the date on the branch it came from); the newest date per file wins.
  * Opt-in (TRELLIS_SITE_LASTUPDATED=git): it needs the full history, `fetch-depth: 0` in CI.
  */
 function gitDates(logger) {
   const dates = new Map();
   try {
-    const out = execFileSync('git', ['log', '--format=t:%ct', '--name-only', '--', 'docs'], {
+    const out = execFileSync('git', ['log', '--first-parent', '--format=t:%ct', '--name-only', '--', 'docs'], {
       cwd: repoRoot,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
@@ -144,8 +146,9 @@ function gitDates(logger) {
     let time = 0;
     for (const line of out.split('\n')) {
       if (line.startsWith('t:')) time = Number(line.slice(2)) * 1000;
-      else if (line && !dates.has(line)) dates.set(line, new Date(time));
+      else if (line && time > (dates.get(line)?.getTime() ?? 0)) dates.set(line, new Date(time));
     }
+    logger.info(`lastUpdated: commit dates for ${dates.size} files under docs/`);
   } catch (error) {
     logger.warn(`lastUpdated: git log failed (${error.message}); pages show no date`);
   }

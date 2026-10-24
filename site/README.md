@@ -60,7 +60,7 @@ Environment variables the build reads (all optional):
 |---|---|---|
 | `TRELLIS_SITE_REF` | `main` | The ref the GitHub links point at (files outside `docs/`, excerpts). |
 | `TRELLIS_SITE_CONDITIONALS` | `label` | `defaults` renders the docs the way `dotnet new trellis` with no options writes them: each conditional block evaluated against the defaults, with no asides. |
-| `TRELLIS_SITE_LASTUPDATED` | unset | `git` shows each page's last commit date, read from `git log`; it needs the full history (`fetch-depth: 0` in CI). |
+| `TRELLIS_SITE_LASTUPDATED` | unset | `git` shows "Last updated" on every doc: the date its last change reached the branch being built (`git log --first-parent`, so a merge counts by its own date). It needs the full history (`fetch-depth: 0` in CI). Starlight dates the site's own pages either way. |
 | `TRELLIS_REPO_ROOT` | `..` | Where the repository is, for a checkout of the site outside it. |
 
 For example, `TRELLIS_SITE_CONDITIONALS=defaults npm run build` checks that the docs read well without
