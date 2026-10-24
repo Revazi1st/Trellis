@@ -3,8 +3,15 @@ name: Dependabot auto-merge
 # Dependabot's patch and minor bumps of NuGet packages, images and dev-container features merge on
 # their own once every required check is green. Everything else waits for a person: a major, or a
 # group that contains one; a .NET SDK bump (Dependabot calls a feature-band jump a patch, yet it
-# raises the SDK every contributor and generated project needs); and the GitHub Actions group,
-# whose pull request edits workflow files, which the Actions token is never allowed to merge.
+# raises the SDK every contributor and generated project needs); any npm update, whose JavaScript
+# toolchain can change a build in ways the required checks do not show; and the GitHub Actions
+# group, whose pull request edits workflow files, which the Actions token is never allowed to merge.
+#if (TemplateSource)
+#
+# Template source only: the npm updates are the documentation site's (site/, ADR-0031). Astro and
+# Starlight are 0.x and the site's build leans on their internals, so every npm bump waits, the
+# simplest rule that keeps theirs by hand.
+#endif
 #
 # What makes this safe enough:
 #   - dependabot.yml holds new versions back for a week (cooldown: version updates only, a security
@@ -73,6 +80,7 @@ jobs:
           (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
            steps.metadata.outputs.update-type == 'version-update:semver-minor') &&
           steps.metadata.outputs.package-ecosystem != 'dotnet_sdk' &&
+          steps.metadata.outputs.package-ecosystem != 'npm_and_yarn' &&
           steps.metadata.outputs.package-ecosystem != 'github_actions'
         run: |
           # With required checks on the base branch, gh either enables auto-merge (checks still
@@ -86,6 +94,7 @@ jobs:
           steps.setup.outputs.ready == 'true' &&
           (steps.metadata.outputs.update-type == 'version-update:semver-major' ||
            steps.metadata.outputs.package-ecosystem == 'dotnet_sdk' ||
+           steps.metadata.outputs.package-ecosystem == 'npm_and_yarn' ||
            steps.metadata.outputs.package-ecosystem == 'github_actions')
         env:
           NAMES: ${{ steps.metadata.outputs.dependency-names }}
@@ -94,4 +103,4 @@ jobs:
         run: |
           # An earlier run may have enabled auto-merge; a recreate can change the versions in place.
           gh pr merge --disable-auto "$PR_URL" 2>/dev/null || true
-          echo "::notice title=Review this update::$NAMES ($ECOSYSTEM, $KIND) is merged by hand: a major version, a .NET SDK bump, or the GitHub Actions group."
+          echo "::notice title=Review this update::$NAMES ($ECOSYSTEM, $KIND) is merged by hand: a major version, a .NET SDK bump, an npm update, or the GitHub Actions group."

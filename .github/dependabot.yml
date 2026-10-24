@@ -176,3 +176,28 @@ updates:
       include: "scope"
     cooldown:
       default-days: 7
+#if (TemplateSource)
+
+  # Template source only: the documentation site's npm packages (site/, ADR-0031), which a generated
+  # project never has. None of these pull requests merges on its own (dependabot-auto-merge.yml waits
+  # for a person on every npm update): Astro and Starlight are 0.x and the site's build leans on their
+  # internals, so a bump is read, built and looked at first. The Astro family moves in one pull request,
+  # because Starlight and the links validator each require a range of Astro.
+  - package-ecosystem: npm
+    directory: "/site"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    cooldown:
+      default-days: 7
+    groups:
+      astro:
+        patterns:
+          - "astro"
+          - "@astrojs/*"
+          - "starlight-links-validator"
+      fonts:
+        patterns: ["@fontsource-variable/*"]
+#endif

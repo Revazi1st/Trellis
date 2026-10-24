@@ -51,10 +51,12 @@ published release, so it never documents a version nuget.org does not have.
    `gh label create docs-not-needed --description "No feature or threat-model doc change needed"`.
 7. **Dependency bumps merge on their own.** `.github/workflows/dependabot-auto-merge.yml` enables
    GitHub's auto-merge on Dependabot's patch and minor pull requests for NuGet packages, images and
-   dev-container features. Three kinds wait for a person: a major, or a group that contains one; a
+   dev-container features. Four kinds wait for a person: a major, or a group that contains one; a
    .NET SDK bump (Dependabot calls a feature-band jump a patch, yet it raises the SDK everyone
-   needs); and the weekly GitHub Actions group, whose pull request edits workflow files, which the
-   Actions token may never merge. `dependabot.yml` holds every new version back for a week
+   needs); every npm update, which here means the documentation site's (`site/`: Astro and Starlight
+   are 0.x releases its build leans on, so read the notes and look at the site before merging); and
+   the weekly GitHub Actions group, whose pull request edits workflow files, which the Actions token
+   may never merge. `dependabot.yml` holds every new version back for a week
    (`cooldown`; version updates only, a security update still arrives at once). Two repository
    settings make it work, both set once: *Settings → General → Allow auto-merge* (with
    *Automatically delete head branches*), and a ruleset on `main` that requires the CI, Template CI
