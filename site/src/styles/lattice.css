@@ -119,7 +119,9 @@ h1[data-page-title],
   outline: 2px solid var(--lt-leaf);
   outline-offset: 2px;
 }
-.sl-markdown-content :is(h2, h3) code {
+/* Code in a heading is set in the heading, without the pill: as specific as the rule above (and more),
+   or its padding wins and an option heading starts indented. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6) code:not(pre code) {
   font-size: 0.85em;
   background: transparent;
   padding: 0;
