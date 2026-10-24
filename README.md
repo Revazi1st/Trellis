@@ -448,9 +448,11 @@ violation it must catch (`PlantedViolations`).
   and relative link.
 - Line coverage has a floor per ring: Core 90 %, Infrastructure 85 %, Presentation 75 %, Shared 80 %.
 - Every pull request also tests what the template generates. Template CI creates a solution per toggle
-  leg (default, no UI, UI tests without the UI, all options), checks it for leftovers of the
-  template's name, builds it in Release and runs the tests of the default, no-UI and all-options legs.
-  It repeats the default on Windows and builds a project from the packed `.nupkg`.
+  leg (default, no UI, UI tests without the UI, all options, and Redis, Serilog and multi-tenancy each
+  on alone with the UI off), checks it for leftovers of the template's name, builds it in Release and
+  runs its tests on every leg but UI-tests-without-the-UI, the Aspire end-to-end test included, so each
+  of them boots its generated AppHost. It repeats the default on Windows and builds a project from the
+  packed `.nupkg`.
 
 ## Fun features 🎉
 
@@ -614,6 +616,9 @@ describes planned work that is not in the template yet; the marker goes when it 
   - the error-code vocabulary fitness test and the value-object constructor test;
   - the build-time analyzer for a discarded `Result`.
 - [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT):
+  - booting the generated solution's AppHost from its own test suite in template CI, and a template-CI leg for every option value;
+  - a local script that instantiates, builds and tests every template leg and prints a results table (`build/test.ps1`);
+  - release notes in the package metadata;
   - a persistent-lifetime database container in the AppHost, Aspire's guidance as his AppHost applies it;
   - one resource-name constants class referenced by the AppHost through an `IsAspireProjectResource="false"` reference (`Shared/Services.cs`);
   - `DefaultStartup="true"` on the AppHost in the `.slnx`;
