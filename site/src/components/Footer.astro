@@ -1,0 +1,16 @@
+---
+// Starlight's footer (edit link, last updated, previous and next), plus, on a release build, the version
+// this documentation describes. A preview says what it is in the banner at the top instead.
+import Default from '@astrojs/starlight/components/Footer.astro';
+import { build, nugetUrl, packageId, releaseNotesUrl } from '../data/repo.mjs';
+---
+
+<Default />
+{
+  build.version && (
+    <p class="trellis-version">
+      The documentation of <a href={`${nugetUrl}/${build.version}`}>{packageId} {build.version}</a> ·{' '}
+      <a href={releaseNotesUrl(build.ref)}>release notes</a>
+    </p>
+  )
+}

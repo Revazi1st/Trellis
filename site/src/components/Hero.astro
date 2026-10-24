@@ -5,10 +5,12 @@
 import Default from '@astrojs/starlight/components/Hero.astro';
 import { LinkButton } from '@astrojs/starlight/components';
 import ringsDark from '@repo/eng/readme/rings-dark.svg?url';
-import { quickstart } from '../data/repo.mjs';
+import { nugetUrl, packageId, packagePublished, quickstart } from '../data/repo.mjs';
 
 const { data } = Astro.locals.starlightRoute.entry;
 const stage = data.stage;
+// Under the terminal: the frontmatter's note until the package is on nuget.org, then where it is.
+const fine = packagePublished ? `<a href="${nugetUrl}">${packageId} on nuget.org</a>` : stage?.fine;
 const { title = data.title, tagline, actions = [] } = data.hero ?? {};
 const lines = [
   { cmd: quickstart.install },
@@ -55,7 +57,7 @@ const legend = [
                 ),
               )}</pre>
           </div>
-          {stage.fine && <p class="fine" set:html={stage.fine} />}
+          {fine && <p class="fine" set:html={fine} />}
           {actions.length > 0 && (
             <div class="actions">
               {actions.map(({ link, text, variant, icon }) => (

@@ -58,7 +58,7 @@ Environment variables the build reads (all optional):
 
 | Variable | Default | What it changes |
 |---|---|---|
-| `TRELLIS_SITE_REF` | `main` | The ref the GitHub links point at (files outside `docs/`, excerpts). |
+| `TRELLIS_SITE_REF` | `main` | What the site is built from. A release tag (`v1.2.3`) makes a release build: the footer of every page names the version it documents. Any other ref makes a preview: a banner on every page says which ref and commit it shows, and that it is not the released documentation (or, before the first release, that the package is not on nuget.org yet). The GitHub links to files outside `docs/` point at this ref too. |
 | `TRELLIS_SITE_CONDITIONALS` | `label` | `defaults` renders the docs the way `dotnet new trellis` with no options writes them: each conditional block evaluated against the defaults, with no asides. |
 | `TRELLIS_SITE_LASTUPDATED` | unset | `git` shows "Last updated" on every doc: the date its last change reached the branch being built (`git log --first-parent`, so a merge counts by its own date). It needs the full history (`fetch-depth: 0` in CI). Starlight dates the site's own pages either way. |
 | `TRELLIS_REPO_ROOT` | `..` | Where the repository is, for a checkout of the site outside it. |

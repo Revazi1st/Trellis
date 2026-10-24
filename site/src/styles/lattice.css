@@ -204,6 +204,36 @@ starlight-toc a[aria-current='true'] {
   background: var(--lt-surface-2);
 }
 
+/* The preview banner (any build but a release) and the documented version (a release build). */
+:root {
+  --sl-color-banner-bg: #3a2f1b;
+  --sl-color-banner-text: #f5e5c3;
+}
+:root[data-theme='light'] {
+  --sl-color-banner-bg: #f3e6c9;
+  --sl-color-banner-text: #4a3511;
+}
+.sl-banner {
+  padding-block: 0.45rem;
+  font-size: var(--sl-text-sm);
+  border-bottom: 1px solid var(--lt-line);
+  box-shadow: none;
+}
+.sl-banner code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.95em;
+}
+.trellis-version {
+  margin: 1.5rem 0 0;
+  font-size: var(--sl-text-xs);
+  color: var(--sl-color-gray-3);
+  text-align: center;
+}
+.trellis-version a {
+  color: inherit;
+}
+
 /* A template-conditional block: content that only some generated solutions have. */
 .starlight-aside--note[aria-label^='Only '] {
   --sl-color-asides-text-accent: var(--lt-link);

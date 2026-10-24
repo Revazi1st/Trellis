@@ -5,7 +5,7 @@ description: The prerequisites and the commands that check them, installing, upd
 
 import { Aside, Code, TabItem, Tabs } from '@astrojs/starlight/components';
 import OptionsTable from '../../../components/OptionsTable.astro';
-import { packageId, quickstart, sdkVersion, templateShortName } from '../../../data/repo.mjs';
+import { packageId, packagePublished, quickstart, sdkVersion, templateShortName } from '../../../data/repo.mjs';
 
 ## Prerequisites
 
@@ -32,9 +32,11 @@ OrbStack, Colima and Podman work too: see [Docker engines other than Docker Desk
   </TabItem>
 </Tabs>
 
-<Aside type="caution" title="Before v0.1.0">
-  <code>{packageId}</code> lands on nuget.org with the first release. Until then, install from a clone.
-</Aside>
+{!packagePublished && (
+  <Aside type="caution" title="Before the first release">
+    <code>{packageId}</code> lands on nuget.org with the first release. Until then, install from a clone.
+  </Aside>
+)}
 
 ## Keep it current, or remove it
 

@@ -81,6 +81,7 @@ export default defineConfig({
         './src/styles/lattice.css',
       ],
       components: {
+        Footer: './src/components/Footer.astro',
         Hero: './src/components/Hero.astro',
         MarkdownContent: './src/components/MarkdownContent.astro',
       },
