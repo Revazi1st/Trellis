@@ -1,4 +1,5 @@
-/* The "Lattice" visual language on Starlight.
+/* The "Lattice" visual language on Starlight (eng/readme/README.md has the language: its tokens, ring
+   hues and shapes; no shadows, radius 16 on cards and 10 on chips, panels and the terminal).
    Starlight's dark scheme is :root, its light scheme :root[data-theme='light']. These rules are
    unlayered, so they win over Starlight's layered ones: every variable set in one scheme is set in the
    other too, or the dark value would leak into light. */
@@ -17,7 +18,6 @@
   --lt-leaf-ink: #0e2415;
   --lt-link: #a9dd8a;
   --lt-code: #0f1813;
-  --lt-shadow: none;
   --lt-lattice: rgba(143, 209, 106, 0.05);
   /* ring hues (fills follow the scheme) */
   --ring-gold: #3a2f1b;
@@ -70,7 +70,6 @@
   --lt-brand-deep: #163f2b;
   --lt-link: #1f5c3d;
   --lt-code: #eef3ec;
-  --lt-shadow: 0 12px 32px rgba(10, 30, 18, 0.1);
   --lt-lattice: rgba(31, 92, 61, 0.045);
   --ring-gold: #f3e6c9;
   --ring-ochre: #f8efd9;
@@ -611,9 +610,9 @@ starlight-toc a[aria-current='true'] {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--stage-line);
-  border-radius: 16px;
+  border-top-color: rgba(255, 255, 255, 0.2); /* no shadow: a 1 px lighter top edge lifts it off the stage */
+  border-radius: 10px;
   background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 .terminal-bar {
   display: flex;
@@ -723,7 +722,6 @@ starlight-toc a[aria-current='true'] {
 .glass img {
   width: min(100%, 300px);
   height: auto;
-  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.35));
 }
 .glass figcaption {
   max-width: 34ch;
@@ -828,7 +826,6 @@ starlight-toc a[aria-current='true'] {
   border: 1px solid var(--lt-line);
   border-radius: 16px;
   padding: 22px;
-  box-shadow: var(--lt-shadow);
 }
 .bento > .card:nth-child(-n + 2) {
   grid-column: span 3;
