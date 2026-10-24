@@ -46,6 +46,8 @@ derive what frontmatter would have held and adapt the rest:
   on a directive line in `docs/` it did not read as one.
 - **Testing**: the `## Tests` section of `development.md` is rendered as a page of its own, and links
   to its anchors follow it there.
+- **Architecture** opens with the rings picture, both themes, read from `eng/readme/rings-*.svg` at build
+  time (`docs/architecture.md` cannot embed it: `eng/readme/` never ships).
 - **Mermaid**: a `mermaid` fence is drawn as a diagram in the browser, by mermaid from this build: a
   chunk fetched only by a page that has a diagram.
 

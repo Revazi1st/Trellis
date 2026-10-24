@@ -256,6 +256,24 @@ starlight-toc a[aria-current='true'] {
   border-radius: 10px;
 }
 
+/* The rings that open the Architecture page (markdown-plugins.mjs, leadFigures). */
+.trellis-rings {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  margin: 0.25rem 0 1.75rem;
+}
+.trellis-rings img {
+  width: min(240px, 70vw);
+  height: auto;
+}
+.trellis-rings figcaption {
+  max-width: 44ch;
+  text-align: center;
+  font-size: var(--sl-text-sm);
+  color: var(--lt-muted);
+}
+
 /* Mermaid: the source until the script has drawn it. */
 .trellis-mermaid {
   margin-block: 1.25rem;

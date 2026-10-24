@@ -12,6 +12,8 @@
 //   5. ```mermaid fences -> <pre class="mermaid">, rendered in the browser
 //   6. the page's route as frontmatter `slug`, so the links validator files its headings under the page
 //      the reader sees (it would otherwise derive the page from the path under src/content/docs)
+//   7. a lead picture above the first paragraph of a page that has one (leadFigures): the rings on
+//      Architecture, which the doc cannot embed itself (they live in eng/readme/, which never ships)
 // For site pages under src/content/docs (.mdx):
 //   root-relative links and JSX href props get the base (/Trellis), so pages are written base-free.
 
@@ -26,6 +28,7 @@ import {
   githubBlob,
   githubTree,
   readTemplateOptions,
+  repoRoot,
   routeForDoc,
   sectionPages,
 } from '../../trellis.config.mjs';
@@ -128,6 +131,14 @@ function docsPlugin(rel) {
         }
       }
 
+      // 7. The lead picture, above the first paragraph (the H1 is gone by now).
+      const lead = !sectionMode && leadFigures[rel];
+      if (lead) {
+        const first = kids.findIndex((n) => n.type === 'paragraph');
+        kids.splice(first === -1 ? 0 : first, 0, { type: 'html', value: lead() });
+        changed = true;
+      }
+
       // 3. Template conditionals, at any depth (all of today's sit at the top level).
       const resolved = resolveConditionals(kids, ctx, rel);
       if (resolved !== kids) {
@@ -180,6 +191,31 @@ function sitePagePlugin() {
     mdxJsxFlowElement: jsx,
     mdxJsxTextElement: jsx,
   };
+}
+
+// ---- lead pictures --------------------------------------------------------------------------------
+
+// docs/<file> -> the HTML of the picture its page opens with.
+const leadFigures = { 'architecture.md': ringsFigure };
+
+/**
+ * The rings mark from eng/readme/ (render-diagrams.py draws it), both themes, as data URIs read at build
+ * time: Starlight's data-theme shows one and hides the other (lattice.css), and each SVG keeps its own
+ * ids, which two inline copies on one page would not.
+ */
+function ringsFigure() {
+  const svg = (theme) => readFileSync(path.join(repoRoot, `eng/readme/rings-${theme}.svg`), 'utf8');
+  const [light, dark] = [svg('light'), svg('dark')];
+  const alt = escapeHtml(light.match(/<desc[^>]*>([^<]*)<\/desc>/)?.[1] ?? 'The rings of the solution').replace(/"/g, '&quot;');
+  const img = (theme, source) =>
+    `<img class="rings-${theme}" src="data:image/svg+xml;base64,${Buffer.from(source).toString('base64')}" width="240" height="240" alt="${alt}">`;
+  return [
+    '<figure class="trellis-rings not-content">',
+    img('light', light),
+    img('dark', dark),
+    '<figcaption>Dependencies point inward. Infrastructure and Persistence are peers that never reference each other.</figcaption>',
+    '</figure>',
+  ].join('\n');
 }
 
 // ---- conditionals ---------------------------------------------------------------------------------
