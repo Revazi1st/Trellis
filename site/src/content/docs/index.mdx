@@ -3,6 +3,10 @@ title: Trellis
 description: A dotnet new template for .NET 10 that generates a rich-DDD, Clean Architecture solution whose rules the tests enforce.
 template: splash
 lastUpdated: false
+# The site's title is Trellis too: without this, Starlight's "<page> | <site>" title reads "Trellis | Trellis".
+head:
+  - tag: title
+    content: Trellis — Clean Architecture the tests enforce
 hero:
   title: 'Clean Architecture <em>the tests enforce.</em>'
   tagline: 'Rich DDD aggregates, a hand-rolled command pipeline that returns Results instead of throwing, a transactional outbox, Aspire orchestration and a Blazor UI. The rules are written twice: as architecture tests, and as instructions an AI agent follows.'
