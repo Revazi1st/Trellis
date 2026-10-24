@@ -106,7 +106,7 @@ export default defineConfig({
             { label: 'Install and create', slug: 'start/install' },
             { label: 'First run', link: '/develop/development/#running-the-app' },
             { label: 'Try it', link: '/features/invoices/#try-it' },
-            { label: 'Options', link: '/start/install/#options' },
+            { label: 'Options', slug: 'start/options' },
             { label: 'Make it yours', link: '/develop/upgrading/' },
           ],
         },
@@ -125,6 +125,7 @@ export default defineConfig({
             { label: 'Development', slug: 'develop/development' },
             { label: 'Testing', slug: 'develop/testing' },
             { label: 'Upgrading', slug: 'develop/upgrading' },
+            { label: 'Releasing', slug: 'develop/releasing' },
           ],
         },
         {

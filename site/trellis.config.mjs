@@ -92,7 +92,49 @@ export function readTemplateOptions() {
       convenience: symbol === 'skipRestore',
     });
   }
-  return options;
+  // The toggles in template.json's order, the conveniences after them.
+  return [...options.filter((o) => !o.convenience), ...options.filter((o) => o.convenience)];
+}
+
+// What the Options page (start/options) says about each option beyond what template.json holds. The page
+// generates one section per boolean option from template.json (the description, the default, the files
+// only that option brings, the reminder `dotnet new` prints) and adds, from here, what to do after creating
+// a solution with it and the docs that explain it. Inline `code` and [links](development.md#anchor) to
+// files under docs/ are allowed; the links validator checks them. A boolean option without an entry fails
+// the build, so a new toggle gets its section in the change that adds it.
+export const optionNotes = {
+  IncludeUI: {
+    after: 'Nothing: the AppHost starts the `web` resource beside the `api`. With `--include-ui false` the solution is API-only.',
+    docs: ['adr/0015-blazor-everywhere-shared-ui.md', 'adr/0012-presentation-structure-common-libraries.md'],
+  },
+  UseRedis: {
+    after: 'Nothing for `aspire run`: the AppHost starts the `cache` resource, with a RedisInsight tile, and the API reads its connection string. In the dev-container flow, `docker compose --profile redis up -d` starts Redis.',
+    docs: ['adr/0026-read-caching.md', 'deployment.md#deploy-to-one-host'],
+  },
+  UseSerilog: {
+    after: 'Nothing. Serilog writes the console and hands every event on to OpenTelemetry; its levels come from the `Serilog` section, which mirrors `Logging:LogLevel` but is not read from it.',
+    docs: ['deployment.md#observability'],
+  },
+  UseMultitenancy: {
+    after: 'Regenerate the shipped initial migration once, before the first run: it has no tenant columns. The two commands are in [Multi-tenancy](development.md#multi-tenancy-optional).',
+    docs: ['development.md#multi-tenancy-optional', 'adr/0019-multitenancy-toggle.md', 'adr/0022-tenant-on-the-principal.md'],
+  },
+  IncludeUiTests: {
+    after: 'Build the project once and install a browser before the first browser run; the tests skip unless `RUN_UI_TESTS=1`. See [UI tests](development.md#ui-tests-optional).',
+    docs: ['development.md#ui-tests-optional', 'development.md#tests'],
+  },
+  skipRestore: {
+    after: 'Run `dotnet restore` yourself before the first build.',
+    docs: [],
+  },
+};
+
+/** docs/-relative target ("development.md#tests") -> the site URL, with the base. */
+export function docHref(target) {
+  const [file, anchor] = target.split('#');
+  const section = anchor && sectionPages.find((sp) => sp.from === file && sp.anchor === anchor);
+  if (section) return `${base}/${section.route}/`;
+  return `${base}/${routeForDoc(file)}/${anchor ? `#${anchor}` : ''}`;
 }
 
 // How the docs' <!--#if (EXPR) --> blocks render:

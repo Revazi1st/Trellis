@@ -54,6 +54,15 @@ derive what frontmatter would have held and adapt the rest:
 The site makes no request to a third party: mermaid, the Geist and Geist Mono fonts and the search index
 are all served from the site itself (the fonts' licence is at `/Trellis/fonts-license.txt`).
 
+## The site's own pages
+
+`src/content/docs/` holds the pages that are not in `docs/`: the landing page, Install and create, and
+Options. The Options page is generated from `.template.config/`: one section per boolean option with its
+default, its description, the files only it adds and the reminder `dotnet new` prints, plus what to do
+after creating a solution with it and the docs that explain it, from `optionNotes` in
+`trellis.config.mjs`. A new toggle fails the build until it has an entry there. The sidebar is
+`astro.config.mjs`'s; `docs/INDEX.md` is reachable but in neither the sidebar nor the search.
+
 ## Settings
 
 Environment variables the build reads (all optional):

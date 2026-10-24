@@ -1,0 +1,20 @@
+---
+title: Options
+description: Every option of dotnet new trellis, what each one adds to the solution, what to do after creating it, and where the docs explain it.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import OptionsTable from '../../../components/OptionsTable.astro';
+import { templateShortName } from '../../../data/repo.mjs';
+
+Options are flags of `dotnet new` and checkboxes in Visual Studio and Rider. A flag takes `true` or `false`, and a bare flag means `true`: <code>dotnet new {templateShortName} -n Acme.Shop --use-multitenancy</code>. The choices are recorded in the generated `.trellis-template.json`, which [Upgrading](/develop/upgrading/) regenerates from.
+
+<OptionsTable />
+
+The sections below are generated from the template's own configuration when the site is built, so they say what `dotnet new trellis --help` and the generated solution say. On the other pages of this site, a passage that only some solutions have is marked with the option that keeps it.
+
+<Aside type="tip" title="Turning an option on later">
+  Create a fresh solution with the option and merge the difference, the way [Upgrading](/develop/upgrading/) adopts a new template version. An option that changes the schema also follows [Schema-affecting changes](/develop/upgrading/#5-schema-affecting-changes).
+</Aside>
+
+{/* trellis:option-sections */}

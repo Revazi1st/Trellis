@@ -4,8 +4,7 @@ description: The prerequisites and the commands that check them, installing, upd
 ---
 
 import { Aside, Code, TabItem, Tabs } from '@astrojs/starlight/components';
-import OptionsTable from '../../../components/OptionsTable.astro';
-import { packageId, packagePublished, quickstart, sdkVersion, templateShortName } from '../../../data/repo.mjs';
+import { packageId, packagePublished, quickstart, sdkVersion } from '../../../data/repo.mjs';
 
 ## Prerequisites
 
@@ -52,15 +51,7 @@ Name the project with dot-separated parts made of letters and digits, each start
 
 ## Options
 
-<OptionsTable />
-
-Flags take `true` or `false`, and a bare flag means `true`: <code>dotnet new {templateShortName} -n Acme.Shop --use-multitenancy</code>. Visual Studio and Rider show the same options as checkboxes. Your choices are recorded in the generated `.trellis-template.json`.
-
-<Aside type="note" title="Multi-tenancy regenerates one migration">
-  The shipped initial migration has no tenant columns, so a solution created with `--use-multitenancy` regenerates it once before the first run. `dotnet new` prints the reminder, and [Multi-tenancy (optional)](/develop/development/#multi-tenancy-optional) has the commands.
-</Aside>
-
-To turn an option on later, regenerate with it and merge the difference the way [Upgrading](/develop/upgrading/) adopts a new template version; an option that changes the schema also follows [Schema-affecting changes](/develop/upgrading/#5-schema-affecting-changes).
+Add options as flags, such as `--use-redis` or `--include-ui false` for an API-only solution. [Options](/start/options/) lists every one, with what it adds and what to do after creating the solution: with `--use-multitenancy`, for example, regenerate the initial migration before the first run.
 
 ## Next
 

@@ -15,7 +15,8 @@
 //   7. a lead picture above the first paragraph of a page that has one (leadFigures): the rings on
 //      Architecture, which the doc cannot embed itself (they live in eng/readme/, which never ships)
 // For site pages under src/content/docs (.mdx):
-//   root-relative links and JSX href props get the base (/Trellis), so pages are written base-free.
+//   root-relative links and JSX href props get the base (/Trellis), so pages are written base-free, and
+//   a {/* trellis:option-sections */} comment becomes one section per template option (options.mjs).
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -33,6 +34,7 @@ import {
   sectionPages,
 } from '../../trellis.config.mjs';
 import { describe, directiveLines, evaluate, fold, identifiers, parseDirective } from './conditionals.mjs';
+import { optionSections } from './options.mjs';
 import { section as readSection } from './doc-text.mjs';
 import GithubSlugger from 'github-slugger';
 
@@ -184,6 +186,11 @@ function sitePagePlugin() {
   };
   return {
     name: 'trellis-site-pages',
+    before(root, ctx) {
+      const at = root.children.findIndex((n) => n.type === 'mdxFlowExpression' && n.value.trim() === '/* trellis:option-sections */');
+      if (at === -1) return;
+      ctx.setProperty(root, 'children', [...root.children.slice(0, at), ...optionSections(), ...root.children.slice(at + 1)]);
+    },
     link(node, ctx) {
       const url = withBase(node.url);
       if (url !== node.url) ctx.setProperty(node, 'url', url);

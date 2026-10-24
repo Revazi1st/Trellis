@@ -2,6 +2,8 @@
 // The options table, generated at build time from .template.config/template.json (bool parameters:
 // defaultValue, description) and dotnetcli.host.json (longName), so it cannot drift from what
 // `dotnet new trellis --help` prints.
+import { optionAnchor } from '../lib/options.mjs';
+import { base } from '../../trellis.config.mjs';
 import { options } from '../data/repo.mjs';
 ---
 
@@ -14,7 +16,7 @@ import { options } from '../data/repo.mjs';
       {
         options.map((o) => (
           <tr>
-            <td><code>{o.flag}</code></td>
+            <td><a href={`${base}/start/options/#${optionAnchor(o.flag)}`}><code>{o.flag}</code></a></td>
             <td><span class:list={['pill', o.defaultValue ? 'on' : 'off']}>{o.defaultValue ? 'on' : 'off'}</span></td>
             <td>
               {o.description}
