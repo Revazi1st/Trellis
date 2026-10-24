@@ -437,6 +437,28 @@ starlight-toc a[aria-current='true'] {
   height: auto;
 }
 
+/* An ASCII diagram (a fence without a language that draws with box characters, markdown-plugins.mjs):
+   the type shrinks until the widest line (--columns characters of Geist Mono, 0.6em each) fits the
+   column, from the code size down to 0.65rem; a wider diagram scrolls sideways at that floor. */
+.trellis-ascii {
+  container-type: inline-size;
+  overflow-x: auto;
+  border: 1px solid var(--lt-line);
+  border-radius: 10px;
+  background: var(--lt-surface);
+}
+.trellis-ascii pre {
+  margin: 0;
+  padding: 0.85rem 0.75rem;
+  overflow: visible;
+  font-family: var(--__sl-font-mono);
+  font-size: clamp(0.65rem, (100cqi - 1.5rem) / (var(--columns) * 0.6), 0.875rem);
+  line-height: 1.35;
+  white-space: pre;
+  color: var(--sl-color-white);
+  background: transparent;
+}
+
 /* Excerpts read from the repository. */
 .trellis-excerpt {
   margin: 0.75rem 0 0;

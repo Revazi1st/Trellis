@@ -9,7 +9,8 @@
 //   3. template conditionals <!--#if (EXPR) --> … <!--#endif -->: a toggle aside per block, or evaluated
 //      against the template defaults (conditionalsMode)
 //   4. links: docs/*.md -> site routes (#anchors kept, moved anchors followed); anything else -> GitHub
-//   5. ```mermaid fences -> <pre class="mermaid">, rendered in the browser
+//   5. ```mermaid fences -> <pre class="mermaid">, rendered in the browser; a fence without a language
+//      that draws with box characters (an ASCII diagram) -> a <pre> whose type fits the column
 //   6. the page's route as frontmatter `slug`, so the links validator files its headings under the page
 //      the reader sees (it would otherwise derive the page from the path under src/content/docs)
 //   7. a lead picture above the first paragraph of a page that has one (leadFigures): the rings on
@@ -179,12 +180,22 @@ function docsPlugin(rel) {
       if (url !== node.url) ctx.setProperty(node, 'url', url);
     },
     code(node) {
-      if (node.lang !== 'mermaid') return;
-      // The source stays in the page (readable without JavaScript); the client script draws it.
-      return {
-        type: 'html',
-        value: `<div class="trellis-mermaid not-content" data-pagefind-ignore><pre class="mermaid">${escapeHtml(node.value)}</pre></div>`,
-      };
+      if (node.lang === 'mermaid') {
+        // The source stays in the page (readable without JavaScript); the client script draws it.
+        return {
+          type: 'html',
+          value: `<div class="trellis-mermaid not-content" data-pagefind-ignore><pre class="mermaid">${escapeHtml(node.value)}</pre></div>`,
+        };
+      }
+      if (!node.lang && BOX_DRAWING.test(node.value)) {
+        // An ASCII diagram, not code to copy: its widest line, in characters, sizes its type (lattice.css)
+        // so all of it fits the column, down to a floor below which it scrolls sideways.
+        const columns = Math.max(...node.value.split('\n').map((line) => [...line].length));
+        return {
+          type: 'html',
+          value: `<div class="trellis-ascii not-content" style="--columns: ${columns}"><pre>${escapeHtml(node.value)}</pre></div>`,
+        };
+      }
     },
   };
 }
@@ -447,6 +458,7 @@ function pointerTo(sp) {
 // ---- helpers --------------------------------------------------------------------------------------
 
 const slugOf = (text) => new GithubSlugger().slug(text);
+const BOX_DRAWING = /[─-╿]/; // ─ │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼ and the rest of the block
 
 function safeExists(p) {
   try {
