@@ -11,7 +11,7 @@ project exclude this folder, so a generated project never contains it.
 
 ## Run it locally
 
-You need Node 22 (`.nvmrc` here; Astro 7.4 needs 22.22 or later, and `npm ci` refuses an older one).
+You need Node 22.23.4 or later (`.nvmrc` names the exact build CI uses; the lockfile's packages set the floor, and `npm ci` refuses an older Node). A newer lockfile that raises the floor moves `.nvmrc` and the `engines` field in `package.json` with it.
 
 ```bash
 cd site

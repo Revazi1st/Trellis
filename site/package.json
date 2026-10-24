@@ -6,7 +6,7 @@
   "description": "The Trellis documentation site: Astro + Starlight rendering ../docs in place. Maintainer-only, never part of a generated project.",
   "license": "MIT",
   "engines": {
-    "node": ">=22.22.0"
+    "node": ">=22.23.4"
   },
   "scripts": {
     "dev": "astro dev",

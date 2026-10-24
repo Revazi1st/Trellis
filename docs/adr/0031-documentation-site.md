@@ -19,7 +19,7 @@ project as plain GitHub Markdown, with template conditionals in HTML comments (`
 ## Decision
 
 - **Astro and Starlight in `site/`.** Astro 7.4, Starlight 0.42 and starlight-links-validator, pinned
-  exactly with a committed lockfile, on Node 22 (`site/.nvmrc`; `npm ci` refuses an older Node).
+  exactly with a committed lockfile, on the Node build `site/.nvmrc` names (an exact 22.x patch, the floor the lockfile's packages set; `npm ci` refuses an older Node).
   `site/README.md` describes it.
 - **`docs/` rendered in place.** A custom loader puts `docs/**/*.md` into Starlight's collection where
   the files are: no copy, no sync step, no frontmatter added. The H1 becomes the title, the first
