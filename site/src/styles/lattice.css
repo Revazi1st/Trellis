@@ -129,6 +129,12 @@ h1[data-page-title],
   font-size: var(--sl-text-lg);
   line-height: 1.3;
 }
+/* Previous and next are cards like the link cards: a hairline, no shadow (the overlays, the search
+   dialog and the mobile menu, keep Starlight's). */
+.pagination-links a {
+  border-color: var(--lt-line);
+  box-shadow: none;
+}
 
 /* ---- chrome: header, sidebar, table of contents --------------------------------------------------- */
 .header {
