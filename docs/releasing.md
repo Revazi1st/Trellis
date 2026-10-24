@@ -1,16 +1,18 @@
 # Releasing the template
 
 How a version of the `Trellis.Templates` package (the `dotnet new trellis` template) reaches
-nuget.org. Everything runs in [`.github/workflows/release.yml`](../.github/workflows/release.yml);
-this page is what a maintainer does around it. Generated projects do not ship that workflow.
+nuget.org, and its documentation reaches the website. Everything runs in
+[`.github/workflows/release.yml`](../.github/workflows/release.yml), which deploys the site through
+[`.github/workflows/site.yml`](../.github/workflows/site.yml); this page is what a maintainer does
+around them. Generated projects ship neither workflow.
 
 ## What the workflow does
 
 ```
 prepare ──► test ─────────┐
-        └─► template ─────┴─► package ──────────────────────► publish (environment: nuget.org)
-            (matrix)          pack, smoke test, attest,        download the drafted package,
-                              draft the GitHub release         NuGet login, push, publish release
+        └─► template ─────┴─► package ──────────────────────► publish (environment: nuget.org) ──► site
+            (matrix)          pack, smoke test, attest,        download the drafted package,       site.yml from the tag:
+                              draft the GitHub release         NuGet login, push, publish release  build, deploy to Pages
 ```
 
 | Job | Steps | Dry run |
@@ -20,9 +22,11 @@ prepare ──► test ─────────┐
 | `template` | the whole `template-ci.yml` matrix: every toggle leg instantiated and built in Release, and the legs flagged `test: true` tested, the Aspire E2E that boots the generated AppHost included (the browser tests stay opt-in); the default leg again on Windows; a project built from the packed template | runs |
 | `package` | pack with `-p:Version=X.Y.Z`, install the `.nupkg` and build an instance of it, attest its build provenance, create a **draft** GitHub release with the CHANGELOG section as notes and the `.nupkg` attached | runs; the draft stays |
 | `publish` | in the `nuget.org` environment: download the `.nupkg` from the draft, log in to nuget.org by trusted publishing, push, publish the release | runs up to the login; **push and publish are skipped** |
+| `site` | `site.yml` with the tag: build the documentation site from the tagged commit (every link checked) and deploy it to GitHub Pages in the `github-pages` environment; every page's footer names the version | **skipped** |
 
 Nothing is public until `publish`: the package is attested and drafted first, the push happens
-next, and the GitHub release is published only after the push succeeded.
+next, and the GitHub release is published only after the push succeeded. The site follows the
+published release, so it never documents a version nuget.org does not have.
 
 ## One-time setup
 
@@ -62,6 +66,21 @@ next, and the GitHub release is published only after the push succeeded.
    know: a merge made by the Actions token starts no push workflow on `main`, and each weekly pull
    request was tested against the `main` of its own moment, so `ci.yml` (template source only) and
    `template-ci.yml` also run once a night on `main` to test the combined tree.
+8. **GitHub Pages, for the documentation site** (<https://revazi1st.github.io/Trellis/>). Two settings
+   only the repository's owner can make:
+   - *Settings → Pages → Build and deployment → Source*: **GitHub Actions**. This also creates the
+     `github-pages` environment.
+   - *Settings → Environments → `github-pages` → Deployment branches and tags*: keep `main` and **add a
+     tag rule, `v*`**. A release deploys from its tag, and the environment GitHub creates allows only
+     the default branch, so without the rule the release's `site` job fails with
+     `Tag "vX.Y.Z" is not allowed to deploy to github-pages due to environment protection rules.`
+     (a preview dispatched on another branch fails the same way:
+     `Branch "<name>" is not allowed to deploy to github-pages due to environment protection rules.`).
+     A preview started on `main` is allowed already, whatever ref it builds.
+
+   Then require the `Build and validate` job of `site.yml` on `main`'s ruleset beside the CI jobs: it
+   runs on every pull request and builds the site only when the pull request touches what the site
+   renders, passing (as skipped) otherwise.
 
 ## Before a minor release: an agent dry run
 
@@ -100,8 +119,30 @@ and results vary between models and attempts: it is a smoke test of the guidance
 5. **Verify.** The GitHub release is published; the package page
    (<https://www.nuget.org/packages/Trellis.Templates>) shows X.Y.Z once nuget.org has indexed it
    (minutes), with a Release Notes link to that GitHub release (`PackageReleaseNotes` in the pack
-   project, built from the version); and it installs:
-   `dotnet new install Trellis.Templates::X.Y.Z --debug:custom-hive "$(mktemp -d)"`.
+   project, built from the version); it installs:
+   `dotnet new install Trellis.Templates::X.Y.Z --debug:custom-hive "$(mktemp -d)"`; and
+   <https://revazi1st.github.io/Trellis/> has no preview banner and names `Trellis.Templates X.Y.Z` in
+   every page's footer.
+
+## The documentation site
+
+The site is `site/` (see its README): Astro and Starlight rendering `docs/` in place. GitHub Pages
+holds one copy of it, and three things replace that copy:
+
+- **A release**: the `site` job above, from the tag.
+- **A preview**: `gh workflow run site.yml -f ref=main` (any branch, tag or SHA; the default is
+  `main`). It builds that ref and deploys it in place of the released site, with a banner on every
+  page saying it is a preview of that ref and commit and not the released documentation (before the
+  first release: that `Trellis.Templates` is not on nuget.org yet). Put the release back afterwards
+  with `gh workflow run site.yml -f ref=vX.Y.Z`, which rebuilds it from its tag, no banner.
+- **A fix to the site itself after a release** (a page that renders wrong, a broken style): merge it
+  to `main`, then `gh workflow run site.yml -f ref=vX.Y.Z -f site_ref=main`. The docs still come
+  from the tag and `site/` from `main`, so the release's documentation stays the release's. A fix to
+  `docs/` is documentation of the next version and ships with it.
+
+Pull requests that touch `docs/`, `site/`, `README.md`, `.template.config/`, `global.json`,
+`eng/readme/` or a source file a site page quotes run the same build without deploying it: a link or
+an `#anchor` that points nowhere fails it.
 
 ## When something fails
 
@@ -116,3 +157,8 @@ and results vary between models and attempts: it is a smoke test of the guidance
   or publish by hand with `gh release edit vX.Y.Z --draft=false`.
 - **A bad version reached nuget.org**: versions cannot be deleted or replaced. Unlist it on
   nuget.org and release a patch.
+- **The `site` job failed** with `Tag "vX.Y.Z" is not allowed to deploy to github-pages`: add the
+  `v*` tag rule (one-time setup, step 8), then re-run the failed job, or run
+  `gh workflow run site.yml -f ref=vX.Y.Z`. The package and the release are already public; only the
+  site waits. Any other failure of the build is a link or a page to fix: fix it on `main` and redeploy
+  with `-f site_ref=main` as above.

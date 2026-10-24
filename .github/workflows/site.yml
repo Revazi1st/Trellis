@@ -11,7 +11,9 @@ name: Site
 #   - workflow_call: release.yml deploys the site from the release tag once the package is published.
 #   - workflow_dispatch: a preview from any ref (default main). It replaces the published site until the
 #     next deploy; any ref but a release tag shows a banner on every page saying it is a preview. Restore
-#     the release with: gh workflow run site.yml -f ref=vX.Y.Z (docs/releasing.md).
+#     the release with: gh workflow run site.yml -f ref=vX.Y.Z (docs/releasing.md). With site_ref, the
+#     docs come from ref and site/ from site_ref: a fix to the site's own code, deployed for the release
+#     without a new one (gh workflow run site.yml -f ref=vX.Y.Z -f site_ref=main).
 on:
   pull_request:
     branches: [main]
@@ -22,6 +24,11 @@ on:
         type: string
         required: true
         default: main
+      site_ref:
+        description: "Optional: take site/ from this ref instead (a fix to the site's own code, deployed for a release)"
+        type: string
+        required: false
+        default: ""
   workflow_call:
     inputs:
       ref:
@@ -89,6 +96,16 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
 
+      # Exactly the site/ of site_ref (files it does not have are removed); everything else stays ref's.
+      - name: Take site/ from site_ref
+        if: inputs.site_ref != ''
+        env:
+          SITE_FROM: ${{ inputs.site_ref }}
+        run: |
+          git fetch --no-tags origin "$SITE_FROM"
+          git restore --source=FETCH_HEAD --staged --worktree -- site
+          echo "site/ comes from $SITE_FROM ($(git rev-parse --short FETCH_HEAD)); the docs from $SITE_REF."
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: site/.nvmrc
@@ -108,12 +125,15 @@ jobs:
         run: npm run build
 
       - name: Summary
+        env:
+          SITE_FROM: ${{ inputs.site_ref }}
         run: |
           kind=preview
           if [[ "$SITE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then kind=release; fi
           {
             echo "### Site built from \`$SITE_REF\` ($(git rev-parse --short HEAD)), a $kind build"
             echo
+            if [ -n "$SITE_FROM" ]; then echo "site/ from \`$SITE_FROM\`."; echo; fi
             echo "$(find site/dist -name '*.html' | wc -l | tr -d ' ') pages, every internal link and anchor valid."
           } >> "$GITHUB_STEP_SUMMARY"
 

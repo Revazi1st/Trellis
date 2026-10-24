@@ -77,6 +77,23 @@ Environment variables the build reads (all optional):
 For example, `TRELLIS_SITE_CONDITIONALS=defaults npm run build` checks that the docs read well without
 the asides.
 
+## Deploy and preview
+
+`.github/workflows/site.yml` builds and publishes the site on GitHub Pages, at
+<https://revazi1st.github.io/Trellis/>:
+
+- **Pull requests** that touch `docs/`, `site/`, `README.md`, `.template.config/`, `global.json`,
+  `eng/readme/` or a source file a site page quotes get a build-and-validate job, never a deploy.
+- **A release** deploys the site from its tag: `release.yml` calls `site.yml` once the package is
+  published (never on a dry run), with `TRELLIS_SITE_REF` set to the tag.
+- **A preview** deploys any ref on demand: `gh workflow run site.yml -f ref=main`. It replaces the
+  released site until the next deploy and says so in a banner on every page;
+  `gh workflow run site.yml -f ref=vX.Y.Z` puts the release back, and `-f site_ref=main` beside it
+  deploys a fix to this folder for that release.
+
+`docs/releasing.md` has the one-time Pages settings (the source, and the tag rule the `github-pages`
+environment needs) and what to do when a deploy fails.
+
 ## Updating the dependencies
 
 `package.json` pins every dependency exactly. Starlight is 0.x and a few things here lean on its

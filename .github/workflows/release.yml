@@ -4,7 +4,8 @@ name: Release
 # on main. A dry run (Actions > Release > Run workflow, "dry_run" ticked, on main or on a tag)
 # runs every step except the NuGet push and publishing the GitHub release, so the gates, the
 # packing, the provenance attestation, the draft release and the NuGet trusted-publishing login
-# are all proven before anything becomes public.
+# are all proven before anything becomes public. Once a real release is published, the
+# documentation site is deployed from its tag (site.yml); a dry run deploys nothing.
 on:
   push:
     tags: ["v*.*.*"]
@@ -284,3 +285,19 @@ jobs:
             echo "trusted-publishing login all ran. Skipped: the NuGet push and publishing the release."
             echo "The draft release stays for inspection; the real run for $TAG replaces it."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The documentation site, built from the tag that was just published and deployed to GitHub Pages
+  # (site.yml, ADR-0031). It runs only after the push and the published release, so the site never
+  # documents a version nuget.org does not have; a dry run publishes nothing and deploys nothing. The
+  # github-pages environment must allow v* tags (docs/releasing.md, one-time setup).
+  site:
+    name: Deploy the documentation site
+    needs: [prepare, publish]
+    if: needs.prepare.outputs.dry-run != 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/site.yml
+    with:
+      ref: ${{ needs.prepare.outputs.tag }}
