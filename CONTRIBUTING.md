@@ -80,6 +80,16 @@ template's name, the consumer files, actionlint over the generated workflows) an
 run only in Template CI.
 The `add-toggle` skill covers adding a toggle; `docs/releasing.md` covers releasing.
 
+## The website
+
+The documentation website (<https://revazi1st.github.io/Trellis/>) lives in `site/`: Astro and
+Starlight, rendering the files under `docs/` in place, so `docs/` stays the content and there is
+nothing to copy or sync. Run it with Node 22: `cd site && npm ci && npm run dev`, then open
+<http://localhost:4321/Trellis/>. Its build is a check: a pull request that touches `docs/` or `site/`
+builds it, and a link or an `#anchor` that points nowhere fails it (`npm run build` runs the same check
+locally). [site/README.md](site/README.md) says what the build does to a doc and how the site is
+deployed; it never ships in a generated project.
+
 ## Commit style
 
 Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `ci:`, `build:`; Dependabot's

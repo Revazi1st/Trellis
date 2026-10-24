@@ -9,6 +9,8 @@ dotnet new install Trellis.Templates
 dotnet new trellis -n Your.Project
 ```
 
+Documentation: <https://revazi1st.github.io/Trellis/>
+
 Name it with dot-separated parts made of letters and digits (`Acme.Shop`): hyphens, spaces and
 underscores become underscores in namespaces, which fail analyzer rule CA1707.
 

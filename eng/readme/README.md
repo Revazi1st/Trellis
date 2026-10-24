@@ -80,9 +80,9 @@ starts, and a column that continues a folder opens with its path.
 
 ## The visual language
 
-The pictures share one look with the planned website and future screenshots: calm and precise, hairlines
-instead of outlines, a dark stage for the banner, monospace for real names, the lattice as texture and the
-leaf as the one accent. Nothing is copied from the templates the README credits: the ideas are credited,
+The pictures share one look with the website (`site/`, whose `lattice.css` maps these tokens onto
+Starlight) and future screenshots: calm and precise, hairlines instead of outlines, a dark stage for the
+banner, monospace for real names, the lattice as texture and the leaf as the one accent. Nothing is copied from the templates the README credits: the ideas are credited,
 the art is ours.
 
 **Tokens.** The palette at the top of the script holds them, and every picture takes its colours from

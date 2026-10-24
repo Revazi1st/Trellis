@@ -16,7 +16,9 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/Revazi1st/Trellis</PackageProjectUrl>
+    <!-- The project's home: the documentation site, which the release that ships this deploys from
+         its tag (site.yml). The source stays at RepositoryUrl. -->
+    <PackageProjectUrl>https://revazi1st.github.io/Trellis/</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Revazi1st/Trellis</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
 
