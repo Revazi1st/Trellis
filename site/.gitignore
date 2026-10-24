@@ -1,0 +1,4 @@
+# The root .gitignore ships to generated projects; the site keeps its own.
+node_modules/
+dist/
+.astro/

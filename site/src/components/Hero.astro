@@ -1,0 +1,113 @@
+---
+// Starlight's Hero, replaced on the landing page only by the "stage": the dark hero of the Lattice
+// language (both themes), with the install commands in a terminal chip and the rings beside them.
+// Every other page with a hero keeps Starlight's own.
+import Default from '@astrojs/starlight/components/Hero.astro';
+import { LinkButton } from '@astrojs/starlight/components';
+import ringsDark from '@repo/eng/readme/rings-dark.svg?url';
+import { quickstart } from '../data/repo.mjs';
+
+const { data } = Astro.locals.starlightRoute.entry;
+const stage = data.stage;
+const { title = data.title, tagline, actions = [] } = data.hero ?? {};
+const lines = [
+  { cmd: quickstart.install },
+  { cmd: quickstart.create },
+  { comment: '# the AppHost needs Docker running' },
+  { cmd: quickstart.run.join(' && ') },
+];
+// The ring hues' light fills: the stage is dark in both schemes, so the legend never switches.
+const legend = [
+  ['Domain', '#F3E6C9'],
+  ['Application', '#F8EFD9'],
+  ['Infrastructure', '#DFE9D6'],
+  ['Persistence', '#D3E9E6'],
+  ['Presentation', '#D9E6F3'],
+];
+---
+
+{
+  stage ? (
+    <section class="stage not-content" aria-labelledby="_top">
+      <div class="stage-grid">
+        <div class="stage-copy">
+          <p class="eyebrow">
+            <b>dotnet new</b>
+            {stage.eyebrow}
+          </p>
+          <h1 id="_top" data-page-title set:html={title} />
+          {tagline && <p class="lead" set:html={tagline} />}
+          <div class="terminal">
+            <div class="terminal-bar">
+              <span class="dots" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span>terminal</span>
+              <button type="button" class="copy" data-copy-target="stage-commands">Copy</button>
+            </div>
+            <pre id="stage-commands">{lines.map(({ cmd, comment }) =>
+                comment ? (
+                  <span class="line note">{comment}{'\n'}</span>
+                ) : (
+                  <span class="line"><span class="prompt" aria-hidden="true">$ </span>{cmd}{'\n'}</span>
+                ),
+              )}</pre>
+          </div>
+          {stage.fine && <p class="fine" set:html={stage.fine} />}
+          {actions.length > 0 && (
+            <div class="actions">
+              {actions.map(({ link, text, variant, icon }) => (
+                <LinkButton href={link} variant={variant} icon={icon?.name}>
+                  {text}
+                </LinkButton>
+              ))}
+            </div>
+          )}
+        </div>
+        <figure class="glass">
+          <img src={ringsDark} width="300" height="300" alt="Concentric rings: Domain and SharedKernel at the centre, Application around them, then Infrastructure and Persistence as two halves of one split ring, and Presentation outside." />
+          <figcaption>Dependencies point inward. Infrastructure and Persistence are peers that never reference each other.</figcaption>
+          <ul class="legend">
+            {legend.map(([name, color]) => (
+              <li>
+                <i style={`background:${color}`} />
+                {name}
+              </li>
+            ))}
+          </ul>
+        </figure>
+      </div>
+    </section>
+  ) : (
+    <Default />
+  )
+}
+
+<script>
+  // Copy the commands without their prompts. Falls back to selecting them where the clipboard is blocked.
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy-target]')) {
+    button.addEventListener('click', async () => {
+      const target = document.getElementById(button.dataset.copyTarget ?? '');
+      if (!target) return;
+      const text = [...target.querySelectorAll('.line')]
+        .map((line) => line.textContent?.replace(/^\$ /, '').trimEnd() ?? '')
+        .join('\n');
+      const say = (label: string) => {
+        button.textContent = label;
+        setTimeout(() => (button.textContent = 'Copy'), 1500);
+      };
+      try {
+        await navigator.clipboard.writeText(text);
+        say('Copied');
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        getSelection()?.removeAllRanges();
+        getSelection()?.addRange(range);
+        say('Selected');
+      }
+    });
+  }
+</script>

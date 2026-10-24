@@ -1,0 +1,28 @@
+---
+// The options table, generated at build time from .template.config/template.json (bool parameters:
+// defaultValue, description) and dotnetcli.host.json (longName), so it cannot drift from what
+// `dotnet new trellis --help` prints.
+import { options } from '../data/repo.mjs';
+---
+
+<div class="trellis-table not-content">
+  <table>
+    <thead>
+      <tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">What it does</th></tr>
+    </thead>
+    <tbody>
+      {
+        options.map((o) => (
+          <tr>
+            <td><code>{o.flag}</code></td>
+            <td><span class:list={['pill', o.defaultValue ? 'on' : 'off']}>{o.defaultValue ? 'on' : 'off'}</span></td>
+            <td>
+              {o.description}
+              {o.convenience && <span class="muted"> A command-line convenience: it changes nothing in the solution.</span>}
+            </td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>

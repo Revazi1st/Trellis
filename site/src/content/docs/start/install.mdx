@@ -1,0 +1,67 @@
+---
+title: Install and create
+description: The prerequisites and the commands that check them, installing, updating and removing the template, creating a solution, and every option of dotnet new trellis.
+---
+
+import { Aside, Code, TabItem, Tabs } from '@astrojs/starlight/components';
+import OptionsTable from '../../../components/OptionsTable.astro';
+import { packageId, quickstart, sdkVersion, templateShortName } from '../../../data/repo.mjs';
+
+## Prerequisites
+
+Each tool says when you need it; only the SDK is needed to create a solution.
+
+| Tool | Needed for | Check it |
+|---|---|---|
+| .NET 10 SDK, {sdkVersion} or later | installing the template, creating, building and running the solution | `dotnet --version` |
+| Docker (Docker Desktop or Linux Docker Engine) | PostgreSQL, the integration tests (Testcontainers), the SDK container | `docker version` |
+| Aspire CLI 13.5 or later, optional | `aspire run`; `dotnet run --project tools/<Name>.AppHost` starts the same app | `aspire --version` |
+| PowerShell, optional | installing the browsers for the optional Playwright tests | `pwsh --version` |
+
+OrbStack, Colima and Podman work too: see [Docker engines other than Docker Desktop](/develop/development/#docker-engines-other-than-docker-desktop).
+
+## Install the template
+
+<Tabs syncKey="install-source">
+  <TabItem label="nuget.org">
+    <Code code={quickstart.install} lang="bash" />
+  </TabItem>
+  <TabItem label="From a clone of main">
+    <Code code={quickstart.fromClone.slice(0, 2).join('\n')} lang="bash" />
+    A folder install records `0.0.0-source` as the template version; `dotnet new uninstall ./Trellis` removes it.
+  </TabItem>
+</Tabs>
+
+<Aside type="caution" title="Before v0.1.0">
+  <code>{packageId}</code> lands on nuget.org with the first release. Until then, install from a clone.
+</Aside>
+
+## Keep it current, or remove it
+
+<Code code={[...quickstart.update, quickstart.uninstall].join('\n')} lang="bash" />
+
+`--check-only` lists the newer versions without installing them. A newer template changes nothing in a solution you already created: [Upgrading](/develop/upgrading/) regenerates it from the options recorded in its `.trellis-template.json` and merges the difference.
+
+## Create a solution
+
+<Code code={quickstart.create} lang="bash" />
+
+Name the project with dot-separated parts made of letters and digits, each starting with a letter (`Acme.Shop`): hyphens, spaces and underscores turn into underscores in namespaces, which analyzer rule CA1707 rejects. In the paths the docs show, `Trellis` reads as your project's name: `tools/Trellis.AppHost` becomes `tools/Acme.Shop.AppHost`.
+
+## Options
+
+<OptionsTable />
+
+Flags take `true` or `false`, and a bare flag means `true`: <code>dotnet new {templateShortName} -n Acme.Shop --use-multitenancy</code>. Visual Studio and Rider show the same options as checkboxes. Your choices are recorded in the generated `.trellis-template.json`.
+
+<Aside type="note" title="Multi-tenancy regenerates one migration">
+  The shipped initial migration has no tenant columns, so a solution created with `--use-multitenancy` regenerates it once before the first run. `dotnet new` prints the reminder, and [Multi-tenancy (optional)](/develop/development/#multi-tenancy-optional) has the commands.
+</Aside>
+
+To turn an option on later, regenerate with it and merge the difference the way [Upgrading](/develop/upgrading/) adopts a new template version; an option that changes the schema also follows [Schema-affecting changes](/develop/upgrading/#5-schema-affecting-changes).
+
+## Next
+
+- [First run](/develop/development/#running-the-app): the AppHost, the dashboard and the seeded administrator.
+- [Try it](/features/invoices/#try-it): an invoice through its whole life in thirteen requests.
+- [Architecture](/understand/architecture/): the rings and the rule the tests enforce.
