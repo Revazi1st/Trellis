@@ -474,9 +474,9 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         // With it the host refuses to start, because minimal APIs resolve the response's JSON contract when
         // they build the endpoint; the request is there in case a future framework defers that to the call.
         CancellationToken ct = TestContext.Current.CancellationToken;
-        using var host = factory.WithTestServices(static services => services.AddTransient<IStartupFilter, UnmappedResultEndpoint>());
-
-        Exception thrown = await Should.ThrowAsync<Exception>(async () => await host.CreateClient().GetAsync(UnmappedResultEndpoint.Route, ct));
+        Exception thrown = await BootFailure.OfAsync(
+            () => factory.WithTestServices(static services => services.AddTransient<IStartupFilter, UnmappedResultEndpoint>()),
+            client => client.GetAsync(UnmappedResultEndpoint.Route, ct));
 
         // ToString carries every inner exception: the guard's NotSupportedException names the fix.
         string report = thrown.ToString();
