@@ -10,7 +10,7 @@ const json = (p) => JSON.parse(read(p));
 
 function find(dir, test, out = []) {
   for (const name of readdirSync(path.join(repoRoot, dir))) {
-    const rel = path.join(dir, name);
+    const rel = path.posix.join(dir, name);
     if (statSync(path.join(repoRoot, rel)).isDirectory()) find(rel, test, out);
     else if (test(name)) out.push(rel);
   }
@@ -18,6 +18,16 @@ function find(dir, test, out = []) {
 }
 
 const template = json('.template.config/template.json');
+
+// Whether a repository file can reach a generated project: template.json's first source minus its
+// unconditional excludes (the maintainer's files: the site, its ADR, the release workflow). A file an
+// option leaves out (a conditional exclude) still counts: some solution has it.
+const excluded = (template.sources?.[0]?.exclude ?? []).map((glob) => {
+  const literal = (s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  const segment = (s) => s.split('**').map((p) => p.split('*').map(literal).join('[^/]*')).join('.*');
+  return new RegExp(`^${glob.split('**/').map(segment).join('(?:.*/)?')}$`);
+});
+const ships = (repoPath) => !excluded.some((re) => re.test(repoPath));
 const globalJson = json('global.json');
 const openapi = json('docs/api/openapi.v1.json');
 
@@ -27,14 +37,15 @@ export const sdkVersion = globalJson.sdk.version; // the repository's pinned SDK
 export const options = readTemplateOptions();
 export const toggles = options.filter((o) => !o.convenience);
 
+// What a generated solution can contain, so a maintainer-only file (ADR-0031) is not counted.
 export const facts = [
-  { value: find('src', (n) => n.endsWith('.csproj')).length, label: 'source projects in four rings' },
-  { value: find('tests', (n) => n.endsWith('.csproj')).length, label: 'test projects, unit to browser' },
+  { value: find('src', (n) => n.endsWith('.csproj')).filter(ships).length, label: 'source projects in four rings' },
+  { value: find('tests', (n) => n.endsWith('.csproj')).filter(ships).length, label: 'test projects, unit to browser' },
   {
     value: Object.values(openapi.paths).flatMap((p) => Object.keys(p).filter((m) => ['get', 'post', 'put', 'patch', 'delete'].includes(m))).length,
     label: 'operations in the committed OpenAPI contract',
   },
-  { value: readdirSync(path.join(repoRoot, 'docs/adr')).filter((f) => /^\d{4}-.*\.md$/.test(f)).length, label: 'decision records with their why' },
+  { value: find('docs/adr', (n) => /^\d{4}-.*\.md$/.test(n)).filter(ships).length, label: 'decision records with their why' },
   { value: toggles.length, label: 'toggles; scaffold only what you need' },
 ];
 

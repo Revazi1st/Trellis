@@ -1,10 +1,14 @@
 ---
 // The options table, generated at build time from .template.config/template.json (bool parameters:
 // defaultValue, description) and dotnetcli.host.json (longName), so it cannot drift from what
-// `dotnet new trellis --help` prints.
+// `dotnet new trellis --help` prints. `toggles` leaves out the command-line conveniences
+// (--skip-restore): the landing page's table is the toggles its heading counts.
 import { optionAnchor } from '../lib/options.mjs';
 import { base } from '../../trellis.config.mjs';
-import { options } from '../data/repo.mjs';
+import { options, toggles } from '../data/repo.mjs';
+
+const { toggles: onlyToggles = false } = Astro.props;
+const rows = onlyToggles ? toggles : options;
 ---
 
 <div class="trellis-table not-content">
@@ -14,7 +18,7 @@ import { options } from '../data/repo.mjs';
     </thead>
     <tbody>
       {
-        options.map((o) => (
+        rows.map((o) => (
           <tr>
             <td><a href={`${base}/start/options/#${optionAnchor(o.flag)}`}><code>{o.flag}</code></a></td>
             <td><span class:list={['pill', o.defaultValue ? 'on' : 'off']}>{o.defaultValue ? 'on' : 'off'}</span></td>
