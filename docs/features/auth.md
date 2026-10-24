@@ -53,6 +53,14 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   1106 `FailedSignInCountNotReset` (Warning, user id and Identity error codes — the lockout counter's
   writes report failure as an `IdentityResult`, never discarded). Never the password, never the
   e-mail as typed.
+- **The caller on every signal**: right after authentication, `UserTelemetryMiddleware` (Api.Common)
+  puts the signed-in caller's user id in the log scope (`CallerUserId`; not `UserId`, which the security
+  events above use for the account an event is about) and on the request span (`enduser.id`), so the
+  outcome line of a rejected command names the account, and so does the request span of a 403 from a
+  missing permission, which writes no log line at the shipped levels (ASP.NET Core logs the failure at
+  Information under `Microsoft.AspNetCore`, held at Warning outside Development). The id only, never the
+  e-mail; a request without a valid access token (a sign-in, a registration) carries neither.
+  `docs/deployment.md` lists both in its *Telemetry reference*.
 - **Logout** revokes the presented refresh token (idempotent, anonymous — possession of the token is
   the authorization; never trips replay detection). **Revoke-all** signs the caller out everywhere.
 - **Tenant (multi-tenancy toggle)**: every user has exactly one `TenantId` (`AspNetUsers`, required,
@@ -148,8 +156,9 @@ Permissions are per endpoint; a rule per record (the owner, a team) is the featu
 what OWASP lists first among API risks when it is missing.
 
 - **The owner is a domain fact.** The aggregate stores an `OwnerId`, the `ICurrentUser.UserId` the
-  handler passes to `Create`. Never authorize on the audit `CreatedBy`: it is a user name stamped by
-  Persistence (`AuditingInterceptor`), it changes when the user's name does, and the domain never sees it.
+  handler passes to `Create`. Never authorize on the audit `CreatedBy`: it is bookkeeping text stamped by
+  Persistence (`AuditingInterceptor`), the acting user's id for a signed-in caller but a name for one
+  without an id (`system` for the migration job), and the domain never sees it.
 - **Enforce it where rows are found.** A specification (`ReportSpecs.OwnedBy(ownerId, id)`) or the
   repository's load filters by owner, so a non-owner's read and write both find nothing and answer the
   aggregate's own `NotFound`, exactly as the `"SoftDeleted"` filter hides a deleted invoice. Answer 403 instead
@@ -196,8 +205,9 @@ Keycloak, Auth0) in front of it, beside the local sign-in or instead of it, is n
   `ClaimTypes.NameIdentifier` holding that user's `Guid`, plus one `permission` claim per permission
   (from the provider's roles or the local user's). `CurrentUser` reads `NameIdentifier` as a `Guid`; a
   provider's `sub` is rarely one, and without the mapping `ICurrentUser.UserId` is null for every external
-  caller, which breaks auditing and ownership and puts them all in the idempotency filter's single
-  `anonymous` partition.
+  caller, which breaks ownership, puts them all in the idempotency filter's single `anonymous`
+  partition, stamps the audit columns with the token's name claim (nothing, without one) instead of a
+  user id, and leaves their log lines and request spans without `CallerUserId` and `enduser.id`.
 - **Leave out what the provider owns.** Registration, the lockout and refresh tokens belong to the local
   sign-in; an external user gets none of them.
 <!--#if (IncludeUI) -->

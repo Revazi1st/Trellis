@@ -3,6 +3,7 @@
 - **Status**: accepted
 - **Date**: 2026-10-08
 - **Amended**: 2026-10-11 — Dependabot's patch and minor pull requests merge on their own behind a week of cooldown and the required checks (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-10-18 — the packages numbered after .NET and the SDK image get no major updates from Dependabot: the next .NET is one migration made on purpose (see *Amendment (2026-10-18)* below)
 
 ## Context
 
@@ -34,7 +35,8 @@ xunit.v3 and Microsoft.Testing.Platform packages share a runtime contract.
   OpenApi, Aspire and Npgsql; one for OpenTelemetry; one `test` group for xunit, Microsoft.Testing,
   Playwright and the test libraries; all GitHub Actions in one weekly PR (SHA pins with version
   comments); the SDK in `global.json` without major versions; the SDK image, the compose images and
-  the dev-container features. The ceiling packages are on its ignore list.
+  the dev-container features. The ceiling packages are on its ignore list. *(Amended 2026-10-18: the
+  packages numbered after .NET and the SDK image take no major versions from it either; see below.)*
 
 ## Consequences
 
@@ -59,3 +61,20 @@ one-time setup and the two consequences (no push run for a token-made merge, hen
 and Template CI runs on `main`; each weekly pull request tested against the `main` of its moment) are in
 `docs/releasing.md`. The licence check of ADR-0011 covers the listed package ids only, so the
 release runbook now starts with a read of the bumps that merged since the last tag.
+
+## Amendment (2026-10-18): the next .NET major is not a Dependabot update
+
+The packages numbered after .NET (10.x on .NET 10: `Microsoft.AspNetCore.*`,
+`Microsoft.EntityFrameworkCore*`, `Microsoft.Extensions.*`, the Npgsql EF Core provider and
+`dotnet-ef`, and outside the `microsoft` group `Asp.Versioning.Http` and `Serilog.AspNetCore`) take
+their next major only with the next .NET, which also moves the SDK in `global.json`, the target
+framework and the SDK image. `dependabot.yml` therefore ignores their major updates and the SDK
+image's, as it already ignored the SDK's; their patch and minor updates arrive as before. Proposed
+anyway, one such major would turn the `microsoft` group's weekly pull request into a major that
+waits for review (the amendment above) and hold back the patches that otherwise merge on their own.
+Moving to a new .NET is one change made on purpose (`docs/development.md`, "Bumping the SDK"), never
+a pull request that appears by itself. The packages that number their own majors (Aspire,
+IdentityModel, Microsoft.OpenApi, MessagePack, OpenTelemetry, the `test` group) still get major
+pull requests, which wait for review. A package numbered after .NET that joins
+`Directory.Packages.props` gets its major ignore in the same change, unless an existing pattern
+already covers it.

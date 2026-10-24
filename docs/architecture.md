@@ -49,7 +49,7 @@ request, and its answer's `code` says which one did (`docs/development.md`, *Whe
 | # | Stage | Where | What it can answer |
 |---|---|---|---|
 | 1 | Host | `UseCorrelationId`, `UseExceptionHandler`, `UseStatusCodePages`, `UseApiHardening` (forwarded headers, security headers, the request timeout, CORS) | `Http.*` for a bodyless status (an unknown route, the 504 timeout); `Server.Failure` 500 for any unhandled exception |
-| 2 | Authentication, rate limiting, authorization | `UseAuthentication`, `UseApiRateLimiting`, `UseAuthorization`; the group's `RequireAuthorization()` and the endpoint's `RequirePermission` | 401 `Auth.Unauthenticated`, 429 `RateLimit.Exceeded`, 403 `Auth.Forbidden` |
+| 2 | Authentication, rate limiting, authorization | `UseAuthentication`, `UseUserTelemetry` (the caller's user id on the log scope and the request span), `UseApiRateLimiting`, `UseAuthorization`; the group's `RequireAuthorization()` and the endpoint's `RequirePermission` | 401 `Auth.Unauthenticated`, 429 `RateLimit.Exceeded`, 403 `Auth.Forbidden` |
 | 3 | Binding and endpoint filters | the endpoint's parameters; `IdempotencyFilter` from `RequireIdempotency()` | 400 `Request.*`; `Idempotency.*` (400, 409, 422) or the stored response replayed |
 | 4 | Tracing | `TracingDecorators` | nothing: opens the use case's span |
 | 5 | Logging | `LoggingDecorators` | nothing: writes the outcome line inside that span |

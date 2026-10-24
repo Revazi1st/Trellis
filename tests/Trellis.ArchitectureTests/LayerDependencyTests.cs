@@ -1,4 +1,5 @@
 using NetArchTest.Rules;
+using Shouldly;
 using Xunit;
 
 namespace Trellis.ArchitectureTests;
@@ -24,17 +25,21 @@ public sealed class LayerDependencyTests
 
     [Fact]
     public void Domain_depends_only_on_SharedKernel()
-        => Types.InAssembly(Architecture.DomainAssembly)
-            .ShouldNot()
-            .HaveDependencyOnAny(
-                Architecture.Application,
-                Architecture.Infrastructure,
-                Architecture.Persistence,
-                Architecture.Presentation,
-                Architecture.EntityFramework,
-                Architecture.AspNetCore)
-            .GetResult()
-            .ShouldBeCompliant();
+        => DomainRule(Architecture.DomainAssembly, Architecture.Domain).ShouldBeCompliant();
+
+    [Fact]
+    public void The_domain_rule_refuses_what_the_SharedKernel_brings_along()
+    {
+        // The positive control: the same rule over the planted shapes, the test assembly's namespace standing in
+        // for the Domain's own.
+        Type[] refused = [.. (DomainRule(typeof(PlantedViolations).Assembly, typeof(PlantedViolations).Namespace!).FailingTypes ?? [])
+            .Select(static type => type.ReflectionType)
+            .OfType<Type>()];
+
+        refused.ShouldContain(typeof(PlantedViolations.ValidatorInTheDomain));
+        refused.ShouldContain(typeof(PlantedViolations.LoggerInTheDomain));
+        refused.ShouldNotContain(typeof(PlantedViolations.Command), "a shape on the BCL and the SharedKernel alone passes");
+    }
 
     [Fact]
     public void Application_does_not_depend_on_outer_layers_or_infrastructure_concerns()
@@ -107,6 +112,19 @@ public sealed class LayerDependencyTests
                 Architecture.AspNetCore)
             .GetResult()
             .ShouldBeCompliant();
+
+    /// <summary>
+    /// The Domain's rule as an allow-list: a type may depend on the BCL (<c>System.*</c>), the SharedKernel and
+    /// its own assembly's namespace, nothing else. Not a list of what is banned: the SharedKernel carries
+    /// FluentValidation and the Microsoft.Extensions DI and logging abstractions, so the Domain compiles against
+    /// all three, and the deny-list this replaced (the outer layers, EF Core, ASP.NET Core) let a Domain type
+    /// derive from <c>AbstractValidator</c> or take an <c>ILogger</c> unnoticed.
+    /// </summary>
+    private static NetArchTest.Rules.TestResult DomainRule(System.Reflection.Assembly assembly, string ownNamespace)
+        => Types.InAssembly(assembly)
+            .ShouldNot()
+            .HaveDependencyOtherThan("System", Architecture.SharedKernel, ownNamespace)
+            .GetResult();
 
     public static TheoryData<string> InnerLayers() =>
         [Architecture.SharedKernel, Architecture.Domain, Architecture.Application, Architecture.Infrastructure, Architecture.Persistence];

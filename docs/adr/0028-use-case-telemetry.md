@@ -4,6 +4,8 @@
 - **Date**: 2026-10-08
 - **Amended**: 2026-10-11 — the span wraps the line, descriptions leave the line, stable event ids, final span attribute names, a validation-failure counter (see *Amendment* below)
 - **Amended**: 2026-10-11 — `ErrorType.PreconditionFailed` is a classified expected failure at Information; `ErrorType.Unavailable` stays at Warning (see *Second amendment* below)
+- **Amended**: 2026-10-18 — the caller's user id on every request signal, a log category per use case, an opt-in slow-use-case Warning (see *Third amendment* below)
+- **Prior art**: [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT): logging each use case under its own request type's category (`ILogger<TRequest>`), the acting user's id on every request's log line, and a slow use case surfaced at Warning past a threshold (`LoggingBehaviour`, `PerformanceBehaviour`) (the 2026-10-18 amendment)
 
 ## Context
 
@@ -98,3 +100,47 @@ at Warning beside an unclassified `Failure`: the request did nothing wrong, but 
 is what the Warning channel is for, and the first line written after the retries, the circuit breaker and
 the limiter have given up should reach whoever is on call. `UseCaseOutcomeTests.Every_error_type_logs_one_line_at_its_level`
 pins both rows; `.claude/rules/application.md`'s pipeline line names both levels.
+
+## Third amendment (2026-10-18): the caller's user id, a log category per use case, a slow-use-case Warning
+
+- **The caller's user id on every request signal.** `UserTelemetryMiddleware` (Api.Common) runs right
+  after authentication and, for a signed-in caller, opens a `CallerUserId` log scope and tags the request
+  span `enduser.id` with the caller's user id. The outcome line and whatever a handler logs then name the
+  account; log records carry the scope because ServiceDefaults sets `IncludeScopes`. A 403 from
+  authorization is named by its request span alone at the shipped levels: ASP.NET Core writes the failure
+  at Information under `Microsoft.AspNetCore`, which `appsettings.json` holds at Warning, and nothing
+  else logs it. The scope is not called `UserId`: the security events already name the account they are
+  about `{UserId}`, which need not be the caller, and one record cannot hold both under one key (an OTLP
+  exporter writes both attributes, Serilog keeps the event's). The id only, never the name or the e-mail,
+  for the reason descriptions left the line: it is written for every request. `enduser.id` is the
+  OpenTelemetry semantic convention for the end user an operation runs for (deprecated in semantic
+  conventions 1.26 and restored in 1.31 for exactly that); `user.id` belongs to the generic user
+  namespace, whose own example is an operating-system account, so it does not carry exactly this meaning.
+  Fitness: `UserTelemetryTests` (ApiTests: an authenticated request's outcome record carries the id in
+  its scope and its request span carries `enduser.id`; an anonymous request's carry neither),
+  `TelemetryNamingTests` (`enduser.id` on the semantic-convention list; no message template names
+  `CallerUserId`).
+- **A log category per use case.** The three `LoggingDecorators` take `ILogger<TCommand>` or
+  `ILogger<TQuery>` instead of a logger typed by the decorator, so each outcome line is logged under its
+  use case's own type (`Trellis.Application.Features.Invoices.ListInvoices.ListInvoicesQuery`) and a
+  namespace prefix in `Logging:LogLevel` (or `Serilog:MinimumLevel:Override`) sets one feature's level.
+  Before, every use case shared the decorator's category, so an operator could quiet all commands or all
+  queries and nothing finer. A feature set to Warning drops its success and expected-failure lines and
+  keeps its Warning and Error lines and its spans; the decision above still holds, since the levels
+  themselves do not change. The loggers stay injected rather than built from an `ILoggerFactory`, so a
+  container that registers the open generic `ILogger<>` sees every line. The category is no longer
+  something to match an outcome line by: match the event ids (1001–1099), as the tests now do.
+  Fitness: `UseCaseOutcomeTests.Each_use_case_logs_under_its_own_message_type` (all three decorator
+  shapes), `SerilogExportTests` (the category survives the Serilog bridge).
+- **A slow use case at Warning, when an operator asks.** `Telemetry:SlowUseCaseThreshold` (unset by
+  default, 1 ms to 1 hour, validated at boot with the rest of `UseCaseLoggingOptions`) makes a use case
+  that returns a result after at least that long write event 1007 `UseCaseSlow` at Warning after its
+  outcome line, carrying the use case's name and elapsed milliseconds and nothing else. The consequence
+  above stays true: a Warning still means something unexpected, because nothing is written until someone
+  says what slow is for this system. A use case that throws or is cancelled already has its own line with
+  its elapsed time, so it gets no second one. There is no duration histogram: ASP.NET Core's
+  `http.server.request.duration` by route already charts every HTTP use case; one is worth adding when a
+  use case runs outside HTTP (the scheduled-job recipe in `docs/architecture.md`). Fitness:
+  `UseCaseOutcomeTests` (past the threshold, a success and a failure each add one Warning under the use
+  case's category; under it or without one, none), `OptionsConventionTests` (out of range stops the boot),
+  `UseCaseLoggingOptionsTests` (bound from the section, off by default).
