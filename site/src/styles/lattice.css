@@ -203,6 +203,123 @@ starlight-toc a[aria-current='true'] {
   background: var(--lt-surface-2);
 }
 
+/* A docs table whose rows read better as blocks (markdown-plugins.mjs, tableLayout): each row a block,
+   its first cell the title and every other cell under its column's name. trellis-stack at every width
+   (from 50rem the title sits in a column of its own beside the cells), trellis-stack-narrow below 50rem
+   only. The header row stays in the markup, hidden, and the plugin's ARIA roles keep the table a table
+   for a screen reader. The two blocks below are the same rules for the two classes. */
+.sl-markdown-content table.trellis-stack {
+  display: block;
+}
+.sl-markdown-content table.trellis-stack thead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.sl-markdown-content table.trellis-stack :is(tbody, tr, td) {
+  display: block;
+}
+.sl-markdown-content table.trellis-stack tr {
+  padding: 0.8rem 0.9rem;
+  border-bottom: 1px solid var(--lt-line);
+}
+.sl-markdown-content table.trellis-stack tr:last-child {
+  border-bottom: 0;
+}
+.sl-markdown-content table.trellis-stack td {
+  padding: 0;
+  border: 0;
+}
+.sl-markdown-content table.trellis-stack td:empty {
+  display: none; /* no label over nothing */
+}
+.sl-markdown-content table.trellis-stack td + td {
+  margin-top: 0.55rem;
+}
+.sl-markdown-content table.trellis-stack td:first-child {
+  font-weight: 600;
+  color: var(--sl-color-white);
+}
+.sl-markdown-content table.trellis-stack td + td::before {
+  content: attr(data-th);
+  content: attr(data-th) / ''; /* the role already names the column: a screen reader skips the label */
+  display: block;
+  margin-bottom: 0.1rem;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lt-muted);
+}
+@media (max-width: 49.99rem) {
+  .sl-markdown-content table.trellis-stack-narrow thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .sl-markdown-content table.trellis-stack-narrow :is(tbody, tr, td) {
+    display: block;
+  }
+  .sl-markdown-content table.trellis-stack-narrow tr {
+    padding: 0.8rem 0.9rem;
+    border-bottom: 1px solid var(--lt-line);
+  }
+  .sl-markdown-content table.trellis-stack-narrow tr:last-child {
+    border-bottom: 0;
+  }
+  .sl-markdown-content table.trellis-stack-narrow td {
+    padding: 0;
+    border: 0;
+  }
+  .sl-markdown-content table.trellis-stack-narrow td:empty {
+    display: none;
+  }
+  .sl-markdown-content table.trellis-stack-narrow td + td {
+    margin-top: 0.55rem;
+  }
+  .sl-markdown-content table.trellis-stack-narrow td:first-child {
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+  .sl-markdown-content table.trellis-stack-narrow td + td::before {
+    content: attr(data-th);
+    content: attr(data-th) / '';
+    display: block;
+    margin-bottom: 0.1rem;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--lt-muted);
+  }
+}
+@media (min-width: 50rem) {
+  .sl-markdown-content table.trellis-stack tr {
+    display: grid;
+    grid-template-columns: 12rem minmax(0, 1fr);
+    column-gap: 1.5rem;
+    padding: 0.9rem 1rem;
+  }
+  .sl-markdown-content table.trellis-stack td + td {
+    grid-column: 2;
+  }
+  .sl-markdown-content table.trellis-stack td + td + td {
+    margin-top: 0.7rem;
+  }
+  .sl-markdown-content table.trellis-stack td:first-child + td {
+    margin-top: 0;
+  }
+  .sl-markdown-content table.trellis-stack td:first-child code {
+    white-space: normal;
+  }
+}
+
 /* The preview banner (any build but a release) and the documented version (a release build). */
 :root {
   --sl-color-banner-bg: #3a2f1b;

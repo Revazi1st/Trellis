@@ -46,6 +46,11 @@ derive what frontmatter would have held and adapt the rest:
   on a directive line in `docs/` it did not read as one.
 - **Testing**: the `## Tests` section of `development.md` is rendered as a page of its own, and links
   to its anchors follow it there.
+- **Tables** keep their Markdown; the site picks a layout from the length of their cells
+  (`tableLayout` in `src/lib/markdown-plugins.mjs`). A table with prose in several columns (the
+  test-project map) reads as one block per row at every width, the first cell the title and every other
+  cell under its column's name; any other table of three columns or more with long rows does so on a
+  phone only, where its last columns would sit off-screen.
 - **Architecture** opens with the rings picture, both themes, read from `eng/readme/rings-*.svg` at build
   time (`docs/architecture.md` cannot embed it: `eng/readme/` never ships).
 - **Mermaid**: a `mermaid` fence is drawn as a diagram in the browser, by mermaid from this build: a

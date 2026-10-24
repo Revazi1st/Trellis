@@ -18,6 +18,8 @@
 // For site pages under src/content/docs (.mdx):
 //   root-relative links and JSX href props get the base (/Trellis), so pages are written base-free, and
 //   a {/* trellis:option-sections */} comment becomes one section per template option (options.mjs).
+// And one hast plugin, for files under docs/: a table whose rows read better as blocks (tableLayout) gets
+// a class, each cell its column's name and the table ARIA roles; lattice.css lays it out.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -69,6 +71,16 @@ export function trellisMdastPlugins({ siteContentDir }) {
       if (isInside(file, docsDir)) return docsPlugin(toPosix(path.relative(docsDir, file)));
       if (isInside(file, siteContentDir)) return sitePagePlugin();
       return null;
+    },
+  ];
+}
+
+/** Plugin entries for satteri's `hastPlugins`. */
+export function trellisHastPlugins() {
+  return [
+    (ctx) => {
+      if (!ctx.fileURL) return null;
+      return isInside(fileURLToPath(ctx.fileURL), docsDir) ? tablesPlugin() : null;
     },
   ];
 }
@@ -205,6 +217,59 @@ function sitePagePlugin() {
     },
     mdxJsxFlowElement: jsx,
     mdxJsxTextElement: jsx,
+  };
+}
+
+// ---- tables ---------------------------------------------------------------------------------------
+
+/**
+ * How a docs table is laid out, from the length of its cells' text:
+ *   'stack'        prose in several columns (four columns or more, two of them after the first averaging
+ *                  90 characters or more): each row a block at every width, its first cell the title and
+ *                  every other cell under its column's name. Side by side in the 45rem column, each of
+ *                  those columns would be a few words wide (the Testing table).
+ *   'stack-narrow' a wide table (three columns or more, rows of 60 characters or more on average): the
+ *                  same blocks below 50rem, a table from there up. On a phone the columns after the first
+ *                  two would otherwise sit off-screen behind a sideways scroll.
+ *   null           a table at every width: two columns, or short rows, fit a phone.
+ */
+export function tableLayout(header, rows) {
+  if (header.length < 3 || rows.length === 0) return null;
+  const average = header.map((_, i) => rows.reduce((sum, row) => sum + (row[i]?.length ?? 0), 0) / rows.length);
+  const prose = average.slice(1).filter((a) => a >= 90).length;
+  if (header.length >= 4 && prose >= 2) return 'stack';
+  return average.reduce((sum, a) => sum + a, 0) >= 60 ? 'stack-narrow' : null;
+}
+
+function tablesPlugin() {
+  const elements = (node) => (node.children ?? []).filter((c) => c.type === 'element');
+  return {
+    name: 'trellis-tables',
+    element: {
+      filter: ['table'],
+      visit(table, ctx) {
+        const groups = elements(table).filter((g) => g.tagName === 'thead' || g.tagName === 'tbody');
+        const rows = groups.flatMap((g) => elements(g).filter((r) => r.tagName === 'tr'));
+        const head = rows.find((r) => elements(r).some((c) => c.tagName === 'th'));
+        if (!head) return;
+        const header = elements(head).map((th) => ctx.textContent(th).trim());
+        const body = rows.filter((r) => r !== head).map((r) => elements(r).filter((c) => c.tagName === 'td'));
+        const layout = tableLayout(header, body.map((cells) => cells.map((td) => ctx.textContent(td).trim())));
+        if (!layout) return;
+        ctx.setProperty(table, 'className', [...(table.properties?.className ?? []), `trellis-${layout}`]);
+        // A table laid out as blocks loses its table semantics in some browsers: the roles keep them.
+        ctx.setProperty(table, 'role', 'table');
+        for (const g of groups) ctx.setProperty(g, 'role', 'rowgroup');
+        for (const r of rows) ctx.setProperty(r, 'role', 'row');
+        for (const th of elements(head)) ctx.setProperty(th, 'role', 'columnheader');
+        for (const cells of body) {
+          cells.forEach((td, i) => {
+            ctx.setProperty(td, 'role', 'cell');
+            if (header[i]) ctx.setProperty(td, 'dataTh', header[i]);
+          });
+        }
+      },
+    },
   };
 }
 

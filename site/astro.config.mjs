@@ -7,7 +7,7 @@ import { defineConfig } from 'astro/config';
 import starlightLinksValidator from 'starlight-links-validator';
 import { title as docTitle } from './src/lib/doc-text.mjs';
 import { sidebarLabel } from './src/lib/docs-loader.mjs';
-import { trellisMdastPlugins } from './src/lib/markdown-plugins.mjs';
+import { trellisHastPlugins, trellisMdastPlugins } from './src/lib/markdown-plugins.mjs';
 import { base, docsDir, github, repoRoot, routeForDoc, site } from './trellis.config.mjs';
 
 const siteDir = path.dirname(fileURLToPath(import.meta.url));
@@ -30,9 +30,9 @@ const filesUnder = (dir) =>
   });
 
 /**
- * Registers the Trellis mdast plugins ahead of Starlight's and the links validator's, and checks the
- * output: mermaid's optional ELK layout engine (elkjs, EPL-2.0) is aliased away below, and must not reach
- * a reader by another import path.
+ * Registers the Trellis mdast plugins ahead of Starlight's and the links validator's, and its hast plugin
+ * (the table layouts) after the highlighter, and checks the output: mermaid's optional ELK layout engine
+ * (elkjs, EPL-2.0) is aliased away below, and must not reach a reader by another import path.
  */
 const trellisMarkdown = {
   name: 'trellis-markdown',
@@ -47,6 +47,7 @@ const trellisMarkdown = {
       const processor = config.markdown.processor;
       if (processor?.name !== 'satteri') throw new Error('trellis-markdown expects Astro 7’s default Sätteri processor');
       processor.options.mdastPlugins.unshift(...trellisMdastPlugins({ siteContentDir: path.join(siteDir, 'src/content/docs') }));
+      processor.options.hastPlugins.push(...trellisHastPlugins());
       // GitHub parity: docs/ is written and reviewed on GitHub, which keeps -- and straight quotes as typed
       // (Astro's default turns `--help` in text into an en dash).
       processor.options.features.smartPunctuation = false;
