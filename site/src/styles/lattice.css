@@ -530,6 +530,16 @@ starlight-toc a[aria-current='true'] {
   font-size: 13px;
   color: var(--stage-muted);
 }
+/* A release build's fine print is a link to the package (Hero.astro): stage ink on the dark stage in
+   both schemes, never the page's link colour. */
+.stage .fine a {
+  color: var(--stage-ink);
+  text-decoration-color: var(--stage-muted);
+  text-underline-offset: 0.2em;
+}
+.stage .fine a:hover {
+  text-decoration-color: var(--lt-leaf);
+}
 .stage .fine code {
   color: var(--stage-ink);
   background: rgba(255, 255, 255, 0.08);
