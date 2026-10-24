@@ -43,7 +43,9 @@ derive what frontmatter would have held and adapt the rest:
   written as HTML comments in Markdown) is shown as an aside labelled with the option that keeps it
   ("Only with `--use-redis`"). The plugin reads a directive only when the comment is alone on its line,
   which `scripts/check-template-toggles.sh` enforces for every shipped Markdown file, and the build fails
-  on a directive line in `docs/` it did not read as one.
+  on a directive line in `docs/` it did not read as one. A directive between two bullets ends the list
+  in Markdown; where the block resolves without an aside (a `TemplateSource` block, or any block in the
+  defaults build), the two lists are joined again, as the engine writes them.
 - **Testing**: the `## Tests` section of `development.md` is rendered as a page of its own, and links
   to its anchors follow it there.
 - **Tables** keep their Markdown; the site picks a layout from the length of their cells

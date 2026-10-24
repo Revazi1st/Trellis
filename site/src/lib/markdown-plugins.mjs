@@ -324,11 +324,25 @@ function resolveConditionals(children, ctx, rel) {
     return children;
   }
   const out = [];
+  let joinable = false; // the next node follows a directive this pass removed
+  const add = (n) => {
+    const prev = out.at(-1);
+    if (joinable && prev?.type === 'list' && n.type === 'list' && prev.ordered === n.ordered) {
+      // A directive between two bullets ends the Markdown list (it sits in column 0), so a conditional
+      // bullet is a list of its own, with a gap above it: ADR-0014's TemplateSource "Amended" line under
+      // Status and Date. Where the block resolves (a constant, or the defaults), the lists are one
+      // again, as the engine writes them.
+      out[out.length - 1] = { type: 'list', ordered: prev.ordered, start: prev.start, spread: prev.spread || n.spread, children: [...prev.children, ...n.children] };
+    } else {
+      out.push(n);
+    }
+    joinable = false;
+  };
   for (let i = 0; i < children.length; i++) {
     const n = children[i];
     const d = n.type === 'html' ? parseDirective(n.value) : null;
     if (!d) {
-      out.push(n);
+      add(n);
       continue;
     }
     if (d.kind !== 'if') {
@@ -353,7 +367,9 @@ function resolveConditionals(children, ctx, rel) {
     }
     if (j >= children.length) warn(`${rel}: #if (${d.source}) has no #endif`);
     i = j;
-    out.push(...renderBranches(branches, ctx, rel));
+    joinable = true;
+    for (const r of renderBranches(branches, ctx, rel)) add(r);
+    joinable = true;
   }
   return out;
 }
