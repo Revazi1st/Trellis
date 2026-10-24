@@ -249,14 +249,24 @@ starlight-toc a[aria-current='true'] {
   border-inline-start: 3px solid var(--lt-leaf);
   border-radius: 10px;
 }
+/* Its label is one sentence ("Only with --include-ui (on by default) or --use-multitenancy") that wraps
+   as text. Starlight's title is a flex row, which would make each text run and each flag a column of its
+   own on a phone, a flag broken at its hyphens. */
 .starlight-aside--note[aria-label^='Only '] .starlight-aside__title {
+  display: block;
   font-size: var(--sl-text-sm);
   font-weight: 500;
+}
+.starlight-aside--note[aria-label^='Only '] .starlight-aside__icon {
+  display: inline-block;
+  vertical-align: -0.25em;
+  margin-inline-end: 0.45rem;
 }
 .starlight-aside--note[aria-label^='Only '] .starlight-aside__title code {
   background: transparent;
   padding: 0;
   font-weight: 500;
+  white-space: nowrap;
 }
 .starlight-aside {
   border-radius: 10px;
