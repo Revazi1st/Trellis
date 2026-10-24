@@ -3,7 +3,7 @@
 Trellis is a rich-DDD, Clean Architecture **.NET 10** solution. Vertical-slice features inside layered projects, grouped by ring (`src/Core`, `src/Infrastructure`, `src/Presentation`, `src/Shared`).
 <!--#if (TemplateSource) -->
 
-This repository is also the `dotnet new` template that generates such solutions (`.template.config/`, packed from `eng/Trellis.TemplatePack`). Template work has its own tools: the `add-toggle` skill, the source-only section of `.claude/rules/tools.md`, `scripts/check-template-toggles.sh`, `scripts/test-template.sh` (Template CI's legs on your machine) and `docs/releasing.md`. Files a generated project must not inherit as they are (README, CHANGELOG, the governance files) are excluded in `template.json`; the project gets the stubs in `.template.config/consumer/` instead.
+This repository is also the `dotnet new` template that generates such solutions (`.template.config/`, packed from `eng/Trellis.TemplatePack`). Template work has its own tools: the `add-toggle` skill, the source-only section of `.claude/rules/tools.md`, `scripts/check-template-toggles.sh`, `scripts/test-template.sh` (Template CI's legs on your machine) and `docs/releasing.md`. Files a generated project must not inherit as they are (README, CHANGELOG, the governance files) are excluded in `template.json`; the project gets the stubs in `.template.config/consumer/` instead. The documentation website is `site/` (Astro + Starlight rendering `docs/` in place, maintainer-only; `site/README.md`): a change under `docs/` must keep every link and `#anchor` valid there, which `cd site && npm ci && npm run build` checks on Node 22.
 <!--#endif -->
 
 ## Commands
