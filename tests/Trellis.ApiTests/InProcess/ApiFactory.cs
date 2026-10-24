@@ -22,6 +22,7 @@ using Trellis.Application.Abstractions;
 using Trellis.Application.Authorization;
 using Trellis.Persistence;
 using Trellis.Persistence.Identity;
+using Trellis.ServiceDefaults;
 using Xunit;
 
 namespace Trellis.ApiTests.InProcess;
@@ -69,8 +70,9 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
     public SettableClock Time { get; } = new();
 
     // One container per fixture, no reuse: reuse is experimental and the Ryuk reaper kills
-    // "reusable" containers when a parallel test assembly's session ends mid-run.
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18-alpine")
+    // "reusable" containers when a parallel test assembly's session ends mid-run. Debian postgres:18, the image
+    // the AppHost and a deployment run (IntegrationTests' DatabaseFixture says why not Alpine).
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
         .WithDatabase("trellis_apitests")
         .Build();
 
@@ -85,7 +87,7 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseSetting("ConnectionStrings:trellis-db", _postgres.GetConnectionString());
+        builder.UseSetting($"ConnectionStrings:{ServiceNames.Database}", _postgres.GetConnectionString());
         builder.UseSetting("Authentication:SigningKey", SigningKey);
         // Fixtures register throwaway members; do not depend on appsettings.Development.json opting in.
         builder.UseSetting("Registration:Mode", "Open");

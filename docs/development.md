@@ -120,7 +120,7 @@ Then in Rider/VS Code, using the **`http (dev container)`** launch profiles — 
 `host.docker.internal:5433`, because inside the dev container `localhost` is the container itself:
 
 1. Run **Trellis.MigrationService** (profile `migrate (dev container)`) once — applies migrations and seeds.
-2. Run **Trellis.Api** (profile `http (dev container)`) → <http://localhost:5171>, Scalar at `/scalar/v1`.
+2. Run **Trellis.Api** (profile `http (dev container)`) → <http://localhost:5171>, which opens Scalar (`/scalar/v1`).
 3. Run **Trellis.UI.Web** (profile `http (dev container)`) → <http://localhost:5170>.
 
 **Any run configuration works**, because `devcontainer.json` sets `ASPNETCORE_ENVIRONMENT` and the
@@ -163,12 +163,19 @@ without a login; open the dashboard URL either command prints. This is the best 
 SDK is available. The Aspire CLI reads the AppHost path from the committed `aspire.config.json`
 (`appHost.path`), the project settings file it would otherwise create on first use.
 
-From Rider or Visual Studio, run the **Trellis.AppHost** project: its `Properties/launchSettings.json`
-has an `https` profile (the dashboard at `https://localhost:17171`) and an `http` profile
-(`http://localhost:15171`, no certificate involved); the ports are picked free when the solution is
-created, so this document names yours. The IDE's Aspire run configuration needs one of
-them; without a launch profile it refuses to start, while `dotnet run` and `aspire run` fall back to
-a dynamic dashboard URL. The `https` profile wants a trusted development certificate: run
+PostgreSQL runs in a persistent container that keeps running after the app stops, so the next start
+finds it ready; its data lives in a named volume. For a fresh database, stop the app and remove both:
+`docker rm -f` the `postgres-…` container and `docker volume rm` the `…-postgres-data` volume
+(`docker ps -a` and `docker volume ls` show their names).
+
+From Rider or Visual Studio, run the **Trellis.AppHost** project. Visual Studio makes it the startup
+project when it first opens the solution (`DefaultStartup="true"` in `Trellis.slnx`; a startup project
+you choose later is remembered instead); in Rider, pick it in the run configurations yourself. Its
+`Properties/launchSettings.json` has an `https` profile (the dashboard at `https://localhost:17171`)
+and an `http` profile (`http://localhost:15171`, no certificate involved); the ports are picked free
+when the solution is created, so this document names yours. The IDE's Aspire run configuration needs
+one of them; without a launch profile it refuses to start, while `dotnet run` and `aspire run` fall
+back to a dynamic dashboard URL. The `https` profile wants a trusted development certificate: run
 `dotnet dev-certs https --trust` once (macOS and Windows prompt for confirmation), or use `http`.
 The AppHost's own profile is the only one Aspire reads: the API, web and migration projects run
 with `ExcludeLaunchProfile = true` and get their endpoints and connection string from Aspire
@@ -233,7 +240,7 @@ project) and the `add-feature` skill point here rather than repeat it.
 | `Application.UnitTests` | each handler's orchestration over faked ports (NSubstitute, `FakeTimeProvider`), the validators, event handlers, and the decorator pipeline itself (order, span, outcome line, validation) | nothing | you write a handler, a validator or an event handler, or touch a decorator: one folder per use case under `Features/<Feature>/<UseCase>/`, the validators' bounds in `Features/<Feature>/<Feature>CommandValidatorTests.cs` |
 | `ArchitectureTests` | the rules files hold: layer boundaries, conventions by reflection and source scan, the error-code vocabulary, options validated at boot, telemetry names and the telemetry reference | nothing | you introduce a convention: it gets a rule and a positive control, not just prose |
 | `IntegrationTests` | Persistence against a real PostgreSQL: mappings and round trips, specifications translated to SQL, interceptors, concurrency, the outbox and the idempotency store, retention, the migration matching the model | Docker (Testcontainers starts PostgreSQL) | a query, a mapping, an interceptor or anything transactional changes |
-| `ApiTests` | the HTTP contract through the real pipeline: authentication and each endpoint's permission, problem details, idempotency, caching and conditional requests, the served OpenAPI document equal to the committed one, the reference integration over a scripted socket | Docker for the in-process tests (contract and serialization tests run without it). The Aspire E2E also needs `RUN_ASPIRE_E2E=1` and a local SDK or CI, otherwise it skips; it drops the AppHost's postgres data volume, so it runs on a throwaway database and never touches your `aspire run` data | an endpoint answers something the fitness suites do not already pin: its own 404, a business 409, the field codes of its 400, a notable flow end to end |
+| `ApiTests` | the HTTP contract through the real pipeline: authentication and each endpoint's permission, problem details, idempotency, caching and conditional requests, the served OpenAPI document equal to the committed one, the reference integration over a scripted socket | Docker for the in-process tests (contract and serialization tests run without it). The Aspire E2E also needs `RUN_ASPIRE_E2E=1` and a local SDK or CI, otherwise it skips; it drops the AppHost's postgres data volume and persistent lifetime (`appHost.UseThrowawayDatabase()`, which an Aspire test of your own calls too), so it runs its own container and database and never touches your `aspire run` ones | an endpoint answers something the fitness suites do not already pin: its own 404, a business 409, the field codes of its 400, a notable flow end to end |
 
 `tests/TestSupport/` is not a project: it holds the test files several projects share
 (`ResultAssertions.cs` with `ShouldBeSuccess()`, `Invoices/InvoiceFactory.cs`), each compiled into the

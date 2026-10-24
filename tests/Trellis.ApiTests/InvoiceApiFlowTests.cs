@@ -3,19 +3,23 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using Aspire.Hosting;
+#if (IncludeUI)
 using Aspire.Hosting.ApplicationModel;
+#endif
 using Aspire.Hosting.Testing;
 using Shouldly;
 using Trellis.Api.Contracts.Auth;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
+using Trellis.ServiceDefaults;
 using Xunit;
 
 namespace Trellis.ApiTests;
 
 /// <summary>
-/// True end-to-end: boots the real AppHost (PostgreSQL container, migration worker, API) with
-/// randomized ports and drives the public HTTP contract exactly like a client would.
+/// True end-to-end: boots the real AppHost (PostgreSQL container, migration worker, API, and the web host
+/// when the UI is included) with randomized ports and drives the public HTTP contract exactly like a client
+/// would.
 ///
 /// Requires Aspire's orchestrator (DCP), which runs project resources as local processes alongside
 /// container resources — so it needs a real host environment: a local .NET SDK, or CI. It cannot run
@@ -35,13 +39,22 @@ public sealed class InvoiceApiFlowTests
         CancellationToken ct = TestContext.Current.CancellationToken;
 
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Trellis_AppHost>(ct);
-        UseThrowawayDatabase(appHost);
+        appHost.UseThrowawayDatabase();
+#if (IncludeUI)
+        // Without a health check a resource reports healthy as soon as its process runs.
+        appHost.Resources.Single(static r => r.Name == ServiceNames.Web).Annotations.OfType<HealthCheckAnnotation>()
+            .ShouldNotBeEmpty("the AppHost no longer checks the web host's /health");
+#endif
         await using DistributedApplication app = await appHost.BuildAsync(ct);
         await app.StartAsync(ct);
 
         // Healthy implies the migration worker already completed (api WaitsForCompletion on it).
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("api", ct);
-        using HttpClient client = app.CreateHttpClient("api");
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Api, ct);
+#if (IncludeUI)
+        // The web host is healthy once its own /health answers.
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Web, ct);
+#endif
+        using HttpClient client = app.CreateHttpClient(ServiceNames.Api);
 
         // Invoice endpoints require permissions — anonymous access is rejected.
         (await client.GetAsync("/api/v1/invoices/overdue", ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -147,25 +160,5 @@ public sealed class InvoiceApiFlowTests
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
         createResponse.Headers.Location.ShouldNotBeNull();
         return (await createResponse.Content.ReadFromJsonAsync<CreateInvoiceResponse>(ct))!.Id;
-    }
-
-    /// <summary>
-    /// The AppHost gives postgres a named data volume so <c>aspire run</c> keeps its data between runs.
-    /// The volume name derives from the AppHost project, so without this the test would open, and write
-    /// to, the developer's <c>aspire run</c> database. Without the volume mount every run starts from an
-    /// empty database that the migration worker creates and seeds from scratch.
-    /// </summary>
-    private static void UseThrowawayDatabase(IDistributedApplicationTestingBuilder appHost)
-    {
-        IResource postgres = appHost.Resources.Single(static r => r.Name == "postgres");
-        List<ContainerMountAnnotation> volumes = [.. postgres.Annotations
-            .OfType<ContainerMountAnnotation>()
-            .Where(static m => m.Type == ContainerMountType.Volume)];
-        volumes.ShouldNotBeEmpty("the AppHost no longer mounts a data volume on postgres; drop UseThrowawayDatabase");
-
-        foreach (ContainerMountAnnotation volume in volumes)
-        {
-            postgres.Annotations.Remove(volume);
-        }
     }
 }
