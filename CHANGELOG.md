@@ -415,6 +415,11 @@ If you generated a project from 0.1.0, read these before adopting this version w
 
 ### Fixed
 
+- **Boot-failure tests no longer flake under load**: `AuthFlowTests` and `ProblemDetailsContractTests` asserted a
+  refused start with a bare `Should.Throw(() => host.CreateClient())`; about once in fifteen full-suite runs the
+  test host's own race (the top-level `Program` is started on a second thread, which disposes the host when the
+  start fails) surfaced `ObjectDisposedException` instead of the boot error. `BootFailure.OfAsync` boots the host,
+  retries that one case on a fresh host (three attempts) and returns the real exception.
 - The `.editorconfig` section that marks EF migrations as generated code, and turns every analyzer off
   there, matched any folder called `Migrations`, so a feature folder of that name (tenant or data
   migrations) compiled with no analyzer at all. It names `src/Infrastructure/*.Persistence/Migrations/`
