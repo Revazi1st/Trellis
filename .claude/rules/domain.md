@@ -5,7 +5,7 @@ paths: ["src/Core/Trellis.Domain/**/*.cs"]
 
 # Domain layer rules
 
-The domain is pure: **BCL + SharedKernel only** — never reference EF Core, ASP.NET, Application, Infrastructure, or Persistence (arch-test enforced).
+The domain is pure: **BCL + SharedKernel only** — never reference EF Core, ASP.NET, Application, Infrastructure, or Persistence, nor use the packages the SharedKernel carries (FluentValidation, the Microsoft.Extensions DI and logging abstractions), which the Domain compiles against through its SharedKernel reference. `LayerDependencyTests` enforces it as an allow-list: `System.*`, the SharedKernel, the Domain itself.
 
 - **Aggregates** derive from `AggregateRoot<TId>`; entities from `Entity<TId>`. One aggregate per consistency boundary, and one aggregate changed per command: a rule that must hold across two aggregates at once means the boundary is drawn wrong, and a change that may follow in another aggregate is a domain-event reaction, which loads that aggregate by id, calls one of its `Result` methods and never calls `SaveChanges` (the outbox commits it; `application.md`).
 - **Construction**: a `static Create(...)` factory returning `Result<T>` (validates invariants) + a `private` parameterless constructor for EF. No public constructors, no public setters — mutate only through intention-revealing methods.

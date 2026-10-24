@@ -2,6 +2,7 @@
 using Serilog;
 #endif
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using Trellis.Api.Common;
 using Trellis.Api.Common.Authentication;
@@ -41,23 +42,29 @@ builder.Services.AddSerilog(
     writeToProviders: true);
 #endif
 
-// The use-case outcome line names an error's type and code; its description joins only where
-// Telemetry:IncludeErrorDetail says so (appsettings.Development.json), because a description can carry what a
-// user typed (ADR-0028). Registered before AddApplication, whose TryAdd would otherwise register the default.
-builder.Services.AddSingleton(new UseCaseLoggingOptions
-{
-    IncludeErrorDetail = builder.Configuration.GetValue<bool>(
-        $"{UseCaseLoggingOptions.SectionName}:{nameof(UseCaseLoggingOptions.IncludeErrorDetail)}"),
-});
+// The use-case logging stage's settings, from the Telemetry section and checked at boot (ADR-0028). The outcome
+// line names an error's type and code; its description joins only where Telemetry:IncludeErrorDetail says so
+// (appsettings.Development.json), because a description can carry what a user typed. Telemetry:SlowUseCaseThreshold,
+// unset by default, adds a Warning for a use case slower than it. The bound instance is registered as the plain
+// type the decorators take, before AddApplication, whose TryAdd would otherwise register the defaults.
+builder.Services.AddOptions<UseCaseLoggingOptions>()
+    .BindConfiguration(UseCaseLoggingOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddSingleton(static services => services.GetRequiredService<IOptions<UseCaseLoggingOptions>>().Value);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOutboundIntegrations(builder.Configuration);
-builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trellis-db")
-    ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
+builder.Services.AddPersistence(builder.Configuration.GetConnectionString(ServiceNames.Database)
+    ?? throw new InvalidOperationException($"Connection string '{ServiceNames.Database}' is not configured."));
 // AddPersistence already turned on Npgsql's retrying execution strategy, and the outbox claim and the identity
-// transactions run inside it, see ADR-0023. The Aspire enrichment therefore adds health checks, tracing and
-// metrics only, never a second retry policy on top.
-builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
+// transactions run inside it, see ADR-0023. The Aspire enrichment therefore adds tracing and metrics only: no
+// second retry policy on top, and no second check of the database beside the "database" readiness check below.
+builder.EnrichNpgsqlDbContext<AppDbContext>(static settings =>
+{
+    settings.DisableRetry = true;
+    settings.DisableHealthChecks = true;
+});
 
 // The data-retention windows and the outbox knobs are checked at boot too: a zero Retention:SweepInterval
 // or Outbox:PollInterval would hot-loop its service. Persistence binds them but cannot run DataAnnotations
@@ -96,8 +103,8 @@ builder.Services.AddHybridCache(static cache => cache.DefaultEntryOptions = new 
     LocalCacheExpiration = TimeSpan.FromSeconds(30),
 });
 #if (UseRedis)
-// Aspire registers an IDistributedCache backed by the "cache" Redis resource, which HybridCache uses as its L2.
-builder.AddRedisDistributedCache("cache");
+// Aspire registers an IDistributedCache backed by the cache Redis resource, which HybridCache uses as its L2.
+builder.AddRedisDistributedCache(ServiceNames.Cache);
 #endif
 
 var app = builder.Build();
@@ -121,9 +128,13 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+    // The API's own address opens its reference instead of a 404, from the Aspire dashboard's endpoint link or a
+    // bare URL. Outside the versioned group and the OpenAPI document, like the reference itself.
+    app.MapGet("/", static () => Results.Redirect("/scalar/v1")).ExcludeFromDescription();
 }
 
 app.UseAuthentication();
+app.UseUserTelemetry();     // the caller's user id on every log line and the request span from here on
 app.UseApiRateLimiting();   // after authentication so partitions key on the real user, not "anonymous"
 app.UseAuthorization();
 

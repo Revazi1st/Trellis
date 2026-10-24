@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The domain is deliberately dependency-free: BCL + SharedKernel only. -->
+  <!-- The domain references the SharedKernel and nothing else, and its types use the BCL and the SharedKernel only.
+       The reference brings the SharedKernel's own packages along (FluentValidation,
+       Microsoft.Extensions.DependencyInjection.Abstractions, Microsoft.Extensions.Logging.Abstractions), so the
+       compiler would accept them here; LayerDependencyTests.Domain_depends_only_on_SharedKernel refuses them. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Trellis.SharedKernel\Trellis.SharedKernel.csproj" />

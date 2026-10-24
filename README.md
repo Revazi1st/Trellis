@@ -2,8 +2,10 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="eng/readme/title-dark.svg">
-  <img alt="Trellis" src="eng/readme/title-light.svg">
+  <img alt="Trellis, a best-practices .NET 10 solution template, beside a terminal with its two install commands" src="eng/readme/title-light.svg" width="100%">
 </picture>
+
+Rich DDD · Clean Architecture · vertical slices · CQRS without a mediator · Aspire · Blazor
 
 [![Template CI](https://github.com/Revazi1st/Trellis/actions/workflows/template-ci.yml/badge.svg)](https://github.com/Revazi1st/Trellis/actions/workflows/template-ci.yml)
 [![CI](https://github.com/Revazi1st/Trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/Revazi1st/Trellis/actions/workflows/ci.yml)
@@ -19,16 +21,16 @@
 
 </div>
 
+```bash
+dotnet new install Trellis.Templates
+dotnet new trellis -n Your.Project
+```
+
 **Trellis** is a `dotnet new` template for .NET 10 that generates a rich-DDD, Clean Architecture
 solution: vertical-slice features, CQRS without a mediator, `Result`s instead of exceptions,
 PostgreSQL, Identity with JWT, Aspire orchestration and an optional Blazor UI, in a repository written
 for AI agents as carefully as for people. Like the lattice a gardener puts up for a climbing plant, it
 carries the weight and sets the direction while your features grow, then disappears under them.
-
-```bash
-dotnet new install Trellis.Templates
-dotnet new trellis -n Your.Project
-```
 
 Name the project with dot-separated parts made of letters and digits, each starting with a letter
 (`Acme.Shop`): hyphens, spaces and underscores turn into underscores in namespaces, which analyzer rule
@@ -272,7 +274,7 @@ login.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="eng/readme/architecture-dark.svg">
-  <img alt="The solution tree, project by project, in its rings: Presentation (Api, Api.Common, Api.Contracts, UI.Common, UI.Web) on top, Infrastructure and Persistence side by side as peers, Core (Application, Domain, SharedKernel) below them with the Invoices slice expanded, and Shared (ServiceDefaults) and tools (AppHost, MigrationService, Analyzers) at the bottom. Every arrow points inward." src="eng/readme/architecture-light.svg">
+  <img alt="The solution as a bento of ring cards, each project a card holding its real folders: Presentation (Api, Api.Common, Api.Contracts, UI.Common, UI.Web) on top, Infrastructure and Persistence side by side as peers, Application and Domain with SharedKernel below them with the Invoices slice expanded, and Shared (ServiceDefaults) and tools (AppHost, MigrationService, Analyzers) at the bottom. Every arrow points inward." src="eng/readme/architecture-light.svg" width="100%">
 </picture>
 
 Projects are grouped by ring, and a feature is a vertical slice through them: the invoice use cases
@@ -282,10 +284,12 @@ way. Infrastructure and Persistence are peers that never reference each other, w
 templates ship one Infrastructure project with a Persistence folder inside
 ([ADR-0002](docs/adr/0002-infrastructure-persistence-split.md)).
 
+<p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="eng/readme/rings-dark.svg">
-  <img alt="Concentric rings: Domain and SharedKernel at the centre, Application around them, Infrastructure and Persistence as the two halves of the next ring, Presentation outside." src="eng/readme/rings-light.svg">
+  <img alt="Concentric rings: Domain and SharedKernel at the centre, Application around them, Infrastructure and Persistence as the two halves of the next ring, Presentation outside." src="eng/readme/rings-light.svg" width="160">
 </picture>
+</p>
 
 | Ring | Projects | What lives there |
 |---|---|---|
@@ -304,7 +308,7 @@ are plain SVG, so Figma or Inkscape opens them as editable vectors.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="eng/readme/pipeline-dark.svg">
-  <img alt="A request through the API: the endpoint, then the Tracing, Logging, Validation and UnitOfWork decorators around the handler and the aggregate, one commit to PostgreSQL, and the outbox delivering the event to its handlers afterwards." src="eng/readme/pipeline-light.svg">
+  <img alt="Paying an invoice as a rail of numbered steps: the HTTP request, hardening, the permission and idempotency filters and the endpoint; the Tracing, Logging, Validation and UnitOfWork decorators around the handler and the aggregate; the commit that writes the outbox row with the invoice; and past the outbox boundary, OutboxProcessor, the event handlers and the receipt e-mail." src="eng/readme/pipeline-light.svg" width="100%">
 </picture>
 
 There is no mediator. Each endpoint is one class that takes its handler straight from dependency
@@ -403,7 +407,7 @@ is a constant in `Permissions`, listed in `Permissions.All` and granted to a rol
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="eng/readme/testing-dark.svg">
-  <img alt="The test projects drawn as brackets around the layers they run through: Domain.UnitTests and Application.UnitTests in memory, IntegrationTests from Persistence to a real PostgreSQL, ApiTests through the HTTP pipeline, ArchitectureTests as a frame around every project, and the opt-in UiTests and Aspire end-to-end test around the running app." src="eng/readme/testing-light.svg">
+  <img alt="The test suites as cards under a rail of the layers, each as wide as the layers it runs through: the opt-in UiTests from the browser and the opt-in Aspire end-to-end test from the AppHost, both to PostgreSQL; ApiTests from Shared and IntegrationTests from Persistence, both to a real PostgreSQL; Application.UnitTests and Domain.UnitTests in memory; and ArchitectureTests as a bracket over every project." src="eng/readme/testing-light.svg" width="100%">
 </picture>
 
 Each test project proves one thing about one part of the solution:
@@ -448,9 +452,11 @@ violation it must catch (`PlantedViolations`).
   and relative link.
 - Line coverage has a floor per ring: Core 90 %, Infrastructure 85 %, Presentation 75 %, Shared 80 %.
 - Every pull request also tests what the template generates. Template CI creates a solution per toggle
-  leg (default, no UI, UI tests without the UI, all options), checks it for leftovers of the
-  template's name, builds it in Release and runs the tests of the default, no-UI and all-options legs.
-  It repeats the default on Windows and builds a project from the packed `.nupkg`.
+  leg (default, no UI, UI tests without the UI, all options, and Redis, Serilog and multi-tenancy each
+  on alone with the UI off), checks it for leftovers of the template's name, builds it in Release and
+  runs its tests on every leg but UI-tests-without-the-UI, the Aspire end-to-end test included, so each
+  of them boots its generated AppHost. It repeats the default on Windows and builds a project from the
+  packed `.nupkg`.
 
 ## Fun features 🎉
 
@@ -613,6 +619,17 @@ describes planned work that is not in the template yet; the marker goes when it 
   - upstream status mapped by endpoint contract, `Unavailable` as 503, and optional `If-Match` on transition POSTs;
   - the error-code vocabulary fitness test and the value-object constructor test;
   - the build-time analyzer for a discarded `Result`.
+- [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT):
+  - booting the generated solution's AppHost from its own test suite in template CI, and a template-CI leg for every option value;
+  - a local script that instantiates, builds and tests every template leg and prints a results table (`build/test.ps1`);
+  - release notes in the package metadata;
+  - a persistent-lifetime database container in the AppHost, Aspire's guidance as his AppHost applies it;
+  - one resource-name constants class referenced by the AppHost through an `IsAspireProjectResource="false"` reference (`Shared/Services.cs`);
+  - `DefaultStartup="true"` on the AppHost in the `.slnx`;
+  - logging each use case under its own request type's category (`ILogger<TRequest>`), the acting user's id on every request's log line, and a slow use case surfaced at Warning past a threshold (`LoggingBehaviour`, `PerformanceBehaviour`);
+  - stamping audit columns with the user's id rather than a display name (`AuditableEntityInterceptor`);
+  - opening the API's root on its Scalar reference;
+  - a short, ordered deployment page in Getting started.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.

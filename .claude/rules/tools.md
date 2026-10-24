@@ -7,8 +7,9 @@ paths: ["tools/**/*.{cs,csproj}", ".github/**/*.{yml,yaml}", "docker-compose.yml
 
 ## AppHost (`tools/Trellis.AppHost`)
 
-- Aspire orchestration: postgres (image major pinned — data volumes don't survive major bumps) → migrations (`WaitFor`) → api (`WaitForCompletion(migrations)`) → web. `aspire run` needs a real host, not the SDK container (ADR-0008).
-- `AddDockerComposeEnvironment("compose")` backs `aspire publish`; images come from `dotnet publish /t:PublishContainer` — no Dockerfiles. The compose output has no restart policy, TLS, health checks or app secrets and publishes the Aspire dashboard: `docs/deployment.md` lists what to add, so keep it in step when the AppHost changes what it publishes.
+- Aspire orchestration: postgres (image major pinned — data volumes don't survive major bumps; a persistent lifetime, so the container outlives the AppHost, which an Aspire test strips with the volume through `UseThrowawayDatabase`) → migrations (`WaitFor`) → api (`WaitForCompletion(migrations)`) → web; api and web are healthy once their own `/health` answers (`WithHttpHealthCheck`), not when their process starts. `aspire run` needs a real host, not the SDK container (ADR-0008).
+- **Resource names come from `ServiceNames`** (`src/Shared/Trellis.ServiceDefaults/ServiceNames.cs`), which the AppHost references with `IsAspireProjectResource="false"`: a library it compiles against, not a project it runs. Code that names a resource uses the same constant (`GetConnectionString(ServiceNames.Database)`, a test host's `$"ConnectionStrings:{ServiceNames.Database}"`, `$"https+http://{ServiceNames.Api}"`, the E2E test's waits), so a rename is one edit; JSON, launch settings and YAML keep the literal. A new resource gets its constant first.
+- `AddDockerComposeEnvironment("compose")` backs `aspire publish`; images come from `dotnet publish /t:PublishContainer` — no Dockerfiles. In publish mode only, the AppHost declares the two app secrets as parameters (`signing-key` → `Authentication__SigningKey` on api, `seed-admin-password` → `Seed__AdminPassword` on migrations; `SIGNING_KEY` and `SEED_ADMIN_PASSWORD` in `.env`) and gives the long-running services (postgres, api, web, and the cache with Redis) `restart: unless-stopped`; the dashboard's UI is published on the host's loopback only. The output has no TLS, health checks or resource limits: `docs/deployment.md` (the one-host quick start and the compose table) lists what to add, so keep it in step when the AppHost changes what it publishes.
 
 ## MigrationService (`tools/Trellis.MigrationService`)
 
@@ -26,7 +27,7 @@ paths: ["tools/**/*.{cs,csproj}", ".github/**/*.{yml,yaml}", "docker-compose.yml
 
 ## CI supply-chain gates
 
-- **Central package management** (ADR-0029): versions live only in `Directory.Packages.props` (transitive pinning on); a package family that shares version floors moves in one Dependabot group (`.github/dependabot.yml`) — add a new family to its group in the same change.
+- **Central package management** (ADR-0029): versions live only in `Directory.Packages.props` (transitive pinning on); a package family that shares version floors moves in one Dependabot group (`.github/dependabot.yml`) — add a new family to its group in the same change. A package numbered after .NET (10.x on .NET 10) also needs a semver-major ignore there unless an existing pattern covers it: its next major comes with the next .NET, a migration made by hand.
 - **NuGetAudit** (`all` + `low`, `Directory.Build.props`) fails Release and CI builds on any advisory, transitive included (NU1901–NU1904). Playbook in `docs/development.md` ("Vulnerable packages"): upgrade, else pin the transitive in `Directory.Packages.props` with the advisory in a comment, else `NuGetAuditSuppress` one advisory with its reason. Never lower the level or the mode to get a build through.
 <!--#if (TemplateSource) -->
 

@@ -28,6 +28,8 @@ public sealed class UseCaseOutcomeTests : IDisposable
     {
         services.AddScoped<ICommandHandler<ScriptedCommand>, ScriptedCommandHandler>();
         services.AddScoped<ICommandHandler<GuardedCommand>, GuardedCommandHandler>();
+        services.AddScoped<ICommandHandler<AnsweringCommand, int>, AnsweringCommandHandler>();
+        services.AddScoped<IQueryHandler<AnsweringQuery, int>, AnsweringQueryHandler>();
         services.AddSingleton<IValidator<GuardedCommand>>(new InlineValidator<GuardedCommand>
         {
             static rules => rules.RuleFor(static c => c.Name).NotEmpty(),
@@ -45,6 +47,20 @@ public sealed class UseCaseOutcomeTests : IDisposable
         line.Level.ShouldBe(LogLevel.Information);
         line.EventId.Id.ShouldBe(1001);
         line.Message.ShouldContain("ScriptedCommand succeeded");
+    }
+
+    [Fact]
+    public async Task Each_use_case_logs_under_its_own_message_type()
+    {
+        // The category is the command or query type, so Logging:LogLevel:<a feature's namespace> sets one
+        // feature's level; it used to be the decorator class, one category for every use case.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        (await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())))).ShouldBeSuccess();
+        (await _pipeline.Resolve<ICommandHandler<AnsweringCommand, int>>().Handle(new AnsweringCommand(), ct)).ShouldBeSuccess();
+        (await _pipeline.Resolve<IQueryHandler<AnsweringQuery, int>>().Handle(new AnsweringQuery(), ct)).ShouldBeSuccess();
+
+        _pipeline.Logs.OutcomeLines.Select(static line => line.Category)
+            .ShouldBe([typeof(ScriptedCommand), typeof(AnsweringCommand), typeof(AnsweringQuery)]);
     }
 
     [Fact]
@@ -138,6 +154,54 @@ public sealed class UseCaseOutcomeTests : IDisposable
         line.Level.ShouldBe(LogLevel.Warning);
         line.EventId.Id.ShouldBe(1004);
         line.Message.ShouldContain("Failure (Test.Unclassified): Nobody classified this yet.");
+    }
+
+    [Fact]
+    public async Task A_use_case_slower_than_the_threshold_adds_a_Warning_with_its_name_and_elapsed_time()
+    {
+        // An operator's opt-in. One tick: every invocation through the real pipeline takes longer than that.
+        using var pipeline = new PipelineHarness(static services =>
+        {
+            services.AddSingleton(new UseCaseLoggingOptions { SlowUseCaseThreshold = TimeSpan.FromTicks(1) });
+            services.AddScoped<ICommandHandler<ScriptedCommand>, ScriptedCommandHandler>();
+        });
+        var handler = pipeline.Resolve<ICommandHandler<ScriptedCommand>>();
+
+        (await handler.Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())), TestContext.Current.CancellationToken))
+            .ShouldBeSuccess();
+        // A slow failure is slow too; the scripted failure comes straight back, what this test reads is the lines.
+        _ = await handler.Handle(
+            new ScriptedCommand(static _ => Task.FromResult(Result.Failure(Error.Conflict("Test.Conflict", "Already done.")))),
+            TestContext.Current.CancellationToken);
+
+        // The outcome lines keep their own levels; each invocation adds one Warning that names only the use
+        // case and its elapsed time, under the use case's category.
+        pipeline.Logs.OutcomeLines.Select(static line => line.Level).ShouldBe([LogLevel.Information, LogLevel.Information]);
+        pipeline.Logs.SlowLines.Count.ShouldBe(2);
+        pipeline.Logs.SlowLines.ShouldAllBe(static line => line.Level == LogLevel.Warning
+                                                            && line.EventId.Name == "UseCaseSlow"
+                                                            && line.Category == typeof(ScriptedCommand));
+        pipeline.Logs.SlowLines.ShouldAllBe(static line => line.Message.StartsWith("Use case ScriptedCommand took ", StringComparison.Ordinal)
+                                                            && line.Message.EndsWith("ms, past the slow-use-case threshold", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task No_slow_Warning_is_written_below_the_threshold_or_while_none_is_set()
+    {
+        using var pipeline = new PipelineHarness(static services =>
+        {
+            services.AddSingleton(new UseCaseLoggingOptions { SlowUseCaseThreshold = TimeSpan.FromHours(1) });
+            services.AddScoped<ICommandHandler<ScriptedCommand>, ScriptedCommandHandler>();
+        });
+
+        (await pipeline.Resolve<ICommandHandler<ScriptedCommand>>().Handle(
+            new ScriptedCommand(static _ => Task.FromResult(Result.Success())), TestContext.Current.CancellationToken)).ShouldBeSuccess();
+        (await Handle(new ScriptedCommand(static _ => Task.FromResult(Result.Success())))).ShouldBeSuccess();   // the default: no threshold
+
+        pipeline.Logs.SlowLines.ShouldBeEmpty();
+        pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
+        _pipeline.Logs.SlowLines.ShouldBeEmpty();
+        _pipeline.Logs.OutcomeLines.ShouldHaveSingleItem();
     }
 
     [Theory]
@@ -328,6 +392,21 @@ public sealed class UseCaseOutcomeTests : IDisposable
     private sealed class GuardedCommandHandler : ICommandHandler<GuardedCommand>
     {
         public Task<Result> Handle(GuardedCommand command, CancellationToken cancellationToken) => Task.FromResult(Result.Success());
+    }
+
+    /// <summary>Test-only use cases for the two other decorator shapes: a command with a response, and a query.</summary>
+    private sealed record AnsweringCommand : ICommand<int>;
+
+    private sealed class AnsweringCommandHandler : ICommandHandler<AnsweringCommand, int>
+    {
+        public Task<Result<int>> Handle(AnsweringCommand command, CancellationToken cancellationToken) => Task.FromResult<Result<int>>(42);
+    }
+
+    private sealed record AnsweringQuery : IQuery<int>;
+
+    private sealed class AnsweringQueryHandler : IQueryHandler<AnsweringQuery, int>
+    {
+        public Task<Result<int>> Handle(AnsweringQuery query, CancellationToken cancellationToken) => Task.FromResult<Result<int>>(42);
     }
 
     /// <summary>
