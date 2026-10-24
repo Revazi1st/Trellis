@@ -411,6 +411,12 @@ and patch updates (a new major version is a migration, not a bump). With a bump:
   referenced version cannot load the analyzer. `dotnet <dotnet root>/sdk/<version>/Roslyn/bincore/csc.dll -version`
   prints the compiler's version. Raising it is optional.
 
+A new .NET major moves more than the SDK: the target framework, the SDK image's tag, and every package
+numbered after .NET (`Microsoft.AspNetCore.*`, `Microsoft.EntityFrameworkCore*`, `Microsoft.Extensions.*`,
+the Npgsql EF Core provider, `dotnet-ef`, `Asp.Versioning.Http`, `Serilog.AspNetCore`). Dependabot
+proposes none of those majors (`.github/dependabot.yml` ignores them, as it ignores the SDK's), so the
+move is one change you make on purpose; their patches and minors keep arriving before and after it.
+
 ## Conventions
 
 Layer rules live in `.claude/rules/` (they also guide AI agents). The short version: dependencies point inward, failures are `Result`s not exceptions, migrations are generated not hand-edited, and no commercially-licensed packages (see the ceilings in `Directory.Packages.props`).

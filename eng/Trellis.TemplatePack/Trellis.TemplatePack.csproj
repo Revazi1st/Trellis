@@ -8,6 +8,11 @@
     <Description>A rich-DDD, Clean Architecture .NET 10 solution template: feature-based minimal APIs, separate Infrastructure and Persistence, Aspire orchestration, Blazor UI, and an AI-friendly repository.</Description>
     <PackageTags>dotnet-new;templates;clean-architecture;ddd;cqrs;vertical-slice;aspire;blazor;postgresql</PackageTags>
     <Version>0.1.0</Version>
+    <!-- nuget.org's "Release Notes": the GitHub release of this version, whose notes are its CHANGELOG
+         section. release.yml packs with -p:Version from the v* tag it publishes the release under, so
+         a real release links to itself; what a dry run or Template CI packs is never pushed. A link,
+         not the section itself: nuget.org shows release notes as plain text, Markdown and all. -->
+    <PackageReleaseNotes>https://github.com/Revazi1st/Trellis/releases/tag/v$(Version)</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -55,6 +60,7 @@
       ..\..\.github\workflows\release.yml;
       ..\..\.claude\skills\add-toggle\**;
       ..\..\scripts\check-template-toggles.sh;
+      ..\..\scripts\test-template.sh;
       ..\..\docs\releasing.md;
       ..\..\README.md;
       ..\..\CHANGELOG.md;

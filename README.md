@@ -448,9 +448,11 @@ violation it must catch (`PlantedViolations`).
   and relative link.
 - Line coverage has a floor per ring: Core 90 %, Infrastructure 85 %, Presentation 75 %, Shared 80 %.
 - Every pull request also tests what the template generates. Template CI creates a solution per toggle
-  leg (default, no UI, UI tests without the UI, all options), checks it for leftovers of the
-  template's name, builds it in Release and runs the tests of the default, no-UI and all-options legs.
-  It repeats the default on Windows and builds a project from the packed `.nupkg`.
+  leg (default, no UI, UI tests without the UI, all options, and Redis, Serilog and multi-tenancy each
+  on alone with the UI off), checks it for leftovers of the template's name, builds it in Release and
+  runs its tests on every leg but UI-tests-without-the-UI, the Aspire end-to-end test included, so each
+  of them boots its generated AppHost. It repeats the default on Windows and builds a project from the
+  packed `.nupkg`.
 
 ## Fun features 🎉
 
@@ -613,6 +615,10 @@ describes planned work that is not in the template yet; the marker goes when it 
   - upstream status mapped by endpoint contract, `Unavailable` as 503, and optional `If-Match` on transition POSTs;
   - the error-code vocabulary fitness test and the value-object constructor test;
   - the build-time analyzer for a discarded `Result`.
+- [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT):
+  - booting the generated solution's AppHost from its own test suite in template CI, and a template-CI leg for every option value;
+  - a local script that instantiates, builds and tests every template leg and prints a results table (`build/test.ps1`);
+  - release notes in the package metadata.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
