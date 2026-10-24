@@ -35,8 +35,8 @@
   --stage-glass: rgba(255, 255, 255, 0.05);
 
   /* Starlight, dark */
-  --sl-font: 'Geist';
-  --sl-font-mono: 'Geist Mono';
+  --sl-font: 'Geist Variable';
+  --sl-font-mono: 'Geist Mono Variable';
   --sl-line-height: 1.65;
   --sl-color-white: #f2f7f0;
   --sl-color-gray-1: #e6efe8;

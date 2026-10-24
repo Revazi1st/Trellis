@@ -46,7 +46,11 @@ derive what frontmatter would have held and adapt the rest:
   on a directive line in `docs/` it did not read as one.
 - **Testing**: the `## Tests` section of `development.md` is rendered as a page of its own, and links
   to its anchors follow it there.
-- **Mermaid**: a `mermaid` fence is drawn as a diagram in the browser.
+- **Mermaid**: a `mermaid` fence is drawn as a diagram in the browser, by mermaid from this build: a
+  chunk fetched only by a page that has a diagram.
+
+The site makes no request to a third party: mermaid, the Geist and Geist Mono fonts and the search index
+are all served from the site itself (the fonts' licence is at `/Trellis/fonts-license.txt`).
 
 ## Settings
 
@@ -62,10 +66,14 @@ Environment variables the build reads (all optional):
 For example, `TRELLIS_SITE_CONDITIONALS=defaults npm run build` checks that the docs read well without
 the asides.
 
-## Updating Astro and Starlight
+## Updating the dependencies
 
 `package.json` pins every dependency exactly. Starlight is 0.x and a few things here lean on its
 internals and on Astro's Markdown processor (the two loaders in one collection, the Decisions group built
 in `astro.config.mjs`, the dates the loader supplies, the page route the plugins hand to the links
 validator), so read the release notes of every Astro or Starlight bump and run `npm run build` before
 merging one.
+
+mermaid 12 lays diagrams out with ELK by default. ELK (elkjs) is EPL-2.0, and everything the site serves
+is MIT, ISC, BSD, Apache-2.0 or OFL, so the diagrams are drawn with dagre, elkjs is aliased to a stub
+(`src/lib/no-elk.mjs`), and the build fails if ELK code reaches `dist/` by another import path.

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 // This module's folder is the site folder when Node loads it (astro.config.mjs imports it first), but a
 // chunk under dist/.prerender/ once the build bundles it for prerendering, in the same process. So the
 // first evaluation hands the real folder down through the environment and later ones read it back.
-const siteDir = process.env.TRELLIS_SITE_DIR ?? path.dirname(fileURLToPath(import.meta.url));
+export const siteDir = process.env.TRELLIS_SITE_DIR ?? path.dirname(fileURLToPath(import.meta.url));
 process.env.TRELLIS_SITE_DIR = siteDir;
 
 export const repoRoot = path.resolve(siteDir, process.env.TRELLIS_REPO_ROOT ?? '..');
