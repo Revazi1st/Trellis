@@ -37,6 +37,9 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # KEEP IN SYNC with scripts/test-template.sh, which runs these legs on a maintainer's machine:
+      # it reads this list (one key per line, args in double quotes; a new key needs teaching there)
+      # and its run_leg mirrors the Instantiate, Regenerate, Build and Test steps below.
       matrix:
         include:
           - name: default
@@ -57,6 +60,26 @@ jobs:
             # Multi-tenancy adds columns, so the shipped initial migration is regenerated first.
             regenerate-migration: true
             # Build alone missed a runtime-only DI failure once (ITenantContext); run the generated tests too.
+            test: true
+          # Each option that is off by default, on alone with the UI off. Without these legs Redis,
+          # Serilog and multi-tenancy were only ever all off or all on, and never without the UI, so
+          # code that works only while another option is on too went unseen (ApiFactory's separate
+          # UseRedis and UseMultitenancy blocks had only ever compiled together). With the legs above,
+          # every pair of the five options meets in all four value combinations. Tested, not just
+          # built, for the reason above; they run on every pull request (a public repository's
+          # standard runners cost no Actions minutes).
+          - name: no-ui-with-redis
+            args: "--include-ui false --use-redis true"
+            out: Acme.Ledger
+            test: true
+          - name: no-ui-with-serilog
+            args: "--include-ui false --use-serilog true"
+            out: Acme.Journal
+            test: true
+          - name: no-ui-with-multitenancy
+            args: "--include-ui false --use-multitenancy true"
+            out: Acme.Tenants
+            regenerate-migration: true
             test: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,10 +125,11 @@ jobs:
             fail=1
           fi
 
-          # The template does not ship its maintainer-only checks; a workflow step that runs one
-          # belongs in a block conditioned on the TemplateSource symbol (see ci.yml).
-          if grep -rInF 'check-template-toggles' .github; then
-            echo "::error::Generated workflows reference scripts/check-template-toggles.sh, which the template does not ship (listed above)."
+          # The template does not ship its maintainer-only scripts (check-template-toggles.sh,
+          # test-template.sh); a workflow step that runs one belongs in a block conditioned on the
+          # TemplateSource symbol (see ci.yml).
+          if grep -rInE 'check-template-toggles|test-template\.sh' .github; then
+            echo "::error::Generated workflows reference a maintainer-only script the template does not ship (listed above)."
             fail=1
           fi
 
@@ -182,7 +206,8 @@ jobs:
             echo "::error::The generated README.md is not the consumer stub (it does not name $marker)."
             fail=1
           fi
-          for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md eng/readme; do
+          for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md eng/readme \
+                   scripts/check-template-toggles.sh scripts/test-template.sh; do
             if [ -e "$f" ]; then
               echo "::error::$f is the template repository's own material and must not ship."
               fail=1
@@ -204,11 +229,16 @@ jobs:
         working-directory: ../generated
         run: dotnet build ./*.slnx -c Release
 
+      # Everything runs for real: the Testcontainers suites and the Aspire E2E (InvoiceApiFlowTests),
+      # which boots the generated AppHost under its new name (PostgreSQL, the migration worker, the
+      # API, Redis with --use-redis) as a consumer's first push to their own CI would. The AppHost
+      # starts Linux images, so the E2E is switched on for Linux runners only and skips on any other
+      # (the Windows job below runs only the projects that need no Docker). Playwright stays opt-in.
       - name: Test generated solution
         if: ${{ matrix.test }}
         working-directory: ../generated
-        # Aspire E2E and Playwright stay opt-in (not set here); everything else runs for real,
-        # including the Testcontainers integration tests.
+        env:
+          RUN_ASPIRE_E2E: ${{ runner.os == 'Linux' && '1' || '0' }}
         run: dotnet test ./*.slnx -c Release --no-build
 
   # The default options on Windows: the template installs and instantiates there, the generated

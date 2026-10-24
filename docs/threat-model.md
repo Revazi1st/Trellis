@@ -112,6 +112,10 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   N×. Move to a shared store if the limit is a security control rather than a politeness control.
 - **`/health` and `/alive` are anonymous** so orchestrators can reach them — *open*. Readiness
   reveals dependency names and status — keep both off the public ingress.
+- **The Aspire dashboard of a compose deployment shows every log line and trace** — *closed by
+  default*. The compose file `aspire publish` writes binds its UI to the server's loopback
+  (`127.0.0.1:18888`), so it is reached over an SSH tunnel with the token it prints at start-up; the
+  signing key and the seed password come from `.env` as parameters, never from the YAML.
 - **The security-event log is partial** — *open*. Sign-in failures and lockouts are structured
   events (1101–1106); registration, revocation, refresh-token replay (an unstructured warning) and
   role or permission changes are ordinary application logs, and nothing ships them to a

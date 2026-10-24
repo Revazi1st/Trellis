@@ -13,7 +13,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
 {
     // Deliberately NOT WithReuse(true): reuse is experimental and the Ryuk reaper kills "reusable"
     // containers when a parallel test assembly's session ends, failing whoever is still connected.
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    // Debian postgres:18, the image the AppHost, docker-compose.yml and a deployment run: the Alpine image's musl
+    // libc collates text differently, so an ORDER BY on text could pass here and sort otherwise there.
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18").Build();
 
     private NpgsqlConnection? _connection;
     private Respawner? _respawner;

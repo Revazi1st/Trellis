@@ -55,12 +55,16 @@ builder.Services.AddSingleton(static services => services.GetRequiredService<IOp
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOutboundIntegrations(builder.Configuration);
-builder.Services.AddPersistence(builder.Configuration.GetConnectionString("trellis-db")
-    ?? throw new InvalidOperationException("Connection string 'trellis-db' is not configured."));
+builder.Services.AddPersistence(builder.Configuration.GetConnectionString(ServiceNames.Database)
+    ?? throw new InvalidOperationException($"Connection string '{ServiceNames.Database}' is not configured."));
 // AddPersistence already turned on Npgsql's retrying execution strategy, and the outbox claim and the identity
-// transactions run inside it, see ADR-0023. The Aspire enrichment therefore adds health checks, tracing and
-// metrics only, never a second retry policy on top.
-builder.EnrichNpgsqlDbContext<AppDbContext>(static settings => settings.DisableRetry = true);
+// transactions run inside it, see ADR-0023. The Aspire enrichment therefore adds tracing and metrics only: no
+// second retry policy on top, and no second check of the database beside the "database" readiness check below.
+builder.EnrichNpgsqlDbContext<AppDbContext>(static settings =>
+{
+    settings.DisableRetry = true;
+    settings.DisableHealthChecks = true;
+});
 
 // The data-retention windows and the outbox knobs are checked at boot too: a zero Retention:SweepInterval
 // or Outbox:PollInterval would hot-loop its service. Persistence binds them but cannot run DataAnnotations
@@ -99,8 +103,8 @@ builder.Services.AddHybridCache(static cache => cache.DefaultEntryOptions = new 
     LocalCacheExpiration = TimeSpan.FromSeconds(30),
 });
 #if (UseRedis)
-// Aspire registers an IDistributedCache backed by the "cache" Redis resource, which HybridCache uses as its L2.
-builder.AddRedisDistributedCache("cache");
+// Aspire registers an IDistributedCache backed by the cache Redis resource, which HybridCache uses as its L2.
+builder.AddRedisDistributedCache(ServiceNames.Cache);
 #endif
 
 var app = builder.Build();
@@ -124,6 +128,9 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+    // The API's own address opens its reference instead of a 404, from the Aspire dashboard's endpoint link or a
+    // bare URL. Outside the versioned group and the OpenAPI document, like the reference itself.
+    app.MapGet("/", static () => Results.Redirect("/scalar/v1")).ExcludeFromDescription();
 }
 
 app.UseAuthentication();
