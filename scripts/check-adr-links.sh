@@ -13,14 +13,22 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 fail=0
 
+# The paths both checks below read, one per line from the checkout's root ("./docs/…"): all of them.
+in_scope() { cat; }
+#if (TemplateSource)
+# In the template's repository, less the documentation site (./site, ADR-0031): its pages link the site's
+# own routes, not repository paths, and it never ships. A generated project has no such folder, and a
+# site/ of its own is checked like every other folder.
+in_scope() { sed '/^\.\/site\//d'; }
+#endif
+
 # --- every ADR reference resolves to a file ---
 # The same prune list as the link check below: a git worktree under .claude/worktrees (an agent
-# working on another branch), a build folder or the template repository's documentation site (site/,
-# which links the site's own routes and never ships) must not make this checkout's references fail.
-refs=$(grep -rhoE 'ADR-[0-9]{4}' --include='*.md' --include='*.cs' --include='*.props' \
+# working on another branch) or a build folder must not make this checkout's references fail.
+refs=$(grep -rHoE 'ADR-[0-9]{4}' --include='*.md' --include='*.cs' --include='*.props' \
   --exclude-dir=.git --exclude-dir=worktrees --exclude-dir=artifacts --exclude-dir=bin --exclude-dir=obj \
-  --exclude-dir=node_modules --exclude-dir=TestResults --exclude-dir=site . \
-  | sed 's/ADR-//' | sort -u)
+  --exclude-dir=node_modules --exclude-dir=TestResults . \
+  | in_scope | sed 's/.*ADR-//' | sort -u)
 
 existing=$(find docs/adr -name '*.md' -exec basename {} \; | grep -oE '^[0-9]{4}' | sort -u)
 
@@ -149,8 +157,8 @@ md_links() {  # prints "line<TAB>target" for each link in one Markdown file
 }
 
 md_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./.template.config/consumer \
-    -o -path ./site -o -path ./artifacts -o -name node_modules -o -name bin -o -name obj -o -name TestResults \) -prune \
-    -o -type f -name '*.md' -print | sed 's|^\./||' | sort)
+    -o -path ./artifacts -o -name node_modules -o -name bin -o -name obj -o -name TestResults \) -prune \
+    -o -type f -name '*.md' -print | in_scope | sed 's|^\./||' | sort)
 
 while IFS= read -r f; do
   [ -n "$f" ] || continue
