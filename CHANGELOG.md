@@ -8,6 +8,15 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+- **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
+  live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
+  scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes
+  no colour; `DesignSystemTests` proves the contrast of every text on its ground in both schemes, that
+  only the token file writes a colour, and that the doc and the files name the same tokens and classes.
+  The starting palette is a green ink and accent on near-white, a lime accent on near-black. Two tokens
+  were renamed for anyone who customised 0.1.x: `--fg` is `--ink` and `--border` is `--line`
+  (`docs/upgrading.md`, step 7). No class and no markup changed.
+
 ## [0.1.1] - 2026-10-26
 
 A patch: the documentation corrections and the two fixes that followed the first release.

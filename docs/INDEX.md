@@ -5,6 +5,9 @@ Agent entry point — read only what the task needs.
 ## Guides (humans & agents)
 - [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns, a request stage by stage, domain versus integration events and what each delivery step guarantees, shipping `Api.Contracts` as a package, scheduled use cases
 - [development.md](development.md) — prerequisites, commands, running the app, the testing map (what each project proves, the shared `tests/TestSupport/` files, running part of the suite, which helper for which goal: `InvoiceFactory`, the drivers, `ShouldBeSuccess()`), when the build fails (RSLT001, CS9057), when a request fails, vulnerable packages, bumping the SDK
+<!--#if (IncludeUI) -->
+- [design-system.md](design-system.md) — the UI's tokens in two themes, the components the pages are built from, the contrast and voice rules, the tests that hold them, re-skinning, themes, mocks
+<!--#endif -->
 - [deployment.md](deployment.md) — a one-host quick start (images, `aspire publish`, `.env`, `docker compose up`, the first probe), container images (tags, an SBOM), what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP and trace sampling, the telemetry reference (every source, meter, instrument, attribute and log event id, test-checked), outbox and idempotency runbooks
 - [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge
 - [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice
@@ -26,7 +29,7 @@ Agent entry point — read only what the task needs.
 - [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, test names, the shared test support (`tests/TestSupport/`: `ShouldBeSuccess()`, `InvoiceFactory`) and RSLT001 over tests, arranging through the drivers (`InvoiceDriver`, `InvoiceHttpDriver`) and the switchable `TestCurrentUser`, each test project's conventions (one folder per use case, the validator boundary tests), the fitness suites and their positive controls, the fixture contract and helpers, the OpenAPI snapshot
 - [tools.md](../.claude/rules/tools.md) — `tools/**/*.{cs,csproj}`, `.github/**/*.{yml,yaml}`, `docker-compose.yml`: AppHost, MigrationService, the RSLT001 analyzer, CI supply-chain gates
 <!--#if (IncludeUI) -->
-- [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the host shell
+- [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor,css,js}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the design system, the host shell
 <!--#endif -->
 <!--#if (TemplateSource) -->
 - [site.md](../.claude/rules/site.md) — `site/**` (template repository only, ADR-0031): the Lattice visual language and its design system, the owner's rules for the two themes, how a site change is proven before it merges
@@ -79,6 +82,9 @@ Numbered by the template and updated by template upgrades; record your own from 
 - [0030](adr/0030-discarded-result-analyzer.md) — a discarded Result fails the build: the in-repository RSLT001 analyzer (`tools/Trellis.Analyzers`), loaded into every project, what it reports and exempts, the Roslyn version ceiling
 <!--#if (TemplateSource) -->
 - [0031](adr/0031-documentation-site.md) — the documentation website (template repository only): Astro + Starlight in `site/` rendering `docs/` in place, conditionals as labelled asides, every link validated, no third-party request, deployed from the release tag, a preview with a banner
+<!--#endif -->
+<!--#if (IncludeUI) -->
+- [0032](adr/0032-ui-design-system.md) — a design system for the UI: two files (tokens and components), role names, one `light-dark()` pair per colour, the existing classes as the components, the doc as the source of names held by tests both ways, the starting palette
 <!--#endif -->
 
 ## Project decisions (docs/adr/, 0100 and up)

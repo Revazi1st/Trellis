@@ -75,3 +75,13 @@ Read the changelog's upgrade notes before the first deploy, not after: a change 
 credits its handlers or to a bookkeeping table's shape is safe on an empty outbox and an empty
 idempotency table, and only there. Drain the outbox (no pending `OutboxMessages` rows) and let
 in-flight idempotent requests finish before switching versions when a note asks for it.
+
+<!--#if (IncludeUI) -->
+## 7. Renames in the UI's stylesheet
+
+A project that customised the 0.1.x `app.css` carries two token renames into the design system that
+replaced it ([design-system.md](design-system.md)): `--fg` became `--ink` and `--border` became
+`--line`, and every colour moved from the `:root` and `prefers-color-scheme` blocks into one
+`light-dark(#light, #dark)` pair in `tokens.css`. Move your values there, keep the names, and let
+`DesignSystemTests` tell you which pair needs a different value.
+<!--#endif -->
