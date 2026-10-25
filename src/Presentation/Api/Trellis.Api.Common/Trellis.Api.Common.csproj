@@ -20,4 +20,10 @@
     <PackageReference Include="Scalar.AspNetCore" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The exception handlers and the idempotency result are internal: what they log about a request is
+         proved on a bare HttpContext in ApiTests (LogSafeRequestLineTests), without a host or Docker. -->
+    <InternalsVisibleTo Include="Trellis.ApiTests" />
+  </ItemGroup>
+
 </Project>

@@ -8,6 +8,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+- **The request line is logged line-safe.** The malformed-request (400/413/415), unhandled-exception (500)
+  and idempotency-residue log lines take the method and the path through `LogSafeRequestLine`, which
+  replaces a line break with a space. On Kestrel nothing changes (a method is token characters only, the
+  path is logged escaped); the point is CodeQL, which recognises the replacement as a sanitiser: the
+  `codeql.yml` a generated project ships with no longer opens six `cs/log-forging` alerts on day one.
+
 ## [0.1.0] - 2026-10-25
 
 The first release.
