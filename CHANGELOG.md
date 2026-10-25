@@ -8,10 +8,6 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
-- **Rider lists Trellis as its own entry.** The template no longer carries the `Aspire` classification,
-  which made Rider's New Solution dialog file it as a *Type* inside the Aspire node; it now gets its own
-  row under Custom Templates. `dotnet new list` shows one tag fewer; nothing in a generated project changes.
-
 ## [0.1.0] - 2026-10-25
 
 The first release.
@@ -433,6 +429,9 @@ The first release.
 
 ### Fixed
 
+- **Rider lists Trellis as its own entry.** The template no longer carries the `Aspire` classification,
+  which made Rider's New Solution dialog file it as a *Type* inside the Aspire node; it now gets its own
+  row under Custom Templates. `dotnet new list` shows one tag fewer; nothing in a generated project changes.
 - **The Aspire E2E no longer races the test databases for ports**: run in the same `dotnet test` as the
   Testcontainers suites, the AppHost's processes bound ephemeral ports that Docker's port allocator then
   tried to use for a test database ("failed to listen on TCP socket: address already in use"). The E2E
