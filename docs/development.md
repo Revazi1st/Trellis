@@ -409,8 +409,9 @@ an advisory; retry once the feed is reachable.
 `global.json` pins the SDK with `rollForward: latestFeature`, and Dependabot proposes its feature-band
 and patch updates (a new major version is a migration, not a bump). With a bump:
 
-- CI installs exactly the version in `global.json`; a contributor needs that version or a later
-  feature band of the same major.
+- CI installs exactly the version in `global.json` (`.github/actions/setup-dotnet` reads it and installs
+  that one from the release feed, so a release Microsoft is still publishing cannot fail a build); a
+  contributor needs that version or a later feature band of the same major.
 - The SDK image (`scripts/sdk-image/Dockerfile`, pinned by digest and moved by Dependabot's docker
   updates) must carry an SDK that `global.json` accepts, or `./scripts/dotnet.sh` cannot build.
 - `Microsoft.CodeAnalysis.CSharp` in `Directory.Packages.props` may be raised up to the new compiler's
