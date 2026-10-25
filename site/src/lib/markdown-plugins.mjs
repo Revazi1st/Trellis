@@ -15,12 +15,13 @@
 //      the reader sees (it would otherwise derive the page from the path under src/content/docs)
 //   7. a lead picture above the first paragraph of a page that has one (leadFigures): the rings on
 //      Architecture, which the doc cannot embed itself (they live in eng/readme/, which never ships)
-//   8. code in table cells gets break opportunities after / and . (narrow columns wrap at the seams)
 // For site pages under src/content/docs (.mdx):
 //   root-relative links and JSX href props get the base (/Trellis), so pages are written base-free, and
 //   a {/* trellis:option-sections */} comment becomes one section per template option (options.mjs).
-// And one hast plugin, for files under docs/: a table whose rows read better as blocks (tableLayout) gets
-// a class, each cell its column's name and the table ARIA roles; lattice.css lays it out.
+// And one hast plugin, for files under docs/: tables. A table whose rows read better as blocks
+// (tableLayout) gets a class, each cell its column's name and the table ARIA roles; code in table cells
+// gets break opportunities after / and . (a narrow column wraps a path at its seams); lattice.css lays
+// it out.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -162,13 +163,6 @@ function docsPlugin(rel) {
         changed = true;
       }
 
-      // 8. Code in table cells breaks after a slash or a dot first (`/api/v1/<wbr>invoices`), so a narrow
-      //    column wraps a path or a type name at its seams rather than mid-word. The first column holds
-      //    identifiers and stays whole (lattice.css).
-      for (const table of kids.filter((n) => n.type === 'table')) {
-        for (const row of table.children) row.children.forEach((cell, i) => i > 0 && breakCodeIn(cell, ctx));
-      }
-
       if (changed) ctx.setProperty(root, 'children', kids);
     },
     link(node, ctx) {
@@ -233,12 +227,31 @@ function sitePagePlugin() {
 
 // ---- tables ---------------------------------------------------------------------------------------
 
+// A plain table in the content column of a 1280px window (632px; the column grows to 45rem on wider
+// screens), measured in characters of its text: 14px Geist averages 6.2px a character in these tables,
+// code (Geist Mono, 7.7px) a quarter more.
+const COLUMN = 102; // characters across the column
+const PADDING = 4.6; // a cell's side padding (1.8rem) in characters
+const CODE = 1.25; // a character of code, in characters of text
+const LINE = 25; // what a line of prose needs to read
+const WRAPS = 40; // a column whose cells average this many characters wraps
+const FACT = 30; // a column whose cells are all this short is a fact (lattice.css, trellis-fact)
+const SEAMS = /(?<=\/)|(?<=\.)(?=[A-Za-z])/; // where code breaks first: after a slash, after a dot before a letter
+
+const longest = (parts) => Math.max(0, ...parts.map((p) => p.length));
+const EMPTY_CELL = { text: '', prose: '', codes: [] };
+
 /**
- * How a docs table is laid out, from the length of its cells' text:
- *   'stack'        prose in several columns (four columns or more, two of them after the first averaging
- *                  90 characters or more): each row a block at every width, its first cell the title and
- *                  every other cell under its column's name. Side by side in the 45rem column, each of
- *                  those columns would be a few words wide (the Testing table).
+ * How a docs table is laid out, from its cells ({ text, prose, codes }: a cell's whole text, its text
+ * outside code and its code tokens):
+ *   'stack'        a table of four columns or more that does not fit the column as a table (the
+ *                  test-project map, the two exchange-rates tables, the metrics): each row a block at
+ *                  every width, its first cell the title and every other cell under its column's name.
+ *                  What its columns need to read adds up to more than the column holds — the first
+ *                  column's longest code, which a plain table keeps on one line; elsewhere a code token's
+ *                  longest run between its seams; the longest word; and a line of 25 characters for a
+ *                  column of prose — so side by side, some column would be a few characters wide, or
+ *                  break its tokens mid-word.
  *   'stack-narrow' a wide table (three columns or more, rows of 60 characters or more on average): the
  *                  same blocks below 50rem, a table from there up. On a phone the columns after the first
  *                  two would otherwise sit off-screen behind a sideways scroll.
@@ -246,10 +259,26 @@ function sitePagePlugin() {
  */
 export function tableLayout(header, rows) {
   if (header.length < 3 || rows.length === 0) return null;
-  const average = header.map((_, i) => rows.reduce((sum, row) => sum + (row[i]?.length ?? 0), 0) / rows.length);
-  const prose = average.slice(1).filter((a) => a >= 90).length;
-  if (header.length >= 4 && prose >= 2) return 'stack';
+  const columns = header.map((_, i) => rows.map((row) => row[i] ?? EMPTY_CELL));
+  const average = columns.map((cells) => cells.reduce((sum, c) => sum + c.text.length, 0) / rows.length);
+  if (header.length >= 4) {
+    const needs = columns.reduce((sum, cells, i) => sum + Math.max(floor(cells, i === 0), i > 0 && average[i] >= WRAPS ? LINE : 0), 0);
+    if (needs > COLUMN - PADDING * header.length) return 'stack';
+  }
   return average.reduce((sum, a) => sum + a, 0) >= 60 ? 'stack-narrow' : null;
+}
+
+/** The narrowest a column reads at in a plain table, in characters of text. */
+function floor(cells, first) {
+  let width = 0;
+  for (const { prose, codes } of cells) {
+    width = Math.max(width, longest(prose.split(/\s+/)));
+    for (const code of codes) {
+      const run = first ? code.length : longest(code.split(/\s+/).flatMap((w) => w.split(SEAMS)));
+      width = Math.max(width, CODE * run);
+    }
+  }
+  return width;
 }
 
 function tablesPlugin() {
@@ -265,23 +294,67 @@ function tablesPlugin() {
         if (!head) return;
         const header = elements(head).map((th) => ctx.textContent(th).trim());
         const body = rows.filter((r) => r !== head).map((r) => elements(r).filter((c) => c.tagName === 'td'));
-        const layout = tableLayout(header, body.map((cells) => cells.map((td) => ctx.textContent(td).trim())));
+        const cells = body.map((tds) => tds.map((td) => cellOf(td, ctx)));
+        const layout = tableLayout(header, cells);
+        // Code in a cell breaks after a slash or a dot first (`/api/v1/<wbr>invoices`), so a narrow column
+        // wraps a path or a type name at its seams rather than mid-word. The first column holds identifiers:
+        // a plain table keeps them on one line (lattice.css); as the title of a block they wrap at their
+        // seams like the rest.
+        for (const tds of body) tds.forEach((td, i) => (i > 0 || layout === 'stack') && breakCodeIn(td, ctx));
         if (!layout) return;
         ctx.setProperty(table, 'className', [...(table.properties?.className ?? []), `trellis-${layout}`]);
+        if (layout === 'stack') ctx.setProperty(table, 'style', `--fields: ${header.length - 1}`); // the rows of a block's grid
         // A table laid out as blocks loses its table semantics in some browsers: the roles keep them.
         ctx.setProperty(table, 'role', 'table');
         for (const g of groups) ctx.setProperty(g, 'role', 'rowgroup');
         for (const r of rows) ctx.setProperty(r, 'role', 'row');
         for (const th of elements(head)) ctx.setProperty(th, 'role', 'columnheader');
-        for (const cells of body) {
-          cells.forEach((td, i) => {
+        // A column whose cells are all short (a status, a count, a name) is a fact: in a block it sits beside
+        // the next fact rather than under it.
+        const facts = header.map((_, i) => i > 0 && cells.every((row) => (row[i] ?? EMPTY_CELL).text.length <= FACT));
+        for (const tds of body) {
+          tds.forEach((td, i) => {
             ctx.setProperty(td, 'role', 'cell');
             if (header[i]) ctx.setProperty(td, 'dataTh', header[i]);
+            if (facts[i]) ctx.setProperty(td, 'className', [...(td.properties?.className ?? []), 'trellis-fact']);
           });
         }
       },
     },
   };
+}
+
+/** A cell as tableLayout reads it: its text, the text outside code, and its code tokens. */
+function cellOf(td, ctx) {
+  const codes = [];
+  let prose = '';
+  const visit = (node) => {
+    for (const child of node.children ?? []) {
+      if (child.type === 'text') prose += child.value;
+      else if (child.type === 'element' && child.tagName === 'code') codes.push(ctx.textContent(child));
+      else visit(child);
+    }
+  };
+  visit(td);
+  return { text: ctx.textContent(td).trim(), prose, codes };
+}
+
+/** A <wbr> at each seam of the code under a node. */
+function breakCodeIn(node, ctx) {
+  for (const child of node.children ?? []) {
+    if (child.type !== 'element') continue;
+    if (child.tagName !== 'code') {
+      breakCodeIn(child, ctx);
+      continue;
+    }
+    if (!(child.children ?? []).some((c) => c.type === 'text' && /[/.]/.test(c.value))) continue;
+    const wbr = () => ({ type: 'element', tagName: 'wbr', properties: {}, children: [] });
+    ctx.setProperty(
+      child,
+      'children',
+      child.children.flatMap((c) => (c.type === 'text' ? c.value.split(SEAMS).flatMap((part, i) => (i ? [wbr(), { type: 'text', value: part }] : [{ type: 'text', value: part }])) : [c])),
+    );
+  }
 }
 
 // ---- lead pictures --------------------------------------------------------------------------------
@@ -399,21 +472,6 @@ function renderBranches(branches, ctx, rel) {
     });
   }
   return out;
-}
-
-/** Replaces the inline code under a node by the same code with <wbr> after each / and each . before a letter. */
-function breakCodeIn(node, ctx) {
-  if (!Array.isArray(node.children) || !node.children.some((c) => c.type === 'inlineCode' || Array.isArray(c.children))) return;
-  let changed = false;
-  const next = node.children.map((c) => {
-    if (c.type !== 'inlineCode' || !/[/.]/.test(c.value)) {
-      breakCodeIn(c, ctx);
-      return c;
-    }
-    changed = true;
-    return { type: 'html', value: `<code>${escapeHtml(c.value).replace(/\//g, '/<wbr>').replace(/\.(?=[A-Za-z])/g, '.<wbr>')}</code>` };
-  });
-  if (changed) ctx.setProperty(node, 'children', next);
 }
 
 /** The directive HTML nodes anywhere in a tree. */

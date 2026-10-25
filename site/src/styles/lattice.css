@@ -211,10 +211,11 @@ starlight-toc a[aria-current='true'] {
 }
 
 /* A docs table whose rows read better as blocks (markdown-plugins.mjs, tableLayout): each row a block,
-   its first cell the title and every other cell under its column's name. trellis-stack at every width
-   (from 50rem the title sits in a column of its own beside the cells), trellis-stack-narrow below 50rem
-   only. The header row stays in the markup, hidden, and the plugin's ARIA roles keep the table a table
-   for a screen reader. The two blocks below are the same rules for the two classes. */
+   its first cell the title and every other cell under its column's name, the short ones (trellis-fact: a
+   status, a count) side by side. trellis-stack at every width (from 50rem the title sits in a column of
+   its own beside the cells), trellis-stack-narrow below 50rem only. The header row stays in the markup,
+   hidden, and the plugin's ARIA roles keep the table a table for a screen reader. The two blocks below
+   are the same rules for the two classes. */
 .sl-markdown-content table.trellis-stack {
   display: block;
 }
@@ -249,6 +250,15 @@ starlight-toc a[aria-current='true'] {
 .sl-markdown-content table.trellis-stack td:first-child {
   font-weight: 600;
   color: var(--sl-color-white);
+}
+.sl-markdown-content table.trellis-stack td:first-child code {
+  overflow-wrap: anywhere; /* a title longer than its column (a JSON body) breaks rather than overflows */
+}
+.sl-markdown-content table.trellis-stack td.trellis-fact {
+  display: inline-block;
+  vertical-align: top;
+  max-width: 100%;
+  margin-right: 1.5rem;
 }
 .sl-markdown-content table.trellis-stack td + td::before {
   content: attr(data-th);
@@ -294,6 +304,12 @@ starlight-toc a[aria-current='true'] {
     font-weight: 600;
     color: var(--sl-color-white);
   }
+  .sl-markdown-content table.trellis-stack-narrow td.trellis-fact {
+    display: inline-block;
+    vertical-align: top;
+    max-width: 100%;
+    margin-right: 1.5rem;
+  }
   .sl-markdown-content table.trellis-stack-narrow td + td::before {
     content: attr(data-th);
     content: attr(data-th) / '';
@@ -307,20 +323,31 @@ starlight-toc a[aria-current='true'] {
   }
 }
 @media (min-width: 50rem) {
+  /* The title in a column of its own, spanning the block; the other cells in the rest, a longer cell on a
+     row of its own and facts side by side, as many as fit at 7rem or more each. The grid has as many rows
+     as a block has cells after the title (--fields, from the plugin); the ones left over have no height.
+     The gap between rows of cells is each cell's own top padding, so facts on one row line up. */
   .sl-markdown-content table.trellis-stack tr {
     display: grid;
-    grid-template-columns: 12rem minmax(0, 1fr);
+    grid-template-columns: 12rem repeat(auto-fill, minmax(7rem, auto));
+    grid-template-rows: repeat(var(--fields, 1), auto);
     column-gap: 1.5rem;
-    padding: 0.9rem 1rem;
+    padding: 0.2rem 1rem 0.9rem;
+  }
+  .sl-markdown-content table.trellis-stack td {
+    padding-top: 0.7rem;
+  }
+  .sl-markdown-content table.trellis-stack td:first-child {
+    grid-row: 1 / -1;
   }
   .sl-markdown-content table.trellis-stack td + td {
-    grid-column: 2;
-  }
-  .sl-markdown-content table.trellis-stack td + td + td {
-    margin-top: 0.7rem;
-  }
-  .sl-markdown-content table.trellis-stack td:first-child + td {
+    grid-column: 2 / -1;
     margin-top: 0;
+  }
+  .sl-markdown-content table.trellis-stack td.trellis-fact {
+    display: block;
+    grid-column: auto;
+    margin-right: 0;
   }
   .sl-markdown-content table.trellis-stack td:first-child code {
     white-space: normal;

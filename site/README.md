@@ -48,11 +48,14 @@ derive what frontmatter would have held and adapt the rest:
   defaults build), the two lists are joined again, as the engine writes them.
 - **Testing**: the `## Tests` section of `development.md` is rendered as a page of its own, and links
   to its anchors follow it there.
-- **Tables** keep their Markdown; the site picks a layout from the length of their cells
-  (`tableLayout` in `src/lib/markdown-plugins.mjs`). A table with prose in several columns (the
-  test-project map) reads as one block per row at every width, the first cell the title and every other
-  cell under its column's name; any other table of three columns or more with long rows does so on a
-  phone only, where its last columns would sit off-screen.
+- **Tables** keep their Markdown; the site picks a layout from their cells (`tableLayout` in
+  `src/lib/markdown-plugins.mjs`). A table of four columns or more that would not fit the content column
+  of a 1280 px screen as a table (the test-project map, the exchange-rates tables, the metrics: its
+  columns' identifiers, code tokens, words and lines of prose add up to more than the column holds) reads
+  as one block per row at every width, the first cell the title and every other cell under its column's
+  name, the short ones side by side; any other table of three columns or more with long rows does so on a
+  phone only, where its last columns would sit off-screen. In a table, code breaks at its slashes and dots
+  when its column is narrow.
 - **Architecture** opens with the rings picture, both themes, read from `eng/readme/rings-*.svg` at build
   time (`docs/architecture.md` cannot embed it: `eng/readme/` never ships).
 - **ASCII diagrams**: a fence without a language that draws with box characters (the dependency flow on
