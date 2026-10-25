@@ -1,10 +1,12 @@
 ---
-// Starlight's Hero, replaced on the landing page only by the "stage": the dark hero of the Lattice
-// language (both themes), with the install commands in a terminal chip and the rings beside them.
+// Starlight's Hero, replaced on the landing page only by the "stage": the hero of the Lattice language,
+// dark in the dark scheme and pale in the light one (the --stage-* tokens in lattice.css), with the
+// install commands in a terminal chip that is dark in both, and the scheme's rings beside them.
 // Every other page with a hero keeps Starlight's own.
 import Default from '@astrojs/starlight/components/Hero.astro';
 import { LinkButton } from '@astrojs/starlight/components';
 import ringsDark from '@repo/eng/readme/rings-dark.svg?url';
+import ringsLight from '@repo/eng/readme/rings-light.svg?url';
 import { nugetUrl, packageId, packagePublished, quickstart } from '../data/repo.mjs';
 
 const { data } = Astro.locals.starlightRoute.entry;
@@ -18,13 +20,14 @@ const lines = [
   { comment: '# the AppHost needs Docker running' },
   { cmd: quickstart.run.join(' && ') },
 ];
-// The ring hues' light fills: the stage is dark in both schemes, so the legend never switches.
+// The legend's swatches are the --stage-ring-* tokens: the rings' own fills on the light stage, and the
+// same light fills on the dark one, where the dark fills would not tell apart (lattice.css says why).
 const legend = [
-  ['Domain', '#F3E6C9'],
-  ['Application', '#F8EFD9'],
-  ['Infrastructure', '#DFE9D6'],
-  ['Persistence', '#D3E9E6'],
-  ['Presentation', '#D9E6F3'],
+  ['Domain', 'gold'],
+  ['Application', 'ochre'],
+  ['Infrastructure', 'moss'],
+  ['Persistence', 'teal'],
+  ['Presentation', 'slate'],
 ];
 ---
 
@@ -69,12 +72,13 @@ const legend = [
           )}
         </div>
         <figure class="glass">
-          <img src={ringsDark} width="300" height="300" alt="Concentric rings: Domain and SharedKernel at the centre, Application around them, then Infrastructure and Persistence as two halves of one split ring, and Presentation outside." />
+          <img class="rings-light" src={ringsLight} width="300" height="300" alt="Concentric rings: Domain and SharedKernel at the centre, Application around them, then Infrastructure and Persistence as two halves of one split ring, and Presentation outside." />
+          <img class="rings-dark" src={ringsDark} width="300" height="300" alt="Concentric rings: Domain and SharedKernel at the centre, Application around them, then Infrastructure and Persistence as two halves of one split ring, and Presentation outside." />
           <figcaption>Dependencies point inward. Infrastructure and Persistence are peers that never reference each other.</figcaption>
           <ul class="legend">
-            {legend.map(([name, color]) => (
+            {legend.map(([name, hue]) => (
               <li>
-                <i style={`background:${color}`} />
+                <i style={`background:var(--stage-ring-${hue})`} />
                 {name}
               </li>
             ))}
