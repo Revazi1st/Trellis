@@ -8,7 +8,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
-If you generated a project from 0.1.0, read these before adopting this version with `docs/upgrading.md`:
+## [0.1.0] - 2026-10-25
+
+The first release.
 
 - **The shipped `InitialCreate` was regenerated.** `InvoiceLines.Amount` is `numeric(18,3)` (was
   `numeric(18,2)`), and the outbox's `NextAttemptAtUtc` is now a concurrency token (a snapshot-only
