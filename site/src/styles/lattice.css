@@ -569,9 +569,9 @@ starlight-toc a[aria-current='true'] {
    Geist Mono, 0.6em each) fits the column less the two side paddings (the 2rem below), from the code
    size down to 0.65rem; a wider one scrolls sideways at that floor.
    The padding keeps about a full step between the text and the frame on every side (at 0.75rem the first
-   glyph of a line sat closer to the left border than the 10px corner, and hugged it). The side padding is
-   the largest that keeps the widest diagram in docs/, the release workflow's 97 columns, whole at 1280px
-   with less than one column of it running into the right padding; change it and change the 2rem with it.
+   glyph of a line sat closer to the left border than the 10px corner, and hugged it). At 1rem the column
+   of a 1280px screen holds about 95 columns at the floor size, which the widest diagram in docs/ keeps
+   to; change the padding and change the 2rem with it.
    Lines are 1.2em: Geist Mono's │ is 1.3em tall, and a vertical run joins only where each line is
    shorter than that (at 1.35 every run broke into dashes, and 1.25 still leaves a seam here and there).
    Geist Mono has no ◄ ►, so the next family draws them: the list names monospace fonts as wide as Geist
