@@ -324,12 +324,14 @@ starlight-toc a[aria-current='true'] {
 }
 @media (min-width: 50rem) {
   /* The title in a column of its own, spanning the block; the other cells in the rest, a longer cell on a
-     row of its own and facts side by side, as many as fit at 7rem or more each. The grid has as many rows
-     as a block has cells after the title (--fields, from the plugin); the ones left over have no height.
-     The gap between rows of cells is each cell's own top padding, so facts on one row line up. */
+     row of its own and facts side by side, in as many tracks as fit at 7rem, sharing the width equally
+     (1fr: a track sized to its row's own content put the same column at a different x in each block, and
+     left two facts squeezed beside an empty track). The grid has as many rows as a block has cells after
+     the title (--fields, from the plugin); the ones left over have no height. The gap between rows of
+     cells is each cell's own top padding, so facts on one row line up. */
   .sl-markdown-content table.trellis-stack tr {
     display: grid;
-    grid-template-columns: 12rem repeat(auto-fill, minmax(7rem, auto));
+    grid-template-columns: 12rem repeat(auto-fill, minmax(7rem, 1fr));
     grid-template-rows: repeat(var(--fields, 1), auto);
     column-gap: 1.5rem;
     padding: 0.2rem 1rem 0.9rem;
