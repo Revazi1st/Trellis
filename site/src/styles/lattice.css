@@ -160,12 +160,44 @@ h1[data-page-title],
   outline: 2px solid var(--lt-leaf);
   outline-offset: 2px;
 }
-/* Code in a heading is set in the heading, without the pill: as specific as the rule above (and more),
-   or its padding wins and an option heading starts indented. */
+/* Code in a heading is part of the sentence, not a token to shout: a size under the heading's letters
+   (a monospace face at the same size reads larger), no heavier than them, the heading's tight tracking
+   undone (it crowds a monospace face), and no pill. As specific as the rule above (and more), or its
+   padding wins and an option heading starts indented. */
 .sl-markdown-content :is(h1, h2, h3, h4, h5, h6) code:not(pre code) {
-  font-size: 0.85em;
+  font-size: 0.8em;
+  font-weight: inherit;
+  letter-spacing: 0;
   background: transparent;
   padding: 0;
+}
+/* The line under a heading that named its folder (markdown-plugins.mjs, whereItLives): the path, small
+   and quiet, hung from the heading, a link to the folder on GitHub that stays the line's own colour
+   until hovered. The margin above it is small on purpose: the block after it brings the usual 1rem, and
+   the line reads as the heading's own only when it sits clearly nearer the heading than the body (under
+   an h2 the ink is about 16px above it and 24px below; at 0.45rem the two were nearly equal and the line
+   floated between them, and at 0 it crowds a descender). The plugin puts a break opportunity after each
+   slash, so a long path wraps at its seams on a phone. */
+.sl-markdown-content .trellis-where {
+  margin-top: 0.2rem;
+  font-size: var(--sl-text-sm);
+  line-height: 1.5;
+  color: var(--lt-muted);
+}
+.sl-markdown-content .trellis-where code {
+  padding: 0;
+  font-size: 0.95em;
+  background: transparent;
+  color: inherit;
+}
+.sl-markdown-content .trellis-where a {
+  color: inherit;
+  text-decoration-color: var(--lt-line);
+  text-underline-offset: 0.2em;
+}
+.sl-markdown-content .trellis-where a:hover {
+  color: var(--lt-link);
+  text-decoration-color: currentColor;
 }
 .pagination-links .link-title {
   font-size: var(--sl-text-lg);
@@ -513,9 +545,10 @@ starlight-toc a[aria-current='true'] {
   height: auto;
 }
 
-/* An ASCII diagram (a fence without a language that draws with box characters, markdown-plugins.mjs):
-   the type shrinks until the widest line (--columns characters of Geist Mono, 0.6em each) fits the
-   column, from the code size down to 0.65rem; a wider diagram scrolls sideways at that floor.
+/* An ASCII diagram or a file tree (a fence without a language, or a text fence, that draws with box
+   characters, markdown-plugins.mjs): the type shrinks until the widest line (--columns characters of
+   Geist Mono, 0.6em each) fits the column, from the code size down to 0.65rem; a wider one scrolls
+   sideways at that floor.
    Lines are 1.2em: Geist Mono's │ is 1.3em tall, and a vertical run joins only where each line is
    shorter than that (at 1.35 every run broke into dashes, and 1.25 still leaves a seam here and there).
    Geist Mono has no ◄ ►, so the next family draws them: the list names monospace fonts as wide as Geist
