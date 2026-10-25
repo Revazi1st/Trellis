@@ -758,6 +758,15 @@ starlight-toc a[aria-current='true'] {
   border-color: var(--stage-line);
   color: var(--stage-ink);
 }
+/* The focus ring on the stage's controls: the site's ring is the leaf, which is 1.7:1 on the pale stage,
+   so the stage draws it in its accent (the leaf in the dark scheme, where nothing changes; the brand green
+   in the light one). The terminal is dark in both schemes and keeps the leaf. */
+.stage :focus-visible {
+  outline-color: var(--stage-accent);
+}
+.terminal :focus-visible {
+  outline-color: var(--lt-leaf);
+}
 .glass {
   margin: 0;
   display: grid;
