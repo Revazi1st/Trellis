@@ -1,0 +1,78 @@
+/* The design system's values (docs/design-system.md, ADR-0032): the one file a project edits to make
+   the UI its own. app.css builds every component from these names and writes no colour.
+
+   Three rules, each held by DesignSystemTests in the ArchitectureTests project:
+   1. A colour is written here and nowhere else, once, as light-dark(#light, #dark) in opaque six-digit
+      hex (Only_the_token_file_writes_a_colour, Every_colour_token_is_written_once_for_both_schemes).
+   2. Text passes WCAG AA on the grounds it sits on: --ink, --muted, --accent and the status colours at
+      4.5:1 on --bg and --surface, --ink on --surface-2 too, every --on-x at 4.5:1 on its fill, and the
+      accent at 3:1 on both grounds as a focus ring (Text_passes_AA_on_its_grounds_and_every_on_token_on_its_fill).
+      Change a value and the failing test names the pair, the scheme and the ratio.
+   3. A token named here is in the design doc's Tokens tables, and the other way round
+      (The_design_doc_and_the_token_file_name_the_same_tokens).
+
+   color-scheme on :root lets light-dark() follow the operating system; data-theme on <html> holds one
+   theme regardless (the blocks at the end set nothing else, so a switch has one thing to write). */
+:root {
+  color-scheme: light dark;
+
+  /* Grounds: the page, a raised panel (an input, a callout's base), a second step, and the hairline. */
+  --bg: light-dark(#f6f9f4, #0c1410);
+  --surface: light-dark(#ffffff, #121d16);
+  --surface-2: light-dark(#eef6e8, #172520);
+  --line: light-dark(#d8e3da, #21321e);
+
+  /* Text. */
+  --ink: light-dark(#14231b, #e6efe8);
+  --muted: light-dark(#566b5f, #9db3a4);
+
+  /* The accent: links, the primary fill, the focus ring, the current filter. The dark accent is a light
+     lime, so its text is dark; the light accent is a deep green under white text. */
+  --accent: light-dark(#1f5c3d, #8fd16a);
+  --on-accent: light-dark(#ffffff, #0e2415);
+
+  /* Status colours: text on the grounds, or a fill under their --on-x text. */
+  --danger: light-dark(#b42318, #f0917e);
+  --on-danger: light-dark(#ffffff, #2a0b08);
+  --success: light-dark(#1a7a3e, #7bd389);
+  --on-success: light-dark(#ffffff, #0b2412);
+  --warning: light-dark(#8a5300, #e8b84a);
+  --on-warning: light-dark(#ffffff, #2a1d00);
+
+  /* Type: system faces (a product with its own ships the files from wwwroot/ and keeps a fallback). */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --leading: 1.5;
+  --tracking-heading: -0.02em;
+  --tracking-label: 0.08em;
+
+  /* Space, on a 4 px grid. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-10: 2.5rem;
+
+  /* Shape and devices. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --hairline: 1px solid var(--line);
+  --focus-ring: 2px solid var(--accent);
+  --focus-offset: 2px;
+  --page-width: 56rem;
+  --form-width: 22.5rem;
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }

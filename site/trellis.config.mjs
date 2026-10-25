@@ -39,6 +39,7 @@ export const githubEdit = (repoPath) => `${github.url}/edit/main/${repoPath}`;
 export const routes = {
   'architecture.md': 'understand/architecture',
   'development.md': 'develop/development',
+  'design-system.md': 'develop/design-system',
   'upgrading.md': 'develop/upgrading',
   'releasing.md': 'develop/releasing',
   'deployment.md': 'operate/deployment',

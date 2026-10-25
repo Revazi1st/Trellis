@@ -1,56 +1,77 @@
-/* --on-accent / --on-danger: the text on those fills, each at least 4.5:1 (WCAG AA). Light: white on
-   #4f46e5 6.3:1, on #dc2626 4.8:1. Dark: the fills are light, so the text is the dark background
-   colour: #111827 on #818cf8 5.9:1, on #f87171 6.4:1 (white on them was 3.0:1 and 2.8:1). */
-:root { --fg: #1a1a2e; --muted: #6b7280; --accent: #4f46e5; --on-accent: #fff; --danger: #dc2626; --on-danger: #fff; --border: #e5e7eb; --bg: #fff; }
-@media (prefers-color-scheme: dark) {
-  :root { --fg: #e5e7eb; --muted: #9ca3af; --accent: #818cf8; --on-accent: #111827; --danger: #f87171; --on-danger: #111827; --border: #374151; --bg: #111827; }
-}
-body { font-family: system-ui, sans-serif; margin: 0; color: var(--fg); background: var(--bg); }
-.page { max-width: 900px; margin: 0 auto; padding: 0 1rem; }
-.topbar { display: flex; align-items: center; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
-.brand { font-weight: 700; font-size: 1.2rem; text-decoration: none; color: var(--fg); }
-.nav { display: flex; align-items: center; gap: 1rem; margin-left: auto; }
-.nav-link { text-decoration: none; color: var(--accent); }
-.nav-link.active { text-decoration: underline; }
-.user { color: var(--muted); font-size: .9rem; }
-.content { padding: 1.5rem 0; }
-.form { display: flex; flex-direction: column; gap: .75rem; max-width: 360px; }
-.form label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
-input { padding: .5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); }
-button { padding: .5rem 1rem; border: 0; border-radius: 6px; background: var(--accent); color: var(--on-accent); cursor: pointer; }
+/* The components of the UI, built from the tokens in tokens.css (docs/design-system.md, ADR-0032).
+   Every colour here is a var() of a token or a color-mix() of two, never a literal; a component may
+   alias a token for a variant (--tone on a callout). A class a page uses has its rule here, and every
+   class here has its subsection in the design doc's Components section, or DesignSystemTests fails. */
+
+body { margin: 0; font-family: var(--font-sans); font-size: var(--text-md); line-height: var(--leading); color: var(--ink); background: var(--bg); }
+code { font-family: var(--font-mono); font-size: 0.9em; }
+h1, h2 { font-weight: var(--weight-semibold); letter-spacing: var(--tracking-heading); line-height: 1.2; }
+h1 { font-size: var(--text-xl); }
+h2 { font-size: var(--text-lg); }
+
+/* The page shell: the measure, the top bar under a hairline, the main content. */
+.page { max-width: var(--page-width); margin: 0 auto; padding: 0 var(--space-4); }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: var(--hairline); }
+.brand { font-weight: var(--weight-semibold); font-size: var(--text-lg); letter-spacing: var(--tracking-heading); text-decoration: none; color: var(--ink); }
+.nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-left: auto; }
+.nav-link { text-decoration: none; color: var(--accent); font-weight: var(--weight-medium); }
+.nav-link.active { text-decoration: underline; text-underline-offset: 0.3em; }
+.user { color: var(--muted); font-size: var(--text-sm); }
+.content { padding: var(--space-6) 0; }
+
+/* Forms: a narrow stack; each label wraps its input and its message. */
+.form { display: flex; flex-direction: column; gap: var(--space-3); max-width: var(--form-width); }
+.form label { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+input { padding: var(--space-2) var(--space-3); border: var(--hairline); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
+input[aria-invalid="true"] { border-color: var(--danger); }
+
+/* Buttons: the primary fill, the destructive variant, and a button that reads as a link. */
+button { padding: var(--space-2) var(--space-4); border: 0; border-radius: var(--radius-sm); background: var(--accent); color: var(--on-accent); font: inherit; font-weight: var(--weight-medium); cursor: pointer; }
 button.danger { background: var(--danger); color: var(--on-danger); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: .6; cursor: default; }
-.link-button { background: none; color: var(--accent); padding: 0; }
-.grid { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-.grid th, .grid td { text-align: left; padding: .5rem; border-bottom: 1px solid var(--border); }
+.link-button { background: none; color: var(--accent); padding: 0; font-weight: var(--weight-regular); }
+:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+
+/* The table: hairline rows, uppercase muted headers, tabular figures in a numeric column. */
+.grid { width: 100%; border-collapse: collapse; margin: var(--space-4) 0; }
+.grid th, .grid td { text-align: left; padding: var(--space-2); border-bottom: var(--hairline); }
+.grid th { font-size: var(--text-xs); font-weight: var(--weight-medium); letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--muted); }
 .grid .num, td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.summary { display: grid; grid-template-columns: auto 1fr; gap: .25rem 1rem; }
+
+/* The record's key facts, and the row of buttons that act on it. */
+.summary { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-4); }
 .summary dt { color: var(--muted); }
-.actions { display: flex; gap: .5rem; margin-top: 1rem; }
+.actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
+
 /* "Back to invoices" above a detail or create page's heading: the top bar is not the only way back. */
-.back { display: inline-block; margin-bottom: .75rem; text-decoration: none; color: var(--accent); }
+.back { display: inline-block; margin-bottom: var(--space-3); text-decoration: none; color: var(--accent); }
 .back::before { content: "\2190\00a0"; }
 .back:hover { text-decoration: underline; }
-/* The list's filter row: links (the filter is in the address), the current one filled. */
-.filters { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0 0 1rem; }
-.filters-label { color: var(--muted); font-size: .9rem; margin-right: .25rem; }
-.filter { padding: .25rem .75rem; border: 1px solid var(--border); border-radius: 999px; text-decoration: none; color: var(--accent); }
-.filter[aria-current] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.pager { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; }
-.pager span { color: var(--muted); font-size: .9rem; }
-.error { color: var(--danger); }
-.hint { color: var(--muted); font-size: .85rem; }
 
-.error-panel { border: 1px solid var(--danger); border-radius: 8px; padding: 1rem 1.25rem; }
-.notice { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0 0 1rem; padding: .5rem 1rem; border: 1px solid var(--accent); border-radius: 6px; }
-input[aria-invalid="true"] { border-color: var(--danger); }
+/* The list's filter row: links (the filter is in the address), the current one filled. */
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-4); }
+.filters-label { color: var(--muted); font-size: var(--text-xs); font-weight: var(--weight-medium); letter-spacing: var(--tracking-label); text-transform: uppercase; margin-right: var(--space-1); }
+.filter { padding: var(--space-1) var(--space-3); border: var(--hairline); border-radius: var(--radius-pill); text-decoration: none; color: var(--accent); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.filter[aria-current] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.pager { display: flex; align-items: center; gap: var(--space-4); margin: var(--space-4) 0; }
+.pager span { color: var(--muted); font-size: var(--text-sm); }
+
+/* Failure next to what failed, secondary help, and what validation says. */
+.error { color: var(--danger); }
+.hint { color: var(--muted); font-size: var(--text-sm); }
+.validation-message { color: var(--danger); font-size: var(--text-sm); }
+.validation-errors { color: var(--danger); margin: var(--space-1) 0; padding-left: var(--space-4); }
+
+/* The layout's live region and its success notice; the error boundary's panel. A tint is a token mixed
+   at 12 % or less over a ground, so the ground's text ratios hold. */
+.notifications { display: grid; gap: var(--space-2); }
+.notice { --tone: var(--success); display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin: 0 0 var(--space-4); padding: var(--space-2) var(--space-4); border: 1px solid var(--tone); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--tone) 10%, var(--surface)); }
+.error-panel { --tone: var(--danger); border: 1px solid var(--tone); border-radius: var(--radius-md); padding: var(--space-4) var(--space-6); background: color-mix(in srgb, var(--tone) 8%, var(--surface)); }
+
 /* Read by screen readers, not shown (a column header for the row links, for instance). */
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.validation-message { color: var(--danger); font-size: .85rem; }
-.validation-errors { color: var(--danger); margin: .25rem 0; padding-left: 1rem; }
 
 /* The host's circuit-failure bar (UI.Web App.razor): hidden until blazor.web.js shows it. */
-#blazor-error-ui { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; padding: .75rem 3rem .75rem 1.25rem; background: var(--bg); color: var(--fg); border-top: 2px solid var(--danger); }
-#blazor-error-ui .reload { color: var(--accent); margin-left: .5rem; }
-#blazor-error-ui .dismiss { position: absolute; right: .75rem; top: .5rem; background: none; color: var(--fg); padding: .25rem .5rem; }
+#blazor-error-ui { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; padding: var(--space-3) var(--space-10) var(--space-3) var(--space-6); background: var(--surface); color: var(--ink); border-top: 2px solid var(--danger); }
+#blazor-error-ui .reload { color: var(--accent); margin-left: var(--space-2); }
+#blazor-error-ui .dismiss { position: absolute; right: var(--space-3); top: var(--space-2); background: none; color: var(--ink); padding: var(--space-1) var(--space-2); }

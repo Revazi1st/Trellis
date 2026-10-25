@@ -2,6 +2,7 @@
 # Fails if code changed without the doc that describes it changing too (ADR-0014):
 #   - a feature's code                                         -> docs/features/<feature>.md
 #   - authentication, hardening, identity or the Auth feature  -> docs/threat-model.md
+#   - the UI's stylesheets and layout                          -> docs/design-system.md
 #
 # "A feature's code" is every folder the feature docs describe, mapped to ONE doc by its name
 # (kebab-cased: Invoices -> invoices.md, ExchangeRates -> exchange-rates.md):
@@ -15,6 +16,8 @@
 #                                                      name contains (InvoiceDetail -> Invoices)
 # Shared code the feature docs cover but no single feature owns (Domain/Common, Contracts/Common,
 # a page or entity no feature claims) needs some docs/features/*.md change.
+# The design system is one doc for the files that are the system, not a feature's:
+#   src/Presentation/UI/*.UI.Common/{wwwroot,Layout}/**  -> docs/design-system.md
 #
 # Usage:
 #   check-docs-drift.sh [<base-ref>]   committed changes since this branch left <base-ref>
@@ -130,6 +133,13 @@ shared="$(printf '%s\n' "$owned" | awk -F '\t' '$1 == "*" { print "  " $2 }')"
 if [ -n "$shared" ] && [ -z "$feature_doc_changed" ]; then
   report "Code the feature docs describe changed without any docs/features/*.md update:"
   printf '%s\n' "$shared"
+  fail=1
+fi
+
+design_changed="$(printf '%s\n' "$changed" | grep -E '^src/Presentation/UI/[^/]+\.UI\.Common/(wwwroot|Layout)/' || true)"
+if [ -n "$design_changed" ] && ! grep -qxF 'docs/design-system.md' <<< "$changed"; then
+  report "The UI's stylesheets or layout changed without a docs/design-system.md update:"
+  printf '%s\n' "$design_changed" | sed 's/^/  /'
   fail=1
 fi
 

@@ -125,6 +125,7 @@ export default defineConfig({
           items: [
             { label: 'Development', slug: 'develop/development' },
             { label: 'Testing', slug: 'develop/testing' },
+            { label: 'Design system', slug: 'develop/design-system' },
             { label: 'Upgrading', slug: 'develop/upgrading' },
             { label: 'Releasing', slug: 'develop/releasing' },
           ],

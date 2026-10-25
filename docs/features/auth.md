@@ -243,6 +243,10 @@ timeout, an open circuit, an unreadable body — is the service-unavailable sent
 exception (`ApiCall`). The seeded-admin hint on the sign-in page renders only when the host enables
 `UiOptions.ShowDevelopmentHints` (UI.Web: in Development).
 
+<!--#if (IncludeUI) -->
+Both pages are built from the design system's documented components ([design-system.md](../design-system.md)): the form, its hint and its one alert are its classes, and neither page writes a colour or a style of its own.
+<!--#endif -->
+
 Auth rejections are RFC 9457 everywhere: JwtBearer challenges (401) and forbidden (403) responses
 carry problem-details bodies, and rate-limited requests get a 429 problem with `Retry-After` — all
 written by `IProblemDetailsService` (`ProblemCatalog` + `WriteProblemAsync`), so they carry `code`,
