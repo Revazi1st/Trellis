@@ -192,7 +192,7 @@ h1[data-page-title],
 }
 .sl-markdown-content .trellis-where a {
   color: inherit;
-  text-decoration-color: var(--lt-line);
+  text-decoration-color: var(--sl-color-gray-4); /* a shade lighter than the path: a link you can tell from text, still quieter than it */
   text-underline-offset: 0.2em;
 }
 .sl-markdown-content .trellis-where a:hover {
