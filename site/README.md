@@ -58,12 +58,21 @@ derive what frontmatter would have held and adapt the rest:
   when its column is narrow.
 - **Architecture** opens with the rings picture, both themes, read from `eng/readme/rings-*.svg` at build
   time (`docs/architecture.md` cannot embed it: `eng/readme/` never ships).
-- **ASCII diagrams**: a fence without a language that draws with box characters (the dependency flow on
-  Architecture, the release workflow) is set in a type size that fits its widest line to the column,
-  down to 0.65rem; a wider one scrolls sideways at that size. Keep such a diagram within about 97
-  columns and it fits a 1280 px screen whole. Geist Mono draws the box characters, and a monospace font
-  as wide on each platform draws ◄ ►; a symbol none of them has (∥) comes from a proportional font, off
-  the grid, so write it in words.
+- **Headings that name their folder**: a heading of the shape `` ## Port (`src/Core/…/Abstractions/`) ``
+  (a name, then in parentheses one code span with a slash in it, nothing else) shows the name alone, with
+  the path on a small line under it that links to the folder on GitHub at the ref the site is built from;
+  the table of contents lists the name. Its anchor stays the slug of the whole text, which is what GitHub
+  gives it and what every link to it targets. A heading with a code span anywhere else (`` Dependency flow
+  (enforced by `Trellis.ArchitectureTests`) ``) keeps its text, the code set a little under the size of
+  the heading's letters.
+- **ASCII diagrams and file trees**: a fence without a language, or a `text` fence, that draws with box
+  characters (the dependency flow on Architecture, the release workflow, the file trees on Invoices) is
+  set in a type size that fits its widest line to the column, down to 0.65rem; a wider one scrolls
+  sideways at that size. Keep such a diagram within about 97 columns and it fits a 1280 px screen whole;
+  it fits at the code size up to about 72. Geist Mono draws the box characters, and a monospace font as
+  wide on each platform draws ◄ ►; a symbol none of them has (∥) comes from a proportional font, off the
+  grid, so write it in words. A `text` fence without box characters stays a code block, copy button and
+  all.
 - **Mermaid**: a `mermaid` fence is drawn as a diagram in the browser, by mermaid from this build: a
   chunk fetched only by a page that has a diagram. A diagram shrinks to fit the column down to 80 % of
   its own size and scrolls sideways in its frame past that, so its labels stay readable; a sequence

@@ -9,21 +9,25 @@
 //   3. template conditionals <!--#if (EXPR) --> … <!--#endif -->: a toggle aside per block, or evaluated
 //      against the template defaults (conditionalsMode)
 //   4. links: docs/*.md -> site routes (#anchors kept, moved anchors followed); anything else -> GitHub
-//   5. ```mermaid fences -> <pre class="mermaid">, rendered in the browser; a fence without a language
-//      that draws with box characters (an ASCII diagram) -> a <pre> whose type fits the column
+//   5. ```mermaid fences -> <pre class="mermaid">, rendered in the browser; a fence without a language,
+//      or a text fence, that draws with box characters (an ASCII diagram, a file tree) -> a <pre> whose
+//      type fits the column
 //   6. the page's route as frontmatter `slug`, so the links validator files its headings under the page
 //      the reader sees (it would otherwise derive the page from the path under src/content/docs)
 //   7. a lead picture above the first paragraph of a page that has one (leadFigures): the rings on
 //      Architecture, which the doc cannot embed itself (they live in eng/readme/, which never ships)
+//   8. a heading that names its folder in parentheses, "## Port (`src/Core/…/Abstractions/`)"
+//      (whereItLives): the heading keeps the name and the id GitHub gives the whole text, which is what
+//      every link to it targets; the path moves to a small line under it, a link to the folder on GitHub
 // For site pages under src/content/docs (.mdx):
 //   root-relative links and JSX href props get the base (/Trellis), so pages are written base-free, and
 //   a {/* trellis:option-sections */} comment becomes one section per template option (options.mjs).
-// And one hast plugin, for files under docs/: tables. A table whose rows read better as blocks
-// (tableLayout) gets a class, each cell its column's name and the table ARIA roles; code in table cells
-// gets break opportunities after / and . (a narrow column wraps a path at its seams); lattice.css lays
-// it out.
+// And two hast plugins, for files under docs/: tables, and the lines under headings. A table whose rows
+// read better as blocks (tableLayout) gets a class, each cell its column's name and the table ARIA roles;
+// code in table cells and in a where-it-lives line gets break opportunities after / and . (a narrow
+// column wraps a path at its seams); lattice.css lays it out.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -82,7 +86,7 @@ export function trellisHastPlugins() {
   return [
     (ctx) => {
       if (!ctx.fileURL) return null;
-      return isInside(fileURLToPath(ctx.fileURL), docsDir) ? tablesPlugin() : null;
+      return isInside(fileURLToPath(ctx.fileURL), docsDir) ? [tablesPlugin(), whereLinesPlugin()] : null;
     },
   ];
 }
@@ -127,11 +131,12 @@ function docsPlugin(rel) {
       }
 
       // 2. Sections that are pages of their own.
+      const depthOf = (n) => (sectionMode && n.depth > sectionMode.depth ? n.depth - 1 : n.depth);
       if (sectionMode) {
         const first = kids.findIndex((n) => n.type === 'heading');
         if (first !== -1) kids.splice(first, 1);
         for (const n of kids) {
-          if (n.type === 'heading' && n.depth > sectionMode.depth) ctx.setProperty(n, 'depth', n.depth - 1);
+          if (n.type === 'heading' && depthOf(n) !== n.depth) ctx.setProperty(n, 'depth', depthOf(n));
         }
         changed = true;
       } else {
@@ -148,11 +153,26 @@ function docsPlugin(rel) {
         }
       }
 
-      // 7. The lead picture, above the first paragraph (the H1 is gone by now).
+      // 7. The lead picture, above the first paragraph (the H1 is gone by now; the paths under headings
+      // are not yet, so the first paragraph is the doc's own).
       const lead = !sectionMode && leadFigures[rel];
       if (lead) {
         const first = kids.findIndex((n) => n.type === 'paragraph');
         kids.splice(first === -1 ? 0 : first, 0, { type: 'html', value: lead() });
+        changed = true;
+      }
+
+      // 8. A heading that names its folder: the name stays the heading, the path goes on a line under it.
+      // The ids come from one slugger over the page's headings in order, as Astro assigns them, so a
+      // heading keeps the id it had when it held the path (a repeated text its -n suffix included). This
+      // runs before the conditionals resolve, while a heading inside a block is still a top-level node.
+      const ids = headingIds(kids, ctx);
+      for (let i = kids.length - 1; i >= 0; i--) {
+        const n = kids[i];
+        if (n.type !== 'heading') continue;
+        const split = whereItLives(n, ids.get(n), depthOf(n));
+        if (!split) continue;
+        kids.splice(i, 1, ...split);
         changed = true;
       }
 
@@ -181,9 +201,10 @@ function docsPlugin(rel) {
           value: `<div class="trellis-mermaid not-content" data-pagefind-ignore><pre class="mermaid">${escapeHtml(node.value)}</pre></div>`,
         };
       }
-      if (!node.lang && BOX_DRAWING.test(node.value)) {
-        // An ASCII diagram, not code to copy: its widest line, in characters, sizes its type (lattice.css)
-        // so all of it fits the column, down to a floor below which it scrolls sideways.
+      if (PLAIN_FENCE.has(node.lang ?? '') && BOX_DRAWING.test(node.value)) {
+        // An ASCII diagram or a file tree, not code to copy: its widest line, in characters, sizes its type
+        // (lattice.css) so all of it fits the column, down to a floor below which it scrolls sideways. The
+        // highlighter would set it at the prose line height, where a run of │ breaks into dashes.
         const columns = Math.max(...node.value.split('\n').map((line) => [...line].length));
         return {
           type: 'html',
@@ -355,6 +376,61 @@ function breakCodeIn(node, ctx) {
       child.children.flatMap((c) => (c.type === 'text' ? c.value.split(SEAMS).flatMap((part, i) => (i ? [wbr(), { type: 'text', value: part }] : [{ type: 'text', value: part }])) : [c])),
     );
   }
+}
+
+// ---- where it lives -------------------------------------------------------------------------------
+
+/**
+ * A heading of the shape "Name (`src/Core/…/Abstractions/`)" — a text name, then in parentheses one code
+ * span with a slash in it, and nothing else — split in two: the heading with the name alone, its id set
+ * to the slug of the whole text (GitHub's id for it, and the one every link to it targets; Astro keeps an
+ * id a heading already has), and under it a line with the path, a link to the folder or file on GitHub at
+ * the ref the site is built from when the repository has it. Any other heading is left as it is: a code
+ * span mid-sentence ("Dependency flow (enforced by `Trellis.ArchitectureTests`)"), a parenthesis that
+ * says more than the path ("Layer rules (`.claude/rules/`, loaded when …)"), or a code span with no
+ * slash, which names a type rather than a place. Returns the two nodes, or null.
+ */
+function whereItLives(heading, id, depth) {
+  if (heading.children.length !== 3) return null;
+  const [open, code, close] = heading.children;
+  if (open.type !== 'text' || code.type !== 'inlineCode' || close.type !== 'text') return null;
+  const name = open.value.match(/^(.*\S)\s*\($/)?.[1];
+  if (!name || !code.value.includes('/') || close.value !== ')') return null;
+  const target = code.value;
+  const inRepo = existsSync(path.join(repoRoot, target));
+  const url = inRepo ? (target.endsWith('/') ? githubTree(target) : githubBlob(target)) : null;
+  const pathNode = { type: 'inlineCode', value: target };
+  return [
+    { type: 'heading', depth, data: { hProperties: { id } }, children: [{ type: 'text', value: name }] },
+    { type: 'paragraph', data: { hProperties: { className: ['trellis-where'] } }, children: [url ? { type: 'link', url, children: [pathNode] } : pathNode] },
+  ];
+}
+
+/** The id Astro gives each heading under `nodes`: one GitHub slugger over them in document order. */
+function headingIds(nodes, ctx) {
+  const slugger = new GithubSlugger();
+  const ids = new Map();
+  const walk = (list) => {
+    for (const n of list) {
+      if (n.type === 'heading') ids.set(n, slugger.slug(ctx.textContent(n)));
+      else if (Array.isArray(n.children) && n.type !== 'paragraph') walk(n.children);
+    }
+  };
+  walk(nodes);
+  return ids;
+}
+
+/** The path under a heading breaks at its seams, as code in a table cell does. */
+function whereLinesPlugin() {
+  return {
+    name: 'trellis-where-lines',
+    element: {
+      filter: ['p'],
+      visit(p, ctx) {
+        if ((p.properties?.className ?? []).includes('trellis-where')) breakCodeIn(p, ctx);
+      },
+    },
+  };
 }
 
 // ---- lead pictures --------------------------------------------------------------------------------
@@ -533,6 +609,7 @@ function pointerTo(sp) {
 
 const slugOf = (text) => new GithubSlugger().slug(text);
 const BOX_DRAWING = /[─-╿]/; // ─ │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼ and the rest of the block
+const PLAIN_FENCE = new Set(['', 'text', 'txt']); // a fence that asks for no highlighting
 
 function safeExists(p) {
   try {
