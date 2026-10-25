@@ -28,6 +28,9 @@ Agent entry point — read only what the task needs.
 <!--#if (IncludeUI) -->
 - [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the host shell
 <!--#endif -->
+<!--#if (TemplateSource) -->
+- [site.md](../.claude/rules/site.md) — `site/**` (template repository only, ADR-0031): the Lattice visual language and its design system, the owner's rules for the two themes, how a site change is proven before it merges
+<!--#endif -->
 
 ## Skills (`.claude/skills/`, step-by-step recipes; invoke one by name, e.g. `/add-feature`)
 - [add-feature](../.claude/skills/add-feature/SKILL.md) — a new aggregate or use case, copied from the Invoices slice from the Domain outward; a checklist that starts from the feature doc, names the test behind each enforced box, and lists the shapes the slice does not show (ownership, several aggregates, unique keys, timers, keyset paging)

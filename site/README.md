@@ -48,6 +48,12 @@ derive what frontmatter would have held and adapt the rest:
   defaults build), the two lists are joined again, as the engine writes them.
 - **Testing**: the `## Tests` section of `development.md` is rendered as a page of its own, and links
   to its anchors follow it there.
+- **The visual language, Lattice**, is written down as a design system at
+  <https://claude.ai/artifact/T4GLnKLBUJ5Z47H8Aq4oFw>: the tokens of `src/styles/lattice.css` in both themes
+  with their usage and contrast, the brand book, and a live preview with a guideline for every component.
+  `.claude/rules/site.md` is the short form an agent reads when it touches `site/`: dark is final, light
+  keeps the dark construction and changes colour values only, every change is proven with screenshots
+  and a pixel diff of the dark pages.
 - **Tables** keep their Markdown; the site picks a layout from their cells (`tableLayout` in
   `src/lib/markdown-plugins.mjs`). A table of four columns or more that would not fit the content column
   of a 1280 px screen as a table (the test-project map, the exchange-rates tables, the metrics: its
