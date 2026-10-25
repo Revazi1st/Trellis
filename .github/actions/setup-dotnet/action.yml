@@ -1,0 +1,25 @@
+name: Setup .NET from global.json
+description: >-
+  Installs exactly the SDK version global.json names. actions/setup-dotnet with global-json-file honours
+  rollForward by installing the channel's latest release through aka.ms links, which point at a storage
+  account that answers 409 while Microsoft is still publishing a new release (every job failed that way on
+  2026-10-25, SDK 10.0.403). An exact version is fetched from the release feed itself, so a build installs
+  what the repository pins and nothing a publishing race can change. global.json still decides what the
+  build accepts at run time (rollForward latestFeature lets a contributor use a newer feature band).
+runs:
+  using: composite
+  steps:
+    - name: Read the SDK version from global.json
+      id: sdk
+      shell: bash
+      run: |
+        version="$(jq -r '.sdk.version' global.json)"
+        if [ -z "$version" ] || [ "$version" = "null" ]; then
+          echo "::error::global.json names no sdk.version"
+          exit 1
+        fi
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "SDK $version, from global.json."
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      with:
+        dotnet-version: ${{ steps.sdk.outputs.version }}
