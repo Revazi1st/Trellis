@@ -8,6 +8,11 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+- **CI installs exactly the SDK `global.json` names.** The workflows call `.github/actions/setup-dotnet`,
+  which reads the version and installs that one from the release feed. Before, `setup-dotnet` honoured
+  `rollForward` by installing the channel's newest release through aka.ms links, and a release Microsoft
+  is still publishing answers 409 there: every job failed for hours on the day SDK 10.0.403 appeared.
+  `global.json` still decides what a build accepts (`latestFeature`).
 - **The request line is logged line-safe.** The malformed-request (400/413/415), unhandled-exception (500)
   and idempotency-residue log lines take the method and the path through `LogSafeRequestLine`, which
   replaces a line break with a space. On Kestrel nothing changes (a method is token characters only, the

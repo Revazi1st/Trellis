@@ -102,6 +102,18 @@ updates:
       - dependency-name: "Serilog.AspNetCore"
         update-types: ["version-update:semver-major"]
 
+  # The composite action that installs the SDK (.github/actions/setup-dotnet) pins actions/setup-dotnet
+  # too; Dependabot scans a composite action only when its folder is named.
+  - package-ecosystem: github-actions
+    directory: "/.github/actions/setup-dotnet"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    cooldown:
+      default-days: 7
+
   # One weekly PR for all action bumps: they are SHA pins with version comments, reviewed together.
   - package-ecosystem: github-actions
     directory: "/"

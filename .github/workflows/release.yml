@@ -122,9 +122,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
+      - uses: ./.github/actions/setup-dotnet
       - name: Build (warnings as errors)
         run: dotnet build Trellis.slnx -c Release
       - name: Test
@@ -156,9 +154,7 @@ jobs:
       DRY_RUN: ${{ needs.prepare.outputs.dry-run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
+      - uses: ./.github/actions/setup-dotnet
 
       - name: Pack template
         run: dotnet pack eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj -c Release -o ./nupkg "-p:Version=$VERSION"
@@ -244,9 +240,7 @@ jobs:
       DRY_RUN: ${{ needs.prepare.outputs.dry-run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
+      - uses: ./.github/actions/setup-dotnet
 
       # The package attached to the draft is the one that was smoke-tested and attested.
       - name: Download the package from the draft release

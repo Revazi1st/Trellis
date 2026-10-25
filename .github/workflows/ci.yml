@@ -60,9 +60,7 @@ jobs:
         run: chmod +x scripts/*.sh
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
+        uses: ./.github/actions/setup-dotnet
 
       - name: Restore
         run: dotnet restore Trellis.slnx
@@ -176,9 +174,7 @@ jobs:
         run: chmod +x scripts/*.sh
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
+        uses: ./.github/actions/setup-dotnet
 
 #if (TemplateSource)
       # The Redis blocks in this file are actionable conditionals: their directive lines start with
@@ -260,9 +256,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
+        uses: ./.github/actions/setup-dotnet
 
       # The commands docs/deployment.md gives, with a fixed repository and tag so the steps below
       # can name the images, and no registry: the SDK loads each image into the local Docker.
@@ -425,9 +419,7 @@ jobs:
         run: chmod +x scripts/*.sh
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
+        uses: ./.github/actions/setup-dotnet
 
 ##if (UseRedis)
 #      - name: Start PostgreSQL and Redis
