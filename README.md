@@ -7,17 +7,14 @@
 
 Rich DDD · Clean Architecture · vertical slices · CQRS without a mediator · Aspire · Blazor
 
+[![NuGet](https://img.shields.io/nuget/v/Trellis.Templates?logo=nuget)](https://www.nuget.org/packages/Trellis.Templates)
+[![NuGet downloads](https://img.shields.io/nuget/dt/Trellis.Templates?logo=nuget)](https://www.nuget.org/packages/Trellis.Templates)
 [![Template CI](https://github.com/Revazi1st/Trellis/actions/workflows/template-ci.yml/badge.svg)](https://github.com/Revazi1st/Trellis/actions/workflows/template-ci.yml)
 [![CI](https://github.com/Revazi1st/Trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/Revazi1st/Trellis/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Revazi1st/Trellis/actions/workflows/codeql.yml/badge.svg)](https://github.com/Revazi1st/Trellis/actions/workflows/codeql.yml)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/Revazi1st/Trellis?style=flat&logo=github)](https://github.com/Revazi1st/Trellis/stargazers)
-
-<!-- NuGet badges, after v0.1.0 is on nuget.org: move these two lines into the row above.
-[![NuGet](https://img.shields.io/nuget/v/Trellis.Templates?logo=nuget)](https://www.nuget.org/packages/Trellis.Templates)
-[![NuGet downloads](https://img.shields.io/nuget/dt/Trellis.Templates?logo=nuget)](https://www.nuget.org/packages/Trellis.Templates)
--->
 
 </div>
 
