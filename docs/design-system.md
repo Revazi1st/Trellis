@@ -88,8 +88,9 @@ values and never a rule. Each colour is written once as a light and a dark value
   name them. Headings track `--tracking-heading`; uppercase labels are 12 px with `--tracking-label`.
   Numbers in a table are tabular figures (`font-variant-numeric: tabular-nums`), so columns line up.
 - **Edges** are one-pixel hairlines in `--line`; no shadows. **Radii** 6, 10, 16 or a pill.
-- **One breakpoint**, 50 rem: below it a table's rows become blocks and the top bar may wrap; above it the
-  page keeps `--page-width`.
+- **One breakpoint**, 50 rem, is the system's; nothing shipped changes shape at it yet. The top bar and
+  the filter row wrap wherever they run out of room, the page keeps `--page-width` at every width, and
+  rows that read as blocks below it are the next step on this system.
 - **Focus** is the `--focus-ring` with `--focus-offset`, visible on every focusable element, never
   suppressed; the accent passes 3:1 on both grounds so the ring reads.
 - **Text sits on a ground it passes AA on**: body text and the status colours on `--bg` or `--surface`
@@ -104,7 +105,7 @@ values and never a rule. Each colour is written once as a light and a dark value
 ## Components
 
 The pages are built from these and nothing else. Each subsection names its classes, the states the
-stylesheet styles, what the markup owes accessibility, and how it behaves below the breakpoint.
+stylesheet styles, what the markup owes accessibility, and how it behaves on a narrow screen.
 
 ### Page shell
 
@@ -123,7 +124,7 @@ signed-in name in `--muted`; `.content` is the `<main>`.
 </div>
 ```
 
-Below the breakpoint the top bar wraps rather than overflowing: nothing in it has a fixed width.
+The top bar wraps rather than overflowing at any width: nothing in it has a fixed width.
 
 ### Buttons
 
@@ -226,7 +227,7 @@ filled with the accent. The filter lives in the address, so the pills are links,
 </div>
 ```
 
-The row wraps below the breakpoint.
+The row wraps at any width: a filter that does not fit moves to the next line.
 
 ### Pager
 

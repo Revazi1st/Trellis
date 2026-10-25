@@ -32,7 +32,8 @@ project is someone else's product. What carries over is the construction and a s
   switch has one thing to write. Tokens are opaque so a ratio can be checked once per ground.
 - **The existing classes are the components.** No class was renamed (the browser tests and the markup
   tests pin them); each one has a subsection in `docs/design-system.md` with its markup, states,
-  accessibility and behaviour below the one breakpoint. A new visual element is a new subsection.
+  accessibility and behaviour on a narrow screen; the system names one breakpoint, 50 rem, and nothing
+  shipped changes shape at it yet. A new visual element is a new subsection.
 - **The doc is the source of names, and tests hold it both ways.** `DesignSystemTests`
   (ArchitectureTests, compiled with the UI) proves that only the token file writes a colour, that every
   colour token is one `light-dark()` pair, that text passes WCAG AA on its grounds and every `--on-*`
