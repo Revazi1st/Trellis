@@ -1,0 +1,175 @@
+name: Site
+
+# The documentation site (site/, ADR-0031): Astro + Starlight rendering docs/ in place, published on
+# GitHub Pages. Maintainer-only: template.json and the pack project exclude this workflow, so a generated
+# project never has it. Three ways in, one build:
+#   - pull_request: a pull request that touches what the site renders (docs/, site/, README.md,
+#     .template.config/, global.json, eng/readme/, a source file a site page quotes, this file) is built
+#     and link-checked, never deployed. The workflow runs on every pull request and skips the build when
+#     none of those changed, instead of a paths filter: a required check whose workflow a paths filter
+#     never starts stays pending and blocks the merge, while a skipped job counts as passed.
+#   - workflow_call: release.yml deploys the site from the release tag once the package is published.
+#   - workflow_dispatch: a preview from any ref (default main). It replaces the published site until the
+#     next deploy; any ref but a release tag shows a banner on every page saying it is a preview. Restore
+#     the release with: gh workflow run site.yml -f ref=vX.Y.Z (docs/releasing.md). With site_ref, the
+#     docs come from ref and site/ from site_ref: a fix to the site's own code, deployed for the release
+#     without a new one (gh workflow run site.yml -f ref=vX.Y.Z -f site_ref=main).
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or SHA to build and deploy (a release tag deploys the release; any other ref a preview)"
+        type: string
+        required: true
+        default: main
+      site_ref:
+        description: "Optional: take site/ from this ref instead (a fix to the site's own code, deployed for a release)"
+        type: string
+        required: false
+        default: ""
+  workflow_call:
+    inputs:
+      ref:
+        description: "The release tag to build and deploy"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels its older build; a deploy is never cancelled (the deploy job's
+# own group below).
+concurrency:
+  group: site-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Does it touch the site?
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      site: ${{ steps.diff.outputs.site }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # What the build reads: docs/ and site/, the template's configuration (the Options page, the logo),
+      # the SDK pin and the README pictures, and every file an <Excerpt> on a site page quotes (its
+      # lines are found by content, so a change there can break the build).
+      - name: Compare with the base branch
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed="$(git diff --name-only "$BASE_SHA"...HEAD)"
+          quoted="$(grep -rhoE '<Excerpt path="[^"]+"' site/src/content/docs | sed -E 's/.*path="([^"]+)"/\1/' || true)"
+          if grep -qE '^(docs/|site/|eng/readme/|\.template\.config/|README\.md$|global\.json$|\.github/workflows/site\.yml$)' <<< "$changed" ||
+             grep -qxF -f <(printf '%s\n' "$quoted") <<< "$changed"; then
+            echo "site=true" >> "$GITHUB_OUTPUT"
+            echo "The pull request changes what the site renders: building it."
+          else
+            echo "site=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing the site renders changed: the build is skipped."
+          fi
+
+  build:
+    name: Build and validate
+    needs: changes
+    # Skipped only on an explicit "no": when the comparison itself fails (or did not run, outside a pull
+    # request), the site is built, so a broken changes job can never pass the required check as skipped.
+    if: ${{ !cancelled() && needs.changes.outputs.site != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      # What the site documents: a v* tag makes a release build, any other ref a preview with a banner.
+      SITE_REF: ${{ inputs.ref || github.head_ref || github.ref_name }}
+    steps:
+      # The full history: each doc's last-updated date comes from git log, and the banner names the
+      # latest release tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      # Exactly the site/ of site_ref (files it does not have are removed); everything else stays ref's.
+      - name: Take site/ from site_ref
+        if: inputs.site_ref != ''
+        env:
+          SITE_FROM: ${{ inputs.site_ref }}
+        run: |
+          git fetch --no-tags origin "$SITE_FROM"
+          git restore --source=FETCH_HEAD --staged --worktree -- site
+          echo "site/ comes from $SITE_FROM ($(git rev-parse --short FETCH_HEAD)); the docs from $SITE_REF."
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: site/.nvmrc
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install
+        working-directory: site
+        run: npm ci
+
+      # Fails on any link or #anchor in docs/ or on a site page that points nowhere.
+      - name: Build
+        working-directory: site
+        env:
+          TRELLIS_SITE_REF: ${{ env.SITE_REF }}
+          TRELLIS_SITE_LASTUPDATED: git
+        run: npm run build
+
+      - name: Summary
+        env:
+          SITE_FROM: ${{ inputs.site_ref }}
+        run: |
+          kind=preview
+          if [[ "$SITE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then kind=release; fi
+          {
+            echo "### Site built from \`$SITE_REF\` ($(git rev-parse --short HEAD)), a $kind build"
+            echo
+            if [ -n "$SITE_FROM" ]; then echo "site/ from \`$SITE_FROM\`."; echo; fi
+            echo "$(find site/dist -name '*.html' | wc -l | tr -d ' ') pages, every internal link and anchor valid."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    # Outside a pull request the 'changes' job is skipped, and a plain condition inherits success(),
+    # which is false once any job up the chain was skipped (actions/runner#2205): name the status.
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write      # deploy the artifact
+      id-token: write   # prove the deployment's origin to Pages (OIDC)
+    # One deploy at a time; a deploy that started always finishes.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    # A release deploys from its tag: the environment needs a deployment rule that allows v* tags, or
+    # this job fails with 'Tag "vX.Y.Z" is not allowed to deploy to github-pages due to environment
+    # protection rules' (docs/releasing.md, one-time setup).
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check the Pages setup
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

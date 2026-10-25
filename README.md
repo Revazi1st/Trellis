@@ -26,6 +26,8 @@ dotnet new install Trellis.Templates
 dotnet new trellis -n Your.Project
 ```
 
+Documentation: https://revazi1st.github.io/Trellis/
+
 **Trellis** is a `dotnet new` template for .NET 10 that generates a rich-DDD, Clean Architecture
 solution: vertical-slice features, CQRS without a mediator, `Result`s instead of exceptions,
 PostgreSQL, Identity with JWT, Aspire orchestration and an optional Blazor UI, in a repository written
@@ -629,7 +631,8 @@ describes planned work that is not in the template yet; the marker goes when it 
   - logging each use case under its own request type's category (`ILogger<TRequest>`), the acting user's id on every request's log line, and a slow use case surfaced at Warning past a threshold (`LoggingBehaviour`, `PerformanceBehaviour`);
   - stamping audit columns with the user's id rather than a display name (`AuditableEntityInterceptor`);
   - opening the API's root on its Scalar reference;
-  - a short, ordered deployment page in Getting started.
+  - a short, ordered deployment page in Getting started;
+  - a documentation website as the template's home: a landing page with the install command, feature cards and a three-step quick start; a Getting started / Architecture / Features sidebar with a linear path; an installation page with update and uninstall; one page per option that says what each choice adds and what to do after creation; an architecture page led by one ring diagram and the dependency rule; the documented version in the footer; a Testing page with one table of test projects and one run command; Astro + Starlight on GitHub Pages (ideas from cleanarchitecture.jasontaylor.dev; no code or CSS copied).
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.

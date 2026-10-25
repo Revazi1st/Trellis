@@ -16,8 +16,12 @@
 # block a line may carry only a leading hash in column 0 plus doubled hashes, the block's
 # directives must all be doubled, and no conditional may nest inside it.
 #
-# Markdown and shell files get the mid-line check too: the engine's if token is "<!--#if" in
-# .md and "#if" in .sh, matched anywhere in a line, so a token quoted in prose truncates the file.
+# Markdown and shell files get the same rule, written for their own form: the engine's token is
+# "<!--#if" in .md and "#if" in .sh, matched anywhere in a line, so a token quoted in prose truncates
+# the file. In every file type a directive stands alone on its line: nothing but whitespace before it,
+# nothing but whitespace after it (after its "-->" in Markdown). The engine drops the whole line it finds
+# a directive on, and the documentation site (site/) reads a Markdown directive only when the comment is
+# the whole line; text beside it would be lost from generated projects and shown on every page there.
 #
 # Every exclude glob in template.json must still match a tracked file (or, for the unconditional
 # list, a path .gitignore ignores): a renamed or deleted file otherwise ships again unnoticed.
@@ -127,8 +131,12 @@ yaml_conditionals() {
 
       if (directive == "if" || directive == "elif" || directive == "elseif") {
         if (rest !~ /^[[:space:]]*\(.*\)[[:space:]]*$/) {
-          report("write the condition in parentheses, for example: " "#" directive " (IncludeUI)")
+          report("write the condition in parentheses with nothing after it, for example: " "#" directive " (IncludeUI)")
         }
+      } else if (rest !~ /^[[:space:]]*$/) {
+        report("nothing may follow the " directive " directive on its line; move the text to a line of its own")
+      }
+      if (directive == "if" || directive == "elif" || directive == "elseif") {
         cond = rest
         while (match(cond, /[A-Za-z_][A-Za-z0-9_]*/)) {
           printf "SYM\t%d\t%s\n", FNR, substr(cond, RSTART, RLENGTH)
@@ -194,7 +202,41 @@ for f in $yaml_files; do
   done <<< "$(yaml_conditionals "$f")"
 done
 
-# --- Markdown and shell: a directive token may only open a line ---
+# --- Markdown and shell: a directive stands alone on its line ---
+# Prints "line<TAB>message" for every line of one file that holds a directive token but is not exactly
+# one directive: whitespace, the directive, whitespace. In Markdown the directive is one comment closed
+# on the same line, <!--#if (IncludeUI) -->, and nothing follows its first "-->"; in shell it is
+# "#if (IncludeUI)", "#else" or "#endif", the condition in parentheses. site/src/lib/conditionals.mjs
+# reads a Markdown directive by exactly this shape, and the site's build fails on any directive line in
+# docs/ that it did not read as one.
+text_directives() {
+  awk -v markdown="$2" '
+    function report(msg) { printf "%d\t%s\n", FNR, msg }
+    markdown == 1 {
+      if ($0 !~ /<!--#(if|elseif|elif|else|endif)/) next
+      if ($0 !~ /^[[:space:]]*<!--#(if|elseif|elif|else|endif)([^A-Za-z0-9_]|$)/) {
+        report("a template conditional token appears inside a line; the engine would drop the rest of the generated file. Keep directives on lines of their own and describe the token in prose")
+        next
+      }
+      close_at = index($0, "-->")
+      if (close_at == 0) {
+        report("close the directive comment on its own line: <!--#if (X) -->")
+      } else if (substr($0, close_at + 3) !~ /^[[:space:]]*$/) {
+        report("nothing may follow a directive on its line; the engine drops the whole line, and the site would show the text on every page. Move it to a line of its own")
+      }
+      next
+    }
+    {
+      if ($0 !~ /#(if|elseif|elif|else|endif)([^A-Za-z0-9_]|$)/) next
+      if ($0 !~ /^[[:space:]]*#(if|elseif|elif|else|endif)([^A-Za-z0-9_]|$)/) {
+        report("a template conditional token appears inside a line; the engine would drop the rest of the generated file. Keep directives on lines of their own and describe the token in prose")
+      } else if ($0 !~ /^[[:space:]]*#((if|elseif|elif)[[:space:]]*[(].*[)]|else|endif)[[:space:]]*$/) {
+        report("a directive stands alone on its line: #if (X), #else or #endif, the condition in parentheses and nothing after it")
+      }
+    }
+  ' "$1"
+}
+
 text_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./artifacts -o -path ./eng -o -name node_modules \
     -o -name bin -o -name obj -o -name TestResults \) -prune -o -type f \( -name '*.md' -o -name '*.sh' \) -print \
   | sed 's|^\./||' | sort)
@@ -204,14 +246,14 @@ for f in $text_files; do
     continue
   fi
   case "$f" in
-    *.md) token='<!--#(if|elseif|else|endif)' ;;
-    *)    token='#(if|elseif|elif|else|endif)([^A-Za-z0-9_]|$)' ;;
+    *.md) markdown=1 ;;
+    *)    markdown=0 ;;
   esac
-  while IFS=: read -r line _; do
+  while IFS=$'\t' read -r line message; do
     [ -n "$line" ] || continue
-    echo "::error file=$f,line=$line::a template conditional token appears inside a line; the engine would drop the rest of the generated file. Keep directives on lines of their own and describe the token in prose"
+    echo "::error file=$f,line=$line::$message"
     fail=1
-  done <<< "$(grep -nE "$token" "$f" | grep -vE "^[0-9]+:[[:space:]]*$token" || true)"
+  done <<< "$(text_directives "$f" "$markdown")"
 done
 
 # --- every exclude glob in template.json still matches what it was written for ---

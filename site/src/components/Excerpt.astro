@@ -1,0 +1,63 @@
+---
+// A code excerpt read from the repository at build time, titled with its path and linked to the same
+// lines on GitHub at the ref the site is built from, so it cannot rot the way a pasted copy does.
+// Select the lines with, in order of preference:
+//   region="Name"  between `#region Name` and `#endregion` (or `// region:Name` … `// endregion`)
+//   from="text"    the first line containing the text, through the end of the block it opens ({ … })
+//   lines="12-24"  a bare range (1-based, inclusive): the last resort, it moves when the file does
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { Code } from '@astrojs/starlight/components';
+import { github, githubBlob, repoRoot } from '../../trellis.config.mjs';
+
+interface Props {
+  path: string;
+  region?: string;
+  from?: string;
+  lines?: string;
+  lang?: string;
+  /** Wrap long lines (narrow places such as cards) instead of scrolling them. */
+  wrap?: boolean;
+}
+const { path: file, region, from, lines, wrap = false } = Astro.props;
+const ext = path.extname(file).slice(1);
+const lang = Astro.props.lang ?? ({ cs: 'csharp', csproj: 'xml', slnx: 'xml', props: 'xml', yml: 'yaml' }[ext] ?? ext);
+const all = readFileSync(path.join(repoRoot, file), 'utf8').split(/\r?\n/);
+
+let start = 1;
+let end = all.length;
+if (region) {
+  const open = all.findIndex((l) => new RegExp(`(#region|//\\s*region:)\\s*${region}\\b`).test(l));
+  const close = all.findIndex((l, i) => i > open && /(#endregion|\/\/\s*endregion)/.test(l));
+  if (open === -1 || close === -1) throw new Error(`${file}: no region ${region}`);
+  [start, end] = [open + 2, close];
+} else if (from) {
+  const open = all.findIndex((l) => l.includes(from));
+  if (open === -1) throw new Error(`${file}: no line containing "${from}"`);
+  let depth = 0;
+  let seen = false;
+  let close = open;
+  for (let i = open; i < all.length; i++) {
+    for (const ch of all[i]) {
+      if (ch === '{') (depth++, (seen = true));
+      if (ch === '}') depth--;
+    }
+    if (seen && depth === 0) {
+      close = i;
+      break;
+    }
+  }
+  [start, end] = [open + 1, close + 1];
+} else if (lines) {
+  [start, end] = lines.split('-').map(Number);
+}
+const slice = all.slice(start - 1, end);
+const indent = Math.min(...slice.filter((l) => l.trim()).map((l) => l.match(/^\s*/)?.[0].length ?? 0));
+const code = slice.map((l) => l.slice(indent)).join('\n');
+const href = `${githubBlob(file)}#L${start}-L${end}`;
+---
+
+<figure class="trellis-excerpt">
+  <Code code={code} lang={lang} title={path.basename(file)} wrap={wrap} preserveIndent={wrap} />
+  <figcaption><a href={href}>{file}, lines {start}–{end}</a> at <code>{github.ref}</code></figcaption>
+</figure>

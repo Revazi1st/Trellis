@@ -74,6 +74,9 @@ Numbered by the template and updated by template upgrades; record your own from 
 - [0028](adr/0028-use-case-telemetry.md) — use-case telemetry: one outcome line per invocation with the level by outcome class, one span with outcome tags, `Trellis.*` subscription by prefix, enforced instrument and attribute names
 - [0029](adr/0029-central-package-management.md) — central package management with transitive pinning, NuGetAudit on the whole graph, Dependabot groups for the families that must move together
 - [0030](adr/0030-discarded-result-analyzer.md) — a discarded Result fails the build: the in-repository RSLT001 analyzer (`tools/Trellis.Analyzers`), loaded into every project, what it reports and exempts, the Roslyn version ceiling
+<!--#if (TemplateSource) -->
+- [0031](adr/0031-documentation-site.md) — the documentation website (template repository only): Astro + Starlight in `site/` rendering `docs/` in place, conditionals as labelled asides, every link validated, no third-party request, deployed from the release tag, a preview with a banner
+<!--#endif -->
 
 ## Project decisions (docs/adr/, 0100 and up)
 

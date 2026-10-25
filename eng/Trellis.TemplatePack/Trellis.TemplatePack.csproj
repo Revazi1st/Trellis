@@ -16,7 +16,9 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/Revazi1st/Trellis</PackageProjectUrl>
+    <!-- The project's home: the documentation site, which the release that ships this deploys from
+         its tag (site.yml). The source stays at RepositoryUrl. -->
+    <PackageProjectUrl>https://revazi1st.github.io/Trellis/</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Revazi1st/Trellis</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
 
@@ -40,8 +42,11 @@
          The template's own governance files (README and its eng/readme pictures, CHANGELOG,
          CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, CODEOWNERS, issue forms, the release runbook)
          are maintainer material: generated projects get the stubs in
-         .template.config/consumer/ instead. template.json itself is listed because the package
-         carries the stamped copy (StampTemplateVersion below). -->
+         .template.config/consumer/ instead. So is the documentation site (site/, its node_modules
+         and build output included, the site.yml workflow that deploys it, and its decision
+         record, ADR-0031, whose docs/INDEX.md line is a TemplateSource block). template.json
+         itself is listed because the package carries the stamped copy (StampTemplateVersion
+         below). -->
     <TemplateContentExclude>
       ..\..\**\bin\**;
       ..\..\**\obj\**;
@@ -55,13 +60,16 @@
       ..\..\eng\Directory.Build.props;
       ..\..\eng\Directory.Build.targets;
       ..\..\eng\readme\**;
+      ..\..\site\**;
       ..\..\.template.config\template.json;
       ..\..\.github\workflows\template-ci.yml;
       ..\..\.github\workflows\release.yml;
+      ..\..\.github\workflows\site.yml;
       ..\..\.claude\skills\add-toggle\**;
       ..\..\scripts\check-template-toggles.sh;
       ..\..\scripts\test-template.sh;
       ..\..\docs\releasing.md;
+      ..\..\docs\adr\0031-documentation-site.md;
       ..\..\README.md;
       ..\..\CHANGELOG.md;
       ..\..\CONTRIBUTING.md;

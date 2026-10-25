@@ -246,9 +246,6 @@ project) and the `add-feature` skill point here rather than repeat it.
 (`ResultAssertions.cs` with `ShouldBeSuccess()`, `Invoices/InvoiceFactory.cs`), each compiled into the
 projects that need it by a linked `<Compile Include>` in their csproj.
 
-<!--#if (IncludeUI || UseMultitenancy) -->
-Suites a template option adds, present only in a project generated with it:
-<!--#endif -->
 <!--#if (IncludeUI) -->
 - **`ApiTests/Ui`** (with the UI; optional): UI.Common's typed clients, token handling and form logic over a
   scripted `HttpMessageHandler` and a manual clock, no browser. Needs nothing more than the rest of
@@ -256,8 +253,9 @@ Suites a template option adds, present only in a project generated with it:
 <!--#endif -->
 <!--#if (IncludeUiTests && IncludeUI) -->
 - **`UiTests`** (`--include-ui-tests`; optional, and opt-in at run time): the pages in a real browser
-  against a running app. Needs `RUN_UI_TESTS=1`, installed browsers and a running app (see *UI tests*
-  above), otherwise it skips. Write one for a flow only a browser shows; keep them few.
+  against a running app. Needs `RUN_UI_TESTS=1`, installed browsers and a running app (see
+  [UI tests](#ui-tests-optional)), otherwise it skips. Write one for a flow only a browser shows; keep
+  them few.
 <!--#endif -->
 <!--#if (UseMultitenancy) -->
 - **`TenancyTests`** (IntegrationTests) and **`TenantIsolationTests`** (ApiTests), with multi-tenancy

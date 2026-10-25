@@ -286,6 +286,14 @@ If you generated a project from 0.1.0, read these before adopting this version w
   GitHub release of its version, whose notes are that version's CHANGELOG section
   (`PackageReleaseNotes` in the pack project; idea from
   [jasontaylordev/CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture)).
+- **A documentation website** (not in generated projects): <https://revazi1st.github.io/Trellis/>,
+  Astro + Starlight in `site/` rendering `docs/` in place, with a landing page, an Install and create
+  page, an Options page generated from `template.json` and the decision records in the sidebar; a
+  passage only some options bring is labelled with the option. Every link and anchor is checked on each
+  pull request that touches the docs, the site makes no third-party request, and each release deploys it
+  from its tag (a manual preview says so on every page). The package's project link points at it
+  (ADR-0031; ideas from cleanarchitecture.jasontaylor.dev). `check-template-toggles.sh` now requires
+  every directive to stand alone on its line.
 
 ### Changed
 

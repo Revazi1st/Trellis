@@ -207,7 +207,8 @@ jobs:
             fail=1
           fi
           for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md eng/readme \
-                   scripts/check-template-toggles.sh scripts/test-template.sh; do
+                   scripts/check-template-toggles.sh scripts/test-template.sh site .github/workflows/site.yml \
+                   docs/adr/0031-documentation-site.md; do
             if [ -e "$f" ]; then
               echo "::error::$f is the template repository's own material and must not ship."
               fail=1
@@ -294,8 +295,8 @@ jobs:
           chmod +x scripts/check-template-toggles.sh
           ./scripts/check-template-toggles.sh
 
-      # The template-only workflows (this one, release.yml) never reach a generated project, so
-      # the instantiate legs do not lint them.
+      # The template-only workflows (this one, release.yml, site.yml) never reach a generated
+      # project, so the instantiate legs do not lint them.
       - name: Lint the workflows
         run: docker run --rm -v "$PWD:/repo" --workdir /repo "$ACTIONLINT_IMAGE" -color .github/workflows/*.yml
 

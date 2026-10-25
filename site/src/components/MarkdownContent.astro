@@ -1,0 +1,76 @@
+---
+// Starlight's MarkdownContent, plus the loader that draws the docs' mermaid diagrams (a ```mermaid fence
+// becomes <pre class="mermaid"> in markdown-plugins.mjs). The loader is a few hundred bytes on every page;
+// mermaid itself is a chunk of this build, fetched only by a page that has a diagram, never from a CDN.
+// Each diagram is drawn with the Lattice palette of the current theme and redrawn when the theme
+// changes; without JavaScript its source stays readable as text. A diagram fills the column but shrinks
+// to no less than 80 % of its own size: a wider one (the eight lifelines of a sequence diagram) scrolls
+// sideways in its frame rather than shrink its labels past reading.
+import Default from '@astrojs/starlight/components/MarkdownContent.astro';
+---
+
+<Default><slot /></Default>
+
+<script>
+  const palette = (dark: boolean) =>
+    dark
+      ? {
+          darkMode: true, background: '#0C1410', primaryColor: '#172520', primaryBorderColor: '#8FD16A',
+          primaryTextColor: '#E6EFE8', secondaryColor: '#3A2F1B', tertiaryColor: '#121D16', lineColor: '#9DB3A4',
+          textColor: '#E6EFE8', mainBkg: '#172520', nodeBorder: '#8FD16A', actorBkg: '#172520', actorBorder: '#8FD16A',
+          actorTextColor: '#E6EFE8', actorLineColor: '#566B5F', signalColor: '#E6EFE8', signalTextColor: '#E6EFE8',
+          labelBoxBkgColor: '#172520', labelBoxBorderColor: '#8FD16A', labelTextColor: '#E6EFE8',
+          loopTextColor: '#E6EFE8', noteBkgColor: '#2E2616', noteBorderColor: '#9E7E42', noteTextColor: '#F1E3C4',
+          activationBkgColor: '#27331F', activationBorderColor: '#8FD16A', sequenceNumberColor: '#0E2415',
+        }
+      : {
+          darkMode: false, background: '#FFFFFF', primaryColor: '#EEF6E8', primaryBorderColor: '#1F5C3D',
+          primaryTextColor: '#14231B', secondaryColor: '#F3E6C9', tertiaryColor: '#FFFFFF', lineColor: '#566B5F',
+          textColor: '#14231B', mainBkg: '#EEF6E8', nodeBorder: '#1F5C3D', actorBkg: '#EEF6E8', actorBorder: '#1F5C3D',
+          actorTextColor: '#14231B', actorLineColor: '#9DB3A4', signalColor: '#14231B', signalTextColor: '#14231B',
+          labelBoxBkgColor: '#EEF6E8', labelBoxBorderColor: '#1F5C3D', labelTextColor: '#14231B',
+          loopTextColor: '#14231B', noteBkgColor: '#F8EFD9', noteBorderColor: '#C39A52', noteTextColor: '#4A3511',
+          activationBkgColor: '#DFE9D6', activationBorderColor: '#1F5C3D', sequenceNumberColor: '#FFFFFF',
+        };
+
+  async function drawDiagrams() {
+    const nodes = [...document.querySelectorAll<HTMLElement>('.trellis-mermaid pre.mermaid')];
+    if (nodes.length === 0) return;
+    const { default: mermaid } = await import('mermaid');
+    for (const el of nodes) el.dataset.src ??= el.textContent ?? '';
+    let drawing = Promise.resolve();
+    const draw = () =>
+      (drawing = drawing.then(async () => {
+        const dark = document.documentElement.dataset.theme === 'dark';
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          // mermaid 12 lays diagrams out with ELK by default; dagre is the layout GitHub draws these docs
+          // with, and ELK (EPL-2.0) is not part of this site (src/lib/no-elk.mjs).
+          layout: 'dagre',
+          look: 'classic',
+          theme: 'base',
+          fontFamily: "'Geist Variable', system-ui, sans-serif",
+          themeVariables: palette(dark),
+          // A long message wraps over a few lines instead of pushing the lifelines apart: unwrapped, the
+          // Invoices sequence diagram is 2,600 px wide, wrapped 1,400.
+          sequence: { wrap: true, width: 170 },
+        });
+        for (const el of nodes) {
+          el.removeAttribute('data-processed');
+          el.textContent = el.dataset.src ?? '';
+        }
+        // A diagram that fails shows mermaid's error drawing in its place; the others still draw.
+        await mermaid.run({ nodes, suppressErrors: true });
+        for (const el of nodes) {
+          const svg = el.querySelector('svg');
+          const width = svg?.viewBox.baseVal?.width; // the diagram's own size, which mermaid caps it at
+          if (svg && width) svg.style.minWidth = `${Math.round(width * 0.8)}px`;
+        }
+      }));
+    await draw();
+    new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+
+  drawDiagrams();
+</script>

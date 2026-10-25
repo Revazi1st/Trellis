@@ -1,0 +1,194 @@
+---
+title: Trellis
+description: A dotnet new template for .NET 10 that generates a rich-DDD, Clean Architecture solution whose rules the tests enforce.
+template: splash
+lastUpdated: false
+# The site's title is Trellis too: without this, Starlight's "<page> | <site>" title reads "Trellis | Trellis".
+head:
+  - tag: title
+    content: Trellis — Clean Architecture the tests enforce
+hero:
+  title: 'Clean Architecture <em>the tests enforce.</em>'
+  tagline: 'Rich DDD aggregates, a hand-rolled command pipeline that returns Results instead of throwing, a transactional outbox, Aspire orchestration and a Blazor UI. The rules are written twice: as architecture tests, and as instructions an AI agent follows.'
+  actions:
+    - text: Get started
+      link: /Trellis/start/install/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/Revazi1st/Trellis
+      icon: external
+      variant: secondary
+stage:
+  eyebrow: '.NET 10 · Aspire 13 · PostgreSQL · Blazor'
+  fine: 'The package lands on nuget.org with v0.1.0. Until then, install from a clone: <code>dotnet new install ./Trellis</code>.'
+---
+
+import { Card, CardGrid, Code, LinkCard, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+import Excerpt from '../../components/Excerpt.astro';
+import OptionsTable from '../../components/OptionsTable.astro';
+import { facts, quickstart, sdkVersion, toggles } from '../../data/repo.mjs';
+import ringsDark from '@repo/eng/readme/rings-dark.svg?url';
+import ringsLight from '@repo/eng/readme/rings-light.svg?url';
+
+
+<div class="facts not-content">
+  {facts.map((fact) => (
+    <div class="fact">
+      <b>{fact.value.toLocaleString('en')}</b>
+      <span>{fact.label}</span>
+    </div>
+  ))}
+</div>
+
+<section class="block">
+
+<p class="label">What you get</p>
+
+## Opinionated where it pays, open where it should be
+
+<p class="sub">Every card opens the page that explains the piece, rendered from the repository's own <code>docs/</code>.</p>
+
+<div class="bento">
+
+<Card title="A pipeline, no mediator" icon="list-format">
+
+Commands and queries run through decorators: tracing, logging, validation, unit of work. Failures travel as a `Result` and reach the client as RFC 9457 problem details. A discarded `Result` fails the build. Paying an invoice is this whole handler:
+
+<Excerpt path="src/Core/Trellis.Application/Features/Invoices/PayInvoice/PayInvoiceCommandHandler.cs" from="internal sealed class PayInvoiceCommandHandler" wrap />
+
+[See the architecture →](/understand/architecture/)
+
+</Card>
+
+<Card title="A rich domain, worked end to end" icon="document">
+
+Aggregates created through `Create(...)` that returns a `Result`, value objects as sealed records mapped as EF complex types, hand-rolled strongly typed ids. The Invoices slice is the reference: create, issue, pay, void, list, with a receipt e-mail after the commit.
+
+<Excerpt path="src/Core/Trellis.Domain/Invoices/Invoice.cs" from="public Result MarkPaid(" wrap />
+
+[Read the reference feature →](/features/invoices/)
+
+</Card>
+
+<Card title="Outbox and idempotency" icon="random">
+
+Domain events are written in the same transaction and dispatched after it, at least once, with per-handler checkpoints. Idempotency keys and strong ETags on the API.
+
+[The outbox decision →](/decisions/0018-transactional-outbox-and-idempotency/)
+
+</Card>
+
+<Card title="Tests that hold the shape" icon="approve-check">
+
+Architecture tests pin the layer rules, integration tests run on a real PostgreSQL in Testcontainers, API tests go through the real pipeline, and a Playwright suite is one toggle away.
+
+[The testing page →](/develop/testing/)
+
+</Card>
+
+<Card title="Built for agents too" icon="comment-alt">
+
+`AGENTS.md`, path-scoped rules, skills for adding a feature or an integration, and a docs-drift gate in CI, so a person and an AI assistant read the same instructions.
+
+[Read the agent instructions →](https://github.com/Revazi1st/Trellis/blob/main/AGENTS.md)
+
+</Card>
+
+</div>
+
+</section>
+
+<section class="block" id="start">
+
+<p class="label">Quick start</p>
+
+## Up and running in three steps
+
+<p class="sub">Forward slashes throughout; every command runs the same in bash, zsh and PowerShell.</p>
+
+<Steps>
+
+1. **Install the template**
+
+   Needs the .NET 10 SDK ({sdkVersion} or later). Nothing else yet.
+
+   <Tabs syncKey="install-source">
+     <TabItem label="nuget.org">
+       <Code code={quickstart.install} lang="bash" frame="terminal" />
+     </TabItem>
+     <TabItem label="From a clone of main">
+       <Code code={quickstart.fromClone.slice(0, 2).join('\n')} lang="bash" frame="terminal" />
+     </TabItem>
+   </Tabs>
+
+2. **Create a solution**
+
+   Name it the way you would name the root namespace. Add toggles as you need them.
+
+   <Code code={[quickstart.create, quickstart.createWithToggles].join('\n')} lang="bash" frame="terminal" />
+
+3. **Run it**
+
+   Needs Docker running. The AppHost starts PostgreSQL, applies the migrations, seeds the first administrator and opens the Aspire dashboard.
+
+   <Code code={quickstart.run.join('\n')} lang="bash" frame="terminal" />
+
+   Sign in with the seeded administrator named in the generated README, or walk the thirteen requests of `Trellis.Api.http` from the [Try it](/features/invoices/#try-it) section.
+
+</Steps>
+
+</section>
+
+<section class="block">
+
+<p class="label">Options</p>
+
+## The options, one table
+
+<p class="sub">Generated from <code>template.json</code> at build time, so it cannot drift from what <code>dotnet new trellis --help</code> prints.</p>
+
+<OptionsTable toggles />
+
+</section>
+
+<section class="arch not-content">
+  <figure class="rings">
+    <img class="rings-light" src={ringsLight} width="280" height="280" alt="Concentric rings: Domain and SharedKernel at the centre, Application around them, then Infrastructure and Persistence as two halves of one split ring, and Presentation outside." />
+    <img class="rings-dark" src={ringsDark} width="280" height="280" alt="Concentric rings: Domain and SharedKernel at the centre, Application around them, then Infrastructure and Persistence as two halves of one split ring, and Presentation outside." />
+    <ul class="legend">
+      <li><i style="background:var(--ring-gold)" />Domain · SharedKernel</li>
+      <li><i style="background:var(--ring-ochre)" />Application</li>
+      <li><i style="background:var(--ring-moss)" />Infrastructure</li>
+      <li><i style="background:var(--ring-teal)" />Persistence</li>
+      <li><i style="background:var(--ring-slate)" />Presentation</li>
+    </ul>
+  </figure>
+  <div>
+    <p class="label">Architecture</p>
+    <h2>The rule in one sentence</h2>
+    <p class="rule">Dependencies point inward. The Domain knows nothing about EF, HTTP or DI; Application defines the ports; Infrastructure and Persistence are peers that implement them and never reference each other.</p>
+    <p class="sub">Grouped by ring on disk: <code>src/Core</code>, <code>src/Infrastructure</code>, <code>src/Presentation</code>, <code>src/Shared</code>. Features are vertical slices inside the layers. The architecture tests fail the build when a reference crosses the wrong way. <a href="/understand/architecture/">Architecture →</a></p>
+  </div>
+</section>
+
+<section class="block">
+
+<p class="label">Documentation</p>
+
+## One doc set, rendered from the repository
+
+<p class="sub">The pages are the files under <code>docs/</code>, read in place, each with an edit link back to the gated file.</p>
+
+<CardGrid>
+  <LinkCard title="Architecture" description="The rings, the dependency flow, a request stage by stage, events and their guarantees." href="/understand/architecture/" />
+  <LinkCard title="Invoices" description="The reference slice, file by file, and the thirteen-step walkthrough." href="/features/invoices/" />
+  <LinkCard title="Development" description="Prerequisites, everyday commands, secrets, running the app, when a build or a request fails." href="/develop/development/" />
+  <LinkCard title="Testing" description="What each test project proves and needs, and which helper serves which goal." href="/develop/testing/" />
+  <LinkCard title="Deployment" description="Images, required configuration, probes, telemetry, the outbox and idempotency runbooks." href="/operate/deployment/" />
+  <LinkCard title="Decisions" description="Every architecture decision with its context and consequences, from ADR-0001." href="/decisions/0001-record-architecture-decisions/" />
+</CardGrid>
+
+</section>
+
+<p class="closing">Trellis is MIT-licensed. <a href="https://github.com/Revazi1st/Trellis">GitHub</a> · <a href="https://github.com/Revazi1st/Trellis/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/Revazi1st/Trellis/blob/main/CONTRIBUTING.md">Contributing</a> · Set in Geist and Geist Mono, served by this site (<a href="/fonts-license.txt">SIL Open Font License</a>)</p>

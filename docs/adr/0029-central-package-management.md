@@ -4,6 +4,7 @@
 - **Date**: 2026-10-08
 - **Amended**: 2026-10-11 — Dependabot's patch and minor pull requests merge on their own behind a week of cooldown and the required checks (see *Amendment (2026-10-11)* below)
 - **Amended**: 2026-10-18 — the packages numbered after .NET and the SDK image get no major updates from Dependabot: the next .NET is one migration made on purpose (see *Amendment (2026-10-18)* below)
+- **Amended**: 2026-10-25 — an npm update never merges on its own (see *Amendment (2026-10-25)* below)
 
 ## Context
 
@@ -78,3 +79,13 @@ IdentityModel, Microsoft.OpenApi, MessagePack, OpenTelemetry, the `test` group) 
 pull requests, which wait for review. A package numbered after .NET that joins
 `Directory.Packages.props` gets its major ignore in the same change, unless an existing pattern
 already covers it.
+
+## Amendment (2026-10-25): npm updates wait for a person
+
+`dependabot-auto-merge.yml` leaves every npm update (Dependabot's `npm_and_yarn` ecosystem) to a person,
+beside a major, a .NET SDK bump and the GitHub Actions group: a JavaScript toolchain can change a build
+in ways the required checks do not show, and one rule for the whole ecosystem needs no list of packages.
+<!--#if (TemplateSource) -->
+In the template's repository the npm packages are the documentation site's (ADR-0031): Astro and
+Starlight are 0.x releases whose internals the site's build leans on.
+<!--#endif -->
