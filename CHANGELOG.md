@@ -8,6 +8,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-26
+
+A patch: the documentation corrections and the two fixes that followed the first release.
+
 - **CI installs exactly the SDK `global.json` names.** The workflows call `.github/actions/setup-dotnet`,
   which reads the version and installs that one from the release feed. Before, `setup-dotnet` honoured
   `rollForward` by installing the channel's newest release through aka.ms links, and a release Microsoft
@@ -18,6 +22,14 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   replaces a line break with a space. On Kestrel nothing changes (a method is token characters only, the
   path is logged escaped); the point is CodeQL, which recognises the replacement as a sanitiser: the
   `codeql.yml` a generated project ships with no longer opens six `cs/log-forging` alerts on day one.
+- **The docs read right on the website and on GitHub.** The Architecture page's dependency diagram says
+  "Infrastructure and Persistence" in words (the ∥ sign has no monospace glyph) and its Persistence corner
+  meets the line it was drawn to; the Invoices state diagram is laid out top to bottom, so it fits a
+  1280 px screen without scrolling; the Invoices file tree keeps every comment within 80 columns. The
+  website also gained a light theme built to the dark one's construction, wide reference tables that read
+  as blocks, joined lines in box-drawing diagrams, and short headings with the folder path beneath them.
+- **Dependencies**: .NET SDK 10.0.402 in `global.json` (the CI image carries 10.0.403); `Meziantou.Analyzer`
+  3.0.311.
 
 ## [0.1.0] - 2026-10-25
 
