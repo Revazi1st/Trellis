@@ -81,3 +81,18 @@ project as plain GitHub Markdown, with template conditionals in HTML comments (`
 - Revisit when Starlight supports content outside `src/content/docs` (most of the workarounds go), or
   when pages must work without JavaScript (mermaid rendered at build time, with a headless browser in
   the build).
+
+## Amendment (2026-10-26): why not Blazor
+
+The question a reader of this template asks first is why its website is not Blazor, when the template
+recommends Blazor for the application. The two jobs differ. The application UI is interactive, signed
+in, backed by an API and a database, and Blazor is the right tool for it. The website is a few dozen
+pages of Markdown that must paint on the first request, read without JavaScript, be indexed by search
+engines, carry a table of contents, a sidebar, search and link validation, and host as static files on
+GitHub Pages for nothing. Blazor WebAssembly would download a runtime of several megabytes before the
+first page of text and brings none of the Markdown tooling; Blazor Server needs a server the site does
+not have; the .NET static-site generators were young when this was decided and would still need the
+adapter for conditionals and links that this ADR describes. Starlight does the job in a few hundred
+lines of configuration, which is also what the prior art above uses. The cost accepted was a Node
+toolchain in the repository, kept maintainer-only so a generated project never needs it. Revisit if a
+.NET static documentation generator reaches Starlight's level of Markdown support and link checking.
