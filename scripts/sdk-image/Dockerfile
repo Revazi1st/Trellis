@@ -4,7 +4,7 @@
 # The base image is pinned by the digest of its multi-arch index, so a rebuild runs exactly the
 # image that was reviewed. The tag stays next to the digest for Dependabot (docker ecosystem),
 # which moves the two together when the 10.0 line is republished.
-#   tag: mcr.microsoft.com/dotnet/sdk:10.0 — at this digest SDK 10.0.401, runtime 10.0.12
+#   tag: mcr.microsoft.com/dotnet/sdk:10.0 — at this digest SDK 10.0.402, runtime 10.0.13
 FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:747cbade5bfd918a175ac32f8f1d931edec2c7d0d5397a3de72eaef1ac1f66d2
 
 # The docker CLI comes from Docker's static-binary channel, which publishes no checksums, so the
