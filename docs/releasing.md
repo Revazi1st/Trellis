@@ -12,7 +12,7 @@ around them. Generated projects ship neither workflow.
 prepare ──► test ─────────┐
         └─► template ─────┴─► package ──────────────────────► publish (environment: nuget.org)
             (matrix)          pack, smoke test, attest,        download the drafted package,
-                              draft the GitHub release         NuGet login, push, publish release
+                              draft the GitHub release         NuGet login, push, publish
                                                                │
                                                                └─► site: site.yml from the tag,
                                                                    build, deploy to Pages
