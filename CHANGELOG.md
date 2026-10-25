@@ -8,6 +8,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+- **Rider lists Trellis as its own entry.** The template no longer carries the `Aspire` classification,
+  which made Rider's New Solution dialog file it as a *Type* inside the Aspire node; it now gets its own
+  row under Custom Templates. `dotnet new list` shows one tag fewer; nothing in a generated project changes.
+
 ## [0.1.0] - 2026-10-25
 
 The first release.
