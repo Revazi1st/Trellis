@@ -74,9 +74,7 @@ derive what frontmatter would have held and adapt the rest:
 - **ASCII diagrams and file trees**: a fence without a language, or a `text` fence, that draws with box
   characters (the dependency flow on Architecture, the release workflow, the file trees on Invoices) is
   set in a type size that fits its widest line to the column, down to 0.65rem; a wider one scrolls
-  sideways at that size. Keep such a diagram within about 96 columns and it fits a 1280 px screen whole
-  (one column more, the release workflow's 97, runs into its right padding but still shows whole); it
-  fits at the code size up to about 71. Geist Mono draws the box characters, and a monospace font as
+  sideways at that size. Keep such a diagram within about 95 columns and it fits a 1280 px screen whole; wider, it still shows whole but runs into its right padding. Geist Mono draws the box characters, and a monospace font as
   wide on each platform draws ◄ ►; a symbol none of them has (∥) comes from a proportional font, off the
   grid, so write it in words. A `text` fence without box characters stays a code block, copy button and
   all.
