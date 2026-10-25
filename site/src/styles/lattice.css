@@ -131,7 +131,8 @@
      black, a white top edge instead of a pale one, the scheme's hairline and ink, the stage's muted, and the
      brand green for the prompt and the focus ring where the dark terminal has the leaf */
   --terminal-bg: rgba(20, 35, 27, 0.07);
-  --terminal-edge: rgba(255, 255, 255, 0.7);
+  --terminal-edge: var(--lt-line); /* the dark pane's lighter top edge would read as a white gap on a light
+     stage, so here the edge is the hairline like the rest of the frame; the tint alone lifts the pane */
   --terminal-line: var(--lt-line);
   --terminal-dot: rgba(20, 35, 27, 0.14);
   --terminal-ink: var(--lt-ink);
@@ -747,7 +748,7 @@ starlight-toc a[aria-current='true'] {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--terminal-line);
-  border-top-color: var(--terminal-edge); /* no shadow: a 1 px lighter top edge lifts it off the stage */
+  border-top-color: var(--terminal-edge); /* no shadow: on the dark stage a 1 px lighter top edge lifts it off; the light scheme keeps the hairline */
   border-radius: 10px;
   background: var(--terminal-bg);
 }
