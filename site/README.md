@@ -58,7 +58,9 @@ derive what frontmatter would have held and adapt the rest:
 - **ASCII diagrams**: a fence without a language that draws with box characters (the dependency flow on
   Architecture, the release workflow) is set in a type size that fits its widest line to the column,
   down to 0.65rem; a wider one scrolls sideways at that size. Keep such a diagram within about 97
-  columns and it fits a 1280 px screen whole.
+  columns and it fits a 1280 px screen whole. Geist Mono draws the box characters, and a monospace font
+  as wide on each platform draws ◄ ►; a symbol none of them has (∥) comes from a proportional font, off
+  the grid, so write it in words.
 - **Mermaid**: a `mermaid` fence is drawn as a diagram in the browser, by mermaid from this build: a
   chunk fetched only by a page that has a diagram. A diagram shrinks to fit the column down to 80 % of
   its own size and scrolls sideways in its frame past that, so its labels stay readable; a sequence
