@@ -47,11 +47,16 @@
   --stage-ring-moss: #dfe9d6;
   --stage-ring-teal: #d3e9e6;
   --stage-ring-slate: #d9e6f3;
-  /* the terminal chip: dark in both schemes, so its text and lines are set once */
+  /* the terminal chip: a translucent panel over the stage, the lattice showing through, lifted off it by a
+     1 px lighter top edge. The light scheme keeps every bit of this construction and sets its own value for
+     each of these, so a scheme changes nothing but the colours. */
   --terminal-bg: rgba(0, 0, 0, 0.35);
+  --terminal-edge: rgba(255, 255, 255, 0.2);
   --terminal-line: rgba(255, 255, 255, 0.1);
+  --terminal-dot: rgba(255, 255, 255, 0.14);
   --terminal-ink: #f2f7f0;
   --terminal-muted: #a9bbae;
+  --terminal-accent: var(--lt-leaf);
 
   /* Starlight, dark */
   --sl-font: 'Geist Variable';
@@ -96,18 +101,22 @@
   --ring-teal: #d3e9e6;
   --ring-slate: #d9e6f3;
   --ring-edge: rgba(31, 92, 61, 0.25);
-  /* the stage in the light scheme: pale moss fading into the page, the lattice and the one leaf glow
-     kept, the brand green where the dark stage has the leaf (the leaf is a dark-stage accent: as text
-     on a light ground it fails contrast). The terminal keeps the dark stage's own gradient: a terminal
-     is dark, and on the pale stage it is the one dark object the composition is anchored by. */
+  /* the stage in the light scheme: the dark stage's construction, in the light scheme's colours, and nothing
+     else changes. Pale moss fading into the page, the lattice and the one leaf glow kept, the brand green
+     where the dark stage has the leaf (the leaf is a dark-stage accent: as text on a light ground it fails
+     contrast), and where the dark stage lays a faint white over itself (the glass, the terminal) this one lays
+     a faint ink: translucent in both, the lattice showing through in both. The alphas are measured, not
+     guessed: each panel sits as far below this stage (in L*) as its dark twin sits off the dark one, the
+     glass by about 6 and the terminal by about 5. The muted is a step darker than the scheme's: where two
+     lattice lines cross under a panel, or under the glow, #566b5f falls short of 4.5:1 and this one holds it. */
   --stage-bg: linear-gradient(180deg, var(--lt-surface-2), var(--lt-bg));
   --stage-lattice: var(--lt-lattice);
   --stage-glow: rgba(143, 209, 106, 0.18);
   --stage-ink: var(--lt-ink);
-  --stage-muted: var(--lt-muted);
+  --stage-muted: #4a5e52;
   --stage-accent: var(--lt-brand);
   --stage-line: var(--lt-line);
-  --stage-glass: rgba(255, 255, 255, 0.85);
+  --stage-glass: rgba(20, 35, 27, 0.08);
   --stage-code: rgba(31, 92, 61, 0.08);
   --stage-primary: var(--lt-brand);
   --stage-primary-ink: #ffffff;
@@ -118,7 +127,16 @@
   --stage-ring-moss: var(--ring-moss);
   --stage-ring-teal: var(--ring-teal);
   --stage-ring-slate: var(--ring-slate);
-  --terminal-bg: linear-gradient(160deg, #0b1510, #10261b);
+  /* the terminal: the same translucent panel as on the dark stage, a shade of the ink instead of a shade of
+     black, a white top edge instead of a pale one, the scheme's hairline and ink, the stage's muted, and the
+     brand green for the prompt and the focus ring where the dark terminal has the leaf */
+  --terminal-bg: rgba(20, 35, 27, 0.07);
+  --terminal-edge: rgba(255, 255, 255, 0.7);
+  --terminal-line: var(--lt-line);
+  --terminal-dot: rgba(20, 35, 27, 0.14);
+  --terminal-ink: var(--lt-ink);
+  --terminal-muted: var(--stage-muted);
+  --terminal-accent: var(--lt-brand);
 
   --sl-color-white: #14231b;
   --sl-color-gray-1: #1b2e23;
@@ -723,13 +741,13 @@ starlight-toc a[aria-current='true'] {
   line-height: 1.6;
   color: var(--stage-muted);
 }
-/* The terminal is dark in both schemes (the --terminal-* tokens): a darker pane of the dark stage, the
-   dark stage's own gradient on the light one. */
+/* The terminal is a translucent panel over the stage in both schemes (the --terminal-* tokens): a darker
+   pane of the dark stage, a shade of the ink on the light one, the lattice showing through either. */
 .terminal {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--terminal-line);
-  border-top-color: rgba(255, 255, 255, 0.2); /* no shadow: a 1 px lighter top edge lifts it off the stage */
+  border-top-color: var(--terminal-edge); /* no shadow: a 1 px lighter top edge lifts it off the stage */
   border-radius: 10px;
   background: var(--terminal-bg);
 }
@@ -752,7 +770,7 @@ starlight-toc a[aria-current='true'] {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--terminal-dot);
 }
 .terminal-bar .copy {
   margin-inline-start: auto;
@@ -775,7 +793,7 @@ starlight-toc a[aria-current='true'] {
   background: transparent;
 }
 .terminal .prompt {
-  color: var(--lt-leaf);
+  color: var(--terminal-accent);
   user-select: none;
 }
 .terminal .note {
@@ -829,12 +847,12 @@ starlight-toc a[aria-current='true'] {
 }
 /* The focus ring on the stage's controls: the site's ring is the leaf, which is 1.7:1 on the pale stage,
    so the stage draws it in its accent (the leaf in the dark scheme, where nothing changes; the brand green
-   in the light one). The terminal is dark in both schemes and keeps the leaf. */
+   in the light one), and the terminal in its own, the colour of its prompt. */
 .stage :focus-visible {
   outline-color: var(--stage-accent);
 }
 .terminal :focus-visible {
-  outline-color: var(--lt-leaf);
+  outline-color: var(--terminal-accent);
 }
 .glass {
   margin: 0;
