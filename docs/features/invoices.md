@@ -15,7 +15,7 @@ Administrators may do all of this; members may only read.
 
 ```mermaid
 stateDiagram-v2
-    direction LR
+    direction TB
     [*] --> Draft: Create
     Draft --> Draft: AddLine
     Draft --> Issued: Issue (at least one line, due date not past)
@@ -24,7 +24,7 @@ stateDiagram-v2
     Issued --> Voided: Void
     Paid --> [*]
     Voided --> [*]
-    note right of Issued: overdue once its due date has passed
+    note left of Issued: overdue once its due date has passed
 ```
 
 Every arrow is a method on `Invoice` that returns a `Result`; a call from the wrong state answers a
