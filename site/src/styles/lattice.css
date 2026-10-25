@@ -172,11 +172,14 @@ h1[data-page-title],
   padding: 0;
 }
 /* The line under a heading that named its folder (markdown-plugins.mjs, whereItLives): the path, small
-   and quiet, close under the heading, a link to the folder on GitHub that stays the line's own colour
-   until hovered. The plugin puts a break opportunity after each slash, so a long path wraps at its seams
-   on a phone. */
+   and quiet, hung from the heading, a link to the folder on GitHub that stays the line's own colour
+   until hovered. The margin above it is small on purpose: the block after it brings the usual 1rem, and
+   the line reads as the heading's own only when it sits clearly nearer the heading than the body (under
+   an h2 the ink is about 16px above it and 24px below; at 0.45rem the two were nearly equal and the line
+   floated between them, and at 0 it crowds a descender). The plugin puts a break opportunity after each
+   slash, so a long path wraps at its seams on a phone. */
 .sl-markdown-content .trellis-where {
-  margin-top: 0.45rem;
+  margin-top: 0.2rem;
   font-size: var(--sl-text-sm);
   line-height: 1.5;
   color: var(--lt-muted);
