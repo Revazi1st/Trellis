@@ -84,27 +84,27 @@ One folder per layer, one subfolder per use case:
 
 ```text
 src/Core/Trellis.Domain/
-├── Common/                     Money, Currency, EmailAddress: value objects, not invoice-only
+├── Common/                     Money, Currency, EmailAddress: value objects
 └── Invoices/
-    ├── Invoice.cs              the aggregate: Create, AddLine, Issue, MarkPaid, Void
+    ├── Invoice.cs              aggregate: Create/AddLine/Issue/MarkPaid/Void
     ├── InvoiceLine.cs          child entity, reachable only through Invoice
     ├── InvoiceId.cs            strongly-typed IDs (InvoiceLineId.cs alike)
     ├── InvoiceErrors.cs        one Error per rule: the codes clients branch on
-    ├── InvoiceSpecs.cs         query shapes (All, Overdue), translated to SQL by Persistence
+    ├── InvoiceSpecs.cs         query shapes (All, Overdue), run by Persistence
     ├── IInvoiceRepository.cs   the port Persistence implements
-    └── Events/                 Issued, Paid, Voided: delivered by the outbox after commit
+    └── Events/                 Issued, Paid, Voided: by the outbox after commit
 src/Core/Trellis.Application/Features/Invoices/
-    ├── CreateInvoice/          command + handler + validator, one folder per use case
-    ├── AddInvoiceLine/         IssueInvoice/ alike; PayInvoice/ and VoidInvoice/ take only
-    │                           an id, so they carry no validator
-    ├── GetInvoice/             query + handler; no validator, it takes only the route's id
-    ├── ListInvoices/           query + handler + validator (the status and the paging bounds)
+    ├── CreateInvoice/          command + handler + validator per use case
+    ├── AddInvoiceLine/         IssueInvoice/ alike; PayInvoice/, VoidInvoice/
+    │                           take only an id, so they carry no validator
+    ├── GetInvoice/             query + handler; no validator for a route id
+    ├── ListInvoices/           query + handler + validator (status and paging)
     ├── ListOverdueInvoices/    query + handler + validator (the paging bounds)
-    ├── InvoicePreconditions.cs the shared If-Match check: NotFound first, then Invoice.VersionMismatch
+    ├── InvoicePreconditions.cs If-Match: NotFound first, then VersionMismatch
     ├── EventHandlers/          SendReceiptOnInvoicePaid, RecordInvoiceMetrics
     └── InvoiceResponse.cs      the read model the queries return
 src/Infrastructure/Trellis.Persistence/
-    ├── Configurations/         InvoiceConfiguration, InvoiceLineConfiguration: the EF mapping
+    ├── Configurations/         Invoice(Line)Configuration: the EF mapping
     └── Repositories/           InvoiceRepository
 src/Presentation/Api/Trellis.Api.Contracts/Invoices/
     └── InvoiceContracts.cs     the wire records, shared with every client
