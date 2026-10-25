@@ -22,7 +22,8 @@
 # missing from one of them ships by one route and not by the other.
 #
 # The generated tests include the Aspire E2E, which boots each generated AppHost as Template CI does
-# on its Linux runners; RUN_ASPIRE_E2E=0 skips it. The browser tests stay off, as in CI. Needs a .NET
+# on its Linux runners, in a run of its own after the suites (its processes and Testcontainers would
+# otherwise race for the same host ports); RUN_ASPIRE_E2E=0 skips it. The browser tests stay off, as in CI. Needs a .NET
 # SDK that satisfies global.json, a running Docker (Testcontainers, the E2E), and jq and git (for the
 # toggle check). Template CI's content gates (leftovers of the template's name, the consumer files,
 # actionlint over the generated workflows) and its Windows job run only in CI.
@@ -200,7 +201,14 @@ regenerate_migration() {
     dotnet dotnet-ef migrations add InitialCreate --project src/Infrastructure/*.Persistence
 }
 build_solution() { dotnet build ./*.slnx -c Release; }
-test_solution() { RUN_ASPIRE_E2E="$e2e" dotnet test ./*.slnx -c Release --no-build; }
+test_solution() {
+  dotnet test ./*.slnx -c Release --no-build || return
+  [ "$e2e" = 1 ] || return 0
+  # The E2E alone, after the suites, as Template CI's second step runs it; exit code 8 is "zero
+  # tests", which a project that removed the reference flow answers.
+  RUN_ASPIRE_E2E=1 dotnet test ./tests/*.ApiTests -c Release --no-build -- \
+    --filter-trait Category=AspireE2E --ignore-exit-code 8
+}
 in_dir() {  # $1 = folder, rest = command (a function above, or a program)
   local dir="$1"
   shift
