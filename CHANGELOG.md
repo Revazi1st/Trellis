@@ -427,6 +427,13 @@ If you generated a project from 0.1.0, read these before adopting this version w
 
 ### Fixed
 
+- **The Aspire E2E no longer races the test databases for ports**: run in the same `dotnet test` as the
+  Testcontainers suites, the AppHost's processes bound ephemeral ports that Docker's port allocator then
+  tried to use for a test database ("failed to listen on TCP socket: address already in use"). The E2E
+  now sits in `AspireE2ECollection` (alone, after the parallel collections) and carries the
+  `Category=AspireE2E` trait, and `ci.yml` runs it as its own step after the suites
+  (`--filter-trait Category=AspireE2E --ignore-exit-code 8`, so a project that removed the reference
+  flow passes the step with nothing to run). Template CI and `scripts/test-template.sh` do the same.
 - **Boot-failure tests no longer flake under load**: `AuthFlowTests` and `ProblemDetailsContractTests` asserted a
   refused start with a bare `Should.Throw(() => host.CreateClient())`; about once in fifteen full-suite runs the
   test host's own race (the top-level `Program` is started on a second thread, which disposes the host when the

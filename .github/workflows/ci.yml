@@ -90,16 +90,14 @@ jobs:
       - name: Build (warnings as errors)
         run: dotnet build Trellis.slnx --no-restore -c Release
 
-      # ubuntu-latest ships a Docker daemon and this job has a local SDK, so Testcontainers
-      # integration tests and the Aspire orchestration E2E both run here (ADR-0008).
+      # ubuntu-latest ships a Docker daemon and this job has a local SDK, so the Testcontainers
+      # suites run here, and the Aspire orchestration E2E in the step after them (ADR-0008).
       # Coverage is collected OUT of process (dotnet-coverage wraps the run): the in-process MTP
       # coverage extension aborts the xunit.v3 host, which is why coverage was absent for a while.
       # eng/coverage.runsettings limits it to the solution's own production code: no test
       # assemblies, no third-party packages that ship symbols, no migrations, no generated code.
       - name: Test (with coverage)
         id: test
-        env:
-          RUN_ASPIRE_E2E: "1"
         run: |
           dotnet tool restore
           settings=()
@@ -110,6 +108,20 @@ jobs:
           fi
           dotnet dotnet-coverage collect "${settings[@]}" -f cobertura -o coverage.cobertura.xml \
             "dotnet test Trellis.slnx --no-build -c Release -- --report-trx --results-directory TestResults"
+
+      # The Aspire E2E runs alone, after the suites above, and outside the coverage run: the AppHost's
+      # processes bind ephemeral ports while Testcontainers asks Docker for host ports from the same
+      # range, and the two allocators do not see each other, so a test database starting beside the
+      # E2E could fail with "address already in use". It is the tests tagged Category=AspireE2E
+      # (AspireE2ECollection); --ignore-exit-code 8 keeps the step green once remove-feature has
+      # deleted the reference flow and nothing carries the tag yet.
+      - name: Aspire end-to-end
+        if: ${{ !cancelled() && steps.test.outcome == 'success' }}
+        env:
+          RUN_ASPIRE_E2E: "1"
+        run: |
+          dotnet test tests/Trellis.ApiTests --no-build -c Release -- \
+            --filter-trait Category=AspireE2E --ignore-exit-code 8 --report-trx --results-directory TestResults
 
       # From the TRX files the run wrote: totals per test project, skipped tests included, then every
       # failure with its message and stack trace, in the job summary and as annotations. It runs
@@ -131,8 +143,8 @@ jobs:
       # Infrastructure 94.2% of 976, Presentation 83.7% of 1682 (the Blazor UI is its least covered
       # part; 91.8% without it) and Shared 100% of 69. Each floor sits several points below, so an
       # option's extra code or an ordinary change does not trip it while untested code piling up
-      # does. tools (the AppHost and the migration job) is reported, not gated: most of its
-      # coverage comes from the Aspire E2E test. Raise a floor as coverage grows; never lower one
+      # does. tools (the AppHost and the migration job) is reported, not gated: the Aspire E2E,
+      # which exercised most of it, runs outside the coverage run. Raise a floor as coverage grows; never lower one
       # to get a change through.
       - name: Coverage summary and ring floors
         run: >-

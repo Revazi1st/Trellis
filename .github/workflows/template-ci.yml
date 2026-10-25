@@ -232,15 +232,22 @@ jobs:
 
       # Everything runs for real: the Testcontainers suites and the Aspire E2E (InvoiceApiFlowTests),
       # which boots the generated AppHost under its new name (PostgreSQL, the migration worker, the
-      # API, Redis with --use-redis) as a consumer's first push to their own CI would. The AppHost
-      # starts Linux images, so the E2E is switched on for Linux runners only and skips on any other
-      # (the Windows job below runs only the projects that need no Docker). Playwright stays opt-in.
+      # API, Redis with --use-redis) as a consumer's first push to their own CI would. The E2E runs as
+      # its own step after the suites, as the shipped ci.yml does: its processes and Testcontainers
+      # would otherwise race for the same host ports. The AppHost starts Linux images, so that step
+      # runs on Linux runners only (the Windows job below runs only the projects that need no Docker).
+      # Playwright stays opt-in. KEEP IN SYNC with scripts/test-template.sh.
       - name: Test generated solution
         if: ${{ matrix.test }}
         working-directory: ../generated
-        env:
-          RUN_ASPIRE_E2E: ${{ runner.os == 'Linux' && '1' || '0' }}
         run: dotnet test ./*.slnx -c Release --no-build
+
+      - name: Aspire end-to-end (generated AppHost)
+        if: ${{ matrix.test && runner.os == 'Linux' }}
+        working-directory: ../generated
+        env:
+          RUN_ASPIRE_E2E: "1"
+        run: dotnet test ./tests/*.ApiTests -c Release --no-build -- --filter-trait Category=AspireE2E --ignore-exit-code 8
 
   # The default options on Windows: the template installs and instantiates there, the generated
   # solution builds, and the test projects that need no Docker pass (Windows runners cannot run the

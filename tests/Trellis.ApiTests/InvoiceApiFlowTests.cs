@@ -25,7 +25,11 @@ namespace Trellis.ApiTests;
 /// container resources — so it needs a real host environment: a local .NET SDK, or CI. It cannot run
 /// from inside the SDK container (project processes there can't reach the sibling database container),
 /// so it is opt-in: set RUN_ASPIRE_E2E=1. The containerized `dotnet test` skips it and stays green.
+/// It sits in <see cref="AspireE2ECollection"/>: alone, after the parallel collections, and in CI as its own
+/// step, because its processes and Testcontainers would otherwise race for the same host ports.
 /// </summary>
+[Collection(AspireE2ECollection.Name)]
+[Trait("Category", AspireE2ECollection.Category)]
 public sealed class InvoiceApiFlowTests
 {
     private static bool E2EEnabled =>
