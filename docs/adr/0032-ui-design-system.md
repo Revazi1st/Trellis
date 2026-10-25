@@ -39,8 +39,7 @@ project is someone else's product. What carries over is the construction and a s
   colour token is one `light-dark()` pair, that text passes WCAG AA on its grounds and every `--on-*`
   on its fill (4.5:1; 3:1 for the accent as a ring or a border), that every class a page uses has a
   rule and every rule has its subsection, and that the doc's token tables and `tokens.css` name the
-  same set. Each fact has a positive control. The WCAG arithmetic is the one the repository's picture
-  renderer uses.
+  same set. Each fact has a positive control. The WCAG arithmetic is WCAG 2.1's relative-luminance and contrast-ratio definitions, ported into the test.
 - **The starting palette** is the template's own: a green ink and accent on near-white in light, a
   lime accent on near-black in dark, with `--on-accent` white in light and dark green in dark, because
   the lime fails as text on a light ground. The status colours were chosen by the contrast test. A
