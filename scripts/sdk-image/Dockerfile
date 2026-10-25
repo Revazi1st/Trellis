@@ -5,7 +5,7 @@
 # image that was reviewed. The tag stays next to the digest for Dependabot (docker ecosystem),
 # which moves the two together when the 10.0 line is republished.
 #   tag: mcr.microsoft.com/dotnet/sdk:10.0 — at this digest SDK 10.0.402, runtime 10.0.13
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:747cbade5bfd918a175ac32f8f1d931edec2c7d0d5397a3de72eaef1ac1f66d2
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:afd0ccff9d306812a69ef0f47458376b6acb544ae866cfc4b8d28ff0eef35ea7
 
 # The docker CLI comes from Docker's static-binary channel, which publishes no checksums, so the
 # SHA-256 of each architecture's tarball is pinned here and checked before anything is unpacked.
