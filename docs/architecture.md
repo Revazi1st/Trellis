@@ -8,8 +8,8 @@ Trellis is a rich-DDD, Clean Architecture .NET 10 solution. Projects are grouped
                  ┌─────────────── Core ───────────────┐
  SharedKernel ◄── Domain ◄── Application ◄──┐
                                             │
-        ┌──────── Infrastructure ───────────┤   (Infrastructure ∥ Persistence:
-        │  Infrastructure   Persistence ─────┘    peers, never reference each other — ADR-0002)
+        ┌──────── Infrastructure ───────────┤   (Infrastructure and Persistence:
+        │  Infrastructure   Persistence ────┘     peers, never reference each other — ADR-0002)
         │
         └──────── Presentation ────────────────
              Api ──► Api.Common ──► Api.Contracts
