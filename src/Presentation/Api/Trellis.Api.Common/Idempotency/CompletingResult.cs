@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Trellis.Api.Common.Http;
 using Trellis.Application.Abstractions;
 
 namespace Trellis.Api.Common.Idempotency;
@@ -70,8 +71,8 @@ internal sealed class CompletingResult(object? inner, string key, IIdempotencySt
             httpContext.RequestServices.GetRequiredService<ILogger<IdempotencyFilter>>().LogWarning(
                 exception,
                 "The outcome of an idempotent {Method} {Path} could not be stored; its key stays in flight until retention sweeps it",
-                httpContext.Request.Method,
-                httpContext.Request.Path);
+                LogSafeRequestLine.Method(httpContext.Request),
+                LogSafeRequestLine.Path(httpContext.Request));
         }
     }
 

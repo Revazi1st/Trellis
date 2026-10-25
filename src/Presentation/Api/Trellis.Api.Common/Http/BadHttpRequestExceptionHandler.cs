@@ -29,7 +29,10 @@ internal sealed class BadHttpRequestExceptionHandler(ILogger<BadHttpRequestExcep
         {
             logger.LogInformation(
                 "Rejected malformed request {Method} {Path} with {StatusCode}: {Reason}",
-                httpContext.Request.Method, httpContext.Request.Path, malformed.StatusCode, malformed.Message);
+                LogSafeRequestLine.Method(httpContext.Request),
+                LogSafeRequestLine.Path(httpContext.Request),
+                malformed.StatusCode,
+                malformed.Message);
         }
 
         return await httpContext.WriteProblemAsync(ProblemCatalog.Malformed(malformed), malformed);

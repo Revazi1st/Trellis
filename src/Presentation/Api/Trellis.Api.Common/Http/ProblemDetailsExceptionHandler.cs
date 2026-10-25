@@ -17,7 +17,11 @@ internal sealed class ProblemDetailsExceptionHandler(ILogger<ProblemDetailsExcep
         Exception exception,
         CancellationToken cancellationToken)
     {
-        logger.LogError(exception, "Unhandled exception for {Method} {Path}", httpContext.Request.Method, httpContext.Request.Path);
+        logger.LogError(
+            exception,
+            "Unhandled exception for {Method} {Path}",
+            LogSafeRequestLine.Method(httpContext.Request),
+            LogSafeRequestLine.Path(httpContext.Request));
 
         return await httpContext.WriteProblemAsync(ProblemCatalog.ServerFailure, exception);
     }
