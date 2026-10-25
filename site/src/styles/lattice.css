@@ -566,8 +566,12 @@ starlight-toc a[aria-current='true'] {
 
 /* An ASCII diagram or a file tree (a fence without a language, or a text fence, that draws with box
    characters, markdown-plugins.mjs): the type shrinks until the widest line (--columns characters of
-   Geist Mono, 0.6em each) fits the column, from the code size down to 0.65rem; a wider one scrolls
-   sideways at that floor.
+   Geist Mono, 0.6em each) fits the column less the two side paddings (the 1.92rem below), from the code
+   size down to 0.65rem; a wider one scrolls sideways at that floor.
+   The padding keeps about a full step between the text and the frame on every side (at 0.75rem the first
+   glyph of a line sat closer to the left border than the 10px corner, and hugged it). The side padding is
+   the largest that keeps the widest diagram in docs/, the release workflow's 97 columns, whole at 1280px
+   with less than one column of it running into the right padding; change it and change the 1.92rem with it.
    Lines are 1.2em: Geist Mono's │ is 1.3em tall, and a vertical run joins only where each line is
    shorter than that (at 1.35 every run broke into dashes, and 1.25 still leaves a seam here and there).
    Geist Mono has no ◄ ►, so the next family draws them: the list names monospace fonts as wide as Geist
@@ -582,12 +586,12 @@ starlight-toc a[aria-current='true'] {
 }
 .trellis-ascii pre {
   margin: 0;
-  padding: 0.85rem 0.75rem;
+  padding: 0.9rem 0.96rem;
   overflow: visible;
   font-family:
     var(--sl-font-mono), Menlo, 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New',
     var(--sl-font-system-mono);
-  font-size: clamp(0.65rem, (100cqi - 1.5rem) / (var(--columns) * 0.6), 0.875rem);
+  font-size: clamp(0.65rem, (100cqi - 1.92rem) / (var(--columns) * 0.6), 0.875rem);
   line-height: 1.2;
   white-space: pre;
   color: var(--sl-color-white);
