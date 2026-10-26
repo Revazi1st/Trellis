@@ -294,6 +294,9 @@ bottom on `--surface` under a two-pixel `--danger` edge, with a `.reload` link a
 
 ## Proof
 
+A change is looked at 400 px and 1280 px wide, in both colour schemes, before it is finished: no horizontal
+overflow at the phone width, the page at `--page-width` on the laptop.
+
 `DesignSystemTests` (`tests/*.ArchitectureTests/`, compiled with the UI) holds the system to its
 rules, each fact with a positive control that fails a planted violation:
 
