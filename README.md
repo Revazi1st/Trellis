@@ -652,8 +652,7 @@ describes planned work that is not in the template yet; the marker goes when it 
 **Agent setups we learned from**
 - [Aspire](https://github.com/microsoft/aspire) by Microsoft (MIT): the *Owns* / *Out of scope* / *Overlap* lines that open each reviewer in `.claude/agents/`, and their "zero duplicate feedback" rule, from its `reviewing-aspire-architecture` agent.
 - [ASP.NET Core](https://github.com/dotnet/aspnetcore) by Microsoft (MIT): the red/green proof a bug fix's test owes, that it "fails for the expected reason without the fix", from its Copilot instructions (`test-reviewer`).
-- [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) by Anthropic (Apache-2.0): a reviewer dedicated to a change's tests, the idea behind `test-reviewer` (`pr-test-analyzer` in its `pr-review-toolkit`).
-- [Claude Code documentation](https://code.claude.com/docs/en/sub-agents) by Anthropic: the security-reviewer example agent, the starting point of `security-reviewer`.
+- [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) by Anthropic (Apache-2.0): a reviewer dedicated to a change's tests, the idea behind `test-reviewer` (`pr-test-analyzer` in its `pr-review-toolkit`), and the `security-reviewer` template in its `claude-code-setup` plugin, the starting point of ours.
 - [dotnet/skills](https://github.com/dotnet/skills) by Microsoft (MIT): the plugins `docs/INDEX.md` points at as optional installs (`dotnet`, `dotnet-test`, `dotnet-data`); nothing is copied or enabled.
 
 **Formats and conventions**

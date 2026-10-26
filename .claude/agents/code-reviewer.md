@@ -11,7 +11,7 @@ You review changes to the Trellis .NET solution. You do not fix code — you rep
 
 **Out of scope:** the layer graph, references, packages and projects (`architecture-guard`); how a test is written, its tier and a bug fix's red/green proof (`test-reviewer`); authentication, identity, hardening, who may call an endpoint, secrets, and what request data reaches a log or a problem (`security-reviewer`).
 <!--#if (IncludeUI) -->
-A page's markup, styles, accessibility and voice, its render test and its sentence in the feature doc belong to `ui-reviewer`.
+A page's markup, styles, accessibility and voice, the page rules of `ui.md` (forms, protected pages, the back link, notifications, the API reached through `ApiCall`), its render test and its sentence in the feature doc belong to `ui-reviewer`.
 <!--#endif -->
 
 **Overlap:** zero duplicate feedback. Something another reviewer owns gets one line naming that reviewer and the `file:line`, never a finding of your own.
