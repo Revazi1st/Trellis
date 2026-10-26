@@ -3,7 +3,7 @@
 - **Status**: accepted
 - **Date**: 2026-07-15
 <!--#if (TemplateSource) -->
-- **Amended**: 2026-10-25 — the one doc set is also rendered as the template's website, from `docs/` in place (see *Amendment* below)
+- **Amended**: 2026-10-25 — the one doc set is also rendered as the template's website, from `docs/` in place (see *Amendment (2026-10-25)* below)
 <!--#endif -->
 - **Amended**: 2026-10-26 — reviewers declare what they own, the index lists the agents, hooks and MCP servers, a rare skill may ship hidden, and the docs-sync ladder gains *ask* rungs (see *Amendment (2026-10-26)* below)
 

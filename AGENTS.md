@@ -46,7 +46,7 @@ Layer-specific conventions load automatically from `.claude/rules/` when you tou
   - A bug fix starts with a test that fails without the fix.
   - Before a change is finished the reviewer it needs reads it (`.claude/agents/`, each listed in `docs/INDEX.md`): `code-reviewer` for any change under `src/`; `architecture-guard` when it adds a project, a reference or a package, or crosses a layer; `test-reviewer` when it adds or changes a test or fixes a bug; `security-reviewer` when it touches authentication, identity, hardening or the Auth feature, or who may call an endpoint.
   <!--#if (IncludeUI) -->
-    `ui-reviewer` reads a change to a page, a layout or a stylesheet under `src/Presentation/UI/` against the design system (`docs/design-system.md`), `.claude/rules/ui.md`, accessibility and both themes.
+    `ui-reviewer` reads a change under `src/Presentation/UI/` (a page, a layout, a form, a stylesheet) against the design system (`docs/design-system.md`), `.claude/rules/ui.md`, accessibility and both themes.
   - A reviewer subagent's finding (`code-reviewer`, `architecture-guard`, `test-reviewer`, `security-reviewer`, `ui-reviewer`) is a claim: check it against the code or a test before acting on it, and push back when it would undo a decision an ADR records.
   <!--#else -->
   - A reviewer subagent's finding (`code-reviewer`, `architecture-guard`, `test-reviewer`, `security-reviewer`) is a claim: check it against the code or a test before acting on it, and push back when it would undo a decision an ADR records.

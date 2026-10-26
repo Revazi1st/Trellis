@@ -179,6 +179,10 @@ after each layer.
       aggregate has a lifecycle, and a *Try it* table matching those requests.
 - [ ] `dotnet build Trellis.slnx -c Release && dotnet test Trellis.slnx` (or `./scripts/dotnet.sh …`
       without a local SDK), then `dotnet format --verify-no-changes`.
+- [ ] Run the reviewers the change needs before finishing (AGENTS.md, *Boundaries*): `code-reviewer`;
+      `architecture-guard` when a project or a package was added; `test-reviewer` for the new tests;
+      `security-reviewer` when a permission, an allowlist or who may call an endpoint changed. Their
+      findings are claims to check against the code.
 
 ## Not shown by the Invoices slice: decide deliberately
 

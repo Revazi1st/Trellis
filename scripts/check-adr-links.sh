@@ -154,17 +154,19 @@ if grep -q '^## Hooks' docs/INDEX.md; then
       fail=1
     fi
   done
-  if [ -f .claude/settings.json ]; then
-    hooks_run=$(grep -oE '"command"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' .claude/settings.json \
-      | grep -oE '\.claude/hooks/[A-Za-z0-9._-]+\.sh' | sort -u) || true
-    while IFS= read -r hook; do
-      [ -n "$hook" ] || continue
-      if [ ! -f "$hook" ]; then
-        echo "::error::.claude/settings.json runs $hook, which does not exist"
-        fail=1
-      fi
-    done <<< "$hooks_run"
-  fi
+fi
+
+# --- every hook .claude/settings.json runs exists, whether or not the index has a Hooks section ---
+if [ -f .claude/settings.json ]; then
+  hooks_run=$(grep -oE '"command"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' .claude/settings.json \
+    | grep -oE '\.claude/hooks/[A-Za-z0-9._-]+\.sh' | sort -u) || true
+  while IFS= read -r hook; do
+    [ -n "$hook" ] || continue
+    if [ ! -f "$hook" ]; then
+      echo "::error::.claude/settings.json runs $hook, which does not exist"
+      fail=1
+    fi
+  done <<< "$hooks_run"
 fi
 
 # --- every feature doc is listed in docs/INDEX.md ---

@@ -32,8 +32,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   gains sections for the reviewers, the hooks and the MCP servers (when to reach for Microsoft Learn,
   Context7 and Playwright, and the optional `dotnet/skills` plugins, none enabled);
   `scripts/check-adr-links.sh` fails when a reviewer, a hook or a feature doc is missing from it, or
-  when `.claude/settings.json` runs a hook that does not exist. `architecture-guard`'s dependency flow now matches `AGENTS.md`, and
-  ADR-0014 records all of this in an amendment.
+  when `.claude/settings.json` runs a hook that does not exist. `architecture-guard`'s dependency
+  flow now matches `AGENTS.md`, and ADR-0014 records all of this in an amendment.
 
 ## [0.1.1] - 2026-10-26
 
