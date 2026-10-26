@@ -488,3 +488,30 @@ jobs:
         run: chmod +x scripts/*.sh
       - name: Check feature docs are updated
         run: ./scripts/check-docs-drift.sh origin/${{ github.base_ref }}
+
+  # An accepted ADR changes only by a dated amendment appended at its end, and a reversal is a new
+  # ADR (ADR-0001): scripts/check-adr-history.sh compares every changed docs/adr/ file with the base
+  # branch. The adr-rewrite label is the escape hatch for a rewrite that is truly needed.
+  adr-history:
+    name: ADR history
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'adr-rewrite')
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+      - name: ADR history self-test
+        run: ./scripts/check-adr-history.sh --self-test
+      # fetch-depth: 0 brings every branch; the fetch covers a checkout that did not.
+      - name: ADR history
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git rev-parse --verify --quiet "origin/$BASE_REF^{commit}" > /dev/null \
+            || git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          ./scripts/check-adr-history.sh "origin/$BASE_REF"

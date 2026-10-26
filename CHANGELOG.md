@@ -34,6 +34,13 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `scripts/check-adr-links.sh` fails when a reviewer, a hook or a feature doc is missing from it, or
   when `.claude/settings.json` runs a hook that does not exist. `architecture-guard`'s dependency
   flow now matches `AGENTS.md`, and ADR-0014 records all of this in an amendment.
+- **An accepted ADR only gains amendments, and CI says so.** A new `adr-history` job in `ci.yml` runs
+  `scripts/check-adr-history.sh` on every pull request: deleting or renaming a record under `docs/adr/`
+  fails, and so does any edit to an existing one other than its header's status and *Amended* lines and
+  a dated `## Amendment (YYYY-MM-DD)` section appended at its end (ADR-0001's amendment of 2026-10-26).
+  A template upgrade that appends amendments to the template's records passes. For a rewrite that is
+  truly needed, create an `adr-rewrite` label in your repository and put it on the pull request, as
+  with `docs-not-needed`.
 
 ## [0.1.1] - 2026-10-26
 

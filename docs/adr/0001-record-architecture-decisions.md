@@ -5,6 +5,7 @@
 - **Amended**: 2026-10-08 — numbering: the template's ADRs are 0001–0099, a generated project's own start at 0100 (see *Amendment* below)
 - **Amended**: 2026-10-11 — an optional *Prior art* line credits what a decision takes from another project (see *Amendment* below)
 - **Amended**: 2026-10-11 — an optional *Alternatives / Revisit when* section (see *Amendment (2026-10-11): alternatives and revisit triggers* below)
+- **Amended**: 2026-10-26 — CI enforces the rule: an accepted record gains only appended amendments (see *Amendment (2026-10-26): the rule is enforced* below)
 
 ## Context
 
@@ -49,3 +50,14 @@ would reopen the decision. It stays short (three to five lines), and a trigger i
 check ("the package is relicensed under MIT"), never "if it stops fitting", which would read as an
 invitation to undo the decision. The `new-adr` skill's skeleton carries the section. Existing records are
 not backfilled; a dated amendment adds one where a reader keeps reopening a decision.
+
+## Amendment (2026-10-26): the rule is enforced
+
+Immutability was a convention a reviewer had to notice. CI's `adr-history` job now runs
+`scripts/check-adr-history.sh` on every pull request, comparing each changed file under `docs/adr/` with
+the base branch: a new record passes, a deleted or renamed one fails, and an existing one passes only
+when its old text is untouched and the change is a dated `## Amendment (YYYY-MM-DD)` section appended
+at its end, beside the header's *Status*, *Superseded*, *Amended* and *Refines* lines, which may change.
+A template upgrade that appends amendments to the template's records therefore passes as it is. When a
+rewrite is truly needed (a broken link, a record that was never accepted), the pull request's
+`adr-rewrite` label skips the job, and `ADR_HISTORY_SKIP=1` skips the script on a machine.

@@ -68,7 +68,8 @@ dotnet test Trellis.slnx                     # integration and API tests start P
 `.github/workflows/ci.yml` runs the secret scan, the format check, the Release build, every test with
 coverage, the API contract (the OpenAPI document diffed against the running app), the container smoke
 (the production images published and booted with only the documented configuration) and the
-SDK-container build; its docs-drift job honours a `docs-not-needed` pull-request label, which you create in your
+SDK-container build; its docs-drift job honours a `docs-not-needed` pull-request label and its adr-history
+job (an accepted ADR only gains dated amendments) an `adr-rewrite` label, both of which you create in your
 repository. `.github/workflows/codeql.yml` runs on a public repository, and on a private one only once
 GitHub Advanced Security code scanning is enabled and the `CODEQL_ENABLED` repository variable
 (Settings → Secrets and variables → Actions → Variables) is `true`. Dependabot is configured in

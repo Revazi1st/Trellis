@@ -5,6 +5,7 @@
       "Bash(./scripts/dotnet.sh:*)",
       "Bash(./scripts/ef.sh:*)",
       "Bash(./scripts/check-docs-drift.sh:*)",
+      "Bash(./scripts/check-adr-history.sh:*)",
       "Bash(git status)",
       "Bash(git diff:*)",
       "Bash(git log:*)"

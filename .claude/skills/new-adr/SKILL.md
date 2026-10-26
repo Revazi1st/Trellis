@@ -57,3 +57,6 @@ ADRs are short, dated, immutable records of load-bearing decisions (ADR-0001). O
 Supersede rather than edit: a reversal is a new ADR that references the old one, and the old one's
 status line says what superseded it. A correction that leaves the decision standing is a dated
 `## Amendment (YYYY-MM-DD)` section at the end, with a `- **Amended**:` line under the date.
+`scripts/check-adr-history.sh` (CI's `adr-history` job) fails a pull request that deletes or renames an
+ADR or changes one anywhere but its header's Status, Superseded, Amended and Refines lines and a dated
+amendment appended at its end.
