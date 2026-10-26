@@ -551,16 +551,29 @@ plain text you can read too.
   [`add-integration`](.claude/skills/add-integration/SKILL.md),
   [`add-migration`](.claude/skills/add-migration/SKILL.md), [`new-adr`](.claude/skills/new-adr/SKILL.md)
   and [`run-app`](.claude/skills/run-app/SKILL.md). An agent follows them, and so can you.
-- **Reviewers** in `.claude/agents/`: `code-reviewer`, `architecture-guard` and, with the UI,
-  `ui-reviewer` (a change to a page, a layout or a stylesheet, read against the design system, the UI
-  rules and accessibility, in a browser through the Playwright MCP when one is running), whose findings
-  are claims to check against the code before acting on them.
+- **Reviewers** in `.claude/agents/`, five read-only subagents, each opening with what it owns, what it
+  leaves to another and how they overlap, so a change read by several hears each point once:
+  [`code-reviewer`](.claude/agents/code-reviewer.md) (correctness and the layer's conventions),
+  [`architecture-guard`](.claude/agents/architecture-guard.md) (projects, references, packages),
+  [`test-reviewer`](.claude/agents/test-reviewer.md) (a change's tests against the testing rules, a bug
+  fix's test shown to fail without the fix for the expected reason),
+  [`security-reviewer`](.claude/agents/security-reviewer.md) (authentication, identity, hardening and who
+  may call an endpoint, against the threat model) and, with the UI,
+  [`ui-reviewer`](.claude/agents/ui-reviewer.md) (a page, a layout or a stylesheet against the design
+  system, the UI rules and accessibility, in a browser through the Playwright MCP when one is running).
+  `AGENTS.md` says which one a change needs; their findings are claims to check against the code before
+  acting on them.
+- **One index**: [docs/INDEX.md](docs/INDEX.md) lists the guides, the rules, the skills, the reviewers,
+  the hooks, the MCP servers and the decisions, each with when it applies, and the link check fails when
+  one is missing from it.
 - **Decisions** in [docs/adr/](docs/adr/), indexed in [docs/INDEX.md](docs/INDEX.md): each with its
   context and consequences and, where it takes an idea from another project, a *Prior art* line naming
   it. Your own start at 0100.
 - **Drift gates**: the edit hook and CI's docs-drift job, the link check, the OpenAPI snapshot and the
   fitness tests turn the docs and the conventions into something a change can fail.
-- **[.mcp.json](.mcp.json)** wires up the Microsoft Learn, Context7 and Playwright MCP servers.
+- **[.mcp.json](.mcp.json)** wires up the Microsoft Learn, Context7 and Playwright MCP servers; the index
+  says when to reach for each, and points at the optional .NET plugins of `dotnet/skills` without
+  enabling any.
 
 The release runbook adds an agent dry run before each minor version: an agent builds one fixed feature
 in a freshly generated project with nothing but that repository to go on, and the existing gates judge
@@ -591,7 +604,7 @@ agents alike.
 ## Credits 💐
 
 Trellis takes ideas from other people's work. Each line names what was taken; nothing below is a
-verbatim copy, so the MIT and BSD notices stay with their projects. Templates we only compared
+verbatim copy, so the MIT, BSD and Apache notices stay with their projects. Templates we only compared
 against are not listed (ADR-0002 names them). A line marked *when adopted* or *once imported*
 describes planned work that is not in the template yet; the marker goes when it lands.
 
@@ -635,6 +648,13 @@ describes planned work that is not in the template yet; the marker goes when it 
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
+
+**Agent setups we learned from**
+- [Aspire](https://github.com/microsoft/aspire) by Microsoft (MIT): the *Owns* / *Out of scope* / *Overlap* lines that open each reviewer in `.claude/agents/`, and their "zero duplicate feedback" rule, from its `reviewing-aspire-architecture` agent.
+- [ASP.NET Core](https://github.com/dotnet/aspnetcore) by Microsoft (MIT): the red/green proof a bug fix's test owes, that it "fails for the expected reason without the fix", from its Copilot instructions (`test-reviewer`).
+- [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) by Anthropic (Apache-2.0): a reviewer dedicated to a change's tests, the idea behind `test-reviewer` (`pr-test-analyzer` in its `pr-review-toolkit`).
+- [Claude Code documentation](https://code.claude.com/docs/en/sub-agents) by Anthropic: the security-reviewer example agent, the starting point of `security-reviewer`.
+- [dotnet/skills](https://github.com/dotnet/skills) by Microsoft (MIT): the plugins `docs/INDEX.md` points at as optional installs (`dotnet`, `dotnet-test`, `dotnet-data`); nothing is copied or enabled.
 
 **Formats and conventions**
 - [Michael Nygard's ADR format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions): Status, Context, Decision, Consequences (ADR-0001).

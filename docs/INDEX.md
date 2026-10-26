@@ -32,7 +32,7 @@ Agent entry point — read only what the task needs.
 - [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor,css,js}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the design system, the host shell
 <!--#endif -->
 <!--#if (TemplateSource) -->
-- [site.md](../.claude/rules/site.md) — `site/**` (template repository only, ADR-0031): the Lattice visual language and its design system, the owner's rules for the two themes, how a site change is proven before it merges
+- [site.md](../.claude/rules/site.md) — `site/**` (template repository only, ADR-0031): the site's visual language and its design system, the owner's rules for the two themes, how a site change is proven before it merges
 <!--#endif -->
 
 ## Skills (`.claude/skills/`, step-by-step recipes; invoke one by name, e.g. `/add-feature`)
@@ -45,6 +45,28 @@ Agent entry point — read only what the task needs.
 - [new-adr](../.claude/skills/new-adr/SKILL.md) — record an architecture decision: the next number in the right range (0100 and up for the project's own), the index line, an optional *Alternatives / Revisit when* section, dated amendments instead of edits
 - [remove-feature](../.claude/skills/remove-feature/SKILL.md) — delete the Invoices reference slice from the Domain outward once your own first feature exists
 - [run-app](../.claude/skills/run-app/SKILL.md) — run the full stack with `aspire run` (needs a local SDK) or as sibling containers without one, and verify it end to end
+
+## Reviewers (`.claude/agents/`, read-only; the AGENTS.md routing says which one a change needs)
+- [code-reviewer](../.claude/agents/code-reviewer.md) — any change under `src/`: correctness (a `catch` that swallows included), the conventions of the layers touched, whether the change is tested at all, the feature doc, the OpenAPI snapshot and the CHANGELOG line it owes
+- [architecture-guard](../.claude/agents/architecture-guard.md) — a change that adds a project, a reference or a package, or crosses a layer: the dependency flow, the Infrastructure ∥ Persistence peer rule, each layer's purity, the licence ceilings, a new project anchored in `ArchitectureRules.cs`
+- [test-reviewer](../.claude/agents/test-reviewer.md) — a change that adds or changes a test or fixes a bug: the tier, a bug fix's test failing without the fix for the expected reason, `ShouldBeSuccess()`, factories and drivers, time without sleeping, names, fixtures, positive controls, the narrowed run
+- [security-reviewer](../.claude/agents/security-reviewer.md) — a change to authentication, identity, hardening or the Auth feature, or to who may call an endpoint: the allowlists and permissions, tokens, credential rate limits, what reaches a log or a problem, secrets, the hardening defaults, checked against `docs/threat-model.md`
+<!--#if (IncludeUI) -->
+- [ui-reviewer](../.claude/agents/ui-reviewer.md) — a change to a page, a layout or a stylesheet under `src/Presentation/UI/`: the design system, `ui.md`, accessibility, voice, both themes and two widths, in a browser through the `playwright` MCP server when one is running
+<!--#endif -->
+
+Each opens with what it owns, what it leaves to another reviewer and how they overlap, so a change read by several gets each point once. Their findings are claims to check against the code before acting on them.
+
+## Hooks (`.claude/hooks/`, run by Claude Code from `.claude/settings.json`)
+- [docs-drift.sh](../.claude/hooks/docs-drift.sh) — `PostToolUse` on `Edit|Write`: runs `scripts/check-docs-drift.sh --working-tree` and, when code changed without the doc that describes it, adds a reminder to the agent's context; a non-blocking reminder (CI's docs-drift job is the guarantee)
+
+## MCP servers and optional plugins
+`.mcp.json` declares three servers for the project; Claude Code asks before it uses each one the first time.
+- `microsoft-learn` — a .NET, ASP.NET Core, EF Core or Aspire API question: read the member's documentation before guessing its name, its overloads or its behaviour
+- `context7` — the current documentation of a third-party package Microsoft Learn does not cover; works without a key, and a `CONTEXT7_API_KEY` in the environment raises its limits
+- `playwright` — look at the running app in a browser (navigate, resize, read the accessibility tree, take a screenshot) instead of guessing what a page shows
+
+Optional plugins: the `dotnet/skills` marketplace offers .NET plugins a collaborator may install for themselves (`claude plugin marketplace add dotnet/skills`, then choose from `/plugin`); this repository enables none. `dotnet` gives the agent a Roslyn language server with C#, refactoring and MSBuild skills, and needs a local .NET SDK. `dotnet-test` adds test-writing and test-quality agents with skills for running, filtering and measuring tests. `dotnet-data` adds EF Core query optimisation. Where a plugin's advice and a rule here disagree, the rule here wins.
 
 ## Template decisions (docs/adr/, 0001–0099)
 
