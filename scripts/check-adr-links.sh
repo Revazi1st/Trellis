@@ -3,9 +3,12 @@
 # if any docs/adr/*.md is not listed in docs/INDEX.md (template ADRs 0001-0099 above the
 # '## Project decisions' heading, project ADRs 0100 and up below it), if two ADRs share a number,
 # if the template's own repository holds an ADR numbered 0100 or more, if a 'paths:' glob in
-# .claude/rules/*.md matches zero files (a renamed directory silently unloads a rule), if a skill
-# is missing from the Skills section of docs/INDEX.md (once that section exists), or if a relative
-# link in a Markdown file points at a path that does not exist (a moved or renamed doc).
+# .claude/rules/*.md matches zero files (a renamed directory silently unloads a rule), if a skill,
+# a reviewer (.claude/agents/*.md) or a hook (.claude/hooks/*.sh, less the sourced common.sh) is
+# missing from its section of docs/INDEX.md (each check once that section exists), if
+# .claude/settings.json runs a .claude/hooks/ script that does not exist, if a docs/features/*.md is
+# not linked from docs/INDEX.md, or if a relative link in a Markdown file points at a path that does
+# not exist (a moved or renamed doc).
 set -euo pipefail
 # Under pipefail, "echo … | grep -q" is a race: grep exits on the first match, echo can get EPIPE and
 # the pipeline fails although the match was found. Membership tests use here-strings instead.
@@ -112,7 +115,7 @@ done
 # --- every skill is listed in docs/INDEX.md, once the index has a Skills section ---
 # Each .claude/skills/<name>/SKILL.md appears there as a (../.claude/skills/<name>/SKILL.md) link,
 # so an agent reading the index finds every skill. A listed skill that no longer exists is a broken
-# link, which the next check reports.
+# link, which the link check below reports.
 if grep -q '^## Skills' docs/INDEX.md; then
   for f in .claude/skills/*/SKILL.md; do
     [ -e "$f" ] || continue
@@ -122,6 +125,60 @@ if grep -q '^## Skills' docs/INDEX.md; then
     fi
   done
 fi
+
+# --- every reviewer is listed in docs/INDEX.md, once the index has a Reviewers section ---
+# Each .claude/agents/<name>.md appears there as a (../.claude/agents/<name>.md) link, so an agent
+# reading the index finds every reviewer and when it applies. A listed reviewer that no longer exists
+# is a broken link, which the link check below reports.
+if grep -q '^## Reviewers' docs/INDEX.md; then
+  for f in .claude/agents/*.md; do
+    [ -e "$f" ] || continue
+    if ! grep -qF "(../$f)" docs/INDEX.md; then
+      echo "::error::$f is not listed under '## Reviewers' in docs/INDEX.md"
+      fail=1
+    fi
+  done
+fi
+
+# --- every hook is listed in docs/INDEX.md, and every hook settings.json runs exists ---
+# Each .claude/hooks/<name>.sh appears there as a (../.claude/hooks/<name>.sh) link; common.sh holds
+# the helpers the hooks source and is not a hook of its own. A "command" in .claude/settings.json that
+# names a missing .claude/hooks/ script fails quietly in a session (the hook never runs), so the check
+# reads every "command" value (an escaped quote inside one included) and looks for each hook it names.
+if grep -q '^## Hooks' docs/INDEX.md; then
+  for f in .claude/hooks/*.sh; do
+    [ -e "$f" ] || continue
+    [ "$(basename "$f")" = common.sh ] && continue
+    if ! grep -qF "(../$f)" docs/INDEX.md; then
+      echo "::error::$f is not listed under '## Hooks' in docs/INDEX.md"
+      fail=1
+    fi
+  done
+fi
+
+# --- every hook .claude/settings.json runs exists, whether or not the index has a Hooks section ---
+if [ -f .claude/settings.json ]; then
+  hooks_run=$(grep -oE '"command"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' .claude/settings.json \
+    | grep -oE '\.claude/hooks/[A-Za-z0-9._-]+\.sh' | sort -u) || true
+  while IFS= read -r hook; do
+    [ -n "$hook" ] || continue
+    if [ ! -f "$hook" ]; then
+      echo "::error::.claude/settings.json runs $hook, which does not exist"
+      fail=1
+    fi
+  done <<< "$hooks_run"
+fi
+
+# --- every feature doc is listed in docs/INDEX.md ---
+# The index is the agents' entry point (ADR-0014): a docs/features/<name>.md it does not link is a
+# feature an agent never finds. The line is a (features/<name>.md) link under '## Guides'.
+for f in docs/features/*.md; do
+  [ -e "$f" ] || continue
+  if ! grep -qF "(features/$(basename "$f"))" docs/INDEX.md; then
+    echo "::error::$f is not linked from docs/INDEX.md (add a '[features/$(basename "$f")](features/$(basename "$f"))' line under '## Guides')"
+    fail=1
+  fi
+done
 
 # --- every relative Markdown link resolves ---
 # Inline links and images, [text](path) and ![alt](path), outside fenced code blocks and inline code
@@ -189,6 +246,6 @@ while IFS= read -r f; do
 done <<< "$md_files"
 
 if [ "$fail" -eq 0 ]; then
-  echo "ADR link check passed — references resolve, INDEX is complete, rules globs match files, relative links resolve."
+  echo "ADR link check passed — references resolve, INDEX lists every ADR, rule, skill, reviewer, hook and feature doc, rules globs match files, settings.json hooks exist, relative links resolve."
 fi
 exit "$fail"

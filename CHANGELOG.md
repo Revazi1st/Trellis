@@ -22,6 +22,18 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   change is finished and its accessibility rule now names the page title, the single `h1` and colour as
   never the only signal; the `add-feature` and `remove-feature` skills name the design system's
   components and tests in their UI steps.
+- **Two more reviewers, and every reviewer says what it owns.** `test-reviewer` reads a change's tests
+  against `.claude/rules/tests.md` (the tier, a bug fix's test shown to fail without the fix for the
+  expected reason, `ShouldBeSuccess()`, the factories and drivers, time without sleeping, the fixtures,
+  the narrowed run), and `security-reviewer` reads a change to authentication, identity, hardening, the
+  Auth feature or who may call an endpoint against `docs/threat-model.md`. Every reviewer in
+  `.claude/agents/` now opens with *Owns*, *Out of scope* and *Overlap* lines, so a change read by
+  several gets each point once, and `AGENTS.md` says which reviewer a change needs. `docs/INDEX.md`
+  gains sections for the reviewers, the hooks and the MCP servers (when to reach for Microsoft Learn,
+  Context7 and Playwright, and the optional `dotnet/skills` plugins, none enabled);
+  `scripts/check-adr-links.sh` fails when a reviewer, a hook or a feature doc is missing from it, or
+  when `.claude/settings.json` runs a hook that does not exist. `architecture-guard`'s dependency
+  flow now matches `AGENTS.md`, and ADR-0014 records all of this in an amendment.
 
 ## [0.1.1] - 2026-10-26
 

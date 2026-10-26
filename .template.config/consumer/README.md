@@ -86,6 +86,9 @@ against the `main` of its own moment, so consider a nightly `schedule:` trigger 
 - [AGENTS.md](AGENTS.md): the conventions and boundaries, written for people and coding agents alike.
 - [docs/INDEX.md](docs/INDEX.md): architecture, development, deployment, the threat model and the
   decision records in `docs/adr/`.
+- `.claude/`: the agent toolkit, its skills, reviewers and hooks, beside the MCP servers in `.mcp.json`;
+  [docs/INDEX.md](docs/INDEX.md) lists each one with when to use it, and `AGENTS.md` says which reviewer
+  a change needs.
 - [docs/features/invoices.md](docs/features/invoices.md): the reference slice. The `add-feature`,
   `remove-feature` and `add-integration` skills in `.claude/skills/` start from it.
 - [CHANGELOG.md](CHANGELOG.md): record this project's changes under `[Unreleased]`.
