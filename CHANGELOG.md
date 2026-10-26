@@ -19,7 +19,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 - **A `ui-reviewer` subagent** (`.claude/agents/`, with `--include-ui`) reads a change to a page, a
   layout or a stylesheet against the design system, the UI rules and accessibility, in a browser through
   the Playwright MCP when one is running, and reports; `.claude/rules/ui.md` asks for it before a UI
-  change is finished, and the `add-feature` and `remove-feature` skills now name the design system's
+  change is finished and its accessibility rule now names the page title, the single `h1` and colour as
+  never the only signal; the `add-feature` and `remove-feature` skills name the design system's
   components and tests in their UI steps.
 
 ## [0.1.1] - 2026-10-26

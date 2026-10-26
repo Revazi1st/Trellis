@@ -124,7 +124,9 @@ signed-in name in `--muted`; `.content` is the `<main>`.
 </div>
 ```
 
-The top bar wraps rather than overflowing at any width: nothing in it has a fixed width.
+The top bar wraps rather than overflowing at any width: nothing in it has a fixed width. A page sets its
+`<PageTitle>` and has one `h1`, its other headings in order below it; the error panel's `h1` takes the
+page's place only when the page has failed.
 
 ### Buttons
 
