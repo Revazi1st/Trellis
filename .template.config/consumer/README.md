@@ -46,7 +46,9 @@ The demo data belongs to the sample invoicing feature;
 states, the rules between them and where each file lives. Its *Try it* section walks the lifecycle
 one request at a time from `src/Presentation/Api/Trellis.Api/Trellis.Api.http`.
 <!--#if (IncludeUI) -->
-The web UI clicks through the same steps once you sign in.
+The web UI clicks through the same steps once you sign in. Its visual language is written down in
+[docs/design-system.md](docs/design-system.md), and the `ui-reviewer` agent in `.claude/agents/` reads a
+change to a page against it before the change is finished.
 <!--#endif -->
 
 No .NET SDK on the host? Build and test through the SDK container (`scripts/dotnet.sh`) or open the

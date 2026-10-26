@@ -409,7 +409,8 @@
             "tests/Trellis.ArchitectureTests/DesignSystemTests.cs",
             ".claude/rules/ui.md",
             "docs/design-system.md",
-            "docs/adr/0032-ui-design-system.md"
+            "docs/adr/0032-ui-design-system.md",
+            ".claude/agents/ui-reviewer.md"
           ]
         },
         {

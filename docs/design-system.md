@@ -124,7 +124,9 @@ signed-in name in `--muted`; `.content` is the `<main>`.
 </div>
 ```
 
-The top bar wraps rather than overflowing at any width: nothing in it has a fixed width.
+The top bar wraps rather than overflowing at any width: nothing in it has a fixed width. A page sets its
+`<PageTitle>` and has one `h1`, its other headings in order below it; the error panel's `h1` takes the
+page's place only when the page has failed.
 
 ### Buttons
 
@@ -292,6 +294,9 @@ bottom on `--surface` under a two-pixel `--danger` edge, with a `.reload` link a
 
 ## Proof
 
+A change is looked at 400 px and 1280 px wide, in both colour schemes, before it is finished: no horizontal
+overflow at the phone width, the page at `--page-width` on the laptop.
+
 `DesignSystemTests` (`tests/*.ArchitectureTests/`, compiled with the UI) holds the system to its
 rules, each fact with a positive control that fails a planted violation:
 
@@ -308,6 +313,11 @@ rules, each fact with a positive control that fails a planted violation:
   alias the stylesheet declares.
 - `The_design_doc_and_the_token_file_name_the_same_tokens`: the [Tokens](#tokens) tables and
   `tokens.css` name the same set, both ways.
+
+The `ui-reviewer` subagent (`.claude/agents/ui-reviewer.md`) reads a change to a page, a layout or a
+stylesheet against this document, `.claude/rules/ui.md` and the accessibility each component owes, in a
+browser at phone and laptop width when one is running, and reports; run it before a UI change is
+finished. Its findings are claims to check against the code or one of the tests above.
 
 To see both themes, switch the operating system's appearance: the tokens follow it through
 `color-scheme`. To hold one theme while you look, set `data-theme="light"` or `"dark"` on `<html>` in the
