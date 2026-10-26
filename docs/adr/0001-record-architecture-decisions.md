@@ -57,7 +57,9 @@ Immutability was a convention a reviewer had to notice. CI's `adr-history` job n
 `scripts/check-adr-history.sh` on every pull request, comparing each changed file under `docs/adr/` with
 the base branch: a new record passes, a deleted or renamed one fails, and an existing one passes only
 when its old text is untouched and the change is a dated `## Amendment (YYYY-MM-DD)` section appended
-at its end, beside the header's *Status*, *Superseded*, *Amended* and *Refines* lines, which may change.
-A template upgrade that appends amendments to the template's records therefore passes as it is. When a
-rewrite is truly needed (a broken link, a record that was never accepted), the pull request's
-`adr-rewrite` label skips the job, and `ADR_HISTORY_SKIP=1` skips the script on a machine.
+at its end, beside the header's *Status*, *Superseded*, *Amended* and *Refines* lines, which may change,
+and a *Prior art* line it gains (the 2026-10-11 amendment), which once there stays as it is: a credit
+can carry the notice a license requires. A header line added this way stays on one line. A template
+upgrade that appends amendments to the template's records therefore passes as it is. When a rewrite is
+truly needed (a broken link, a record that was never accepted), the pull request's `adr-rewrite` label
+skips the job, and `ADR_HISTORY_SKIP=1` skips the script on a machine.
