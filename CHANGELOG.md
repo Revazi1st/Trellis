@@ -43,6 +43,18 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   A template upgrade that appends amendments to the template's records passes. For a rewrite that is
   truly needed, create an `adr-rewrite` label in your repository and put it on the pull request, as
   with `docs-not-needed`.
+- **More of the rules are tests now** (`tests/Trellis.ArchitectureTests`). The Domain, the use cases
+  (event handlers aside) and the endpoints never `throw`; time comes from the registered `TimeProvider`
+  and ids from their type's `New()`, never `DateTime.UtcNow` or `Guid.NewGuid()`; nothing silences RSLT001
+  (no pragma, `[SuppressMessage]`, `NoWarn` or lowered severity); tests advance a clock instead of
+  sleeping; every aggregate is created through a `static Create` returning `Result`; every project under
+  `src/` is anchored in `ArchitectureRules.cs`, ServiceDefaults included; and, with `--include-ui`, no page
+  uses an endpoint `[Authorize]`, a raw `HttpClient` POST or an inline script. Each scan has a positive
+  control and an allowlist that names its reason, and `.claude/rules/` names the test behind each rule.
+  A `Console` write in a library project is now a build warning (S106), so a Release build fails on
+  one; `async void` already was (S3168). One fix came with
+  them: a `Retry-After` the API writes as a date now reads as the wait from the registered clock (the
+  UI's `TimeProvider`), not the machine's.
 
 ## [0.1.1] - 2026-10-26
 

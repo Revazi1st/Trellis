@@ -49,4 +49,28 @@ public sealed class RepositorySourceTests
         stripped.ShouldNotContain("one", Case.Sensitive);
         stripped.ShouldNotContain("\r", Case.Sensitive);
     }
+
+    /// <summary>
+    /// The XML stripper the suppression scan reads MSBuild files through: a comment goes, its line breaks
+    /// stay, and a glob's <c>/*</c>, which the markup stripper would take for a CSS comment, stays too.
+    /// </summary>
+    [Fact]
+    public void An_XML_comment_goes_and_a_glob_stays()
+    {
+        string stripped = RepositorySource.StripXmlComments("<Compile Include=\"**/*.cs\" />\r\n<!-- <NoWarn>marker</NoWarn>\r\n -->\r\n<NoWarn>CS1591</NoWarn>");
+
+        stripped.ShouldNotContain("marker", Case.Sensitive);
+        stripped.ShouldContain("Include=\"**/*.cs\"", Case.Sensitive);
+        new SourceFile("Planted.csproj", stripped).LineOf(stripped.IndexOf("CS1591", StringComparison.Ordinal)).ShouldBe(4);
+        stripped.ShouldNotContain("\r", Case.Sensitive);
+    }
+
+    [Fact]
+    public void A_hit_is_described_by_its_file_its_line_and_the_line_trimmed()
+    {
+        var file = new SourceFile("src/Planted.cs", "first();\n    marker();\nlast();");
+
+        file.Describe(file.Code.IndexOf("marker", StringComparison.Ordinal)).ShouldBe("src/Planted.cs:2: marker();");
+        file.Describe(0).ShouldBe("src/Planted.cs:1: first();");
+    }
 }

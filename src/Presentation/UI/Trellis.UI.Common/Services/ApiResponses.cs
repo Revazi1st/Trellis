@@ -32,12 +32,13 @@ internal static class ApiResponses
     /// <summary>
     /// The failure for a call the API answered with an error status: its problem body (when readable)
     /// is parsed and kept. A call with no usable answer at all never gets here (<see cref="ApiCall"/>).
+    /// <paramref name="now"/> is the registered clock's, which a <c>Retry-After</c> date is measured from.
     /// </summary>
-    public static async Task<ApiResult<T>> FailureFromAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
+    public static async Task<ApiResult<T>> FailureFromAsync<T>(HttpResponseMessage response, DateTimeOffset now, CancellationToken cancellationToken)
     {
         ProblemResponse? problem = await ReadProblemAsync(response, cancellationToken);
         return ApiResult.Failure<T>(
-            Describe(response.StatusCode, problem, RetryAfter(response)),
+            Describe(response.StatusCode, problem, RetryAfter(response, now)),
             (int)response.StatusCode,
             problem);
     }
@@ -131,10 +132,11 @@ internal static class ApiResponses
             $"Too many requests. Try again in {seconds} {(seconds == 1 ? "second" : "seconds")}.");
     }
 
-    private static TimeSpan? RetryAfter(HttpResponseMessage response) => response.Headers.RetryAfter switch
+    /// <summary>The response's <c>Retry-After</c> as a wait: a delta as it stands, a date less <paramref name="now"/>.</summary>
+    private static TimeSpan? RetryAfter(HttpResponseMessage response, DateTimeOffset now) => response.Headers.RetryAfter switch
     {
         { Delta: { } delta } => delta,
-        { Date: { } date } => date - DateTimeOffset.UtcNow,
+        { Date: { } date } => date - now,
         _ => null,
     };
 

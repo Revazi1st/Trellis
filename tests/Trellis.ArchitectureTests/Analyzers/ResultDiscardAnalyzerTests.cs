@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.CodeAnalysis;
@@ -16,10 +17,10 @@ namespace Trellis.ArchitectureTests.Analyzers;
 /// RSLT001 (ADR-0030): a statement that drops a <see cref="Result"/>, a <see cref="Result{TValue}"/> or an
 /// <see cref="IdentityResult"/> fails the Release build. Each case compiles a snippet against the real
 /// SharedKernel and the test host's trusted platform assemblies and runs the analyzer the build loads;
-/// the last facts prove the build loads it everywhere and that the repository's own configuration turns
-/// a planted discard into an error.
+/// the last facts prove the build loads it everywhere, that the repository's own configuration turns
+/// a planted discard into an error, and that nothing in the repository silences it.
 /// </summary>
-public sealed class ResultDiscardAnalyzerTests
+public sealed partial class ResultDiscardAnalyzerTests
 {
     private const string Usings = """
         using System;
@@ -76,6 +77,22 @@ public sealed class ResultDiscardAnalyzerTests
 
     /// <summary>The folders whose projects must all load the analyzer; eng/ has its own empty props on purpose.</summary>
     private static readonly string[] ProjectFolders = ["src", "tests", "tools"];
+
+    /// <summary>
+    /// Where the suppression scan does not look, as prefixes of repository-relative paths: the analyzer's own
+    /// project, which defines the rule, and this file, whose snippets and rows name it on purpose.
+    /// </summary>
+    private static readonly string[] SuppressionScanExclusions =
+        ["tools/Trellis.Analyzers/", "tests/Trellis.ArchitectureTests/Analyzers/ResultDiscardAnalyzerTests.cs"];
+
+    /// <summary>The kinds of file a suppression lives in: C# and Razor, MSBuild, and analyzer configuration.</summary>
+    private static readonly string[] SuppressionScanExtensions = [".cs", ".razor", ".csproj", ".props", ".targets", ".editorconfig", ".globalconfig"];
+
+    /// <summary>
+    /// The files that may silence RSLT001, keyed by repository-relative path, each with its reason. Empty on
+    /// purpose: a deliberate drop is <c>_ = …</c> with a one-line reason, never a suppression (ADR-0030).
+    /// </summary>
+    private static readonly Dictionary<string, string> SuppressionAllowlist = new(StringComparer.Ordinal);
 
     [Theory]
     [InlineData("a Result call", "account.Close();")]
@@ -540,6 +557,49 @@ public sealed class ResultDiscardAnalyzerTests
         diagnostics.ShouldAllBe(static d => d.Severity == DiagnosticSeverity.Error);
     }
 
+    /// <summary>
+    /// The other half of "never lower RSLT001": nothing under <c>src/</c>, <c>tools/</c> or <c>tests/</c>, and no
+    /// MSBuild or analyzer-configuration file at the repository root (where one reaches every project), silences
+    /// it: no <c>#pragma warning disable</c>, no <c>[SuppressMessage]</c>, no <c>&lt;NoWarn&gt;</c> or
+    /// <c>&lt;WarningsNotAsErrors&gt;</c> entry, no nested <c>.editorconfig</c> or <c>.globalconfig</c> severity
+    /// below warning. The root <c>.editorconfig</c>'s own effect is the Release-build control above.
+    /// </summary>
+    [Fact]
+    public void Nothing_in_the_repository_silences_RSLT001()
+    {
+        List<SourceFile> scanned = [.. SuppressionScanFiles()];
+
+        scanned.ShouldNotBeEmpty("the suppression scan found no file under src/, tools/ or tests/; is the repository root right?");
+        SourceScan.StaleEntries(scanned, SuppressionAllowlist, SuppressionsIn).ShouldBeEmpty();
+        SourceScan.Violations(scanned, SuppressionAllowlist, SuppressionsIn).ShouldBeEmpty(
+            "drop a Result on purpose with `_ = …` and a one-line reason (ADR-0030): a pragma, a [SuppressMessage], a NoWarn or "
+            + "WarningsNotAsErrors entry or a severity below warning hides every discard it covers, the accidental ones too");
+    }
+
+    /// <summary>
+    /// Positive control for the suppression scan, which expects zero hits: one row per way to silence the rule,
+    /// and rows it lets through (a severity that still fails the build, another rule's NoWarn, a commented-out
+    /// entry, a discard whose reason names the rule). Each row says <c>{id}</c> where the analyzer's own
+    /// constant goes, so the rows are assembled rather than naming the rule themselves.
+    /// </summary>
+    [Theory]
+    [InlineData("Planted.cs", "#pragma warning disable {id} // the reason", true)]
+    [InlineData("Planted.cs", "#pragma warning disable CS1591, {id}", true)]
+    [InlineData("Planted.razor", "@{\n#pragma warning disable {id}\n}", true)]
+    [InlineData("Planted.cs", "[SuppressMessage(\"Usage\", \"{id}:A Result is discarded\", Justification = \"none\")]", true)]
+    [InlineData("GlobalSuppressions.cs", "[assembly: System.Diagnostics.CodeAnalysis.SuppressMessageAttribute(\"Usage\", \"{id}\")]", true)]
+    [InlineData("Planted.csproj", "<PropertyGroup>\n  <NoWarn>$(NoWarn);{id}</NoWarn>\n</PropertyGroup>", true)]
+    [InlineData("Directory.Build.props", "<WarningsNotAsErrors>{id}</WarningsNotAsErrors>", true)]
+    [InlineData("src/.editorconfig", "[*.cs]\ndotnet_diagnostic.{id}.severity = none", true)]
+    [InlineData("tests/Planted.globalconfig", "is_global = true\ndotnet_diagnostic.{id}.severity = suggestion", true)]
+    [InlineData("src/.editorconfig", "[*.cs]\ndotnet_diagnostic.{id}.severity = error", false)]
+    [InlineData("Planted.csproj", "<NoWarn>$(NoWarn);CS1591</NoWarn>", false)]
+    [InlineData("Planted.csproj", "<!-- never <NoWarn>{id}</NoWarn> here -->", false)]
+    [InlineData("Planted.cs", "_ = account.Close();   // deliberate: {id} would refuse the bare call", false)]
+    public void The_suppression_scan_flags_each_way_to_silence_the_rule(string path, string text, bool flagged)
+        => SuppressionsIn(ReadForSuppressions(path, text.Replace("{id}", ResultDiscardAnalyzer.DiagnosticId, StringComparison.Ordinal)))
+            .Any().ShouldBe(flagged);
+
     private static string InRunMethod(string statements, string extraUsings = "", bool isAsync = true) => $$"""
         {{Usings}}
         {{extraUsings}}
@@ -610,6 +670,68 @@ public sealed class ResultDiscardAnalyzerTests
 
         return false;
     }
+
+    /// <summary>
+    /// Every file the suppression scan reads: those of its kinds under <c>src/</c>, <c>tools/</c> and
+    /// <c>tests/</c> and at the repository root, the exclusions left out, each read through its kind's stripper.
+    /// </summary>
+    private static IEnumerable<SourceFile> SuppressionScanFiles()
+        => RepositorySource.FilesUnder("src", "tools", "tests")
+            .Concat(RepositorySource.Root.EnumerateFiles().Select(static file => (RelativePath: file.Name, FullPath: file.FullName)))
+            .Where(static file => SuppressionScanExtensions.Contains(Path.GetExtension(file.RelativePath), StringComparer.Ordinal))
+            .Where(static file => !SuppressionScanExclusions.Any(excluded => file.RelativePath.StartsWith(excluded, StringComparison.Ordinal)))
+            .Select(static file => ReadForSuppressions(file.RelativePath, File.ReadAllText(file.FullPath)));
+
+    /// <summary>
+    /// A file as the suppression scan reads it: the comments of its kind stripped, so prose that names a setting
+    /// never trips the scan. Analyzer configuration stays as written: the severity pattern starts at a line's
+    /// first non-blank character, so a comment line (<c>#</c> or <c>;</c>) never matches.
+    /// </summary>
+    private static SourceFile ReadForSuppressions(string relativePath, string text)
+        => new(relativePath, Path.GetExtension(relativePath) switch
+        {
+            ".cs" => RepositorySource.StripComments(text),
+            ".razor" => RepositorySource.StripMarkupComments(text),
+            ".csproj" or ".props" or ".targets" => RepositorySource.StripXmlComments(text),
+            _ => text.ReplaceLineEndings("\n"),
+        });
+
+    /// <summary>Where <paramref name="file"/> silences RSLT001, by the forms its kind of file can carry.</summary>
+    private static IEnumerable<int> SuppressionsIn(SourceFile file)
+    {
+        IEnumerable<Match> hits = Path.GetExtension(file.RelativePath) switch
+        {
+            ".cs" or ".razor" => SuppressingPragma().Matches(file.Code).Concat(SuppressMessageAttribute().Matches(file.Code)),
+            ".csproj" or ".props" or ".targets" => NoWarnEntry().Matches(file.Code),
+            ".editorconfig" or ".globalconfig" => SeverityLine().Matches(file.Code).Where(static m => !FailsTheReleaseBuild(m.Groups["severity"].Value)),
+            _ => [],
+        };
+
+        return hits.Select(static m => m.Index).Order();
+    }
+
+    /// <summary>The severities under which a discard still fails the Release build (warnings are errors there).</summary>
+    private static bool FailsTheReleaseBuild(string severity)
+        => string.Equals(severity, "warning", StringComparison.OrdinalIgnoreCase) || string.Equals(severity, "error", StringComparison.OrdinalIgnoreCase);
+
+    [GeneratedRegex(@"#pragma\s+warning\s+disable\b[^\n]*\b" + ResultDiscardAnalyzer.DiagnosticId + @"\b", RegexOptions.IgnoreCase, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex SuppressingPragma();
+
+    [GeneratedRegex(@"SuppressMessage(?:Attribute)?\s*\([^)]*?\b" + ResultDiscardAnalyzer.DiagnosticId + @"\b", RegexOptions.IgnoreCase, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex SuppressMessageAttribute();
+
+    /// <summary>A <c>NoWarn</c> or <c>WarningsNotAsErrors</c> element, or attribute, whose list holds the rule.</summary>
+    [GeneratedRegex(
+        @"<(?:NoWarn|WarningsNotAsErrors)\b[^>]*>[^<]*\b" + ResultDiscardAnalyzer.DiagnosticId + @"\b"
+        + @"|\b(?:NoWarn|WarningsNotAsErrors)\s*=\s*""[^""]*\b" + ResultDiscardAnalyzer.DiagnosticId + @"\b",
+        RegexOptions.IgnoreCase, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex NoWarnEntry();
+
+    /// <summary>The rule's severity line in an analyzer configuration file, its value captured.</summary>
+    [GeneratedRegex(
+        @"^[ \t]*dotnet_diagnostic\." + ResultDiscardAnalyzer.DiagnosticId + @"\.severity[ \t]*=[ \t]*(?<severity>[^\s#;]*)",
+        RegexOptions.IgnoreCase | RegexOptions.Multiline, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex SeverityLine();
 
     /// <summary>The compiler's view of .editorconfig for one file: the per-rule severities.</summary>
     private sealed class EditorConfigTreeOptions(AnalyzerConfigSet editorConfig) : SyntaxTreeOptionsProvider

@@ -48,4 +48,13 @@ internal static class PlantedViolations
                 ? Error.Validation("Planted.Empty", "A value is required.")
                 : new PositionalValueObject(value);
     }
+
+    /// <summary>The planted aggregate's strongly-typed id, shaped like the real ones.</summary>
+    internal readonly record struct PlantedId(Guid Value) : IStronglyTypedId<PlantedId>
+    {
+        public static PlantedId From(Guid value) => new(value);
+    }
+
+    /// <summary>An aggregate anyone can build unchecked: a public constructor, and no <c>Create</c> factory returning a Result.</summary>
+    internal sealed class AggregateWithoutFactory(PlantedId id) : AggregateRoot<PlantedId>(id);
 }

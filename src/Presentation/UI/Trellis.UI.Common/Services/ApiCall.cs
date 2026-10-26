@@ -16,7 +16,11 @@ namespace Trellis.UI.Common.Services;
 /// </list>
 /// Anything else (a bug) still throws.
 /// </summary>
-internal static class ApiCall
+/// <param name="time">
+/// The registered clock (<c>AddSharedUi</c> adds <see cref="TimeProvider.System"/> unless the host has one):
+/// a <c>Retry-After</c> written as a date is a wait measured from its now, never from the machine's.
+/// </param>
+internal sealed class ApiCall(TimeProvider time)
 {
     /// <summary>
     /// The base type of every Polly rejection: <c>BrokenCircuitException</c> (the circuit is open),
@@ -27,13 +31,13 @@ internal static class ApiCall
     private const string ResilienceRejection = "Polly.ExecutionRejectedException";
 
     /// <summary>A call whose success carries a JSON body of <typeparamref name="TBody"/>.</summary>
-    public static Task<ApiResult<TBody>> ReadAsync<TBody>(
+    public Task<ApiResult<TBody>> ReadAsync<TBody>(
         Func<CancellationToken, Task<HttpResponseMessage>> send, CancellationToken cancellationToken)
         where TBody : class
         => ReadAsync<TBody, TBody>(send, static body => body, cancellationToken);
 
     /// <summary>A call whose success carries a JSON body of <typeparamref name="TBody"/>, of which the caller keeps <paramref name="select"/>.</summary>
-    public static async Task<ApiResult<TResult>> ReadAsync<TBody, TResult>(
+    public async Task<ApiResult<TResult>> ReadAsync<TBody, TResult>(
         Func<CancellationToken, Task<HttpResponseMessage>> send,
         Func<TBody, TResult> select,
         CancellationToken cancellationToken)
@@ -44,7 +48,7 @@ internal static class ApiCall
             using HttpResponseMessage response = await send(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                return await ApiResponses.FailureFromAsync<TResult>(response, cancellationToken);
+                return await ApiResponses.FailureFromAsync<TResult>(response, time.GetUtcNow(), cancellationToken);
             }
 
             // An empty body throws JsonException below; a literal null deserialises to null.
@@ -58,7 +62,7 @@ internal static class ApiCall
     }
 
     /// <summary>A call whose success is the status alone (a 204, or a body the caller has no use for).</summary>
-    public static async Task<ApiResult<bool>> SendAsync(
+    public async Task<ApiResult<bool>> SendAsync(
         Func<CancellationToken, Task<HttpResponseMessage>> send, CancellationToken cancellationToken)
     {
         try
@@ -66,7 +70,7 @@ internal static class ApiCall
             using HttpResponseMessage response = await send(cancellationToken);
             return response.IsSuccessStatusCode
                 ? ApiResult.Success(true)
-                : await ApiResponses.FailureFromAsync<bool>(response, cancellationToken);
+                : await ApiResponses.FailureFromAsync<bool>(response, time.GetUtcNow(), cancellationToken);
         }
         catch (Exception exception) when (IsUnusableAnswer(exception, cancellationToken))
         {

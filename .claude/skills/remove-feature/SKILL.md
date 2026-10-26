@@ -14,7 +14,7 @@ Invoices is scaffolding — every real project deletes it. Two rules first:
 After each step `./scripts/dotnet.sh build Trellis.slnx` — the error frontier should move outward; nothing disappears quietly.
 
 ## 1. Domain
-Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events, errors, specs, `IInvoiceRepository`). `Domain/Common` is shared, not invoice-owned: `EmailAddress` is used by Auth (`RegisterCommandValidator`) — keep it. `Money` + `Currency` have no other consumer today — delete them (and `MoneyTests`) unless your features want them.
+Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events, errors, specs, `IInvoiceRepository`). `Domain/Common` is shared, not invoice-owned: `EmailAddress` is used by Auth (`RegisterCommandValidator`) — keep it. `Money` + `Currency` have no other consumer today — delete them (and `MoneyTests`) unless your features want them. Deleting `Money` also removes its entry from `ThrowAllowlist` in `tests/Trellis.ArchitectureTests/ConventionTests.cs`: the throw scan fails on an allowlist entry whose file is gone.
 
 ## 2. Application
 - Delete `Features/Invoices/` (8 use-case slices, `ListInvoices/` and `ListOverdueInvoices/` among them, + `EventHandlers/` + `InvoiceResponse.cs`) and `Observability/InvoiceMetrics.cs`, and the `Trellis.Invoices` rows (`trellis.invoices.issued`, `trellis.invoices.paid`, `trellis.invoice.currency`) from the *Telemetry reference* in `docs/deployment.md`: `TelemetryNamingTests` fails on a documented name the code no longer emits.

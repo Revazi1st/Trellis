@@ -102,6 +102,7 @@ dotnet_diagnostic.MA0004.severity = none            # ConfigureAwait(false): app
 dotnet_diagnostic.MA0006.severity = none            # string == is already ordinal; string.Equals(…, StringComparison) does not translate in EF expression trees
 dotnet_diagnostic.MA0048.severity = none            # vertical slices co-locate small related types (response + line + mapper) in one file by design
 dotnet_diagnostic.S1135.severity = suggestion       # TODO tracking — allowed, surfaced gently
+dotnet_diagnostic.S106.severity = warning           # no Console writes in a library: log through ILogger (off by default; Sonar skips executables)
 
 # ── A Result is never dropped (ADR-0004, ADR-0030) ─────────────────────────
 # RSLT001, from tools/Trellis.Analyzers (which Directory.Build.props loads into every project), reports a

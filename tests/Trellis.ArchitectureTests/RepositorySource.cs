@@ -2,11 +2,19 @@ using System.Text;
 
 namespace Trellis.ArchitectureTests;
 
-/// <summary>One source file (C#, Razor or CSS) under the repository root, its comments already removed.</summary>
+/// <summary>One source file (C#, Razor, CSS, MSBuild or analyzer configuration) under the repository root, its comments already removed.</summary>
 internal sealed record SourceFile(string RelativePath, string Code)
 {
     /// <summary>The 1-based line of <paramref name="index"/> in <see cref="Code"/> — for failure messages.</summary>
     public int LineOf(int index) => Code.AsSpan(0, index).Count('\n') + 1;
+
+    /// <summary><c>path:line: text</c> for the hit at <paramref name="index"/>, the line's text trimmed: one row of a failure message.</summary>
+    public string Describe(int index)
+    {
+        int start = index == 0 ? 0 : Code.LastIndexOf('\n', index - 1) + 1;
+        int end = Code.IndexOf('\n', index);
+        return $"{RelativePath}:{LineOf(index)}: {Code[start..(end < 0 ? Code.Length : end)].Trim()}";
+    }
 }
 
 /// <summary>
@@ -78,6 +86,31 @@ internal static class RepositorySource
     }
 
     private static readonly string[] MarkupExtensions = [".razor", ".css"];
+
+    /// <summary>
+    /// Every file under the given repository-relative directories, as its repository-relative path and its
+    /// full path, in order, the build and tool folders skipped: for a scan that reads files of several kinds
+    /// and strips each kind's comments itself (<see cref="StripXmlComments"/> for MSBuild files). A directory
+    /// that does not exist is skipped.
+    /// </summary>
+    public static IEnumerable<(string RelativePath, string FullPath)> FilesUnder(params string[] directories)
+    {
+        foreach (string relative in directories)
+        {
+            var directory = new DirectoryInfo(Path.Combine(Root.FullName, relative));
+            if (!directory.Exists)
+            {
+                continue;
+            }
+
+            foreach (FileInfo file in directory.EnumerateFiles("*", SearchOption.AllDirectories)
+                         .Where(static f => !IsInSkippedDirectory(f))
+                         .OrderBy(static f => f.FullName, StringComparer.Ordinal))
+            {
+                yield return (Path.GetRelativePath(Root.FullName, file.FullName).Replace('\\', '/'), file.FullName);
+            }
+        }
+    }
 
     private static DirectoryInfo FindRoot()
     {
@@ -195,6 +228,39 @@ internal static class RepositorySource
             int end = source.IndexOf(close, i + open.Length, StringComparison.Ordinal);
             int stop = end < 0 ? source.Length : end + close.Length;
             for (int j = i; j < stop; j++)
+            {
+                code.Append(source[j] == '\n' ? '\n' : ' ');
+            }
+
+            i = stop;
+        }
+
+        return code.ToString();
+    }
+
+    /// <summary>
+    /// Normalises line endings to <c>\n</c>, then removes XML comments (<c>&lt;!-- --&gt;</c>), keeping line
+    /// breaks so positions still map to lines: for MSBuild files, whose globs (<c>**/*.cs</c>) the markup
+    /// stripper would read as the start of a CSS comment.
+    /// </summary>
+    internal static string StripXmlComments(string source)
+    {
+        source = source.ReplaceLineEndings("\n");
+        var code = new StringBuilder(source.Length);
+        int i = 0;
+        while (i < source.Length)
+        {
+            int open = source.IndexOf("<!--", i, StringComparison.Ordinal);
+            if (open < 0)
+            {
+                code.Append(source, i, source.Length - i);
+                break;
+            }
+
+            code.Append(source, i, open - i);
+            int close = source.IndexOf("-->", open + 4, StringComparison.Ordinal);
+            int stop = close < 0 ? source.Length : close + 3;
+            for (int j = open; j < stop; j++)
             {
                 code.Append(source[j] == '\n' ? '\n' : ' ');
             }

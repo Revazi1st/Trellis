@@ -9,22 +9,24 @@ namespace Trellis.UI.Common.Services;
 /// sentences as such, and the token provider tells a rejected refresh token (401) from a transient failure.
 /// Every call goes through <see cref="ApiCall"/>, so an unreachable API is a result, not an exception.
 /// </summary>
-internal sealed class AuthApiClient(HttpClient httpClient) : IAuthApiClient
+internal sealed class AuthApiClient(HttpClient httpClient, TimeProvider time) : IAuthApiClient
 {
+    private readonly ApiCall _call = new(time);
+
     public Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
-        => ApiCall.ReadAsync<TokenResponse>(
+        => _call.ReadAsync<TokenResponse>(
             ct => httpClient.PostAsJsonAsync("api/v1/auth/login", request, ct), cancellationToken);
 
     public Task<ApiResult<TokenResponse>> RefreshAsync(RefreshRequest request, CancellationToken cancellationToken = default)
-        => ApiCall.ReadAsync<TokenResponse>(
+        => _call.ReadAsync<TokenResponse>(
             ct => httpClient.PostAsJsonAsync("api/v1/auth/refresh", request, ct), cancellationToken);
 
     public Task<ApiResult<Guid>> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
-        => ApiCall.ReadAsync<RegisterResponse, Guid>(
+        => _call.ReadAsync<RegisterResponse, Guid>(
             ct => httpClient.PostAsJsonAsync("api/v1/auth/register", request, ct),
             static registered => registered.UserId,
             cancellationToken);
 
     public Task<ApiResult<bool>> LogoutAsync(LogoutRequest request, CancellationToken cancellationToken = default)
-        => ApiCall.SendAsync(ct => httpClient.PostAsJsonAsync("api/v1/auth/logout", request, ct), cancellationToken);
+        => _call.SendAsync(ct => httpClient.PostAsJsonAsync("api/v1/auth/logout", request, ct), cancellationToken);
 }

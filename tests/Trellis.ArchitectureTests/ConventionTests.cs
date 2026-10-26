@@ -25,6 +25,30 @@ public sealed partial class ConventionTests
     /// </summary>
     private static readonly Dictionary<string, string> BareIgnoreQueryFiltersAllowlist = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The files under the throw scan's folders that may throw, keyed by repository-relative path, each with
+    /// its reason. An entry is a decision that the failure is a programmer error no caller can act on, never
+    /// an expected outcome; a stale one (the file gone, or no longer throwing) fails the scan.
+    /// </summary>
+    private static readonly Dictionary<string, string> ThrowAllowlist = new(StringComparer.Ordinal)
+    {
+        ["src/Core/Trellis.Domain/Common/Money.cs"] =
+            "cross-currency arithmetic and a negative difference are programmer errors, not expected failures (the file header)",
+    };
+
+    /// <summary>
+    /// The files under <c>src/</c> and <c>tools/</c> that may read the machine's clock or mint a random
+    /// <see cref="Guid"/>, keyed by repository-relative path, each with its reason. Empty on purpose: the
+    /// time is the registered <see cref="TimeProvider"/>'s (ADR-0009), an id its type's <c>New()</c>.
+    /// </summary>
+    private static readonly Dictionary<string, string> ClockAndIdAllowlist = new(StringComparer.Ordinal);
+
+    /// <summary>The test files that may name a sleep, keyed by repository-relative path, each with its reason.</summary>
+    private static readonly Dictionary<string, string> SleepAllowlist = new(StringComparer.Ordinal)
+    {
+        ["tests/Trellis.ArchitectureTests/Analyzers/ResultDiscardAnalyzerTests.cs"] = "compiled snippets, never run",
+    };
+
     /// <summary>The open handler contracts Application's assembly scan registers (ADR-0003).</summary>
     private static readonly Type[] HandlerContracts =
         [typeof(ICommandHandler<>), typeof(ICommandHandler<,>), typeof(IQueryHandler<,>), typeof(IDomainEventHandler<>)];
@@ -218,6 +242,30 @@ public sealed partial class ConventionTests
     }
 
     [Fact]
+    public void Aggregates_are_created_through_a_static_Create_returning_Result()
+    {
+        // The factory is where an aggregate's invariants are checked (domain.md, Construction): a public
+        // constructor builds one that skips them, and a factory that throws or hands back the bare
+        // aggregate turns a refused input into an exception instead of an Error the caller can show.
+        List<Type> aggregates = [.. Architecture.DomainAssembly.GetTypes()
+            .Where(static t => t is { IsClass: true, IsAbstract: false } && DerivesFromGeneric(t, typeof(AggregateRoot<>)))];
+
+        aggregates.ShouldNotBeEmpty();   // Invoice anchors the convention
+
+        aggregates.SelectMany(AggregateFactoryViolations).ShouldBeEmpty(
+            "an aggregate has a public static Create(...) returning Result<TAggregate> and a private constructor for EF (domain.md)");
+    }
+
+    [Fact]
+    public void The_aggregate_factory_rule_refuses_an_aggregate_with_a_public_constructor_and_no_Create()
+        => AggregateFactoryViolations(typeof(PlantedViolations.AggregateWithoutFactory))
+            .ShouldBe(
+            [
+                "AggregateWithoutFactory has no public static Create(...) returning Result<AggregateWithoutFactory>",
+                "AggregateWithoutFactory(PlantedId) is a public constructor",
+            ]);
+
+    [Fact]
     public void Cancellation_filters_key_on_the_token_not_only_the_exception_type()
     {
         // A downstream HttpClient timeout is an OperationCanceledException too. A filter keyed on the
@@ -288,6 +336,107 @@ public sealed partial class ConventionTests
         TokenKeyedCancellationFilter().IsMatch(found.Value).ShouldBe(accepted);
     }
 
+    [Fact]
+    public void The_domain_the_use_cases_and_the_endpoints_return_a_Result_and_never_throw()
+    {
+        // An expected failure is a Result (ADR-0004): an aggregate returns an Error from its *Errors class,
+        // a handler returns the aggregate's or the port's, an endpoint maps it to a problem. Domain-event
+        // handlers report failure by throwing (ADR-0023, the outbox's retry signal), so Features/*/EventHandlers/
+        // is outside the scan; so are the ports' adapters in Infrastructure and Persistence.
+        List<SourceFile> scanned = [.. RepositorySource.CSharpFiles("src").Where(static file => ThrowScanScope().IsMatch(file.RelativePath))];
+
+        scanned.ShouldNotBeEmpty("the throw scan found no file in the Domain, Application's Features/ or the Api's Features/; is the repository root right?");
+        SourceScan.StaleEntries(scanned, ThrowAllowlist, ThrowsIn).ShouldBeEmpty();
+        SourceScan.Violations(scanned, ThrowAllowlist, ThrowsIn).ShouldBeEmpty(
+            "return an Error from the aggregate's *Errors class (or the port's) and let the endpoint map it with CustomResults.Problem; "
+            + "a programmer error no caller can act on goes on ThrowAllowlist with its reason");
+    }
+
+    /// <summary>
+    /// Positive control for the throw scan, which expects zero hits outside its allowlist: a throw
+    /// expression and a rethrow are found; a word that only contains the keyword, Shouldly's assertion and
+    /// the guard helpers are not. The scan reads <c>src/</c> only, so the rows are written out whole.
+    /// </summary>
+    [Theory]
+    [InlineData("?? throw new InvalidOperationException()", true)]
+    [InlineData("throw;", true)]
+    [InlineData("int thrower = 1;", false)]
+    [InlineData("Should.Throw<Exception>(() => x)", false)]
+    [InlineData("ArgumentNullException.ThrowIfNull(currency);", false)]
+    public void The_throw_scan_flags_a_throw_and_nothing_that_only_looks_like_one(string code, bool flagged)
+        => ThrowsIn(new SourceFile("Planted.cs", code)).Any().ShouldBe(flagged);
+
+    [Fact]
+    public void Time_comes_from_the_TimeProvider_and_ids_from_their_type()
+    {
+        // The clock is the registered TimeProvider (ADR-0009), so a test stands at any instant it names
+        // (FakeTimeProvider, ApiFactory.Time, the UI harness's manual clock) and a deadline computed in one
+        // place agrees with one computed in another. An id is its type's New(): a version-7 Guid, ordered by
+        // time, where a random one scatters the primary key's index (domain.md, Strongly-typed IDs).
+        List<SourceFile> scanned = [.. RepositorySource.CSharpFiles("src", "tools"), .. RazorFiles("src", "tools")];
+
+        scanned.ShouldNotBeEmpty("the clock scan found no file under src/ or tools/; is the repository root right?");
+        SourceScan.StaleEntries(scanned, ClockAndIdAllowlist, ClockOrIdReadsIn).ShouldBeEmpty();
+        SourceScan.Violations(scanned, ClockAndIdAllowlist, ClockOrIdReadsIn).ShouldBeEmpty(
+            "inject TimeProvider and call GetUtcNow() (UI.Common registers one for the UI), and mint an id with its type's New(); "
+            + "a deliberate exception goes on ClockAndIdAllowlist with its reason");
+    }
+
+    /// <summary>
+    /// Positive control for the clock and id scan, which expects zero hits: each way to read the machine's
+    /// clock or mint a random Guid is found; the TimeProvider, an id type's New(), a version-7 Guid and the
+    /// other members of the same types are not. The scan reads <c>src/</c> and <c>tools/</c> only, so the
+    /// rows are written out whole.
+    /// </summary>
+    [Theory]
+    [InlineData("var now = DateTime.UtcNow;", true)]
+    [InlineData("var now = DateTime.Now;", true)]
+    [InlineData("var now = DateTimeOffset.UtcNow;", true)]
+    [InlineData("var now = System.DateTimeOffset.Now;", true)]
+    [InlineData("var id = Guid.NewGuid();", true)]
+    [InlineData("<p>@DateTime.Now.Year</p>", true)]
+    [InlineData("var now = time.GetUtcNow();", false)]
+    [InlineData("var id = OrderId.New();", false)]
+    [InlineData("var key = Guid.CreateVersion7();", false)]
+    [InlineData("var epoch = DateTimeOffset.UnixEpoch;", false)]
+    [InlineData("var none = Guid.Empty;", false)]
+    public void The_clock_scan_flags_the_machine_clock_and_a_random_Guid(string code, bool flagged)
+        => ClockOrIdReadsIn(new SourceFile("Planted.cs", code)).Any().ShouldBe(flagged);
+
+    [Fact]
+    public void Tests_move_time_and_never_sleep()
+    {
+        // A test that waits on the machine's clock is slow when it passes and flaky when the machine is busy
+        // (tests.md: move time, never sleep). Time moves with FakeTimeProvider.Advance, ApiFactory.Time or the
+        // UI harness's clock; a wait for another thread is a TaskCompletionSource. A delay of Timeout.Infinite
+        // is a wait for cancellation, not a sleep, and passes.
+        List<SourceFile> scanned = [.. RepositorySource.CSharpFiles("tests")];
+
+        scanned.ShouldNotBeEmpty("the sleep scan found no file under tests/; is the repository root right?");
+        SourceScan.StaleEntries(scanned, SleepAllowlist, SleepsIn).ShouldBeEmpty();
+        SourceScan.Violations(scanned, SleepAllowlist, SleepsIn).ShouldBeEmpty(
+            "advance the test's clock (FakeTimeProvider, ApiFactory.Time, UiHarness.Clock) or await the signal itself; "
+            + "a file whose text only names the call goes on SleepAllowlist with its reason");
+    }
+
+    /// <summary>
+    /// Positive control for the sleep scan, which expects zero hits outside its allowlist: a thread sleep and
+    /// a timed delay are found, however the delay is written; a delay of <c>Timeout.Infinite</c> (a wait for
+    /// cancellation) is not. The scan reads <c>tests/</c>, this file among them, so each call is assembled
+    /// from two literals: written out whole, it would trip the very scan it tests.
+    /// </summary>
+    [Theory]
+    [InlineData("await Task", ".Delay(100);", true)]
+    [InlineData("await Task", ".Delay(TimeSpan.FromSeconds(1), cancellationToken);", true)]
+    [InlineData("Thread", ".Sleep(1000);", true)]
+    [InlineData("System.Threading.Thread", ".Sleep(TimeSpan.FromMilliseconds(50));", true)]
+    [InlineData("await Task", ".Delay(Timeout.Infinite, cancellationToken);", false)]
+    [InlineData("await Task", ".Delay(Timeout.InfiniteTimeSpan, cancellationToken);", false)]
+    [InlineData("await Task", ".Delay( Timeout.Infinite, cancellationToken);", false)]
+    [InlineData("await Task", ".Yield();", false)]
+    public void The_sleep_scan_flags_a_wait_on_the_clock_and_not_a_wait_for_cancellation(string receiver, string call, bool flagged)
+        => SleepsIn(new SourceFile("Planted.cs", receiver + call)).Any().ShouldBe(flagged);
+
     private static bool IsRecord(Type type)
         => type.GetProperty("EqualityContract", BindingFlags.NonPublic | BindingFlags.Instance) is not null;
 
@@ -348,6 +497,35 @@ public sealed partial class ConventionTests
         return $"{(arity < 0 ? type.Name : type.Name[..arity])}<{string.Join(", ", type.GetGenericArguments().Select(DisplayName))}>";
     }
 
+    /// <summary>
+    /// What the aggregate factory rule refuses in <paramref name="aggregate"/>: no public static <c>Create</c>
+    /// returning <c>Result&lt;TAggregate&gt;</c>, and each public constructor.
+    /// </summary>
+    private static IEnumerable<string> AggregateFactoryViolations(Type aggregate)
+    {
+        Type result = typeof(Result<>).MakeGenericType(aggregate);
+        if (!aggregate.GetMethods(BindingFlags.Public | BindingFlags.Static).Any(m => m.Name == "Create" && m.ReturnType == result))
+        {
+            yield return $"{aggregate.Name} has no public static Create(...) returning Result<{aggregate.Name}>";
+        }
+
+        foreach (ConstructorInfo constructor in aggregate.GetConstructors(BindingFlags.Public | BindingFlags.Instance))
+        {
+            yield return $"{aggregate.Name}({string.Join(", ", constructor.GetParameters().Select(static p => DisplayName(p.ParameterType)))}) is a public constructor";
+        }
+    }
+
+    /// <summary>Every <c>*.razor</c> file under the given top-level directories, its markup comments stripped.</summary>
+    private static IEnumerable<SourceFile> RazorFiles(params string[] topLevelDirectories)
+        => RepositorySource.RazorAndCssFiles(topLevelDirectories)
+            .Where(static file => file.RelativePath.EndsWith(".razor", StringComparison.OrdinalIgnoreCase));
+
+    private static IEnumerable<int> ThrowsIn(SourceFile file) => Throw().Matches(file.Code).Select(static m => m.Index);
+
+    private static IEnumerable<int> ClockOrIdReadsIn(SourceFile file) => ClockOrRandomId().Matches(file.Code).Select(static m => m.Index);
+
+    private static IEnumerable<int> SleepsIn(SourceFile file) => Sleep().Matches(file.Code).Select(static m => m.Index);
+
     private static bool DerivesFromGeneric(Type type, Type openGeneric)
     {
         for (Type? current = type.BaseType; current is not null; current = current.BaseType)
@@ -374,4 +552,26 @@ public sealed partial class ConventionTests
 
     [GeneratedRegex(@"^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex StableName();
+
+    /// <summary>
+    /// The throw scan's folders, by repository-relative path: the Domain, Application's <c>Features/</c>
+    /// outside any <c>EventHandlers/</c> folder, and the Api's <c>Features/</c>.
+    /// </summary>
+    [GeneratedRegex(@"^src/(?:Core/[^/]+\.Domain/|Core/[^/]+\.Application/Features/(?!(?:[^/]+/)*EventHandlers/)|Presentation/Api/[^/]+\.Api/Features/)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ThrowScanScope();
+
+    /// <summary>The keyword, case-sensitive: <c>ThrowIfNull</c> and Shouldly's <c>Should.Throw</c> are other words.</summary>
+    [GeneratedRegex(@"\bthrow\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex Throw();
+
+    [GeneratedRegex(@"\bDateTime(?:Offset)?\.(?:Utc)?Now\b|\bGuid\.NewGuid\(", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ClockOrRandomId();
+
+    /// <summary>
+    /// A thread sleep, or a delay whose first argument is not <c>Timeout.Infinite</c> (or <c>InfiniteTimeSpan</c>).
+    /// The whitespace before the argument is matched atomically, so backtracking cannot slip the lookahead
+    /// past it.
+    /// </summary>
+    [GeneratedRegex(@"\bThread\.Sleep\(|\bTask\.Delay\((?>\s*)(?!Timeout\.Infinite)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex Sleep();
 }
