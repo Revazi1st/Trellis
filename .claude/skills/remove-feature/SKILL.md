@@ -36,7 +36,7 @@ Delete `src/Core/Trellis.Domain/Invoices/` (aggregate, line entity, IDs, events,
 - **Regenerate the OpenAPI document**: `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` (`./scripts/dotnet.sh` forwards the variable) and commit `docs/api/openapi.v1.json`. `OpenApiSnapshotTests` fails until the committed document drops the invoice operations and schemas.
 
 ## 5. UI (if included)
-- Delete `Pages/Invoices.razor`, `Pages/InvoiceDetail.razor`, `Pages/CreateInvoice.razor`, `Services/IInvoiceApiClient.cs`, `Services/InvoiceApiClient.cs`. In `wwwroot/app.css` the `.filters`/`.filter` rules styled the invoice list's filter row and `.back` its back links: keep them for your own list and detail pages, or delete them.
+- Delete `Pages/Invoices.razor`, `Pages/InvoiceDetail.razor`, `Pages/CreateInvoice.razor`, `Services/IInvoiceApiClient.cs`, `Services/InvoiceApiClient.cs`. The filter row (`.filters`, `.filters-label`, `.filter`), the back link (`.back`), the table, the summary list and the actions row in `wwwroot/app.css` are the design system's components, not the invoice pages' (`docs/design-system.md`): keep them for your own list and detail pages, or delete each rule together with its subsection under *Components*, because `DesignSystemTests` fails on a rule without its subsection and on a subsection without its rule.
 - `DependencyInjection.cs`: the `IInvoiceApiClient` registration. `Layout/MainLayout.razor`: the Invoices nav link. `_Imports.razor`: `@using Trellis.Api.Contracts.Invoices`.
 - `Invoices.razor` owned the home route `/` — give the UI a new home page or login redirects into a 404.
 

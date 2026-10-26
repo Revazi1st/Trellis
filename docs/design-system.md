@@ -309,6 +309,11 @@ rules, each fact with a positive control that fails a planted violation:
 - `The_design_doc_and_the_token_file_name_the_same_tokens`: the [Tokens](#tokens) tables and
   `tokens.css` name the same set, both ways.
 
+The `ui-reviewer` subagent (`.claude/agents/ui-reviewer.md`) reads a change to a page, a layout or a
+stylesheet against this document, `.claude/rules/ui.md` and the accessibility each component owes, in a
+browser at phone and laptop width when one is running, and reports; run it before a UI change is
+finished. Its findings are claims to check against the code or one of the tests above.
+
 To see both themes, switch the operating system's appearance: the tokens follow it through
 `color-scheme`. To hold one theme while you look, set `data-theme="light"` or `"dark"` on `<html>` in the
 browser's developer tools. The page tests in `tests/*.ApiTests/Ui/` render the pages' markup without a

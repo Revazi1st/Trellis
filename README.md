@@ -45,7 +45,7 @@ Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 
 | Flag | Default | What it adds |
 |---|---|---|
-| `--include-ui` | on | Blazor web UI (UI.Common + UI.Web), orchestrated by Aspire |
+| `--include-ui` | on | Blazor web UI (UI.Common + UI.Web) with its design system and the `ui-reviewer` agent, orchestrated by Aspire |
 | `--use-redis` | off | Redis distributed cache as a HybridCache L2 |
 | `--use-serilog` | off | Serilog structured logging (console) alongside OpenTelemetry |
 | `--use-multitenancy` | off | Tenant seam: `tenant` claim on the principal, `TenantId` column + `"Tenant"` query filter on every aggregate root ¹ |
@@ -516,8 +516,8 @@ status checks. A major, a .NET SDK bump and the GitHub Actions group wait for a 
 The table at the top lists the options; this is what each one changes in the generated solution.
 
 - **`--include-ui false`** leaves out `src/Presentation/UI/`, the UI client tests in
-  `tests/Trellis.ApiTests/Ui/` and the UI rule, and the AppHost starts no `web` resource: an API-only
-  solution.
+  `tests/Trellis.ApiTests/Ui/`, the design system (its doc, ADR-0032 and `DesignSystemTests`), the UI
+  rule and the `ui-reviewer` agent, and the AppHost starts no `web` resource: an API-only solution.
 - **`--use-redis true`** adds the `cache` resource with its RedisInsight tile and makes Redis the
   HybridCache L2. In the dev-container flow, `docker compose --profile redis up -d` starts it.
 - **`--use-serilog true`** sends the API's and the web host's logs through Serilog's console sink,
@@ -551,8 +551,10 @@ plain text you can read too.
   [`add-integration`](.claude/skills/add-integration/SKILL.md),
   [`add-migration`](.claude/skills/add-migration/SKILL.md), [`new-adr`](.claude/skills/new-adr/SKILL.md)
   and [`run-app`](.claude/skills/run-app/SKILL.md). An agent follows them, and so can you.
-- **Reviewers** in `.claude/agents/`: `code-reviewer` and `architecture-guard`, whose findings are
-  claims to check against the code before acting on them.
+- **Reviewers** in `.claude/agents/`: `code-reviewer`, `architecture-guard` and, with the UI,
+  `ui-reviewer` (a change to a page, a layout or a stylesheet, read against the design system, the UI
+  rules and accessibility, in a browser through the Playwright MCP when one is running), whose findings
+  are claims to check against the code before acting on them.
 - **Decisions** in [docs/adr/](docs/adr/), indexed in [docs/INDEX.md](docs/INDEX.md): each with its
   context and consequences and, where it takes an idea from another project, a *Prior art* line naming
   it. Your own start at 0100.

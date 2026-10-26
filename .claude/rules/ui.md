@@ -5,6 +5,8 @@ paths: ["src/Presentation/UI/**/*.{cs,razor,css,js}"]
 
 # UI layer rules
 
+Before finishing a change to a page, a layout or a stylesheet, run the `ui-reviewer` subagent (`.claude/agents/ui-reviewer.md`): it reads the change against `docs/design-system.md`, these rules and the accessibility each component owes, in a browser when one is running, and reports. Its findings are claims to check against the code or a test (AGENTS.md).
+
 `UI.Common` is the shared Razor Class Library for the Blazor web host. Keep it **render-mode-agnostic** — only `Microsoft.AspNetCore.Components.*` + `HttpClient`, no host-specific APIs — so it stays cleanly reusable (ADR-0015).
 
 - **Talk to the API only through the typed clients** (`IInvoiceApiClient`, `IAuthApiClient`) over `Api.Contracts`; they return `ApiResult<T>` so components handle failures without exceptions. Every call goes through **`ApiCall`** (Services/): no response, a timeout (the clients' 15 s `HttpClient.Timeout`, or the host pipeline's), an open circuit (Polly's rejections, recognised by name — UI.Common has no Polly reference), unreadable JSON or a 2xx without its body all become the service-unavailable failure with no `StatusCode`; only the caller's own cancellation propagates, and a bug still throws. The typed client sends a **fresh `Idempotency-Key` per logical POST** — never POST with a raw `HttpClient`.

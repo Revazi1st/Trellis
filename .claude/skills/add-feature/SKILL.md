@@ -127,9 +127,24 @@ after each layer.
 ## UI (if included)
 
 - [ ] A typed client method over the contracts, through `ApiCall`; POSTs through the idempotent helper.
+- [ ] A page in `Pages/` that inherits `ProtectedPage` (overriding `RequiredPermission` when a permission
+      gates the whole page), with a `<PageTitle>`, one `h1`, and a `class="back"` link to its list above
+      the heading when it sits below one, there whatever the load state (`.claude/rules/ui.md`).
+- [ ] The nav link in `Layout/MainLayout.razor` (`class="nav-link"`, inside the `AuthorizeView` its
+      permission needs); the contracts namespace in `_Imports.razor`; the typed client registered in
+      `AddSharedUi` (`DependencyInjection.cs`).
 - [ ] Forms over a model in `Forms/` whose DataAnnotations mirror the command validator, with
-      `<ServerValidation>`; success is an `INotificationService` notification; pages inherit
-      `ProtectedPage` (`.claude/rules/ui.md`).
+      `<ServerValidation>`; success is an `INotificationService` notification (`.claude/rules/ui.md`)
+      [`InvoiceFormMirrorTests` is the model].
+- [ ] Built from the design system's documented components (`docs/design-system.md`, *Components*): no
+      colour, `style=` attribute, `<style>` block or `.razor.css` in a page; a new class gets its rule in
+      `app.css` and its subsection in the doc; a new colour is a `light-dark()` pair with its `--on-*`
+      [`DesignSystemTests`].
+- [ ] A render test over `PageHost` in `tests/Trellis.ApiTests/Ui/` for what the page shows in each load
+      state [`InvoicePagesTests` is the model], and the page's sentence in the feature doc's *UI* section
+      [`check-docs-drift.sh`].
+- [ ] Run the `ui-reviewer` subagent on the change before finishing; its findings are claims to check
+      (AGENTS.md).
 
 ## Tests and docs
 

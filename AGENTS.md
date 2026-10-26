@@ -45,6 +45,9 @@ Layer-specific conventions load automatically from `.claude/rules/` when you tou
 - **Always**: run build + tests before finishing a change; regenerate `docs/api/openapi.v1.json` after any endpoint or contract change (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` — `OpenApiSnapshotTests` fails until you do); update `docs/features/<feature>.md` in the same change as anything under that feature's folders (`Features/<Feature>/`, `Domain/<Feature>/`, `Api.Contracts/<Feature>/`, `ExternalApis/<Feature>/`, its EF configurations and UI pages), and `docs/threat-model.md` when authentication, hardening or identity code changes — `scripts/check-docs-drift.sh` enforces both in CI (the edit hook runs the same check).
   - A bug fix starts with a test that fails without the fix.
   - A reviewer subagent's finding (`code-reviewer`, `architecture-guard`) is a claim: check it against the code or a test before acting on it, and push back when it would undo a decision an ADR records.
+  <!--#if (IncludeUI) -->
+  - A change to a page, a layout or a stylesheet under `src/Presentation/UI/` is read by the `ui-reviewer` subagent before it is finished: the design system (`docs/design-system.md`), `.claude/rules/ui.md`, accessibility, both themes. Its findings are claims like the others.
+  <!--#endif -->
   - A rule, skill or doc that misled you is corrected in the same change as the work it misled.
 - **Ask first**: adding a NuGet package (check the LICENSE CEILINGS block in `Directory.Packages.props`); adding a project.
 - **Never**: reference Infrastructure↔Persistence; hand-edit files under `Migrations/`; throw for expected failures instead of returning a `Result`; commit secrets; add MediatR / AutoMapper / FluentAssertions / MassTransit / Moq (the license ceilings — see `Directory.Packages.props`, ADR-0011).
