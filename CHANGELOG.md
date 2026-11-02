@@ -38,7 +38,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `scripts/check-adr-history.sh` on every pull request: deleting or renaming a record under `docs/adr/`
   fails, and so does any edit to an existing one other than its header's *Status*, *Superseded*,
   *Amended* and *Refines* lines, a *Prior art* line it gains, and a dated `## Amendment (YYYY-MM-DD)`
-  section appended at its end (ADR-0001's amendment of 2026-10-26).
+  section (an ordinal such as `## Second amendment (…)` counts) appended at its end (ADR-0001's
+  amendment of 2026-10-26).
   A template upgrade that appends amendments to the template's records passes. For a rewrite that is
   truly needed, create an `adr-rewrite` label in your repository and put it on the pull request, as
   with `docs-not-needed`.

@@ -4,7 +4,8 @@
 #   - added                 passes (check-adr-links.sh covers its number and its docs/INDEX.md line)
 #   - deleted or renamed    fails: a decision is superseded by a new ADR, never removed
 #   - modified              passes only when the old text is an exact prefix of the new text and what
-#                           follows it is a dated '## Amendment (YYYY-MM-DD)' section, so an amendment
+#                           follows it is a dated '## Amendment (YYYY-MM-DD)' section (an ordinal such as
+#                           '## Second amendment (…)' counts), so an amendment
 #                           is only ever appended at the end and nothing above it moves.
 # The header (the lines above the first '## ' heading) has three exceptions. Its Status, Superseded,
 # Amended and Refines lines ('- **Name**:') are left out of the comparison, so they may change. A
@@ -112,7 +113,7 @@ compare() {
         if (blank(new[j])) continue
         if (!first) first = at[j]
         if (directive(new[j])) continue
-        if (new[j] ~ /^## Amendment \([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)/) { print 0; exit }
+        if (new[j] ~ /^## ([A-Z][a-z]+ )?[Aa]mendment \([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)/) { print 0; exit }
         print at[j]; exit
       }
       print first
@@ -224,6 +225,11 @@ self_test() {
   amend "a second clarification"
   commit "a second amendment"
   expect "a second amendment after the first" pass amend
+
+  git checkout -q -b ordinal amend
+  printf '%s\n' '' '## Second amendment (2026-10-27): the form three records already use' '' 'Still appended.' >> "$adr"
+  commit "an ordinal amendment heading"
+  expect "an ordinal amendment heading after the first" pass amend
 
   git checkout -q -b crlf main
   amend "with Windows line endings"

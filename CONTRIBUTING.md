@@ -37,7 +37,8 @@ With a local SDK you can also `aspire run` the full app. See
   (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`).
 - New/changed features update their doc under `docs/features/` (`scripts/check-docs-drift.sh main`
   runs the CI check locally) and, if you made a load-bearing decision, add an ADR numbered below
-  0100 (`docs/adr/`, see the `new-adr` skill).
+  0100 (`docs/adr/`, see the `new-adr` skill). An accepted ADR is never edited, only amended at its
+  end (`scripts/check-adr-history.sh main` runs CI's check locally; the `adr-rewrite` label skips it).
 - A user-visible change gets a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), written
   for the people who generate projects from the template.
 - A change that copies or adapts someone else's work (an idea, a pattern, a layout, text or code)
