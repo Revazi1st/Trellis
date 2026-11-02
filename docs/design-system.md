@@ -425,9 +425,10 @@ written as `data-theme`; System removes both, and the page follows the system ag
   `<script>` in any `.razor` file); it is the one script besides Blazor's.
 - **`Layout/ThemeToggle.razor`**, the select, placed in `MainLayout`'s nav after the `AuthorizeView`.
   It reads the kept choice through `IJSRuntime` after its first render and writes a new one when the
-  select changes, never during a render (a prerender has no browser to call); a host that does not load
-  `theme.js` still renders it, on System. `IJSRuntime` belongs to the Components stack and works in
-  every render mode, so UI.Common stays render-mode-agnostic (ADR-0015).
+  select changes, never during a render (a prerender has no browser to call). A host that does not load
+  `theme.js` still renders it, on System, and a choice made there is shown but applies nothing: the read
+  and the write both catch the failed call, so the page goes on. `IJSRuntime` belongs to the Components
+  stack and works in every render mode, so UI.Common stays render-mode-agnostic (ADR-0015).
 
 The `/Error` page's layout has no switch (it renders statically, with no circuit to run one), yet it
 takes the kept theme: `theme.js` runs from the head every page shares. To drop the switch, delete the

@@ -19,8 +19,9 @@
     private const string LightTheme = "light";
     private const string DarkTheme = "dark";
 
-    // What the browser keeps, once the first render has read it; until then, and in a host without
-    // theme.js, the operating system's.
+    // What the browser keeps, once the first render has read it; until then the operating system's. A host
+    // without theme.js renders the switch on System and shows a choice made there without applying it: the
+    // read and the write are both caught, so the circuit lives on.
     private string _theme = SystemTheme;
 
     // Interop only after a render, never during one: a prerender has no browser behind it and throws.
@@ -46,7 +47,14 @@
     private async Task ChangeAsync(ChangeEventArgs args)
     {
         _theme = Known(args.Value);
-        await JS.InvokeVoidAsync("appTheme.set", _theme);
+        try
+        {
+            await JS.InvokeVoidAsync("appTheme.set", _theme);
+        }
+        catch (Exception exception) when (exception is JSException or InvalidOperationException)
+        {
+            // no appTheme in this host: the select shows the choice, nothing applies it, the circuit lives on
+        }
     }
 
     // Light and Dark are held; anything else is the system's, as theme.js reads it.

@@ -34,7 +34,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   Content-Security-Policy runs no inline script; `Layout/ThemeToggle.razor` reads and writes it through
   `IJSRuntime`, never during a render. A `select` now looks like an `input`. `docs/design-system.md`
   names the component (`.theme`, `.theme-select`) and says how to remove it; a browser flow in the
-  optional `UiTests` project proves the choice survives a reload and wins over a light system.
+  optional `UiTests` project proves the choice survives a reload and a link out of the error page and
+  wins over a light system, and that a host without the script keeps working.
 - **The design tokens export as JSON** for a design tool or a published design-system page:
   `./scripts/export-design-tokens.sh [-o tokens.json]` writes one object per token in `tokens.css`, in
   its order, with its value (a colour as its light and dark pair) and its usage, the token's *Role* in
