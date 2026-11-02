@@ -15,7 +15,7 @@ Migrations are generated, **never hand-edited** (see `.claude/rules/persistence.
 This runs `dotnet-ef` inside the SDK container (the tool is pinned in `.config/dotnet-tools.json`). The design-time factory (`AppDbContextFactory`) supplies a throwaway connection, so no database is needed to scaffold.
 
 After scaffolding:
-1. **Review** the generated `Up`/`Down` in `src/Infrastructure/Trellis.Persistence/Migrations/` — confirm the columns/constraints match your model change (e.g. value-object complex-type columns, strongly-typed-ID `uuid` columns, required FKs).
+1. **Review** the generated `Up`/`Down` in `src/Infrastructure/Trellis.Persistence/Migrations/` — confirm the columns/constraints match your model change (e.g. value-object complex-type columns, strongly-typed-ID `uuid` columns, required FKs). Review, never edit: when something is wrong, remove the migration (below), correct the model or its configuration, and generate it again. The edit hook asks before any edit under `Migrations/`; a data migration (SQL the model cannot express) is the one reason to allow it.
 2. Build + test: `./scripts/dotnet.sh test Trellis.slnx` — the IntegrationTests apply the migration against a real PostgreSQL container.
 
 To undo a not-yet-applied migration: `./scripts/ef.sh migrations remove --project src/Infrastructure/Trellis.Persistence`.

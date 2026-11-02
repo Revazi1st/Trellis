@@ -6,12 +6,36 @@
       "Bash(./scripts/ef.sh:*)",
       "Bash(./scripts/check-docs-drift.sh:*)",
       "Bash(./scripts/check-adr-history.sh:*)",
+      "Bash(./scripts/check-adr-links.sh:*)",
+      "Bash(./scripts/check-hooks.sh:*)",
       "Bash(git status)",
       "Bash(git diff:*)",
       "Bash(git log:*)"
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-edits.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-commit.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -19,6 +43,17 @@
           {
             "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/docs-drift.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/stop-tests.sh",
             "timeout": 10
           }
         ]

@@ -125,9 +125,9 @@ jobs:
 
           # The template does not ship its maintainer-only scripts (check-template-toggles.sh,
           # test-template.sh); a workflow step that runs one belongs in a block conditioned on the
-          # TemplateSource symbol (see ci.yml).
-          if grep -rInE 'check-template-toggles|test-template\.sh' .github; then
-            echo "::error::Generated workflows reference a maintainer-only script the template does not ship (listed above)."
+          # TemplateSource symbol (see ci.yml); a hook or an agent file that names one, likewise.
+          if grep -rInE 'check-template-toggles|test-template\.sh' .github .claude; then
+            echo "::error::Generated workflows or agent files reference a maintainer-only script the template does not ship (listed above)."
             fail=1
           fi
 
@@ -144,6 +144,11 @@ jobs:
       - name: Generated ADR link check
         working-directory: ../generated
         run: bash scripts/check-adr-links.sh
+
+      # The hooks run as executables, so this also proves the chmod post-action lists every one.
+      - name: Generated hook self-test
+        working-directory: ../generated
+        run: bash scripts/check-hooks.sh
 
       - name: Lint the generated workflows
         working-directory: ../generated

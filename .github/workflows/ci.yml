@@ -55,9 +55,10 @@ jobs:
 
       # A template installed from a NuGet package loses the Unix executable bit. The template's
       # chmod post-action restores it, but a host that skips post-actions (or a commit made on
-      # Windows) does not, so set it explicitly and generated projects work regardless.
+      # Windows) does not, so set it explicitly and generated projects work regardless. The hooks
+      # too: the hook self-test below runs them the way Claude Code does, as executables.
       - name: Make scripts executable
-        run: chmod +x scripts/*.sh
+        run: chmod +x scripts/*.sh .claude/hooks/*.sh
 
       - name: Setup .NET
         uses: ./.github/actions/setup-dotnet
@@ -70,6 +71,9 @@ jobs:
 
       - name: ADR link check
         run: ./scripts/check-adr-links.sh
+
+      - name: Hook self-test
+        run: ./scripts/check-hooks.sh
 
 #if (TemplateSource)
       # Template source only: TemplateSource is a constant that is false whenever dotnet new runs,

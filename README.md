@@ -570,8 +570,14 @@ plain text you can read too.
 - **Decisions** in [docs/adr/](docs/adr/), indexed in [docs/INDEX.md](docs/INDEX.md): each with its
   context and consequences and, where it takes an idea from another project, a *Prior art* line naming
   it. Your own start at 0100.
-- **Drift gates**: the edit hook and CI's docs-drift job, the link check, the OpenAPI snapshot and the
-  fitness tests turn the docs and the conventions into something a change can fail.
+- **Hooks** in `.claude/hooks/`, each backing a rule `AGENTS.md` states: the edit hook asks before a
+  hand edit of a generated file (a migration, the OpenAPI snapshot) and before a new project or package;
+  the commit hook asks for a Conventional Commits subject and, with gitleaks installed, refuses a staged
+  secret; a Stop hook reminds the agent once to run the tests it owes. `scripts/check-hooks.sh` tests
+  every decision, and CI runs it.
+- **Drift gates**: the docs-drift hook (once per report) and CI's docs-drift job, the link check, the
+  OpenAPI snapshot and the fitness tests turn the docs and the conventions into something a change can
+  fail.
 - **[.mcp.json](.mcp.json)** wires up the Microsoft Learn, Context7 and Playwright MCP servers; the index
   says when to reach for each, and points at the optional .NET plugins of `dotnet/skills` without
   enabling any.
@@ -653,7 +659,9 @@ describes planned work that is not in the template yet; the marker goes when it 
 **Agent setups we learned from**
 - [Aspire](https://github.com/microsoft/aspire) by Microsoft (MIT): the *Owns* / *Out of scope* / *Overlap* lines that open each reviewer in `.claude/agents/`, and their "zero duplicate feedback" rule, from its `reviewing-aspire-architecture` agent.
 - [ASP.NET Core](https://github.com/dotnet/aspnetcore) by Microsoft (MIT): the red/green proof a bug fix's test owes, that it "fails for the expected reason without the fix", from its Copilot instructions (`test-reviewer`).
-- [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) by Anthropic (Apache-2.0): a reviewer dedicated to a change's tests, the idea behind `test-reviewer` (`pr-test-analyzer` in its `pr-review-toolkit`), and the `security-reviewer` template in its `claude-code-setup` plugin, the starting point of ours.
+- [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) by Anthropic (Apache-2.0): a reviewer dedicated to a change's tests, the idea behind `test-reviewer` (`pr-test-analyzer` in its `pr-review-toolkit`), and the `security-reviewer` template in its `claude-code-setup` plugin, the starting point of ours; as ideas only, `hookify`'s `require-tests-run` Stop rule behind `stop-tests.sh` and `security-guidance`'s check at commit time behind `guard-commit.sh`.
+- [Claude Code documentation](https://code.claude.com/docs/en/hooks-guide) by Anthropic: the protect-files `PreToolUse` recipe that `guard-edits.sh` grew from, the best-practices example of a hook that guards the migrations folder, and the `stop_hook_active` guard that keeps `stop-tests.sh` from blocking twice in a row.
+- [gitleaks](https://github.com/gitleaks/gitleaks) by Zachary Rice (MIT): the documented pre-commit invocation (`gitleaks git --pre-commit --staged --redact`) that `guard-commit.sh` runs when gitleaks is installed.
 - [dotnet/skills](https://github.com/dotnet/skills) by Microsoft (MIT): the plugins `docs/INDEX.md` points at as optional installs (`dotnet`, `dotnet-test`, `dotnet-data`); nothing is copied or enabled.
 
 **Formats and conventions**
@@ -661,7 +669,7 @@ describes planned work that is not in the template yet; the marker goes when it 
 - [AGENTS.md](https://agents.md): the tool-neutral agent instruction file (ADR-0014).
 - [Contributor Covenant 2.1](https://www.contributor-covenant.org) (CC BY 4.0): `CODE_OF_CONDUCT.md`.
 - [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html): `CHANGELOG.md` and the release rules.
-- [Conventional Commits](https://www.conventionalcommits.org): the commit style in `CONTRIBUTING.md`.
+- [Conventional Commits](https://www.conventionalcommits.org): the commit style in `AGENTS.md`, which `CONTRIBUTING.md` points at and the commit hook checks.
 - Martin Fowler's [subcutaneous test](https://martinfowler.com/bliki/SubcutaneousTest.html) term, used for the integration-test host.
 
 **Services**

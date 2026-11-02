@@ -52,4 +52,6 @@ on a link or an anchor that points nowhere. A generated project gets neither the
 - **The docs-sync ladder gains *ask* rungs**: above the soft `PostToolUse` reminder, a `PreToolUse` hook
   may ask the person before an edit the conventions reserve to a generator or to their judgement. A hook
   ships with a self-test, and none is the only guard: each stays backed by an `AGENTS.md` instruction
-  and, where one exists, a CI check.
+  and, where one exists, a CI check. The first of them (the edit, commit and Stop hooks, and a
+  docs-drift reminder that speaks once per report) landed with `scripts/check-hooks.sh`, the self-test
+  CI runs on every push.

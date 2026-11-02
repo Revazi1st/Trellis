@@ -4,7 +4,7 @@ Agent entry point — read only what the task needs.
 
 ## Guides (humans & agents)
 - [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns, a request stage by stage, domain versus integration events and what each delivery step guarantees, shipping `Api.Contracts` as a package, scheduled use cases
-- [development.md](development.md) — prerequisites, commands, running the app, the testing map (what each project proves, the shared `tests/TestSupport/` files, running part of the suite, which helper for which goal: `InvoiceFactory`, the drivers, `ShouldBeSuccess()`), when the build fails (RSLT001, CS9057), when a request fails, vulnerable packages, bumping the SDK
+- [development.md](development.md) — prerequisites, commands, running the app, the testing map (what each project proves, the shared `tests/TestSupport/` files, running part of the suite, which helper for which goal: `InvoiceFactory`, the drivers, `ShouldBeSuccess()`), when the build fails (RSLT001, CS9057), when a request fails, vulnerable packages, bumping the SDK, the agent hooks (what each decides, adding one, turning them off)
 <!--#if (IncludeUI) -->
 - [design-system.md](design-system.md) — the UI's tokens in two themes, the components the pages are built from, the contrast and voice rules, the tests that hold them, re-skinning, themes, mocks
 <!--#endif -->
@@ -58,7 +58,12 @@ Agent entry point — read only what the task needs.
 Each opens with what it owns, what it leaves to another reviewer and how they overlap, so a change read by several gets each point once. Their findings are claims to check against the code before acting on them.
 
 ## Hooks (`.claude/hooks/`, run by Claude Code from `.claude/settings.json`)
-- [docs-drift.sh](../.claude/hooks/docs-drift.sh) — `PostToolUse` on `Edit|Write`: runs `scripts/check-docs-drift.sh --working-tree` and, when code changed without the doc that describes it, adds a reminder to the agent's context; a non-blocking reminder (CI's docs-drift job is the guarantee)
+- [guard-edits.sh](../.claude/hooks/guard-edits.sh) — `PreToolUse` on `Edit|Write`: asks the person before an edit under `Migrations/` or of `docs/api/openapi.v1.json` (the reason names the regenerate command), a new `.csproj`, or an edit that adds a package (`Directory.Packages.props`, a `.csproj`) or a `<Project>` to the `.slnx`; silent otherwise
+- [guard-commit.sh](../.claude/hooks/guard-commit.sh) — `PreToolUse` on `Bash`, for a `git commit`: denies when gitleaks, if installed, finds a secret in the staged changes; asks when the subject is not `type(scope): subject`
+- [stop-tests.sh](../.claude/hooks/stop-tests.sh) — `Stop`: blocks the stop once when the session changed `.cs` or `.razor` code under `src/` or `tools/` and ran no `dotnet test`
+- [docs-drift.sh](../.claude/hooks/docs-drift.sh) — `PostToolUse` on `Edit|Write`: runs `scripts/check-docs-drift.sh --working-tree` and, when code changed without the doc that describes it, adds a reminder to the agent's context, once per session for a given report; a non-blocking reminder (CI's docs-drift job is the guarantee)
+
+They share the helpers in `common.sh`; `scripts/check-hooks.sh` is their self-test, run by CI, and `docs/development.md` (*Agent hooks*) says how to add one or turn them off.
 
 ## MCP servers and optional plugins
 `.mcp.json` declares three servers for the project; an interactive Claude Code session asks before it uses them (a headless `claude -p` run loads them without asking).

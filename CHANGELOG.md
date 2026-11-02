@@ -58,6 +58,16 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   one; `async void` already was (S3168). One fix came with
   them: a `Retry-After` the API writes as a date now reads as the wait from the registered clock (the
   UI's `TimeProvider`), not the machine's.
+- **Claude Code asks before the edits your conventions reserve, and commits in style.** Three new hooks
+  in `.claude/hooks/`: `guard-edits.sh` asks you before an agent hand-edits a migration or
+  `docs/api/openapi.v1.json` (the prompt names the command that regenerates it), creates a project or
+  adds a package, and stays silent for a version bump; `guard-commit.sh` asks when a `git commit -m`
+  subject is not `type(scope): subject` and, when gitleaks is installed, refuses a commit whose staged
+  changes hold a secret; `stop-tests.sh` stops the agent once when it changed code under `src/` or
+  `tools/` and ran no test. The docs-drift reminder now speaks once per session for a given report.
+  `AGENTS.md` gains a *Commits* line (a generated project had no commit convention before) and names
+  the hook behind each boundary it backs; `docs/development.md` gains *Agent hooks* (what each decides,
+  how to add one, how to turn them off); `scripts/check-hooks.sh` tests every decision, and CI runs it.
 
 ## [0.1.1] - 2026-10-26
 
