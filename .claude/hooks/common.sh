@@ -89,10 +89,20 @@ json_escape() {
 
 # decide deny|ask REASON: prints the PreToolUse decision Claude Code reads from stdout and exits 0.
 # "ask" shows REASON to the person, who allows or refuses the tool call; "deny" refuses it and shows
-# REASON to the agent.
+# REASON to the agent. A WARNING the hook set on the way rides along as the object's systemMessage
+# (shown to the person), since stdout must hold that one object and nothing else.
 decide() {
-  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"%s"}}\n' \
-    "$1" "$(json_escape "$2")"
+  local warning=""
+  [ -z "${WARNING:-}" ] || warning="$(printf ',"systemMessage":"%s"' "$(json_escape "$WARNING")")"
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"%s"}%s}\n' \
+    "$1" "$(json_escape "$2")" "$warning"
+  exit 0
+}
+
+# warn_and_exit: prints a WARNING the hook set as {"systemMessage":"…"}, the one way a hook that exits
+# 0 reaches the person (its stderr is never shown), and exits 0. Silent when there is none.
+warn_and_exit() {
+  [ -z "${WARNING:-}" ] || printf '{"systemMessage":"%s"}\n' "$(json_escape "$WARNING")"
   exit 0
 }
 
@@ -111,30 +121,81 @@ count_in() {
     END { print n }'
 }
 
-# project_root: sets PROJECT_DIR to CLAUDE_PROJECT_DIR (the working directory when it is unset), with
-# slashes for backslashes and no trailing slash, and PROJECT_DIR_REAL to the same folder with symbolic
-# links resolved. Fails when the folder does not exist.
+# normal_path PATH: prints PATH with slashes for backslashes, a run of slashes as one, "." segments
+# dropped and each "name/.." pair resolved, from the text alone (the folders need not exist). A ".."
+# with nothing left to climb out of is kept, so the path stays outside the folder it climbed above.
+# Claude Code resolves "<project>/src/../docs/x" and "<project>//docs/x" to "<project>/docs/x", and so
+# must a rule that names that file. Prints nothing for an empty PATH.
+normal_path() {
+  [ -n "$1" ] || return 0
+  local rest="${1//\\//}/" lead="" out="" seg
+  case "$rest" in /*) lead=/ ;; esac
+  while [ -n "$rest" ]; do
+    seg="${rest%%/*}"
+    rest="${rest#*/}"
+    case "$seg" in
+      '' | .) ;;
+      ..)
+        case "$out" in
+          '' | .. | */..) out="${out:+$out/}.." ;;
+          */*) out="${out%/*}" ;;
+          *) out="" ;;
+        esac ;;
+      *) out="${out:+$out/}$seg" ;;
+    esac
+  done
+  printf '%s\n' "$lead$out"
+}
+
+# project_root: sets PROJECT_DIR to CLAUDE_PROJECT_DIR (the working directory when it is unset),
+# through normal_path, and PROJECT_DIR_REAL to the same folder with symbolic links resolved. Fails when
+# the folder does not exist.
 project_root() {
-  PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-  PROJECT_DIR="${PROJECT_DIR//\\//}"
-  [ "$PROJECT_DIR" = / ] || PROJECT_DIR="${PROJECT_DIR%/}"
+  PROJECT_DIR="$(normal_path "${CLAUDE_PROJECT_DIR:-$PWD}")"
   PROJECT_DIR_REAL=""
   [ -n "$PROJECT_DIR" ] && [ -d "$PROJECT_DIR" ] || return 1
   PROJECT_DIR_REAL="$(cd "$PROJECT_DIR" 2>/dev/null && pwd -P)" || PROJECT_DIR_REAL="$PROJECT_DIR"
 }
 
-# relative_path PATH: prints PATH with slashes for backslashes, relative to the project folder when it
-# lies inside it (under either spelling project_root found), and as given otherwise (still absolute).
-relative_path() {
-  local p="${1//\\//}" d
-  for d in "${PROJECT_DIR:-}" "${PROJECT_DIR_REAL:-}"; do
-    [ -n "$d" ] || continue
-    case "$p" in
-      "$d"/*) printf '%s\n' "${p#"$d"/}"; return 0 ;;
+# work_root: sets WORK_DIR to the top folder of the git checkout that holds the input's cwd, spelled
+# as cwd spells it, and WORK_DIR_REAL to it with symbolic links resolved. That is the checkout Claude
+# works in: cwd follows Claude into a worktree (and through a cd), while CLAUDE_PROJECT_DIR stays at the
+# folder the session started in. Both are empty when cwd is missing or outside a checkout, or git is
+# not installed.
+work_root() {
+  local cwd cdup
+  WORK_DIR=""
+  WORK_DIR_REAL=""
+  cwd="$(normal_path "$(json_string cwd)")"
+  [ -n "$cwd" ] && [ -d "$cwd" ] || return 0
+  cdup="$(git -C "$cwd" rev-parse --show-cdup 2>/dev/null)" || return 0
+  while [ -n "$cdup" ]; do
+    case "$cdup" in
+      ../*) cwd="${cwd%/*}"; cdup="${cdup#../}" ;;
+      *) return 0 ;;
     esac
   done
-  case "$p" in
-    ./*) p="${p#./}" ;;
-  esac
-  printf '%s\n' "$p"
+  [ -n "$cwd" ] && [ -d "$cwd" ] || return 0
+  WORK_DIR="$cwd"
+  WORK_DIR_REAL="$(cd "$cwd" 2>/dev/null && pwd -P)" || WORK_DIR_REAL="$cwd"
+}
+
+# relative_path PATH: sets REL to PATH (through normal_path) relative to the deepest of WORK_DIR and
+# PROJECT_DIR, under either spelling, that holds it, and REL_ROOT to that folder. When none holds it,
+# REL is PATH as normalised (still absolute, or relative as given) and REL_ROOT is empty.
+relative_path() {
+  local p d
+  p="$(normal_path "$1")"
+  REL="$p"
+  REL_ROOT=""
+  for d in "${WORK_DIR:-}" "${WORK_DIR_REAL:-}" "${PROJECT_DIR:-}" "${PROJECT_DIR_REAL:-}"; do
+    [ -n "$d" ] || continue
+    case "$p" in
+      "$d"/*)
+        if [ "${#d}" -gt "${#REL_ROOT}" ]; then
+          REL_ROOT="$d"
+          REL="${p#"$d"/}"
+        fi ;;
+    esac
+  done
 }

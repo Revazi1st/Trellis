@@ -64,7 +64,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   adds a package, and stays silent for a version bump; `guard-commit.sh` asks when a `git commit -m`
   subject is not `type(scope): subject` and, when gitleaks is installed, refuses a commit whose staged
   changes hold a secret; `stop-tests.sh` stops the agent once when it changed code under `src/` or
-  `tools/` and ran no test. The docs-drift reminder now speaks once per session for a given report.
+  `tools/` and ran no test (a subagent's edits and test runs count). The hooks work in the checkout
+  Claude is in, a worktree included, and from a project path with a space, and a failed hook never
+  blocks an edit or a command. The docs-drift reminder now speaks once per session for a given report.
   `AGENTS.md` gains a *Commits* line (a generated project had no commit convention before) and names
   the hook behind each boundary it backs; `docs/development.md` gains *Agent hooks* (what each decides,
   how to add one, how to turn them off); `scripts/check-hooks.sh` tests every decision, and CI runs it.

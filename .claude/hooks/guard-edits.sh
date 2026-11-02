@@ -8,9 +8,11 @@
 #   an edit that adds a <Project> to a *.slnx             a new project (ask first)
 # A version bump, a project moved between solution folders and every other file pass without a
 # prompt. The reason names the command that does the job instead, and the person may still allow the
-# edit (a data migration, say). Only paths inside the project count, matched relative to it, so a
-# folder named Migrations anywhere else is ordinary code. scripts/check-hooks.sh has a case for every
-# decision.
+# edit (a data migration, say). Only paths inside the project, or inside the git checkout Claude works
+# in (the input's cwd: a worktree, say), count. The path is normalised first (src/../, //, /./), and the
+# two path rules match at any depth below that folder, so a worktree's copy under .claude/worktrees/
+# asks too, while a Migrations folder outside a Persistence project is ordinary code.
+# scripts/check-hooks.sh has a case for every decision.
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || exit 0
 # shellcheck source=common.sh
@@ -18,24 +20,27 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || exit 0
 
 read_input || exit 0
 project_root || exit 0
+work_root
 tool="$(json_string tool_name)"
 path="$(json_string file_path)"
 [ -n "$path" ] || exit 0
-rel="$(relative_path "$path")"
+relative_path "$path"
+rel="$REL"
 case "$rel" in
-  /* | [A-Za-z]:/* | ../*) exit 0 ;;   # outside the project
+  '' | /* | [A-Za-z]:/* | .. | ../*) exit 0 ;;   # outside the project and the checkout
 esac
-file="$PROJECT_DIR/$rel"
+file="${REL_ROOT:-$PROJECT_DIR}/$rel"
 
-migrations='^src/Infrastructure/[^/]+\.Persistence/Migrations/'
-if [[ "$rel" =~ $migrations ]]; then
-  project="${rel%%/Migrations/*}"
+migrations='/(src/Infrastructure/[^/]+\.Persistence)/Migrations/'
+if [[ "/$rel" =~ $migrations ]]; then
+  project="${BASH_REMATCH[1]}"
   decide ask "$rel is a generated migration: migrations are generated, never hand-edited (AGENTS.md, .claude/rules/persistence.md). To change one that is not applied anywhere yet, remove it and generate it again: ./scripts/ef.sh migrations remove --project $project, change the model, then ./scripts/ef.sh migrations add <Name> --project $project (the add-migration skill). A data migration (SQL the model cannot express) is the one reason to edit by hand."
 fi
 
-if [ "$rel" = docs/api/openapi.v1.json ]; then
-  decide ask "docs/api/openapi.v1.json is the snapshot of the OpenAPI document the API serves (ADR-0025), regenerated rather than edited: UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh test tests/Trellis.ApiTests writes it from the running code, and OpenApiSnapshotTests fails while the file and the code disagree. Change the endpoint or the contract instead."
-fi
+case "/$rel" in
+  */docs/api/openapi.v1.json)
+    decide ask "$rel is the snapshot of the OpenAPI document the API serves (ADR-0025), regenerated rather than edited: UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh test tests/Trellis.ApiTests writes it from the running code, and OpenApiSnapshotTests fails while the file and the code disagree. Change the endpoint or the contract instead." ;;
+esac
 
 # The text before and after the change: the replaced and the replacing string of an Edit; the file on
 # disk (empty when it does not exist yet) and the new content of a Write.
@@ -49,7 +54,8 @@ before_after() {
   fi
 }
 
-package='<(Global)?Package(Reference|Version)[[:space:]]+Include='
+# Include may follow other attributes and have blanks around its =; the element may span lines.
+package='<(Global)?Package(Reference|Version)[[:space:]]([^>]*[[:space:]])?Include[[:space:]]*='
 case "$rel" in
   *.csproj | Directory.Packages.props | */Directory.Packages.props)
     case "$rel" in

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # PostToolUse(Edit|Write): if code changed without the doc that describes it, remind (non-blocking).
 # The code-to-doc mapping lives in one place, scripts/check-docs-drift.sh, run here over the
-# uncommitted changes; CI runs the same script over the whole branch, which is the hard guarantee.
+# uncommitted changes of the checkout Claude works in (the input's cwd, a worktree included, when it
+# holds the script; the project folder otherwise); CI runs the same script over the whole branch,
+# which is the hard guarantee.
 # A session hears a given report once: the hook keeps the session id and a checksum of the last report
 # it sent in the git folder (git rev-parse --git-path claude-hooks/docs-drift.last) and stays silent
 # while both are unchanged; a clean run deletes the record, and without git it reminds every time.
@@ -13,7 +15,11 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || exit 0
 
 read_input || true
 session="$(json_string session_id)"
-cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
+project_root || exit 0
+work_root
+dir="$PROJECT_DIR"
+[ -n "$WORK_DIR" ] && [ -f "$WORK_DIR/scripts/check-docs-drift.sh" ] && dir="$WORK_DIR"
+cd "$dir" 2>/dev/null || exit 0
 
 script=scripts/check-docs-drift.sh
 [ -f "$script" ] || exit 0
