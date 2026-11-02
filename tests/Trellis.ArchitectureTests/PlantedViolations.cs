@@ -9,7 +9,8 @@ namespace Trellis.ArchitectureTests;
 /// <summary>
 /// Deliberately broken shapes for the positive controls: each reflection rule is also run against the
 /// shape it exists to refuse, because a rule that passes a clean codebase and a broken check alike proves
-/// nothing. Nothing registers these types, and no production rule scans this assembly.
+/// nothing; where a rule could over-reach, the nearest shape it must accept sits beside them. Nothing
+/// registers these types, and no production rule scans this assembly.
 /// </summary>
 internal static class PlantedViolations
 {
@@ -57,4 +58,31 @@ internal static class PlantedViolations
 
     /// <summary>An aggregate anyone can build unchecked: a public constructor, and no <c>Create</c> factory returning a Result.</summary>
     internal sealed class AggregateWithoutFactory(PlantedId id) : AggregateRoot<PlantedId>(id);
+
+    /// <summary>An aggregate with its Result factory and a second way in that hands it back bare, unchecked.</summary>
+    internal sealed class AggregateWithBareFactory : AggregateRoot<PlantedId>
+    {
+        private AggregateWithBareFactory(PlantedId id)
+            : base(id)
+        {
+        }
+
+        public static Result<AggregateWithBareFactory> Create(PlantedId id) => new AggregateWithBareFactory(id);
+
+        public static AggregateWithBareFactory FromSnapshot(PlantedId id) => new(id);
+    }
+
+    /// <summary>
+    /// The shape the factory rule accepts: an aggregate only its parent creates, through an internal
+    /// <c>Create</c> the parent's own <c>Result</c>-returning method calls.
+    /// </summary>
+    internal sealed class AggregateCreatedByItsParent : AggregateRoot<PlantedId>
+    {
+        private AggregateCreatedByItsParent(PlantedId id)
+            : base(id)
+        {
+        }
+
+        internal static Result<AggregateCreatedByItsParent> Create(PlantedId id) => new AggregateCreatedByItsParent(id);
+    }
 }

@@ -59,9 +59,10 @@ internal static class RepositorySource
 
     /// <summary>
     /// Every <c>*.razor</c> and <c>*.css</c> file under the given repository-relative directories
-    /// (<c>src/Presentation/UI</c>, say), Razor, HTML and CSS comments stripped and line endings normalised
-    /// (<see cref="StripMarkupComments"/>), so a scan reads the same text on every operating system and
-    /// prose that names a colour never trips a rule. A directory that does not exist is skipped.
+    /// (<c>src/Presentation/UI</c>, say), Razor, HTML, CSS and full-line C# comments stripped and line endings
+    /// normalised (<see cref="StripMarkupComments"/>), so a scan reads the same text on every operating system
+    /// and prose that names a colour or a forbidden call never trips a rule. A directory that does not exist
+    /// is skipped.
     /// </summary>
     public static IEnumerable<SourceFile> RazorAndCssFiles(params string[] directories)
     {
@@ -198,9 +199,10 @@ internal static class RepositorySource
 
     /// <summary>
     /// Normalises line endings to <c>\n</c>, then removes Razor (<c>@* *@</c>), HTML (<c>&lt;!-- --&gt;</c>)
-    /// and CSS (<c>/* */</c>) comments, keeping line breaks so positions still map to lines. A C# line
-    /// comment inside an <c>@code</c> block stays: <c>//</c> is also part of every address in the markup,
-    /// and the C# stripper's string rules do not hold in markup text.
+    /// and CSS (<c>/* */</c>) comments, and a C# line comment that fills its line (<c>//</c> or <c>///</c>
+    /// after the indentation, as an <c>@code</c> block writes one), keeping line breaks so positions still map
+    /// to lines. A <c>//</c> after other text on its line stays: it is also part of every address in the
+    /// markup, and the C# stripper's string rules do not hold in markup text.
     /// </summary>
     internal static string StripMarkupComments(string source)
     {
@@ -209,6 +211,24 @@ internal static class RepositorySource
         int i = 0;
         while (i < source.Length)
         {
+            if (i == 0 || source[i - 1] == '\n')
+            {
+                int first = i;
+                while (first < source.Length && source[first] is ' ' or '\t')
+                {
+                    first++;
+                }
+
+                if (source.AsSpan(first).StartsWith("//", StringComparison.Ordinal))
+                {
+                    int lineEnd = source.IndexOf('\n', first);
+                    int stopAt = lineEnd < 0 ? source.Length : lineEnd;
+                    code.Append(' ', stopAt - i);
+                    i = stopAt;
+                    continue;
+                }
+            }
+
             ReadOnlySpan<char> rest = source.AsSpan(i);
             (string open, string close) = rest switch
             {

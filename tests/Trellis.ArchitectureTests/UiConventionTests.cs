@@ -11,8 +11,9 @@ namespace Trellis.ArchitectureTests;
 /// <list type="bullet">
 /// <item>no endpoint <c>[Authorize]</c>: client-token Blazor Server has no server scheme to challenge
 /// (ADR-0007), so a page inherits <c>ProtectedPage</c> and gates by permission with <c>AuthorizeView</c>;</item>
-/// <item>only the typed clients talk to the API: nothing in the UI builds an <c>HttpClient</c> of its own, and
-/// no page or layout POSTs, which would skip <c>ApiCall</c>'s failure mapping and the fresh
+/// <item>only the typed clients talk to the API: nothing in the UI but <c>AddSharedUi</c> builds an
+/// <c>HttpClient</c>, no component takes one (or the factory that makes one) from the container, and no
+/// page or layout POSTs, which would skip <c>ApiCall</c>'s failure mapping and the fresh
 /// <c>Idempotency-Key</c> every logical POST carries;</item>
 /// <item>no inline <c>&lt;script&gt;</c>: the host's Content-Security-Policy is <c>script-src 'self'</c>, so a
 /// script lives in a file.</item>
@@ -28,8 +29,15 @@ public sealed partial class UiConventionTests
     /// <summary>UI files that may carry an endpoint <c>[Authorize]</c>. Empty on purpose: there is no scheme to challenge (ADR-0007).</summary>
     private static readonly Dictionary<string, string> EndpointAuthorizeAllowlist = new(StringComparer.Ordinal);
 
-    /// <summary>UI files that may build an <c>HttpClient</c> or POST from a page or layout. Empty on purpose: the typed clients do both.</summary>
-    private static readonly Dictionary<string, string> RawHttpAllowlist = new(StringComparer.Ordinal);
+    /// <summary>
+    /// UI files that may build or take an <c>HttpClient</c>, or POST from a page or layout, each with its reason.
+    /// Only <c>AddSharedUi</c> builds one; everything else reaches the API through a typed client.
+    /// </summary>
+    private static readonly Dictionary<string, string> RawHttpAllowlist = new(StringComparer.Ordinal)
+    {
+        [$"{UiDirectory}/Trellis.UI.Common/DependencyInjection.cs"] =
+            "AddSharedUi builds the typed clients' HttpClient over the factory-owned handler chain and the bearer handler",
+    };
 
     /// <summary>Razor files that may carry an inline script. Empty on purpose: the Content-Security-Policy refuses one.</summary>
     private static readonly Dictionary<string, string> InlineScriptAllowlist = new(StringComparer.Ordinal);
@@ -81,16 +89,24 @@ public sealed partial class UiConventionTests
     }
 
     /// <summary>
-    /// Positive control for the raw-HTTP scan: an <c>HttpClient</c> built anywhere in the UI, and a POST from a
-    /// page or a layout, are found; the typed client's own POST and a page calling the typed client are not.
+    /// Positive control for the raw-HTTP scan: an <c>HttpClient</c> built anywhere in the UI, in each spelling
+    /// (the target-typed <c>new(…)</c> the IDE's IDE0090 suggests, an initializer without parentheses), one
+    /// a component injects, the factory, and a POST from a page or a layout, are found; the typed client's own
+    /// POST, a page calling the typed client and a page injecting one are not.
     /// </summary>
     [Theory]
     [InlineData("Services/Planted.cs", "var client = new HttpClient();", true)]
     [InlineData("Services/Planted.cs", "using var client = new System.Net.Http.HttpClient(handler);", true)]
+    [InlineData("Services/Planted.cs", "HttpClient client = new(handler);", true)]
+    [InlineData("Services/Planted.cs", "var client = new HttpClient { BaseAddress = uri };", true)]
+    [InlineData("Pages/Planted.razor", "@inject HttpClient Http", true)]
+    [InlineData("Pages/Planted.razor", "@inject IHttpClientFactory Factory", true)]
+    [InlineData("Layout/Planted.cs", "[Inject] private HttpClient Http { get; set; } = default!;", true)]
     [InlineData("Pages/Planted.razor", "await Http.PostAsJsonAsync(\"api/v1/invoices\", _model);", true)]
     [InlineData("Layout/Planted.razor", "await Http.PostAsync(\"api/v1/auth/logout\", content: null);", true)]
     [InlineData("Services/Planted.cs", "=> ApiCall.SendAsync(ct => httpClient.PostAsJsonAsync(\"api/v1/auth/logout\", request, ct), cancellationToken);", false)]
     [InlineData("Pages/Planted.razor", "ApiResult<bool> result = await OrderApi.PayAsync(Id, _order.Version);", false)]
+    [InlineData("Pages/Planted.razor", "@inject IInvoiceApiClient InvoiceApi", false)]
     public void The_scan_flags_a_raw_HttpClient_and_a_POST_from_a_page(string path, string code, bool flagged)
         => RawHttpIn(new SourceFile($"{UiDirectory}/Trellis.UI.Common/{path}", code)).Any().ShouldBe(flagged);
 
@@ -130,6 +146,7 @@ public sealed partial class UiConventionTests
 
     private static IEnumerable<int> RawHttpIn(SourceFile file)
         => NewHttpClient().Matches(file.Code)
+            .Concat(InjectedHttpClient().Matches(file.Code))
             .Concat(IsPageOrLayout(file.RelativePath) ? PostCall().Matches(file.Code) : Enumerable.Empty<Match>())
             .Select(static m => m.Index)
             .Order();
@@ -140,8 +157,23 @@ public sealed partial class UiConventionTests
     [GeneratedRegex(@"\[\s*(?:global::)?(?:\w+\.)*Authorize(?:Attribute)?\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex EndpointAuthorize();
 
-    [GeneratedRegex(@"\bnew\s+(?:global::)?(?:System\.Net\.Http\.)?HttpClient\s*\(", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    /// <summary>
+    /// An <c>HttpClient</c> built here: <c>new HttpClient(…)</c> or <c>new HttpClient { … }</c>, qualified or not,
+    /// and the target-typed <c>HttpClient client = new(…)</c>.
+    /// </summary>
+    [GeneratedRegex(
+        @"\bnew\s+(?:global::)?(?:System\.Net\.Http\.)?HttpClient\s*[({]|\bHttpClient\s+\w+\s*=\s*new\s*\(",
+        RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex NewHttpClient();
+
+    /// <summary>
+    /// An <c>HttpClient</c> taken from the container by a component (<c>@inject</c>, an <c>[Inject]</c> property),
+    /// or <c>IHttpClientFactory</c> named at all: neither carries the base address or the bearer handler.
+    /// </summary>
+    [GeneratedRegex(
+        @"@inject\s+(?:global::)?(?:System\.Net\.Http\.)?HttpClient\b|\[\s*Inject\b[^\]]*\][^;{=]*\bHttpClient\b|\bIHttpClientFactory\b",
+        RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex InjectedHttpClient();
 
     [GeneratedRegex(@"\.Post(?:AsJson)?Async\s*\(", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex PostCall();

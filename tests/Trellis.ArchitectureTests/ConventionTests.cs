@@ -253,7 +253,8 @@ public sealed partial class ConventionTests
         aggregates.ShouldNotBeEmpty();   // Invoice anchors the convention
 
         aggregates.SelectMany(AggregateFactoryViolations).ShouldBeEmpty(
-            "an aggregate has a public static Create(...) returning Result<TAggregate> and a private constructor for EF (domain.md)");
+            "an aggregate has a static Create(...) returning Result<TAggregate> (internal when only its parent aggregate creates it), "
+            + "no other public static method that hands back the bare aggregate, and a private constructor for EF (domain.md)");
     }
 
     [Fact]
@@ -261,9 +262,18 @@ public sealed partial class ConventionTests
         => AggregateFactoryViolations(typeof(PlantedViolations.AggregateWithoutFactory))
             .ShouldBe(
             [
-                "AggregateWithoutFactory has no public static Create(...) returning Result<AggregateWithoutFactory>",
+                "AggregateWithoutFactory has no static Create(...) returning Result<AggregateWithoutFactory>",
                 "AggregateWithoutFactory(PlantedId) is a public constructor",
             ]);
+
+    [Fact]
+    public void The_aggregate_factory_rule_refuses_a_second_way_in_that_hands_back_the_bare_aggregate()
+        => AggregateFactoryViolations(typeof(PlantedViolations.AggregateWithBareFactory))
+            .ShouldBe(["AggregateWithBareFactory.FromSnapshot hands back the bare aggregate"]);
+
+    [Fact]
+    public void The_aggregate_factory_rule_accepts_an_internal_Create_that_a_parent_aggregate_calls()
+        => AggregateFactoryViolations(typeof(PlantedViolations.AggregateCreatedByItsParent)).ShouldBeEmpty();
 
     [Fact]
     public void Cancellation_filters_key_on_the_token_not_only_the_exception_type()
@@ -372,7 +382,10 @@ public sealed partial class ConventionTests
         // The clock is the registered TimeProvider (ADR-0009), so a test stands at any instant it names
         // (FakeTimeProvider, ApiFactory.Time, the UI harness's manual clock) and a deadline computed in one
         // place agrees with one computed in another. An id is its type's New(): a version-7 Guid, ordered by
-        // time, where a random one scatters the primary key's index (domain.md, Strongly-typed IDs).
+        // time, where a random one scatters the primary key's index (domain.md, Strongly-typed IDs). A text
+        // scan cannot follow `using static System.DateTime;` or a type alias (`using Clock = System.DateTime;`),
+        // so neither is written (application.md); a string literal that names the call is flagged, literals
+        // being kept.
         List<SourceFile> scanned = [.. RepositorySource.CSharpFiles("src", "tools"), .. RazorFiles("src", "tools")];
 
         scanned.ShouldNotBeEmpty("the clock scan found no file under src/ or tools/; is the repository root right?");
@@ -383,18 +396,21 @@ public sealed partial class ConventionTests
     }
 
     /// <summary>
-    /// Positive control for the clock and id scan, which expects zero hits: each way to read the machine's
-    /// clock or mint a random Guid is found; the TimeProvider, an id type's New(), a version-7 Guid and the
-    /// other members of the same types are not. The scan reads <c>src/</c> and <c>tools/</c> only, so the
-    /// rows are written out whole.
+    /// Positive control for the clock and id scan, which expects zero hits: each member that reads the
+    /// machine's clock (today's date included) or mints a random Guid is found, called or as a method group;
+    /// the TimeProvider, an id type's New(), a version-7 Guid and the other members of the same types are not.
+    /// The scan reads <c>src/</c> and <c>tools/</c> only, so the rows are written out whole.
     /// </summary>
     [Theory]
     [InlineData("var now = DateTime.UtcNow;", true)]
     [InlineData("var now = DateTime.Now;", true)]
+    [InlineData("var today = DateTime.Today;", true)]
     [InlineData("var now = DateTimeOffset.UtcNow;", true)]
     [InlineData("var now = System.DateTimeOffset.Now;", true)]
     [InlineData("var id = Guid.NewGuid();", true)]
+    [InlineData("Func<Guid> mint = Guid.NewGuid;", true)]
     [InlineData("<p>@DateTime.Now.Year</p>", true)]
+    [InlineData("<p>@DateTime.Today</p>", true)]
     [InlineData("var now = time.GetUtcNow();", false)]
     [InlineData("var id = OrderId.New();", false)]
     [InlineData("var key = Guid.CreateVersion7();", false)]
@@ -498,15 +514,25 @@ public sealed partial class ConventionTests
     }
 
     /// <summary>
-    /// What the aggregate factory rule refuses in <paramref name="aggregate"/>: no public static <c>Create</c>
-    /// returning <c>Result&lt;TAggregate&gt;</c>, and each public constructor.
+    /// What the aggregate factory rule refuses in <paramref name="aggregate"/>: no static <c>Create</c> returning
+    /// <c>Result&lt;TAggregate&gt;</c> (public, or internal for an aggregate only its parent creates; Application
+    /// reaches that one only through the parent), each public static method that hands back the bare aggregate
+    /// or a task of it, and each public constructor.
     /// </summary>
     private static IEnumerable<string> AggregateFactoryViolations(Type aggregate)
     {
         Type result = typeof(Result<>).MakeGenericType(aggregate);
-        if (!aggregate.GetMethods(BindingFlags.Public | BindingFlags.Static).Any(m => m.Name == "Create" && m.ReturnType == result))
+        Type[] bare = [aggregate, typeof(Task<>).MakeGenericType(aggregate)];
+        MethodInfo[] statics = aggregate.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly);
+
+        if (!statics.Any(m => m.Name == "Create" && m.ReturnType == result))
         {
-            yield return $"{aggregate.Name} has no public static Create(...) returning Result<{aggregate.Name}>";
+            yield return $"{aggregate.Name} has no static Create(...) returning Result<{aggregate.Name}>";
+        }
+
+        foreach (MethodInfo method in statics.Where(m => m.IsPublic && bare.Contains(m.ReturnType)))
+        {
+            yield return $"{aggregate.Name}.{method.Name} hands back the bare aggregate";
         }
 
         foreach (ConstructorInfo constructor in aggregate.GetConstructors(BindingFlags.Public | BindingFlags.Instance))
@@ -564,7 +590,8 @@ public sealed partial class ConventionTests
     [GeneratedRegex(@"\bthrow\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Throw();
 
-    [GeneratedRegex(@"\bDateTime(?:Offset)?\.(?:Utc)?Now\b|\bGuid\.NewGuid\(", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    /// <summary>A machine-clock member (<c>DateTime.Today</c> too) or <c>Guid.NewGuid</c>, called or as a method group.</summary>
+    [GeneratedRegex(@"\bDateTime\.(?:UtcNow|Now|Today)\b|\bDateTimeOffset\.(?:UtcNow|Now)\b|\bGuid\.NewGuid\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex ClockOrRandomId();
 
     /// <summary>

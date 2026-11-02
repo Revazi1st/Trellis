@@ -46,11 +46,14 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 - **More of the rules are tests now** (`tests/Trellis.ArchitectureTests`). The Domain, the use cases
   (event handlers aside) and the endpoints never `throw`; time comes from the registered `TimeProvider`
   and ids from their type's `New()`, never `DateTime.UtcNow` or `Guid.NewGuid()`; nothing silences RSLT001
-  (no pragma, `[SuppressMessage]`, `NoWarn` or lowered severity); tests advance a clock instead of
-  sleeping; every aggregate is created through a `static Create` returning `Result`; every project under
-  `src/` is anchored in `ArchitectureRules.cs`, ServiceDefaults included; and, with `--include-ui`, no page
-  uses an endpoint `[Authorize]`, a raw `HttpClient` POST or an inline script. Each scan has a positive
-  control and an allowlist that names its reason, and `.claude/rules/` names the test behind each rule.
+  (no pragma, bare or naming it, `[SuppressMessage]`, `NoWarn`, analyzer or warnings-as-errors switched
+  off, or lowered severity, a bulk one included; `.editorconfig` now names RSLT001's severity itself, so
+  no bulk severity line reaches it); tests advance a clock instead of sleeping; every aggregate is
+  created through a `static Create` returning `Result`, with no public static method that hands it back
+  bare; every project under `src/` is anchored in `ArchitectureRules.cs`, ServiceDefaults included; and,
+  with `--include-ui`, no page uses an endpoint `[Authorize]`, an `HttpClient` of its own, a POST of its
+  own or an inline script. Each scan has a positive control and an allowlist that names its reason, and
+  `.claude/rules/` names the test behind each rule.
   A `Console` write in a library project is now a build warning (S106), so a Release build fails on
   one; `async void` already was (S3168). One fix came with
   them: a `Retry-After` the API writes as a date now reads as the wait from the registered clock (the
