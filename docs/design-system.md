@@ -30,10 +30,10 @@ values and never a rule. Each colour is written once as a light and a dark value
 | Token | Role | Used by |
 |---|---|---|
 | `--bg` | the page | `body` |
-| `--surface` | a raised panel: an input, a secondary button, a tinted callout's or pill's base, the host's error bar | `input`, `.secondary`, `.callout`, the status pills' tints, `#blazor-error-ui` |
+| `--surface` | a raised panel: an input, a secondary button, a tinted callout's or pill's base, the host's error bar | `input`, `select`, `.secondary`, `.callout`, the status pills' tints, `#blazor-error-ui` |
 | `--surface-2` | a second step up: the neutral status pill's fill, and a code span's or a table header's ground when a component takes one | `.pill` |
 | `--line` | the hairline: borders and table rules | `--hairline`, the filter pills, the status pill, the secondary button, the table rows |
-| `--ink` | body text | `body`, `input`, the brand, `.secondary`, `.pill`, the error bar |
+| `--ink` | body text | `body`, `input`, `select`, the brand, `.secondary`, `.pill`, the error bar |
 | `--muted` | secondary text: labels, hints, the signed-in user, the pager's count | `.user`, `.hint`, `.label`, `.summary dt`, `.pager span` |
 | `--accent` | links, the primary button's fill, the focus ring, the current filter's fill, a callout's default tone | `a`, `.nav-link`, `.back`, `.filter`, `.link-button`, `button`, `.callout`, `:focus-visible` |
 | `--on-accent` | text on an accent fill | `button`, `.filter[aria-current]` |
@@ -51,7 +51,7 @@ values and never a rule. Each colour is written once as a light and a dark value
 | `--font-sans` | the face of everything but code: the system stack | `body` |
 | `--font-mono` | code spans and request ids | `code` |
 | `--text-xs` | 12 px: uppercase labels | `.label` |
-| `--text-sm` | 14 px: hints, meta, form labels, the signed-in user, the pager's count, a status | `.hint`, `.user`, `.form label`, `.pager span`, `.validation-message`, `.filter`, `.pill` |
+| `--text-sm` | 14 px: hints, meta, form labels, the signed-in user, the pager's count, a status | `.hint`, `.user`, `.form label`, `.pager span`, `.validation-message`, `.filter`, `.pill`, `.theme-select` |
 | `--text-md` | 16 px: body | `body` |
 | `--text-lg` | 18 px: the brand and section headings | `.brand`, `h2` |
 | `--text-xl` | 24 px: the page heading | `h1` |
@@ -66,17 +66,17 @@ values and never a rule. Each colour is written once as a light and a dark value
 
 | Token | Role | Used by |
 |---|---|---|
-| `--space-1` | 4 px | the gap inside a label, the filter pill's vertical padding, a table cell's below the breakpoint |
-| `--space-2` | 8 px | cell padding, the gap between actions and filters, the status pill's side padding |
+| `--space-1` | 4 px | the gap inside a label, the filter pill's and the theme switch's vertical padding, a table cell's below the breakpoint |
+| `--space-2` | 8 px | cell padding, the gap between actions and filters, the status pill's and the theme switch's side padding |
 | `--space-3` | 12 px | the gap between form fields, the back link's margin |
 | `--space-4` | 16 px | the page's side gutter, the top bar's gap and padding |
 | `--space-6` | 24 px | the content's vertical padding, a callout's side padding |
 | `--space-10` | 40 px | the error bar's room for its dismiss button |
-| `--radius-sm` | 6 px: inputs and buttons | `input`, `button` |
+| `--radius-sm` | 6 px: inputs and buttons | `input`, `select`, `button` |
 | `--radius-md` | 10 px: panels | `.callout` |
 | `--radius-lg` | 16 px: a card wider than a form | a card, when a component takes one |
 | `--radius-pill` | a full round | `.filter`, `.pill` |
-| `--hairline` | the one-pixel line in `--line` | `.topbar`, `input`, `.grid th`, `.grid td`, `.filter`, `.pill`, `.secondary` |
+| `--hairline` | the one-pixel line in `--line` | `.topbar`, `input`, `select`, `.grid th`, `.grid td`, `.filter`, `.pill`, `.secondary` |
 | `--focus-ring` | the focus outline: two pixels of accent | `:focus-visible` |
 | `--focus-offset` | the gap between the outline and the element | `:focus-visible` |
 | `--page-width` | the measure of the page shell | `.page` |
@@ -112,7 +112,7 @@ stylesheet styles, what the markup owes accessibility, and how it behaves on a n
 `.page` centres the content at `--page-width` with a `--space-4` gutter; `.topbar` is a flex row under a
 hairline holding `.brand` (the product name, in `--ink`) and `.nav` (`aria-label="Main"`), whose
 `.nav-link`s are accent text, the current one underlined by the framework's `.active`; `.user` shows the
-signed-in name in `--muted`; `.content` is the `<main>`.
+signed-in name in `--muted`; the [theme switch](#theme-switch) ends the nav; `.content` is the `<main>`.
 
 ```html
 <div class="page">
@@ -127,6 +127,31 @@ signed-in name in `--muted`; `.content` is the `<main>`.
 The top bar wraps rather than overflowing at any width: nothing in it has a fixed width. A page sets its
 `<PageTitle>` and has one `h1`, its other headings in order below it; the error panel's `h1` takes the
 page's place only when the page has failed.
+
+### Theme switch
+
+`.theme` is the `label` that wraps the switch at the end of the top bar's nav, an inline flex row;
+`.theme-select` is its `select`, the compact control: `--text-sm` with `--space-1` by `--space-2` padding,
+on the input's `--surface`, hairline and `--radius-sm`. Its options are System, Light and Dark; the one
+the browser keeps is selected once the page is interactive, System until then
+([Themes and the switch](#themes-and-the-switch)).
+
+```html
+<label class="theme">
+  <span class="visually-hidden">Theme</span>
+  <select class="theme-select" aria-label="Colour theme">
+    <option value="system" selected>System</option>
+    <option value="light">Light</option>
+    <option value="dark">Dark</option>
+  </select>
+</label>
+```
+
+A select, never a button that cycles: its three options are announced by name, and nobody has to know
+what comes after the current one. It carries a label, visible or visually hidden (`.visually-hidden`
+here, with an `aria-label` that names it to a screen reader), is operated from the keyboard like any
+select and shows the focus ring. It sits outside `AuthorizeView`, so it is there signed out too, and it
+wraps with the top bar on a narrow screen.
 
 ### Buttons
 
@@ -149,10 +174,10 @@ An icon-only button carries an `aria-label`. A navigation is an `<a>` or a `NavL
 ### Forms
 
 `.form` stacks its fields at `--form-width`; each `label` wraps its input and its message, so the label
-needs no `for`. `input` sits on `--surface` inside a hairline; `input[aria-invalid="true"]` turns the
-hairline `--danger`. `.validation-message` (under its input) and `.validation-errors` (a list) are the
-framework's classes for what validation says, in `--danger` and `--text-sm`; `.hint` is secondary help
-in `--muted`; `.error` is the form's one `role="alert"` paragraph.
+needs no `for`. `input` and `select` sit on `--surface` inside a hairline; `input[aria-invalid="true"]`
+turns the hairline `--danger`. `.validation-message` (under its input) and `.validation-errors` (a list)
+are the framework's classes for what validation says, in `--danger` and `--text-sm`; `.hint` is
+secondary help in `--muted`; `.error` is the form's one `role="alert"` paragraph.
 
 ```html
 <EditForm Model="_model" OnValidSubmit="SubmitAsync" class="form">
@@ -360,10 +385,11 @@ stylesheet against this document, `.claude/rules/ui.md` and the accessibility ea
 browser at phone and laptop width when one is running, and reports; run it before a UI change is
 finished. Its findings are claims to check against the code or one of the tests above.
 
-To see both themes, switch the operating system's appearance: the tokens follow it through
-`color-scheme`. To hold one theme while you look, set `data-theme="light"` or `"dark"` on `<html>` in the
-browser's developer tools. The page tests in `tests/*.ApiTests/Ui/` render the pages' markup without a
-browser; a browser flow lives in the optional `UiTests` project.
+To see both themes, use the [theme switch](#theme-switch) in the top bar: Light and Dark hold one, and
+System follows the operating system's appearance through `color-scheme`. Setting `data-theme="light"`
+or `"dark"` on `<html>` in the browser's developer tools does the same for one page without keeping it.
+The page tests in `tests/*.ApiTests/Ui/` render the pages' markup without a browser; a browser flow
+lives in the optional `UiTests` project.
 
 ## Re-skinning
 
@@ -382,9 +408,30 @@ pair with its `--on-*`, and the contrast fact decides whether it may be text.
 
 `:root` declares `color-scheme: light dark`, so every `light-dark()` value follows the operating
 system. `:root[data-theme="light"]` and `:root[data-theme="dark"]` set only `color-scheme`, so an
-attribute on `<html>` holds one theme regardless of the system. Nothing shipped sets that attribute
-yet; a switch in the top bar that writes it, remembers it in the browser and offers System, Light and
-Dark is the next step on this system, and when it lands this section names it.
+attribute on `<html>` holds one theme regardless of the system: `data-theme` wins over
+`prefers-color-scheme`, and without it the system decides.
+
+The [theme switch](#theme-switch) at the end of the top bar's nav writes that attribute. It offers
+System, Light and Dark: Light or Dark is kept in the browser's `localStorage` under the key `theme` and
+written as `data-theme`; System removes both, and the page follows the system again. Two files make it:
+
+- **`wwwroot/theme.js`** in UI.Common. UI.Web's `App.razor` loads it in `<head>`, before the two
+  stylesheets, as a plain blocking `<script src>`: it runs before the first paint, so a kept Dark never
+  flashes light. It reads the key inside `try` (a private window may refuse storage, and the page then
+  follows the system), accepts only `light` or `dark`, puts the choice back after an enhanced navigation
+  (which rewrites `<html>`'s attributes), and exposes one global, `window.appTheme`, with `get()`
+  (`"light"`, `"dark"` or `"system"`) and `set(value)`. It is a file, not an inline script, because the
+  web host's Content-Security-Policy is `script-src 'self'` (`UiConventionTests` refuses an inline
+  `<script>` in any `.razor` file); it is the one script besides Blazor's.
+- **`Layout/ThemeToggle.razor`**, the select, placed in `MainLayout`'s nav after the `AuthorizeView`.
+  It reads the kept choice through `IJSRuntime` after its first render and writes a new one when the
+  select changes, never during a render (a prerender has no browser to call); a host that does not load
+  `theme.js` still renders it, on System. `IJSRuntime` belongs to the Components stack and works in
+  every render mode, so UI.Common stays render-mode-agnostic (ADR-0015).
+
+The `/Error` page's layout has no switch (it renders statically, with no circuit to run one), yet it
+takes the kept theme: `theme.js` runs from the head every page shares. To drop the switch, delete the
+two files, the script tag, `<ThemeToggle />` and the `.theme` rules; the tokens follow the system again.
 
 ## Mocks and the export
 

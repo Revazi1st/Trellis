@@ -45,7 +45,7 @@ Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 
 | Flag | Default | What it adds |
 |---|---|---|
-| `--include-ui` | on | Blazor web UI (UI.Common + UI.Web), orchestrated by Aspire, with its design system (its tokens exportable as JSON for a design tool) and the `ui-reviewer` agent |
+| `--include-ui` | on | Blazor web UI (UI.Common + UI.Web), orchestrated by Aspire, with its design system (light and dark themes and a switch the user keeps, its tokens exportable as JSON for a design tool) and the `ui-reviewer` agent |
 | `--use-redis` | off | Redis distributed cache as a HybridCache L2 |
 | `--use-serilog` | off | Serilog structured logging (console) alongside OpenTelemetry |
 | `--use-multitenancy` | off | Tenant seam: `tenant` claim on the principal, `TenantId` column + `"Tenant"` query filter on every aggregate root ¹ |
