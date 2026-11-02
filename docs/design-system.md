@@ -349,7 +349,22 @@ Dark is the next step on this system, and when it lands this section names it.
 
 A mock of a new screen is an HTML page that links the two stylesheets and uses the components above:
 hand one to an agent with the component names and it can draft the page as an artifact before any
-Razor is written, in both themes, at phone and laptop width. The tokens are also a data set: a script
-that writes them as `tokens.json` (name, light and dark value, role) for a design tool or a published
-design-system page is the planned export; until it exists, the [Tokens](#tokens) tables and
-`tokens.css` are the source.
+Razor is written, in both themes, at phone and laptop width.
+
+The tokens are also a data set. `scripts/export-design-tokens.sh` writes them as JSON for a design tool
+or a published design-system page to import: an array with one object per custom property `tokens.css`
+declares under `:root`, in the file's order, each a `name`, a `value` and a `usage`. A colour's value is
+its pair, `{"light": "#rrggbb", "dark": "#rrggbb"}` in lower case; any other value is the string as
+written, its whitespace collapsed; the usage is the token's *Role* cell in the [Tokens](#tokens) tables,
+empty for a token without a row. The same files give the same bytes.
+
+```bash
+./scripts/export-design-tokens.sh                  # the JSON on stdout
+./scripts/export-design-tokens.sh -o tokens.json   # or into a file
+./scripts/export-design-tokens.sh --tokens <file> --doc <file>   # another token file and doc
+```
+
+The export is generated, never edited: `tokens.css` and the tables stay the source, and
+`DesignSystemTests` (`The_token_export_names_every_token_with_both_values`) runs the script and holds
+every name and value to `tokens.css` and every usage to the tables, so it cannot drift from either. It
+is POSIX `sh` and `awk` with nothing to install; the fact skips on Windows, where there is no `/bin/sh`.

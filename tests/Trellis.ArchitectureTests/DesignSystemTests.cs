@@ -1,6 +1,8 @@
 #if (IncludeUI)
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Shouldly;
 using Xunit;
@@ -18,7 +20,9 @@ namespace Trellis.ArchitectureTests;
 /// <item>every class a page uses has a rule, every rule has its subsection in the doc, and the doc names
 /// no class the stylesheet lacks;</item>
 /// <item>every <c>var(--x)</c> a stylesheet reads is declared;</item>
-/// <item>the doc's token tables and the token file name the same tokens.</item>
+/// <item>the doc's token tables and the token file name the same tokens;</item>
+/// <item>the token export (<c>scripts/export-design-tokens.sh</c>) writes every token in the file's order,
+/// a colour as its light and dark value, with the Role cell of its row in the doc.</item>
 /// </list>
 /// Each fact has a positive control below it: a scan that passes a clean codebase and a broken check
 /// alike proves nothing. The UI folder is found by shape, <c>src/Presentation/UI/*.UI.Common/wwwroot</c>,
@@ -35,6 +39,9 @@ public sealed partial class DesignSystemTests
     private const string ComponentsHeading = "## Components";
     private const double TextFloor = 4.5;
     private const double RingFloor = 3.0;
+    private const string ExportScript = "scripts/export-design-tokens.sh";
+    private const int ExportTimeoutSeconds = 30;
+    private const string WindowsSkipReason = "the export is a POSIX shell script; the Windows leg skips it";
 
     private static readonly string DesignDocument = Path.Combine("docs", "design-system.md");
 
@@ -314,6 +321,136 @@ public sealed partial class DesignSystemTests
         => NamesOnOneSideOnly(new HashSet<string>(["bg", "fg"], StringComparer.Ordinal), new HashSet<string>(["bg", "ink"], StringComparer.Ordinal))
             .ShouldBe([$"--fg is in the Tokens tables of {DesignDocument} but not in {TokenFileName}", $"--ink is in {TokenFileName} but not in the Tokens tables of {DesignDocument}"]);
 
+    [Fact]
+    public async Task The_token_export_names_every_token_with_both_values()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), WindowsSkipReason);
+
+        ExportRun run = await RunExportAsync();
+        run.ExitCode.ShouldBe(0, $"{ExportScript} failed: {run.Errors}");
+
+        List<ExportedToken> exported = ExportedTokens(run.Output);
+        TokenSheet sheet = Tokens.Value;
+        Dictionary<string, string> roles = RoleCells(SectionLines(TokensHeading));
+        roles.ShouldNotBeEmpty($"no `--token` row with a Role cell under '{TokensHeading}' in {DesignDocument}");
+
+        exported.Select(static token => token.Name).ShouldBe(
+            sheet.Declarations.Select(static d => "--" + d.Name),
+            $"{ExportScript} writes one object per token {TokenFileName} declares under :root, in the file's order");
+
+        List<string> violations = ExportMismatches(sheet, exported, roles);
+
+        violations.ShouldBeEmpty(
+            $"{ExportScript} writes each colour in {TokenFileName} as its light and dark value, any other value as written with its "
+            + $"whitespace collapsed, and the usage from the Role cell of the token's row in {DesignDocument}");
+    }
+
+    /// <summary>
+    /// Positive control for the export: a planted token file and doc give exactly this JSON. A colour is its
+    /// pair in lower case, however it is spaced; any other value is the string as written, a quote and a
+    /// backslash escaped and a value over two lines on one; a comment, a theme block and another rule add
+    /// nothing; a token with no row in the Tokens tables, or a row only below them, has an empty usage.
+    /// </summary>
+    [Fact]
+    public async Task The_token_export_writes_each_value_as_written_and_escapes_it()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), WindowsSkipReason);
+
+        const string plantedTokens = """
+            /* A planted token file. */
+            :root {
+              color-scheme: light dark;
+              --ink: light-dark(#111111, #eeeeee);
+              --line: light-dark(#D8E3DA,#21321E);
+              /* --ghost: 1px; is prose */
+              --space-1: 0.25rem;
+              --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+              --glyph: "\2190";
+              --hairline: 1px
+                solid var(--line);
+            }
+
+            :root[data-theme="dark"] { color-scheme: dark; }
+            .card { --local: 1px; }
+            """;
+        const string plantedDocument = """
+            # Design system
+
+            ## Tokens
+
+            | Token | Role | Used by |
+            |---|---|---|
+            | `--ink` | Text | `body` |
+            | `--font-sans` | the "system" face, \ on every platform | `body` |
+
+            ## Components
+
+            | `--space-1` | below the Tokens tables, so not its role | |
+            """;
+        const string expected = """
+            [
+              {
+                "name": "--ink",
+                "value": {
+                  "light": "#111111",
+                  "dark": "#eeeeee"
+                },
+                "usage": "Text"
+              },
+              {
+                "name": "--line",
+                "value": {
+                  "light": "#d8e3da",
+                  "dark": "#21321e"
+                },
+                "usage": ""
+              },
+              {
+                "name": "--space-1",
+                "value": "0.25rem",
+                "usage": ""
+              },
+              {
+                "name": "--font-sans",
+                "value": "system-ui, -apple-system, \"Segoe UI\", sans-serif",
+                "usage": "the \"system\" face, \\ on every platform"
+              },
+              {
+                "name": "--glyph",
+                "value": "\"\\2190\"",
+                "usage": ""
+              },
+              {
+                "name": "--hairline",
+                "value": "1px solid var(--line)",
+                "usage": ""
+              }
+            ]
+            """;
+
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DirectoryInfo planted = Directory.CreateTempSubdirectory("design-tokens-");
+        try
+        {
+            string tokens = Path.Combine(planted.FullName, TokenFileName);
+            string document = Path.Combine(planted.FullName, "design-system.md");
+            await File.WriteAllTextAsync(tokens, plantedTokens, cancellationToken);
+            await File.WriteAllTextAsync(document, plantedDocument, cancellationToken);
+
+            ExportRun run = await RunExportAsync("--tokens", tokens, "--doc", document);
+
+            run.ExitCode.ShouldBe(0, $"{ExportScript} failed: {run.Errors}");
+            run.Output.ShouldBe(expected.ReplaceLineEndings("\n") + "\n");
+            ExportedTokens(run.Output).ShouldContain(
+                static token => string.Equals(token.Value, "system-ui, -apple-system, \"Segoe UI\", sans-serif", StringComparison.Ordinal),
+                "the quotes in a value survive as JSON a parser reads back");
+        }
+        finally
+        {
+            planted.Delete(recursive: true);
+        }
+    }
+
     private static DirectoryInfo FindWwwRoot()
     {
         var ui = new DirectoryInfo(Path.Combine(RepositorySource.Root.FullName, UiDirectory));
@@ -443,6 +580,134 @@ public sealed partial class DesignSystemTests
             .Concat(inFile.Where(name => !inTables.Contains(name)).Order(StringComparer.Ordinal)
                 .Select(name => $"--{name} is in {TokenFileName} but not in the Tokens tables of {DesignDocument}"));
 
+    /// <summary>
+    /// Runs the export with <c>/bin/sh</c> from the repository root, as a shell on Linux or macOS does, and
+    /// hands back its exit code, its standard output and its standard error.
+    /// </summary>
+    private static async Task<ExportRun> RunExportAsync(params string[] arguments)
+    {
+        var start = new ProcessStartInfo("/bin/sh")
+        {
+            WorkingDirectory = RepositorySource.Root.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+            UseShellExecute = false,
+        };
+        start.ArgumentList.Add(ExportScript);
+        foreach (string argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using Process process = Process.Start(start) ?? throw new InvalidOperationException($"/bin/sh did not start {ExportScript}");
+        Task<string> output = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        Task<string> errors = process.StandardError.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken).WaitAsync(TimeSpan.FromSeconds(ExportTimeoutSeconds), cancellationToken);
+        }
+        catch (TimeoutException timeout)
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException($"{ExportScript} did not finish in {ExportTimeoutSeconds} s", timeout);
+        }
+
+        return new ExportRun(process.ExitCode, await output, await errors);
+    }
+
+    /// <summary>The export's objects: each name with its value (a string, or a colour's pair) and its usage.</summary>
+    private static List<ExportedToken> ExportedTokens(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        return [.. document.RootElement.EnumerateArray().Select(static token =>
+        {
+            JsonElement value = token.GetProperty("value");
+            bool isPair = value.ValueKind == JsonValueKind.Object;
+            return new ExportedToken(
+                token.GetProperty("name").GetString() ?? string.Empty,
+                isPair ? null : value.GetString(),
+                isPair ? new ColourPair(value.GetProperty(Light).GetString() ?? string.Empty, value.GetProperty(Dark).GetString() ?? string.Empty) : null,
+                token.GetProperty("usage").GetString() ?? string.Empty);
+        })];
+    }
+
+    /// <summary>
+    /// The Role cell of each token's row in the given doc lines, by token name: the row whose first cell is
+    /// one whole <c>`--name`</c> span, the column a header row heads <c>Role</c> (the second until one does),
+    /// the first row of a name winning. The export reads the same cells.
+    /// </summary>
+    private static Dictionary<string, string> RoleCells(IEnumerable<(int Number, string Text)> lines)
+    {
+        Dictionary<string, string> roles = new(StringComparer.Ordinal);
+        int column = 1;
+        foreach ((_, string text) in lines)
+        {
+            string row = text.Trim();
+            if (!row.StartsWith('|'))
+            {
+                continue;
+            }
+
+            row = row[1..];
+            string[] cells = [.. (row.EndsWith('|') ? row[..^1] : row).Split('|').Select(static cell => cell.Trim())];
+            List<string> names = [.. TokenNamesIn(cells[0])];
+            if (names.Count == 1 && string.Equals(cells[0], $"`--{names[0]}`", StringComparison.Ordinal))
+            {
+                roles.TryAdd(names[0], column < cells.Length ? cells[column] : string.Empty);
+                continue;
+            }
+
+            int heading = Array.FindIndex(cells, static cell => string.Equals(cell, "Role", StringComparison.Ordinal));
+            if (heading >= 0)
+            {
+                column = heading;
+            }
+        }
+
+        return roles;
+    }
+
+    /// <summary>
+    /// Each exported token held to the file and the doc, the names already matched in order: a colour's light
+    /// and dark value equal to its pair, any other value equal to the declaration with its whitespace
+    /// collapsed, and the usage equal to the Role cell of its row ("" without one).
+    /// </summary>
+    private static List<string> ExportMismatches(TokenSheet sheet, List<ExportedToken> exported, Dictionary<string, string> roles)
+    {
+        List<string> mismatches = [];
+        foreach ((Declaration declared, ExportedToken token) in sheet.Declarations.Zip(exported))
+        {
+            string name = "--" + declared.Name;
+            if (sheet.Colours.TryGetValue(declared.Name, out ColourPair? pair))
+            {
+                if (token.Colour != pair)
+                {
+                    mismatches.Add($"{name}: exported {Described(token)}, but {TokenFileName} has light {pair.LightValue}, dark {pair.DarkValue}");
+                }
+            }
+            else if (!string.Equals(token.Value, Collapsed(declared.Value), StringComparison.Ordinal))
+            {
+                mismatches.Add($"{name}: exported {Described(token)}, but {TokenFileName} has \"{Collapsed(declared.Value)}\"");
+            }
+
+            string role = roles.GetValueOrDefault(declared.Name, string.Empty);
+            if (!string.Equals(token.Usage, role, StringComparison.Ordinal))
+            {
+                mismatches.Add($"{name}: exported usage \"{token.Usage}\", but its Role cell in {DesignDocument} is \"{role}\"");
+            }
+        }
+
+        return mismatches;
+    }
+
+    private static string Described(ExportedToken token)
+        => token.Colour is { } pair ? $"light {pair.LightValue}, dark {pair.DarkValue}" : $"\"{token.Value}\"";
+
+    private static string Collapsed(string value) => WhiteSpaceRun().Replace(value.Trim(), " ");
+
     /// <summary>The lines of one level-two section of the design doc, up to the next level-two heading, with their 1-based numbers.</summary>
     private static IEnumerable<(int Number, string Text)> SectionLines(string heading)
     {
@@ -520,7 +785,15 @@ public sealed partial class DesignSystemTests
     [GeneratedRegex(@"^##\s", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex SectionEnd();
 
+    [GeneratedRegex(@"\s+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex WhiteSpaceRun();
+
     private sealed record Hit(int Index, string Text);
+
+    private sealed record ExportRun(int ExitCode, string Output, string Errors);
+
+    /// <summary>One object of the export: <see cref="Value"/> for a token written as a string, <see cref="Colour"/> for a pair.</summary>
+    private sealed record ExportedToken(string Name, string? Value, ColourPair? Colour, string Usage);
 
     /// <summary>A colour token's two values.</summary>
     private sealed record ColourPair(string LightValue, string DarkValue)
