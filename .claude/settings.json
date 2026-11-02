@@ -8,6 +8,7 @@
       "Bash(./scripts/check-adr-history.sh:*)",
       "Bash(./scripts/check-adr-links.sh:*)",
       "Bash(./scripts/check-hooks.sh:*)",
+      "Bash(./scripts/export-design-tokens.sh:*)",
       "Bash(git status)",
       "Bash(git diff:*)",
       "Bash(git log:*)"
