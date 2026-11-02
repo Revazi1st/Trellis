@@ -425,6 +425,65 @@ the Npgsql EF Core provider, `dotnet-ef`, `Asp.Versioning.Http`, `Serilog.AspNet
 proposes none of those majors (`.github/dependabot.yml` ignores them, as it ignores the SDK's), so the
 move is one change you make on purpose; their patches and minors keep arriving before and after it.
 
+## Agent hooks
+
+Claude Code runs the scripts in `.claude/hooks/` around an agent's tool calls: `.claude/settings.json`
+wires them, `docs/INDEX.md` lists them. Each backs a rule `AGENTS.md` already states, and none is the only
+guard. They are rungs of the ladder ADR-0014 describes: a soft reminder, an *ask* before an edit the
+conventions reserve to a generator or to someone's judgement, the `AGENTS.md` instruction, and the CI
+check, which is the only guarantee.
+
+| Hook | Runs on | Decides |
+|---|---|---|
+| `guard-edits.sh` | `PreToolUse`, `Edit` and `Write` | **asks** before an edit under `src/Infrastructure/*.Persistence/Migrations/` or of `docs/api/openapi.v1.json` (the reason names the command that regenerates it), a new `.csproj`, an edit that adds a package to `Directory.Packages.props` or a `.csproj`, and an edit that adds a `<Project>` to the `.slnx`; a version bump, a moved project and every other file pass without a prompt |
+| `guard-commit.sh` | `PreToolUse`, `Bash` | for a `git commit`: **denies** it when gitleaks is installed and finds a secret in the staged changes of the checkout the commit happens in; **asks** when the `-m` subject is not `type(scope): subject` (`AGENTS.md`, *Commits*); when gitleaks fails without a finding, the commit goes on and a message tells you the changes were not scanned |
+| `stop-tests.sh` | `Stop` | **blocks** the agent's stop once when the session changed a `.cs` or `.razor` file under `src/` or `tools/` and ran no `dotnet test`, asking for the run or a line saying why none is needed |
+| `docs-drift.sh` | `PostToolUse`, `Edit` and `Write` | **reminds** (context for the agent, never a block) when code changed without the doc that describes it, once per session for a given report |
+
+An *ask* puts the reason in front of you, and you allow or refuse the call. The hooks follow Claude
+into a worktree: the edit and commit hooks and the docs-drift reminder work in the git checkout that
+holds the session's current folder, not only in the folder the session started in. What the hooks do
+not see: `guard-commit.sh` reads the command before it runs, so `git add … && git commit` is scanned as
+staged before the add, a message from a file (`-F`), an editor or `--amend` without `-m` is not
+checked, and a `git commit` only quoted or echoed (`grep "git commit -m"`) is not a commit;
+`stop-tests.sh` counts a test run anywhere in the session, the subagents' transcripts included, and
+only a Bash command that starts `dotnet test` or `./scripts/dotnet.sh test` is a run (a quoted mention,
+as in `grep -rn "dotnet test" docs/`, is not). `./scripts/check-hooks.sh` is their self-test: it feeds
+each hook the JSON Claude Code sends for every decision above, and for the silence next to each, checks
+that every command in `.claude/settings.json` starts from a project path with a space, and fails on
+any other answer. CI runs it on every push.
+
+The hooks are Bash scripts. On Windows they need Git for Windows, whose Git Bash Claude Code runs them
+with; without it, the two `PreToolUse` hooks fail, and `"onFailure": "continue"` in
+`.claude/settings.json` lets the edit or the command go ahead rather than blocking it.
+
+To add a hook, or a decision to one:
+
+1. A `case` in the hook that owns the event and the tool, or a new script beside them that sources
+   `common.sh` (`read_input`, `json_string`, `decide`, `json_escape`) and exits 0 with no output whenever
+   it is unsure. No `jq`, only POSIX `awk`, `sed` and `grep`, so it runs on macOS, Linux and Git Bash.
+2. A row in `scripts/check-hooks.sh` for the decision, and one for the nearby edit that must stay silent.
+3. A line in `docs/INDEX.md` (*Hooks*) with its event and decision and, for a new script, its entry in
+   `.claude/settings.json`, the placeholder quoted (`"\"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/<name>.sh"`).
+   `scripts/check-adr-links.sh` fails when the INDEX line is missing or when `settings.json` names a
+   script that does not exist; nothing checks that a new script is wired, so read `settings.json` back.
+<!--#if (TemplateSource) -->
+
+In the template's repository a new script also joins the `+x` list of the "make scripts executable"
+post-action in `.template.config/template.json`; without it a generated project gets the script without
+its executable bit, which Template CI's generated hook self-test reports.
+<!--#endif -->
+
+To turn the hooks off for yourself, set `"disableAllHooks": true` in `.claude/settings.local.json`
+(git-ignored, so only your sessions change). A team that squash-merges commits each pull request's
+title, which no hook sees; a three-line step in a `ci.yml` job that runs on `pull_request` checks it:
+
+```yaml
+      - name: Pull request title
+        env: { TITLE: "${{ github.event.pull_request.title }}" }
+        run: printf '%s\n' "$TITLE" | grep -Eq '^(feat|fix|docs|test|refactor|perf|build|ci|chore|style|revert)(\([a-z0-9][a-z0-9./-]*\))?!?:[ ][^[:space:]]'
+```
+
 ## Conventions
 
 Layer rules live in `.claude/rules/` (they also guide AI agents). The short version: dependencies point inward, failures are `Result`s not exceptions, migrations are generated not hand-edited, and no commercially-licensed packages (see the ceilings in `Directory.Packages.props`).

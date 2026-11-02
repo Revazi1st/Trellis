@@ -93,8 +93,11 @@ deployed; it never ships in a generated project.
 
 ## Commit style
 
-Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `ci:`, `build:`; Dependabot's
-are `build(deps):`, set in `.github/dependabot.yml`). Keep each commit green and self-contained.
+[AGENTS.md](AGENTS.md) (*Boundaries*, **Commits**) states the commit style for people and agents alike,
+and ships with every generated project: Conventional Commits, `type(scope): subject` in the imperative,
+each commit green and self-contained (Dependabot's are `build(deps):`, set in `.github/dependabot.yml`).
+In a Claude Code session the `git commit` hook asks when a subject does not fit (`docs/development.md`,
+*Agent hooks*).
 
 ## Reporting security issues
 
