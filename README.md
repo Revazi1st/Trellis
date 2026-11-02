@@ -448,7 +448,8 @@ violation it must catch (`PlantedViolations`).
 - A pull request that changes a feature's code without its `docs/features/<feature>.md`, or
   authentication and hardening code without [docs/threat-model.md](docs/threat-model.md), fails
   `scripts/check-docs-drift.sh`; `scripts/check-adr-links.sh` resolves every ADR reference, rule glob
-  and relative link.
+  and relative link; `scripts/check-adr-history.sh` fails one that changes an accepted ADR anywhere but
+  in a dated amendment appended at its end.
 - Line coverage has a floor per ring: Core 90 %, Infrastructure 85 %, Presentation 75 %, Shared 80 %.
 - Every pull request also tests what the template generates. Template CI creates a solution per toggle
   leg (default, no UI, UI tests without the UI, all options, and Redis, Serilog and multi-tenancy each

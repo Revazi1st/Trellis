@@ -48,10 +48,12 @@ published release, so it never documents a version nuget.org does not have.
    public repositories on every plan; a private repository needs GitHub Enterprise Cloud. On any
    other private repository the `Attest build provenance` step is skipped with a warning and the
    release goes out unattested, so `gh attestation verify` finds nothing for that package.
-6. **The `docs-not-needed` label.** The CI `Docs drift` job (`scripts/check-docs-drift.sh`)
-   skips itself on a pull request carrying it — the escape hatch for refactors that change no
-   behaviour. Create it once:
-   `gh label create docs-not-needed --description "No feature or threat-model doc change needed"`.
+6. **The `docs-not-needed` and `adr-rewrite` labels.** The CI `Docs drift` job (`scripts/check-docs-drift.sh`)
+   skips itself on a pull request carrying the first — the escape hatch for refactors that change no
+   behaviour — and the `ADR history` job (`scripts/check-adr-history.sh`) on one carrying the second,
+   for an accepted ADR that truly needs a rewrite rather than an amendment. Create them once:
+   `gh label create docs-not-needed --description "No feature or threat-model doc change needed"` and
+   `gh label create adr-rewrite --description "An accepted ADR is rewritten, not amended"`.
 7. **Dependency bumps merge on their own.** `.github/workflows/dependabot-auto-merge.yml` enables
    GitHub's auto-merge on Dependabot's patch and minor pull requests for NuGet packages, images and
    dev-container features. Four kinds wait for a person: a major, or a group that contains one; a

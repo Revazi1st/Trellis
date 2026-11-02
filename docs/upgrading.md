@@ -46,7 +46,7 @@ option flags.
 | Take the template's side | Merge by hand | Keep yours |
 |---|---|---|
 | `scripts/` (template-owned tooling, no project edits expected) | `.claude/`: the rules describe your code, the skills and agents are procedures you may have adapted, and `remove-feature` has you edit both | `Migrations/`: **never overwrite**, your migration history is project-specific (see below) |
-| Files you never touched (`git diff --no-index` plus a clean working tree shows which) | `docs/adr/` and `docs/INDEX.md`: the template's ADRs are numbered 0001–0099 and arrive as new files or dated amendments; yours start at 0100 (the `new-adr` skill), so the two never collide | `CHANGELOG.md`, `README.md`: the project's own |
+| Files you never touched (`git diff --no-index` plus a clean working tree shows which) | `docs/adr/` and `docs/INDEX.md`: the template's ADRs are numbered 0001–0099 and arrive as new files or dated amendments (CI accepts the amendments an upgrade appends); yours start at 0100 (the `new-adr` skill), so the two never collide | `CHANGELOG.md`, `README.md`: the project's own |
 | The marker, last: replace it with the new tree's copy once the upgrade is merged and green, so it records the version you now match | `AGENTS.md`, `docs/*.md`, workflows: template prose and settings you may have edited | |
 | | Your feature slices (`Features/*` beyond the shipped Invoices/Auth) and their `docs/features/*.md` | |
 | | `.csproj` / `Directory.Packages.props` additions, `appsettings*.json` values, endpoints and DI you added | |
