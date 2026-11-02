@@ -1,17 +1,11 @@
 #if (IncludeUI)
 using System.Net;
 using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
-using Microsoft.AspNetCore.Components.Web.HtmlRendering;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Shouldly;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
-using Trellis.UI.Common;
 using Trellis.UI.Common.Pages;
-using Trellis.UI.Common.Services;
 using Xunit;
 
 namespace Trellis.ApiTests.Ui;
@@ -200,75 +194,5 @@ public sealed partial class InvoicePagesTests
 
     [GeneratedRegex("""<a href="invoices" class="back"[^>]*>Back to invoices</a>""", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex BackLink();
-
-    /// <summary>One page rendered in one scope (one circuit) at an address, signed in, over a scripted API.</summary>
-    private sealed class PageHost : IAsyncDisposable
-    {
-        private readonly ServiceProvider _root;
-        private readonly AsyncServiceScope _scope;
-        private readonly HtmlRenderer _renderer;
-
-        private PageHost(string address)
-        {
-            var services = new ServiceCollection();
-            services.AddLogging();
-            services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => Api));
-            services.AddScoped<NavigationManager>(_ => new RecordingNavigationManager(address));
-            services.AddScoped<ITokenStore, InMemoryTokenStore>();
-            services.AddSharedUi(static (_, client) => client.BaseAddress = new Uri("http://api.test/"));
-            // What a Blazor host's AddRazorComponents registers: [SupplyParameterFromQuery] reads the address.
-            services.AddSupplyValueFromQueryProvider();
-
-            _root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-            _scope = _root.CreateAsyncScope();
-            _renderer = new HtmlRenderer(_scope.ServiceProvider, _root.GetRequiredService<ILoggerFactory>());
-        }
-
-        public ScriptedApi Api { get; } = new();
-
-        public RecordingNavigationManager Navigation
-            => (RecordingNavigationManager)_scope.ServiceProvider.GetRequiredService<NavigationManager>();
-
-        public static async Task<PageHost> OpenAsync(
-            string address, Func<HttpRequestMessage, HttpResponseMessage> respond, IReadOnlyList<string>? permissions = null)
-        {
-            var host = new PageHost(address);
-            host.Api.Always(respond);
-            await host._scope.ServiceProvider.GetRequiredService<ITokenStore>()
-                .SetTokensAsync(TestJwt.ExpiringAt(DateTimeOffset.UtcNow.AddHours(1), permissions: permissions), "refresh-1");
-            return host;
-        }
-
-        /// <summary>Renders <typeparamref name="TPage"/> and waits for its loads, then returns the HTML.</summary>
-        public Task<string> RenderAsync<TPage>(IDictionary<string, object?>? parameters = null)
-            where TPage : IComponent
-            => _renderer.Dispatcher.InvokeAsync(async () =>
-            {
-                HtmlRootComponent root = await _renderer.RenderComponentAsync<TPage>(
-                    parameters is null ? ParameterView.Empty : ParameterView.FromDictionary(parameters));
-                await root.QuiescenceTask;
-                return root.ToHtmlString();
-            });
-
-        public async ValueTask DisposeAsync()
-        {
-            await _renderer.DisposeAsync();
-            await _scope.DisposeAsync();
-            await _root.DisposeAsync();
-            Api.Dispose();
-        }
-    }
-
-    /// <summary>Starts at an address and records where a page sent the user instead of going there.</summary>
-    private sealed class RecordingNavigationManager : NavigationManager
-    {
-        private readonly List<string> _navigations = [];
-
-        public RecordingNavigationManager(string address) => Initialize("http://ui.test/", "http://ui.test/" + address);
-
-        public IReadOnlyList<string> Navigations => _navigations;
-
-        protected override void NavigateToCore(string uri, NavigationOptions options) => _navigations.Add(uri);
-    }
 }
 #endif
