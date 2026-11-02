@@ -28,8 +28,9 @@ public sealed class RepositorySourceTests
     }
 
     /// <summary>
-    /// The markup stripper the design-system scans read through: Razor, HTML and CSS comments go, replaced
-    /// by spaces so positions hold; an address's <c>//</c>, a CSS escape and a C# line comment stay.
+    /// The markup stripper the design-system and UI scans read through: Razor, HTML and CSS comments go,
+    /// replaced by spaces so positions hold; an address's <c>//</c>, a CSS escape and a C# line comment after
+    /// other text on its line stay.
     /// </summary>
     [Theory]
     [InlineData("<p>@* marker() *@</p>", "<p>              </p>")]
@@ -40,6 +41,21 @@ public sealed class RepositorySourceTests
     public void Markup_comments_go_and_the_rest_stays(string source, string expected)
         => RepositorySource.StripMarkupComments(source).ShouldBe(expected);
 
+    /// <summary>
+    /// A C# comment that fills its line in a component's <c>@code</c> block goes, so a comment that names a
+    /// forbidden call trips no UI scan, as it trips none in a <c>.cs</c> file; its line stays, blank.
+    /// </summary>
+    [Fact]
+    public void A_full_line_CSharp_comment_in_a_component_goes_and_its_line_stays()
+    {
+        string stripped = RepositorySource.StripMarkupComments("@code {\n    // marker()\n\t/// marker()\n    private int count;\n}");
+
+        stripped.ShouldNotContain("marker", Case.Sensitive);
+        stripped.Split('\n').Length.ShouldBe(5);
+        new SourceFile("File.razor", stripped).LineOf(stripped.IndexOf("count", StringComparison.Ordinal)).ShouldBe(4);
+        RepositorySource.StripMarkupComments("<a href=\"https://example.com/a\">x</a>").ShouldBe("<a href=\"https://example.com/a\">x</a>");
+    }
+
     [Fact]
     public void A_markup_comment_keeps_its_line_breaks_and_Windows_line_endings_are_normalised()
     {
@@ -48,5 +64,29 @@ public sealed class RepositorySourceTests
         new SourceFile("File.razor", stripped).LineOf(stripped.IndexOf("marker", StringComparison.Ordinal)).ShouldBe(4);
         stripped.ShouldNotContain("one", Case.Sensitive);
         stripped.ShouldNotContain("\r", Case.Sensitive);
+    }
+
+    /// <summary>
+    /// The XML stripper the suppression scan reads MSBuild files through: a comment goes, its line breaks
+    /// stay, and a glob's <c>/*</c>, which the markup stripper would take for a CSS comment, stays too.
+    /// </summary>
+    [Fact]
+    public void An_XML_comment_goes_and_a_glob_stays()
+    {
+        string stripped = RepositorySource.StripXmlComments("<Compile Include=\"**/*.cs\" />\r\n<!-- <NoWarn>marker</NoWarn>\r\n -->\r\n<NoWarn>CS1591</NoWarn>");
+
+        stripped.ShouldNotContain("marker", Case.Sensitive);
+        stripped.ShouldContain("Include=\"**/*.cs\"", Case.Sensitive);
+        new SourceFile("Planted.csproj", stripped).LineOf(stripped.IndexOf("CS1591", StringComparison.Ordinal)).ShouldBe(4);
+        stripped.ShouldNotContain("\r", Case.Sensitive);
+    }
+
+    [Fact]
+    public void A_hit_is_described_by_its_file_its_line_and_the_line_trimmed()
+    {
+        var file = new SourceFile("src/Planted.cs", "first();\n    marker();\nlast();");
+
+        file.Describe(file.Code.IndexOf("marker", StringComparison.Ordinal)).ShouldBe("src/Planted.cs:2: marker();");
+        file.Describe(0).ShouldBe("src/Planted.cs:1: first();");
     }
 }

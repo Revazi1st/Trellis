@@ -1,5 +1,6 @@
 #if (IncludeUI)
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using Shouldly;
 using Trellis.Api.Contracts.Auth;
@@ -109,6 +110,27 @@ public sealed class ApiResponsesTests
         result.IsSuccess.ShouldBeFalse();
         result.Error.ShouldBe(expected);
         result.StatusCode.ShouldBe(status);
+    }
+
+    [Fact]
+    public async Task A_Retry_After_date_reads_as_the_wait_from_the_registered_clock()
+    {
+        // Retry-After may be an HTTP date instead of a delta; the wait is that date less the registered
+        // TimeProvider's now (the harness's manual clock, weeks behind the machine's), so the sentence is
+        // the one a 90-second delta produces.
+        await using var ui = new UiHarness();
+        ui.Api.Always(static _ =>
+        {
+            HttpResponseMessage response = Responses.Problem(HttpStatusCode.TooManyRequests, RateLimited);
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(UiHarness.Start.AddSeconds(90));
+            return response;
+        });
+
+        ApiResult<TokenResponse> result = await ui.AuthApi.LoginAsync(
+            new LoginRequest("someone@example.com", "password"), TestContext.Current.CancellationToken);
+
+        result.Error.ShouldBe("Too many requests. Try again in 90 seconds.");
+        result.StatusCode.ShouldBe(429);
     }
 
     [Fact]

@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api.Contracts\Trellis.Api.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api.Common\Trellis.Api.Common.csproj" />
     <ProjectReference Include="..\..\src\Presentation\Api\Trellis.Api\Trellis.Api.csproj" />
+    <ProjectReference Include="..\..\src\Shared\Trellis.ServiceDefaults\Trellis.ServiceDefaults.csproj" />
     <!--#if (IncludeUI) -->
     <ProjectReference Include="..\..\src\Presentation\UI\Trellis.UI.Common\Trellis.UI.Common.csproj" />
     <!--#endif -->

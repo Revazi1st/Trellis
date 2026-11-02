@@ -32,8 +32,8 @@ public static class DependencyInjection
     {
         services.AddHttpClient(ApiClientName);
 
-        // The clock for token expiry, the refresh hold-off and notifications. A host (or a test) that
-        // registers its own TimeProvider first keeps it.
+        // The clock for token expiry, the refresh hold-off, notifications and a Retry-After date. A host
+        // (or a test) that registers its own TimeProvider first keeps it.
         services.TryAddSingleton(TimeProvider.System);
 
         // Deliberately NOT AddHttpClient<T>(...).AddHttpMessageHandler<BearerTokenHandler>():
@@ -43,8 +43,11 @@ public static class DependencyInjection
         // chain here means BearerTokenHandler sees the caller's (circuit's) token source.
         // The auth client stays bearer-free: its endpoints are anonymous, and the bearer chain's
         // token source needs IAuthApiClient to refresh — attaching it here would be a DI cycle.
-        services.AddScoped<IInvoiceApiClient>(sp => new InvoiceApiClient(CreateApiClient(sp, configureApiClient, withBearer: true)));
-        services.AddScoped<IAuthApiClient>(sp => new AuthApiClient(CreateApiClient(sp, configureApiClient, withBearer: false)));
+        // Both take the registered clock too: a Retry-After date is a wait measured from its now.
+        services.AddScoped<IInvoiceApiClient>(sp => new InvoiceApiClient(
+            CreateApiClient(sp, configureApiClient, withBearer: true), sp.GetRequiredService<TimeProvider>()));
+        services.AddScoped<IAuthApiClient>(sp => new AuthApiClient(
+            CreateApiClient(sp, configureApiClient, withBearer: false), sp.GetRequiredService<TimeProvider>()));
 
         services.AddScoped<INotificationService, NotificationService>();
 

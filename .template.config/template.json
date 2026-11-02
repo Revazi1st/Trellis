@@ -407,6 +407,7 @@
             "src/Presentation/UI/**",
             "tests/Trellis.ApiTests/Ui/**",
             "tests/Trellis.ArchitectureTests/DesignSystemTests.cs",
+            "tests/Trellis.ArchitectureTests/UiConventionTests.cs",
             ".claude/rules/ui.md",
             "docs/design-system.md",
             "docs/adr/0032-ui-design-system.md",

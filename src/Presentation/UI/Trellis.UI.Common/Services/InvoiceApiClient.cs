@@ -11,8 +11,10 @@ namespace Trellis.UI.Common.Services;
 /// Every call goes through <see cref="ApiCall"/>: failures carry the status and the API's problem, described by
 /// <see cref="ApiResponses"/>, and an unreachable API is a result, not an exception.
 /// </summary>
-internal sealed class InvoiceApiClient(HttpClient httpClient) : IInvoiceApiClient
+internal sealed class InvoiceApiClient(HttpClient httpClient, TimeProvider time) : IInvoiceApiClient
 {
+    private readonly ApiCall _call = new(time);
+
     public Task<ApiResult<PagedResponse<InvoiceDto>>> ListAsync(
         InvoiceStatus? status = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
     {
@@ -20,34 +22,34 @@ internal sealed class InvoiceApiClient(HttpClient httpClient) : IInvoiceApiClien
         string uri = status is { } wanted
             ? string.Create(CultureInfo.InvariantCulture, $"api/v1/invoices?status={wanted}&page={page}&pageSize={pageSize}")
             : string.Create(CultureInfo.InvariantCulture, $"api/v1/invoices?page={page}&pageSize={pageSize}");
-        return ApiCall.ReadAsync<PagedResponse<InvoiceDto>>(ct => httpClient.GetAsync(uri, ct), cancellationToken);
+        return _call.ReadAsync<PagedResponse<InvoiceDto>>(ct => httpClient.GetAsync(uri, ct), cancellationToken);
     }
 
     public Task<ApiResult<PagedResponse<InvoiceDto>>> GetOverdueAsync(
         int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
-        => ApiCall.ReadAsync<PagedResponse<InvoiceDto>>(
+        => _call.ReadAsync<PagedResponse<InvoiceDto>>(
             ct => httpClient.GetAsync($"api/v1/invoices/overdue?page={page}&pageSize={pageSize}", ct), cancellationToken);
 
     public Task<ApiResult<InvoiceDto>> GetAsync(Guid id, CancellationToken cancellationToken = default)
-        => ApiCall.ReadAsync<InvoiceDto>(ct => httpClient.GetAsync($"api/v1/invoices/{id}", ct), cancellationToken);
+        => _call.ReadAsync<InvoiceDto>(ct => httpClient.GetAsync($"api/v1/invoices/{id}", ct), cancellationToken);
 
     public Task<ApiResult<Guid>> CreateAsync(CreateInvoiceRequest request, CancellationToken cancellationToken = default)
-        => ApiCall.ReadAsync<CreateInvoiceResponse, Guid>(
+        => _call.ReadAsync<CreateInvoiceResponse, Guid>(
             ct => PostWithIdempotencyAsync("api/v1/invoices", request, expectedVersion: null, ct),
             static created => created.Id,
             cancellationToken);
 
     public Task<ApiResult<bool>> AddLineAsync(Guid id, AddInvoiceLineRequest request, long? expectedVersion = null, CancellationToken cancellationToken = default)
-        => ApiCall.SendAsync(ct => PostWithIdempotencyAsync($"api/v1/invoices/{id}/lines", request, expectedVersion, ct), cancellationToken);
+        => _call.SendAsync(ct => PostWithIdempotencyAsync($"api/v1/invoices/{id}/lines", request, expectedVersion, ct), cancellationToken);
 
     public Task<ApiResult<bool>> IssueAsync(Guid id, IssueInvoiceRequest request, long? expectedVersion = null, CancellationToken cancellationToken = default)
-        => ApiCall.SendAsync(ct => PostWithIdempotencyAsync($"api/v1/invoices/{id}/issue", request, expectedVersion, ct), cancellationToken);
+        => _call.SendAsync(ct => PostWithIdempotencyAsync($"api/v1/invoices/{id}/issue", request, expectedVersion, ct), cancellationToken);
 
     public Task<ApiResult<bool>> PayAsync(Guid id, long? expectedVersion = null, CancellationToken cancellationToken = default)
-        => ApiCall.SendAsync(ct => PostWithIdempotencyAsync<object>($"api/v1/invoices/{id}/pay", body: null, expectedVersion, ct), cancellationToken);
+        => _call.SendAsync(ct => PostWithIdempotencyAsync<object>($"api/v1/invoices/{id}/pay", body: null, expectedVersion, ct), cancellationToken);
 
     public Task<ApiResult<bool>> VoidAsync(Guid id, long? expectedVersion = null, CancellationToken cancellationToken = default)
-        => ApiCall.SendAsync(ct => PostWithIdempotencyAsync<object>($"api/v1/invoices/{id}/void", body: null, expectedVersion, ct), cancellationToken);
+        => _call.SendAsync(ct => PostWithIdempotencyAsync<object>($"api/v1/invoices/{id}/void", body: null, expectedVersion, ct), cancellationToken);
 
     /// <summary>
     /// Every POST carries a fresh Idempotency-Key, set once per logical call. Nothing re-sends a POST
