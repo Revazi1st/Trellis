@@ -35,7 +35,7 @@ values and never a rule. Each colour is written once as a light and a dark value
 | `--line` | the hairline: borders and table rules | `--hairline`, the filter pills, the status pill, the secondary button, the table rows |
 | `--ink` | body text | `body`, `input`, the brand, `.secondary`, `.pill`, the error bar |
 | `--muted` | secondary text: labels, hints, the signed-in user, the pager's count | `.user`, `.hint`, `.label`, `.summary dt`, `.pager span` |
-| `--accent` | links, the primary button's fill, the focus ring, the current filter's fill, a callout's default tone | `.nav-link`, `.back`, `.filter`, `.link-button`, `button`, `.callout`, `:focus-visible` |
+| `--accent` | links, the primary button's fill, the focus ring, the current filter's fill, a callout's default tone | `a`, `.nav-link`, `.back`, `.filter`, `.link-button`, `button`, `.callout`, `:focus-visible` |
 | `--on-accent` | text on an accent fill | `button`, `.filter[aria-current]` |
 | `--danger` | a failure: error text, the destructive button's fill, an invalid input's border, the error boundary's callout, a voided status | `.error`, `.validation-message`, `button.danger`, `.callout.danger`, `.pill.danger`, `#blazor-error-ui` |
 | `--on-danger` | text on a danger fill | `button.danger` |
@@ -195,11 +195,13 @@ readers only: `.visually-hidden`. Every other cell carries `data-th` with its he
 </table>
 ```
 
-A repeated link names its target in an `aria-label`. Below the breakpoint the rows read as blocks: the
+A repeated link names its target in an `aria-label`; like every link without a class of its own, it is
+accent text by the stylesheet's base `a` rule. Below the breakpoint the rows read as blocks: the
 header row is left to screen readers, each row sits under a hairline, and each cell is a line led by
-its `data-th` in the label strip with its value at the end, so a phone never scrolls sideways. A cell
-under a `.visually-hidden` header, the row's link, carries no `data-th` and shows no label. A header
-and its cells' `data-th` change together.
+its `data-th` in the label strip with its value at the end; the label keeps its width and a long value
+wraps beside it, so a phone never scrolls sideways and no label breaks. A cell under a
+`.visually-hidden` header, the row's link, carries no `data-th` and shows no label. A header and its
+cells' `data-th` change together.
 
 ### Status pill
 

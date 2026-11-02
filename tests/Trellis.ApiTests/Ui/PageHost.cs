@@ -12,9 +12,10 @@ namespace Trellis.ApiTests.Ui;
 
 /// <summary>
 /// One page rendered in one scope (one circuit) at an address, signed in or not, over the real
-/// <c>AddSharedUi</c> graph and a scripted API: the framework's <see cref="HtmlRenderer"/>, no browser, no
-/// circuit. <see cref="Services"/> is the scope a page resolves from, so a test reaches what the page
-/// reached (the auth state provider, a probe it registered) and <see cref="Navigation"/> where it was sent.
+/// <c>AddSharedUi</c> graph, a scripted API and a <see cref="ManualClock"/> at <see cref="UiHarness.Start"/>:
+/// the framework's <see cref="HtmlRenderer"/>, no browser, no circuit. <see cref="Services"/> is the scope a
+/// page resolves from, so a test reaches what the page reached (the auth state provider, a probe it
+/// registered) and <see cref="Navigation"/> where it was sent.
 /// </summary>
 internal sealed class PageHost : IAsyncDisposable
 {
@@ -29,6 +30,8 @@ internal sealed class PageHost : IAsyncDisposable
         services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => Api));
         services.AddScoped<NavigationManager>(_ => new RecordingNavigationManager(address));
         services.AddScoped<ITokenStore, InMemoryTokenStore>();
+        // Before AddSharedUi, whose TryAdd would otherwise register the machine clock.
+        services.AddSingleton<TimeProvider>(Clock);
         services.AddSharedUi(static (_, client) => client.BaseAddress = new Uri("http://api.test/"));
         // What a Blazor host's AddRazorComponents registers: [SupplyParameterFromQuery] reads the address.
         services.AddSupplyValueFromQueryProvider();
@@ -40,6 +43,9 @@ internal sealed class PageHost : IAsyncDisposable
     }
 
     public ScriptedApi Api { get; } = new();
+
+    /// <summary>The page's clock: the session's expiry and every date a page derives from now read it.</summary>
+    public ManualClock Clock { get; } = new(UiHarness.Start);
 
     /// <summary>The page's scope: what it injects is what a test reads here.</summary>
     public IServiceProvider Services => _scope.ServiceProvider;
@@ -64,7 +70,7 @@ internal sealed class PageHost : IAsyncDisposable
         if (signedIn)
         {
             await host.Services.GetRequiredService<ITokenStore>()
-                .SetTokensAsync(TestJwt.ExpiringAt(DateTimeOffset.UtcNow.AddHours(1), permissions: permissions), "refresh-1");
+                .SetTokensAsync(TestJwt.ExpiringAt(host.Clock.GetUtcNow().AddHours(1), permissions: permissions), "refresh-1");
         }
 
         return host;

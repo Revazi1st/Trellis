@@ -20,10 +20,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   list's status is a pill (Paid a success, Voided a danger, Draft and Issued neutral, the word always
   shown), as is the status on the invoice page; the pager's buttons are secondary buttons; one label
   strip styles the filter row's label and the table headers. On a phone the tables read as blocks,
-  each cell led by its header: a table cell carries `data-th` with its header's text. Two classes
-  were renamed: `.notice` is `.callout success` and `.error-panel` is `.callout danger`
-  (`docs/upgrading.md`, step 7). `docs/design-system.md` names the new components (`.label`,
-  `.secondary`, `.pill` and its variants, `.callout` and its variants).
+  each cell led by its header: a table cell carries `data-th` with its header's text. A link without a
+  class of its own (a table row's link, the sign-in pages' links) is accent text like the shell's,
+  where it took the browser's default colour before. Two classes were renamed: `.notice` is
+  `.callout success` and `.error-panel` is `.callout danger` (`docs/upgrading.md`, step 7).
+  `docs/design-system.md` names the new components (`.label`, `.secondary`, `.pill` and its variants,
+  `.callout` and its variants).
 - **The design tokens export as JSON** for a design tool or a published design-system page:
   `./scripts/export-design-tokens.sh [-o tokens.json]` writes one object per token in `tokens.css`, in
   its order, with its value (a colour as its light and dark pair) and its usage, the token's *Role* in

@@ -5,6 +5,7 @@
 
 body { margin: 0; font-family: var(--font-sans); font-size: var(--text-md); line-height: var(--leading); color: var(--ink); background: var(--bg); }
 code { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
 h1, h2 { font-weight: var(--weight-semibold); letter-spacing: var(--tracking-heading); line-height: 1.2; }
 h1 { font-size: var(--text-xl); }
 h2 { font-size: var(--text-lg); }
@@ -44,15 +45,16 @@ button:disabled { opacity: .6; cursor: default; }
 .grid .num, td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Below the breakpoint each row reads as a block: the header row stays for screen readers only, and each
-   cell is a line led by its header's label (data-th), the value at the end. A cell without data-th (the
-   row's link, under a header only screen readers read) shows no label. */
+   cell is a line led by its header's label (data-th), the value at the end. The label keeps its width and
+   a long value wraps beside it. A cell without data-th (the row's link, under a header only screen readers
+   read) shows no label. */
 @media (max-width: 50rem) {
   .grid, .grid tbody, .grid tr { display: block; }
   .grid thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
   .grid tbody { border-top: var(--hairline); }
   .grid tr { padding: var(--space-2) 0; border-bottom: var(--hairline); }
   .grid td { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); padding: var(--space-1) var(--space-2); border-bottom: 0; text-align: right; overflow-wrap: anywhere; }
-  .grid td[data-th]::before { content: attr(data-th); text-align: left; }
+  .grid td[data-th]::before { content: attr(data-th); text-align: left; flex: none; }
 }
 
 /* A record's status as a static chip, never a link: the word always shows, and a variant tints the chip
