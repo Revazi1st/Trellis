@@ -27,7 +27,7 @@ else
     }
 
     <dl class="summary">
-        <dt>Status</dt><dd>@_invoice.Status</dd>
+        <dt>Status</dt><dd><span class="@Invoices.StatusPill(_invoice.Status)">@_invoice.Status</span></dd>
         <dt>Email</dt><dd>@_invoice.CustomerEmail</dd>
         <dt>Total</dt><dd>@_invoice.Total.ToString("N2") @_invoice.Currency</dd>
         <dt>Due</dt><dd>@(_invoice.DueDate?.ToString("yyyy-MM-dd") ?? "—")</dd>
@@ -39,7 +39,7 @@ else
         <tbody>
             @foreach (InvoiceLineDto line in _invoice.Lines)
             {
-                <tr><td>@line.Description</td><td class="num">@line.Amount.ToString("N2")</td></tr>
+                <tr><td data-th="Description">@line.Description</td><td data-th="Amount" class="num">@line.Amount.ToString("N2")</td></tr>
             }
         </tbody>
     </table>

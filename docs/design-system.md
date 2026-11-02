@@ -30,18 +30,18 @@ values and never a rule. Each colour is written once as a light and a dark value
 | Token | Role | Used by |
 |---|---|---|
 | `--bg` | the page | `body` |
-| `--surface` | a raised panel: an input, a tinted callout's base, the host's error bar | `input`, the callouts, `#blazor-error-ui` |
-| `--surface-2` | a second step up, for a code span or a table header's ground | reserved for the components that need a second step |
-| `--line` | the hairline: borders and table rules | `--hairline`, the filter pills, the table rows |
-| `--ink` | body text | `body`, `input`, the brand, the error bar |
-| `--muted` | secondary text: labels, hints, the signed-in user, the pager's count | `.user`, `.hint`, `.filters-label`, `.summary dt`, `.pager span`, `.grid th` |
-| `--accent` | links, the primary button's fill, the focus ring, the current filter's fill | `.nav-link`, `.back`, `.filter`, `.link-button`, `button`, `:focus-visible` |
+| `--surface` | a raised panel: an input, a secondary button, a tinted callout's or pill's base, the host's error bar | `input`, `.secondary`, `.callout`, the status pills' tints, `#blazor-error-ui` |
+| `--surface-2` | a second step up: the neutral status pill's fill, and a code span's or a table header's ground when a component takes one | `.pill` |
+| `--line` | the hairline: borders and table rules | `--hairline`, the filter pills, the status pill, the secondary button, the table rows |
+| `--ink` | body text | `body`, `input`, the brand, `.secondary`, `.pill`, the error bar |
+| `--muted` | secondary text: labels, hints, the signed-in user, the pager's count | `.user`, `.hint`, `.label`, `.summary dt`, `.pager span` |
+| `--accent` | links, the primary button's fill, the focus ring, the current filter's fill, a callout's default tone | `.nav-link`, `.back`, `.filter`, `.link-button`, `button`, `.callout`, `:focus-visible` |
 | `--on-accent` | text on an accent fill | `button`, `.filter[aria-current]` |
-| `--danger` | a failure: error text, the destructive button's fill, an invalid input's border | `.error`, `.validation-message`, `button.danger`, `.error-panel`, `#blazor-error-ui` |
+| `--danger` | a failure: error text, the destructive button's fill, an invalid input's border, the error boundary's callout, a voided status | `.error`, `.validation-message`, `button.danger`, `.callout.danger`, `.pill.danger`, `#blazor-error-ui` |
 | `--on-danger` | text on a danger fill | `button.danger` |
-| `--success` | something that went well: the notification's border and tint | `.notice` |
+| `--success` | something that went well: the notification's and a paid status's border and tint | `.callout.success`, `.pill.success` |
 | `--on-success` | text on a success fill | a success fill, when a component takes one |
-| `--warning` | something to look at before it fails | a warning callout, when a component takes one |
+| `--warning` | something to look at before it fails | `.pill.warning`, and a warning callout when a page needs one |
 | `--on-warning` | text on a warning fill | the same |
 
 ### Type
@@ -50,33 +50,33 @@ values and never a rule. Each colour is written once as a light and a dark value
 |---|---|---|
 | `--font-sans` | the face of everything but code: the system stack | `body` |
 | `--font-mono` | code spans and request ids | `code` |
-| `--text-xs` | 12 px: uppercase labels | `.grid th`, `.filters-label` |
-| `--text-sm` | 14 px: hints, meta, form labels, the signed-in user, the pager's count | `.hint`, `.user`, `.form label`, `.pager span`, `.validation-message`, `.filter` |
+| `--text-xs` | 12 px: uppercase labels | `.label` |
+| `--text-sm` | 14 px: hints, meta, form labels, the signed-in user, the pager's count, a status | `.hint`, `.user`, `.form label`, `.pager span`, `.validation-message`, `.filter`, `.pill` |
 | `--text-md` | 16 px: body | `body` |
 | `--text-lg` | 18 px: the brand and section headings | `.brand`, `h2` |
 | `--text-xl` | 24 px: the page heading | `h1` |
 | `--weight-regular` | 400: body | `.link-button` |
-| `--weight-medium` | 500: labels, buttons, links in the top bar | `.nav-link`, `.form label`, `button`, `.filter`, `.grid th` |
+| `--weight-medium` | 500: labels, buttons, links in the top bar, a status | `.nav-link`, `.form label`, `button`, `.filter`, `.label`, `.pill` |
 | `--weight-semibold` | 600: headings and the brand | `h1`, `h2`, `.brand` |
 | `--leading` | the body line height | `body` |
 | `--tracking-heading` | headings sit a little tighter | `h1`, `h2`, `.brand` |
-| `--tracking-label` | uppercase labels sit a little wider | `.grid th`, `.filters-label` |
+| `--tracking-label` | uppercase labels sit a little wider | `.label` |
 
 ### Space, shape and devices
 
 | Token | Role | Used by |
 |---|---|---|
-| `--space-1` | 4 px | the gap inside a label, the pill's vertical padding |
-| `--space-2` | 8 px | cell padding, the gap between actions and filters |
+| `--space-1` | 4 px | the gap inside a label, the filter pill's vertical padding, a table cell's below the breakpoint |
+| `--space-2` | 8 px | cell padding, the gap between actions and filters, the status pill's side padding |
 | `--space-3` | 12 px | the gap between form fields, the back link's margin |
 | `--space-4` | 16 px | the page's side gutter, the top bar's gap and padding |
-| `--space-6` | 24 px | the content's vertical padding, the error panel's side padding |
+| `--space-6` | 24 px | the content's vertical padding, a callout's side padding |
 | `--space-10` | 40 px | the error bar's room for its dismiss button |
-| `--radius-sm` | 6 px: inputs, buttons, the notice | `input`, `button`, `.notice` |
-| `--radius-md` | 10 px: panels | `.error-panel` |
+| `--radius-sm` | 6 px: inputs and buttons | `input`, `button` |
+| `--radius-md` | 10 px: panels | `.callout` |
 | `--radius-lg` | 16 px: a card wider than a form | a card, when a component takes one |
-| `--radius-pill` | a full round | `.filter` |
-| `--hairline` | the one-pixel line in `--line` | `.topbar`, `input`, `.grid th`, `.grid td`, `.filter` |
+| `--radius-pill` | a full round | `.filter`, `.pill` |
+| `--hairline` | the one-pixel line in `--line` | `.topbar`, `input`, `.grid th`, `.grid td`, `.filter`, `.pill`, `.secondary` |
 | `--focus-ring` | the focus outline: two pixels of accent | `:focus-visible` |
 | `--focus-offset` | the gap between the outline and the element | `:focus-visible` |
 | `--page-width` | the measure of the page shell | `.page` |
@@ -88,9 +88,9 @@ values and never a rule. Each colour is written once as a light and a dark value
   name them. Headings track `--tracking-heading`; uppercase labels are 12 px with `--tracking-label`.
   Numbers in a table are tabular figures (`font-variant-numeric: tabular-nums`), so columns line up.
 - **Edges** are one-pixel hairlines in `--line`; no shadows. **Radii** 6, 10, 16 or a pill.
-- **One breakpoint**, 50 rem, is the system's; nothing shipped changes shape at it yet. The top bar and
-  the filter row wrap wherever they run out of room, the page keeps `--page-width` at every width, and
-  rows that read as blocks below it are the next step on this system.
+- **One breakpoint**, 50 rem, is the system's: below it a table's rows read as blocks, each cell a line
+  led by its header's label ([Table](#table)). The top bar and the filter row wrap wherever they run out
+  of room, and the page keeps `--page-width` at every width.
 - **Focus** is the `--focus-ring` with `--focus-offset`, visible on every focusable element, never
   suppressed; the accent passes 3:1 on both grounds so the ring reads.
 - **Text sits on a ground it passes AA on**: body text and the status colours on `--bg` or `--surface`
@@ -131,13 +131,16 @@ page's place only when the page has failed.
 ### Buttons
 
 `button` is the primary action: an accent fill with `--on-accent` text, `--radius-sm`, the body font.
-`.danger` on a button is the destructive variant (`--danger` fill, `--on-danger` text); `.link-button`
-is a button that reads as a link (no fill, accent text) for an action that is not a navigation, such as
-sign-out or dismiss. A disabled button fades to 60 % and loses its pointer; it is never hidden.
+`.danger` on a button is the destructive variant (`--danger` fill, `--on-danger` text); `.secondary`
+is a quieter action on `--surface` inside a hairline with `--ink` text, such as the pager's Previous
+and Next; `.link-button` is a button that reads as a link (no fill, accent text) for an action that is
+not a navigation, such as sign-out or dismiss. A disabled button fades to 60 % and loses its pointer;
+it is never hidden.
 
 ```html
 <button type="submit" disabled="@_busy">@(_busy ? "Creating…" : "Create draft")</button>
 <button class="danger" @onclick="VoidAsync">Void</button>
+<button class="secondary" @onclick="NextAsync">Next</button>
 <button type="button" class="link-button" aria-label="Dismiss notification">✕</button>
 ```
 
@@ -164,23 +167,56 @@ in `--muted`; `.error` is the form's one `role="alert"` paragraph.
 One alert per failure; each field's message stays under its field. The form is already narrower than
 the breakpoint, so it does not change below it.
 
+### Label
+
+`.label` is the label strip: `--text-xs` at `--weight-medium`, uppercase with `--tracking-label`, in
+`--muted`. The filter row's `.filters-label` and a table's headers (`.grid th`) are this one rule, and
+so is the label a table cell shows below the breakpoint; a new small label takes `.label` rather than a
+rule of its own.
+
+```html
+<span class="label">Show</span>
+```
+
+The markup stays sentence case; the stylesheet uppercases it.
+
 ### Table
 
-`.grid` is a full-width table with hairline rows; its headers are uppercase `--text-xs` labels in
-`--muted`; `.num` right-aligns a numeric column with tabular figures. A column whose cells are links
-gets a header read by screen readers only: `.visually-hidden`.
+`.grid` is a full-width table with hairline rows; its headers are the label strip; `.num` right-aligns
+a numeric column with tabular figures. A column whose cells are links gets a header read by screen
+readers only: `.visually-hidden`. Every other cell carries `data-th` with its header's text.
 
 ```html
 <table class="grid">
-  <thead><tr><th>Customer</th><th class="num">Total</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+  <thead><tr><th>Customer</th><th>Status</th><th class="num">Total</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
   <tbody>
-    <tr><td>Ada Lovelace</td><td class="num">120.00 EUR</td><td><NavLink href="invoices/…" aria-label="View the invoice for Ada Lovelace">View</NavLink></td></tr>
+    <tr><td data-th="Customer">Ada Lovelace</td><td data-th="Status"><span class="pill">Issued</span></td><td data-th="Total" class="num">120.00 EUR</td><td><NavLink href="invoices/…" aria-label="View the invoice for Ada Lovelace">View</NavLink></td></tr>
   </tbody>
 </table>
 ```
 
-A repeated link names its target in an `aria-label`. Below the breakpoint the table keeps its columns
-today; rows that read as blocks, each cell led by its header, are the next step on this system.
+A repeated link names its target in an `aria-label`. Below the breakpoint the rows read as blocks: the
+header row is left to screen readers, each row sits under a hairline, and each cell is a line led by
+its `data-th` in the label strip with its value at the end, so a phone never scrolls sideways. A cell
+under a `.visually-hidden` header, the row's link, carries no `data-th` and shows no label. A header
+and its cells' `data-th` change together.
+
+### Status pill
+
+`.pill` is a record's status as a static chip, never a link or a button: `--text-sm` at
+`--weight-medium` in `--ink` on `--surface-2`, inside a hairline, `--radius-pill` round. A variant
+sets its tone, `var(--tone)`, to a status colour, which draws the hairline and tints the fill at
+12 % over `--surface` under the same `--ink` text: `.pill.success`, `.pill.warning` and
+`.pill.danger`.
+
+```html
+<td data-th="Status"><span class="pill success">Paid</span></td>
+<dd><span class="pill">Draft</span></dd>
+```
+
+The word is always in the pill: colour is never the only signal. An invoice's status maps in one
+helper the list and the detail page share: Paid is `.pill.success`, Voided `.pill.danger`, Draft and
+Issued the neutral `.pill`. A pill never wraps, in a table cell or a summary, at any width.
 
 ### Summary list
 
@@ -233,30 +269,33 @@ The row wraps at any width: a filter that does not fit moves to the next line.
 
 ### Pager
 
-`.pager` is a `<nav aria-label="Pagination">`: a previous and a next button around a `span` that names
-the page and the count in `--muted`, `aria-live="polite"` so the count is announced when it changes.
+`.pager` is a `<nav aria-label="Pagination">`: a previous and a next button, both `.secondary`, around
+a `span` that names the page and the count in `--muted`, `aria-live="polite"` so the count is announced
+when it changes.
 
 ```html
 <nav class="pager" aria-label="Pagination">
-  <button disabled>Previous</button>
+  <button class="secondary" disabled>Previous</button>
   <span aria-live="polite">Page 1 of 3 (42 invoices)</span>
-  <button>Next</button>
+  <button class="secondary">Next</button>
 </nav>
 ```
 
 ### Notifications and alerts
 
-`.notifications` is the layout's live region (`role="status"`, always in the page, a stack with a
-`--space-2` gap); a `.notice` inside it is a success message on a `--success` hairline and tint with a
-`.link-button` to dismiss it. `.error-panel` is the error boundary's `role="alert"` block on a
-`--danger` hairline and tint, with a heading, a sentence and a retry button. `.error` is a one-line
-failure in `--danger`, next to what failed.
+`.callout` is a message on a panel: a one-pixel line in its tone, `var(--tone)`, `--radius-md`, and
+the tone tinted at 8 % over `--surface` under `--ink` text. The tone is the accent; `.callout.success`
+sets it to `--success` and `.callout.danger` to `--danger`. `.notifications` is the layout's live region
+(`role="status"`, always in the page, a stack with a `--space-2` gap); a `.callout.success` inside it
+is a success notification, laid out as a row (`.notifications .callout`) with a `.link-button` to
+dismiss it. The error boundary's panel is a `.callout.danger` with `role="alert"`: a heading, a
+sentence and a retry button. `.error` is a one-line failure in `--danger`, next to what failed.
 
 ```html
 <div class="notifications" role="status" aria-live="polite">
-  <p class="notice"><span>Invoice issued.</span><button type="button" class="link-button" aria-label="Dismiss notification">✕</button></p>
+  <p class="callout success"><span>Invoice issued.</span><button type="button" class="link-button" aria-label="Dismiss notification">✕</button></p>
 </div>
-<div class="error-panel" role="alert"><h1>Something went wrong</h1><p>…</p><button>Retry</button></div>
+<div class="callout danger" role="alert"><h1>Something went wrong</h1><p>…</p><button>Retry</button></div>
 ```
 
 Success is a notification, failure stays next to what failed; one alert per failure.

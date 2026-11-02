@@ -103,4 +103,8 @@ replaced it ([design-system.md](design-system.md)): `--fg` became `--ink` and `-
 `--line`, and every colour moved from the `:root` and `prefers-color-scheme` blocks into one
 `light-dark(#light, #dark)` pair in `tokens.css`. Move your values there, keep the names, and let
 `DesignSystemTests` tell you which pair needs a different value.
+
+Two classes were renamed when the pages moved onto the system's components: `.notice` became
+`.callout success` and `.error-panel` became `.callout danger`. A page or a rule of yours that uses
+either takes the new classes; `DesignSystemTests` names a class that has lost its rule.
 <!--#endif -->

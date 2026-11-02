@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-26
+- **Amended**: 2026-11-03 — the tables read as blocks below the breakpoint, `.callout` replaces `.notice` and `.error-panel`, and `.label`, `.secondary` and `.pill` join the components (see *Amendment* below)
 
 ## Context
 
@@ -71,3 +72,18 @@ project is someone else's product. What carries over is the construction and a s
   lines, values written twice; revisit if a browser the project must support lacks `light-dark()`.
 - Revisit when a second head (a MAUI app) needs the tokens in C#, when a designer needs a rendered
   gallery page, or when an accessibility scanner (axe-core) is wanted beside the contrast arithmetic.
+
+## Amendment (2026-11-03)
+
+The pages moved onto the components, and the system changes shape at its breakpoint now. Below 50 rem
+a `.grid` table's rows read as blocks: every cell carries `data-th` with its header's text and leads
+with it as a label, the header row is left to screen readers, and the cell under a header only screen
+readers read (a row's link) carries none. Two classes were renamed against the Decision's "no class
+was renamed": `.notice` and `.error-panel` became one `.callout` whose `--tone` is the accent unless
+`.callout.success` or `.callout.danger` names a status, the browser tests anchoring on neither. Three
+components joined, each with its subsection in `docs/design-system.md`: `.label`, the uppercase label
+strip that `.filters-label` and `.grid th` share; `.secondary`, a button on `--surface` inside a
+hairline, which the pager's buttons take; and `.pill`, a static status chip whose `.pill.success`,
+`.pill.warning` and `.pill.danger` alias `--tone` and tint at 12 % under `--ink` text, so the word
+always shows and the contrast fact's grounds hold. The doc remains the source of names, and
+`DesignSystemTests` holds the new classes both ways as it held the old ones.

@@ -139,9 +139,10 @@ after each layer.
       `<ServerValidation>`; success is an `INotificationService` notification (`.claude/rules/ui.md`)
       [`InvoiceFormMirrorTests` is the model].
 - [ ] Built from the design system's documented components (`docs/design-system.md`, *Components*): no
-      colour, `style=` attribute, `<style>` block or `.razor.css` in a page; a new class gets its rule in
-      `app.css` and its subsection in the doc; a new colour is a `light-dark()` pair with its `--on-*`
-      [`DesignSystemTests`].
+      colour, `style=` attribute, `<style>` block or `.razor.css` in a page; a table cell carries
+      `data-th` with its header's text (a link's cell under a `.visually-hidden` header excepted), and a
+      status is a `.pill` that shows its word; a new class gets its rule in `app.css` and its subsection
+      in the doc; a new colour is a `light-dark()` pair with its `--on-*` [`DesignSystemTests`].
 - [ ] A render test over `PageHost` in `tests/Trellis.ApiTests/Ui/` for what the page shows in each load
       state [`InvoicePagesTests` is the model], and the page's sentence in the feature doc's *UI* section
       [`check-docs-drift.sh`].

@@ -15,7 +15,15 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   only the token file writes a colour, and that the doc and the files name the same tokens and classes.
   The starting palette is a green ink and accent on near-white, a lime accent on near-black. Two tokens
   were renamed for anyone who customised 0.1.x: `--fg` is `--ink` and `--border` is `--line`
-  (`docs/upgrading.md`, step 7). No class and no markup changed.
+  (`docs/upgrading.md`, step 7).
+- **The pages are built from the design system's components** (with `--include-ui`). The invoice
+  list's status is a pill (Paid a success, Voided a danger, Draft and Issued neutral, the word always
+  shown), as is the status on the invoice page; the pager's buttons are secondary buttons; one label
+  strip styles the filter row's label and the table headers. On a phone the tables read as blocks,
+  each cell led by its header: a table cell carries `data-th` with its header's text. Two classes
+  were renamed: `.notice` is `.callout success` and `.error-panel` is `.callout danger`
+  (`docs/upgrading.md`, step 7). `docs/design-system.md` names the new components (`.label`,
+  `.secondary`, `.pill` and its variants, `.callout` and its variants).
 - **The design tokens export as JSON** for a design tool or a published design-system page:
   `./scripts/export-design-tokens.sh [-o tokens.json]` writes one object per token in `tokens.css`, in
   its order, with its value (a colour as its light and dark pair) and its usage, the token's *Role* in

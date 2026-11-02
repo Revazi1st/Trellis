@@ -269,7 +269,7 @@ in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/
 `Invoices` (every invoice, newest first, with a Created column and pager controls; a filter row of links — All, Draft, Issued, Paid, Voided, Overdue — keeps the filter in the address, `invoices?status=Draft`, so Back returns to the previous one and a filtered list can be bookmarked: All and the four statuses call `ListAsync`, Overdue calls `GetOverdueAsync`, the current link is `aria-current`, a new filter starts at page 1, and the empty state and the pager name it, "No overdue invoices.", "Page 1 of 3 (42 invoices)"), `InvoiceDetail` (the full lifecycle: add lines and issue while Draft, pay/void after; action errors are kept separate from load errors so they survive the post-action reload), `CreateInvoice` — via `IInvoiceApiClient` over the contracts. The detail and create pages open with a "Back to invoices" link above the heading (there while the invoice loads, and after a failed load); a successful create still lands on the new invoice's detail page. The create, add-line and issue forms validate before sending with DataAnnotations that mirror the command validators (`Forms/InvoiceForms.cs`: required, lengths, amount ≥ 0); the issue form's date picker starts at tomorrow (UTC), the first due date the API accepts (`Invoice.DueDateInPast`). What the API still rejects comes back as `errors[]`: each field error under its input, a whole-request error (`field: null`) in the form's alert (`ServerValidation`). Created, issued, paid and voided are announced as notifications. Every write on the detail page sends the version the page loaded as `If-Match`; a 412 reads "Someone else changed this in the meantime" over the reloaded invoice. The session outlives the 15-minute access token: `TokenAuthenticationStateProvider` checks `exp` and rotates through `POST /auth/refresh` (single-flight, since refresh tokens are single-use); `BearerTokenHandler` always attaches a currently-valid token via `IAccessTokenSource`.
 
 <!--#if (IncludeUI) -->
-The three pages are built from the design system's documented components ([design-system.md](../design-system.md)): the filter row, the table, the summary list, the forms, the actions and the back link are its classes, and no page writes a colour or a style of its own.
+The three pages are built from the design system's documented components ([design-system.md](../design-system.md)): the filter row, the table, the status pill, the summary list, the forms, the actions, the pager's secondary buttons and the back link are its classes, and no page writes a colour or a style of its own. The list's status is a pill, and so is the status in the detail page's summary, through one mapping (`Invoices.StatusPill`): Paid is a success, Voided a danger, Draft and Issued neutral, and the word always shows. On a phone both tables read as blocks, each cell led by its header (`data-th`); the list's link cell, under a header only screen readers read, has no label.
 <!--#endif -->
 
 ## Tests
@@ -317,7 +317,9 @@ The three pages are built from the design system's documented components ([desig
   inputs, success notifications, the loaded version sent as `If-Match` and the list's query string per
   filter (`InvoiceApiClientTests`); `InvoicePagesTests` renders the pages: the API call and the current
   link for every filter in the address, the empty state and pager naming the filter, the Created column,
-  and the back link on the detail (loaded or not) and create pages.
+  the status pill for every status, a header's text on every cell but the link's, the pager's secondary
+  buttons, the detail's summary pill and labelled line cells, and the back link on the detail (loaded or
+  not) and create pages.
 <!--#if (IncludeUiTests && IncludeUI) -->
 - `UiTests` (Playwright, opt-in): sign in, create, issue due in 30 days, return through the back link
   and find the invoice heading the list under All and absent under Overdue.

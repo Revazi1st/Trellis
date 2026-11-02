@@ -112,8 +112,50 @@ public sealed partial class InvoicePagesTests
         string html = await host.RenderAsync<Invoices>();
 
         html.ShouldContain("<th>Created</th>");
-        html.ShouldContain("<td>Ada Lovelace</td>");
-        html.ShouldContain("<td>2026-10-05</td>");
+        html.ShouldContain("""<td data-th="Customer">Ada Lovelace</td>""");
+        html.ShouldContain("""<td data-th="Created">2026-10-05</td>""");
+    }
+
+    [Theory]
+    [InlineData(InvoiceStatus.Draft, "pill")]
+    [InlineData(InvoiceStatus.Issued, "pill")]
+    [InlineData(InvoiceStatus.Paid, "pill success")]
+    [InlineData(InvoiceStatus.Voided, "pill danger")]
+    public async Task The_status_is_a_pill_that_shows_its_word_and_is_tinted_only_when_paid_or_voided(InvoiceStatus status, string classes)
+    {
+        await using PageHost host = await PageHost.OpenAsync("invoices", _ => Responses.Json(Page(1, Invoice("Ada Lovelace", status))));
+
+        string html = await host.RenderAsync<Invoices>();
+
+        Match pill = StatusCell().Match(html);
+        pill.Success.ShouldBeTrue(html);
+        pill.Groups["word"].Value.ShouldBe(status.ToString());
+        pill.Groups["classes"].Value.Split(' ').ShouldBe(classes.Split(' '));
+    }
+
+    [Fact]
+    public async Task Every_cell_but_the_link_carries_its_header_for_the_phone_layout()
+    {
+        await using PageHost host = await PageHost.OpenAsync(
+            "invoices", static _ => Responses.Json(Page(2, Invoice("Ada Lovelace"), Invoice("Grace Hopper"))));
+
+        string html = await host.RenderAsync<Invoices>();
+
+        string[] headers = [.. VisibleHeader().Matches(html).Select(static m => m.Groups["text"].Value)];
+        headers.ShouldBe(["Customer", "Status", "Total", "Due", "Created"]);
+        CellLabels(html).ShouldBe([.. headers, null, .. headers, null]);
+        TableCell().Matches(html).Where(static cell => !cell.Groups["label"].Success).Select(static cell => cell.Groups["content"].Value)
+            .ShouldAllBe(content => content.Contains("aria-label=\"View the invoice for ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task The_pager_buttons_are_secondary_buttons()
+    {
+        await using PageHost host = await PageHost.OpenAsync("invoices", static _ => Responses.Json(Page(42, Invoice("Ada Lovelace"))));
+
+        string html = await host.RenderAsync<Invoices>();
+
+        PagerButton().Matches(html).Select(static m => m.Groups["label"].Value).ShouldBe(["Previous", "Next"]);
     }
 
     [Fact]
@@ -126,6 +168,18 @@ public sealed partial class InvoicePagesTests
 
         html.ShouldContain("<h1>Ada Lovelace</h1>");
         BackLinkPrecedes(html, "<h1>").ShouldBeTrue(html);
+    }
+
+    [Fact]
+    public async Task The_invoice_page_shows_its_status_as_the_lists_pill_and_labels_its_line_cells()
+    {
+        InvoiceDto invoice = Invoice("Ada Lovelace", InvoiceStatus.Paid);
+        await using PageHost host = await PageHost.OpenAsync($"invoices/{invoice.Id}", _ => Responses.Json(invoice));
+
+        string html = await host.RenderAsync<InvoiceDetail>(new Dictionary<string, object?>(StringComparer.Ordinal) { [nameof(InvoiceDetail.Id)] = invoice.Id });
+
+        html.ShouldContain("""<dt>Status</dt><dd><span class="pill success">Paid</span></dd>""");
+        CellLabels(html).ShouldBe(["Description", "Amount"]);
     }
 
     [Fact]
@@ -161,12 +215,12 @@ public sealed partial class InvoicePagesTests
         return new(items, Page: 1, PageSize: PagingLimits.DefaultPageSize, totalCount, totalPages, HasNextPage: totalPages > 1, HasPreviousPage: false);
     }
 
-    private static InvoiceDto Invoice(string customer) => new(
+    private static InvoiceDto Invoice(string customer, InvoiceStatus status = InvoiceStatus.Issued) => new(
         Guid.CreateVersion7(),
         customer,
         "ada@example.com",
         "EUR",
-        InvoiceStatus.Issued,
+        status,
         CreatedAtUtc: new DateTimeOffset(2026, 10, 5, 9, 30, 0, TimeSpan.Zero),
         DueDate: new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
         PaidAtUtc: null,
@@ -181,6 +235,10 @@ public sealed partial class InvoicePagesTests
     private static (string Href, string Label)[] FilterLinks(string html)
         => [.. FilterLink().Matches(html).Select(static m => (m.Groups["href"].Value, m.Groups["label"].Value))];
 
+    /// <summary>Each table cell's <c>data-th</c> in document order, null for a cell without one.</summary>
+    private static string?[] CellLabels(string html)
+        => [.. TableCell().Matches(html).Select(static cell => cell.Groups["label"].Success ? cell.Groups["label"].Value : null)];
+
     /// <summary>The page's "Back to invoices" link exists, points at the list, and comes before <paramref name="marker"/>.</summary>
     private static bool BackLinkPrecedes(string html, string marker)
     {
@@ -194,5 +252,20 @@ public sealed partial class InvoicePagesTests
 
     [GeneratedRegex("""<a href="invoices" class="back"[^>]*>Back to invoices</a>""", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex BackLink();
+
+    /// <summary>The list's status cell: the pill's classes and the word in it.</summary>
+    [GeneratedRegex("""<td data-th="Status"><span class="(?<classes>[^"]*)">(?<word>[^<]*)</span></td>""", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex StatusCell();
+
+    /// <summary>A header with text of its own; the link column's, a visually hidden span, is not one.</summary>
+    [GeneratedRegex("""<th(?: class="num")?>(?<text>[^<]+)</th>""", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex VisibleHeader();
+
+    /// <summary>Every table cell: its <c>data-th</c> label, when it has one, and what it holds.</summary>
+    [GeneratedRegex("""<td(?: data-th="(?<label>[^"]*)")?[^>]*>(?<content>.*?)</td>""", RegexOptions.Singleline, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex TableCell();
+
+    [GeneratedRegex("""<button class="secondary"[^>]*>(?<label>Previous|Next)</button>""", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex PagerButton();
 }
 #endif
