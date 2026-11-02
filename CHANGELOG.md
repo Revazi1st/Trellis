@@ -70,6 +70,17 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `AGENTS.md` gains a *Commits* line (a generated project had no commit convention before) and names
   the hook behind each boundary it backs; `docs/development.md` gains *Agent hooks* (what each decides,
   how to add one, how to turn them off); `scripts/check-hooks.sh` tests every decision, and CI runs it.
+- **Finishing a change, upgrading the template, and a red build from a package.** The `finish-change`
+  skill runs the gates CI runs, in its order (format, the Release build, the tests narrowed then whole,
+  the OpenAPI snapshot, the docs-drift and link checks), asks for the CHANGELOG line and the reviewers
+  the change needs, and commits or opens the pull request from `.github/PULL_REQUEST_TEMPLATE.md` only
+  when asked (`/finish-change commit`, `/finish-change pr`). `/upgrade-template <version>` walks through
+  `docs/upgrading.md` and never starts on its own: the marker, the changelog between the versions, the
+  target regenerated with the same name and options, take, merge or keep, the schema, the marker last.
+  `.claude/rules/dependencies.md` loads with the package and SDK files: asking before a package, the
+  license ceilings, central versions and Dependabot groups, the order to answer a NuGetAudit advisory,
+  and an SDK bump. `add-feature` points at *Protecting an endpoint* for who may call an endpoint, and
+  `docs/upgrading.md` installs the template as `<package>@<version>`, the separator current SDKs expect.
 
 ## [0.1.1] - 2026-10-26
 

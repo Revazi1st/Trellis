@@ -101,7 +101,9 @@ with the architecture tests, `scripts/check-docs-drift.sh` and the OpenAPI snaps
 for what no gate sees: the rule in the aggregate rather than the handler, the feature doc written first,
 the shapes from the `add-feature` skill's "not shown" list handled the way it points. Each miss becomes
 a fix to a rule, a skill box or a test in the release, never a note to the agent. One run is anecdote,
-and results vary between models and attempts: it is a smoke test of the guidance, not a score.
+and results vary between models and attempts: it is a smoke test of the guidance, not a score. The
+agent finishes the way a generated project's agent is told to, with `/finish-change`, so the run puts
+that skill's gates and reviewers to the test as well.
 
 ## Cutting a release
 

@@ -22,6 +22,7 @@ Agent entry point — read only what the task needs.
 ## Layer rules (`.claude/rules/`, loaded when you touch a file their glob matches)
 - [api.md](../.claude/rules/api.md) — `src/Presentation/Api/**/*.cs`: one endpoint per use case, problem details, secure by default, rate limits, idempotency, caching, paging, OpenAPI
 - [application.md](../.claude/rules/application.md) — `src/Core/Trellis.Application/**/*.cs`: slices, handlers, validators, ports, event handlers, one aggregate per command, multi-aggregate commands, handler failures and idempotency keys, per-record authorization, telemetry names, the pipeline
+- [dependencies.md](../.claude/rules/dependencies.md) — `Directory.Packages.props`, `Directory.Build.props`, `global.json`, `.github/dependabot.yml`, `scripts/sdk-image/**`, `.config/dotnet-tools.json`: asking before a package, the license ceilings and the two targets that enforce them, central versions and Dependabot groups, the order to answer a NuGetAudit advisory in, bumping the SDK, a .NET major as a migration
 - [domain.md](../.claude/rules/domain.md) — `src/Core/Trellis.Domain/**/*.cs`: aggregates, lifecycle rules, value objects and what they guarantee, IDs, events, specifications, choosing an `ErrorType`
 - [infrastructure.md](../.claude/rules/infrastructure.md) — `src/Infrastructure/Trellis.Infrastructure/**/*.cs`: adapters, options, outbound HTTP, e-mail
 - [persistence.md](../.claude/rules/persistence.md) — `src/Infrastructure/Trellis.Persistence/**/*.cs`: EF configurations, interceptors, tenancy, outbox, retention, options, migrations, Identity
@@ -42,9 +43,11 @@ Agent entry point — read only what the task needs.
 <!--#if (TemplateSource) -->
 - [add-toggle](../.claude/skills/add-toggle/SKILL.md) — a new template toggle wired through template config, slnx/csproj conditionals, C# blocks, CI and docs (maintainers only)
 <!--#endif -->
+- [finish-change](../.claude/skills/finish-change/SKILL.md) — a change that is done, before it is committed, pushed or opened as a pull request: format, the Release build, the tests narrowed then whole, the OpenAPI snapshot, the drift and link checks, the CHANGELOG line and the reviewers it needs, each with the CI job that fails without it; `/finish-change commit` also commits, `/finish-change pr` opens the pull request from its template
 - [new-adr](../.claude/skills/new-adr/SKILL.md) — record an architecture decision: the next number in the right range (0100 and up for the project's own), the index line, an optional *Alternatives / Revisit when* section, dated amendments instead of edits
 - [remove-feature](../.claude/skills/remove-feature/SKILL.md) — delete the Invoices reference slice from the Domain outward once your own first feature exists
 - [run-app](../.claude/skills/run-app/SKILL.md) — run the full stack with `aspire run` (needs a local SDK) or as sibling containers without one, and verify it end to end
+- [upgrade-template](../.claude/skills/upgrade-template/SKILL.md) — adopt a later template version (`/upgrade-template <version>`; it runs only when you ask): the marker, the changelog between the versions, the target regenerated with the same name and options, take, merge or keep, the schema, the gates, the marker last
 
 ## Reviewers (`.claude/agents/`, read-only; the AGENTS.md routing says which one a change needs)
 - [code-reviewer](../.claude/agents/code-reviewer.md) — any change under `src/`: correctness (a `catch` that swallows included), the conventions of the layers touched, whether the change is tested at all, the feature doc, the OpenAPI snapshot and the CHANGELOG line it owes

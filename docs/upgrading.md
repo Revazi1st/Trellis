@@ -1,7 +1,8 @@
 # Upgrading a generated project
 
 `dotnet new` takes a snapshot: nothing updates a generated project afterwards. Adopting a later
-template version is a regenerate-and-diff exercise, not a package bump.
+template version is a regenerate-and-diff exercise, not a package bump. The `upgrade-template` skill
+walks through the steps below with you: `/upgrade-template <version>` in Claude Code, and only then.
 
 ## 1. Find what you generated from
 
@@ -32,7 +33,7 @@ Install the target version of `template.package`, then generate with the marker'
 **same** name and **every** option from the marker, one `--<key> <value>` per entry:
 
 ```bash
-dotnet new install <template.package>::<new-version>
+dotnet new install <template.package>@<new-version>
 dotnet new <template.shortName> -n <name> -o /tmp/next --include-ui true --use-redis false …
 git diff --no-index . /tmp/next
 ```
