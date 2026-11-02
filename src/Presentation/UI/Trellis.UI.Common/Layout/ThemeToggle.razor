@@ -1,0 +1,67 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+@* The theme switch (docs/design-system.md, Theme switch): System, Light or Dark, kept in the browser by
+   wwwroot/theme.js, which the host loads in its head. A select, not a cycling button: three named
+   options are announced as such. IJSRuntime is part of the Components stack and works in every render
+   mode, so the switch keeps UI.Common render-mode-agnostic (ADR-0015). *@
+<label class="theme">
+    <span class="visually-hidden">Theme</span>
+    <select class="theme-select" @onchange="ChangeAsync" aria-label="Colour theme">
+        <option value="system" selected="@(_theme == SystemTheme)">System</option>
+        <option value="light" selected="@(_theme == LightTheme)">Light</option>
+        <option value="dark" selected="@(_theme == DarkTheme)">Dark</option>
+    </select>
+</label>
+
+@code {
+    private const string SystemTheme = "system";
+    private const string LightTheme = "light";
+    private const string DarkTheme = "dark";
+
+    // What the browser keeps, once the first render has read it; until then the operating system's. A host
+    // without theme.js renders the switch on System and shows a choice made there without applying it: the
+    // read and the write are both caught, so the circuit lives on.
+    private string _theme = SystemTheme;
+
+    // Interop only after a render, never during one: a prerender has no browser behind it and throws.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            _theme = Known(await JS.InvokeAsync<string>("appTheme.get"));
+        }
+        catch (Exception exception) when (exception is JSException or InvalidOperationException)
+        {
+            return;   // no appTheme in this host: the switch stays on System and the page renders
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task ChangeAsync(ChangeEventArgs args)
+    {
+        _theme = Known(args.Value);
+        try
+        {
+            await JS.InvokeVoidAsync("appTheme.set", _theme);
+        }
+        catch (Exception exception) when (exception is JSException or InvalidOperationException)
+        {
+            // no appTheme in this host: the select shows the choice, nothing applies it, the circuit lives on
+        }
+    }
+
+    // Light and Dark are held; anything else is the system's, as theme.js reads it.
+    private static string Known(object? value) => value switch
+    {
+        LightTheme => LightTheme,
+        DarkTheme => DarkTheme,
+        _ => SystemTheme,
+    };
+}

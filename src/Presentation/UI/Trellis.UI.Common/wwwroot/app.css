@@ -20,11 +20,17 @@ h2 { font-size: var(--text-lg); }
 .user { color: var(--muted); font-size: var(--text-sm); }
 .content { padding: var(--space-6) 0; }
 
-/* Forms: a narrow stack; each label wraps its input and its message. */
+/* The theme switch at the end of the top bar: a select under a visually hidden label, smaller than a
+   form's input. It takes the input's ground, hairline and radius from the forms' rule below. */
+.theme { display: inline-flex; align-items: center; }
+.theme-select { padding: var(--space-1) var(--space-2); font-size: var(--text-sm); }
+
+/* Forms: a narrow stack; each label wraps its input and its message. A select is drawn as an input. */
 .form { display: flex; flex-direction: column; gap: var(--space-3); max-width: var(--form-width); }
 .form label { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); font-weight: var(--weight-medium); }
-input { padding: var(--space-2) var(--space-3); border: var(--hairline); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
+input, select { padding: var(--space-2) var(--space-3); border: var(--hairline); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
 input[aria-invalid="true"] { border-color: var(--danger); }
+select { cursor: pointer; }
 
 /* Buttons: the primary fill, the destructive variant, a secondary one on the surface, and a button that
    reads as a link. */

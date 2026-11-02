@@ -4,7 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    @* The design system's values first, then the components built from them (docs/design-system.md). *@
+    @* The design system's values first, then the components built from them (docs/design-system.md).
+       theme.js comes before both and blocks, so the theme the user keeps is on <html> before the first paint. *@
+    <script src="_content/Trellis.UI.Common/theme.js"></script>
     <link rel="stylesheet" href="_content/Trellis.UI.Common/tokens.css" />
     <link rel="stylesheet" href="_content/Trellis.UI.Common/app.css" />
     <link rel="icon" href="data:," />

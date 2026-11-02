@@ -6,7 +6,7 @@ Agent entry point — read only what the task needs.
 - [architecture.md](architecture.md) — the rings, the dependency flow, the key patterns, a request stage by stage, domain versus integration events and what each delivery step guarantees, shipping `Api.Contracts` as a package, scheduled use cases
 - [development.md](development.md) — prerequisites, commands, running the app, the testing map (what each project proves, the shared `tests/TestSupport/` files, running part of the suite, which helper for which goal: `InvoiceFactory`, the drivers, `ShouldBeSuccess()`), when the build fails (RSLT001, CS9057), when a request fails, vulnerable packages, bumping the SDK, the agent hooks (what each decides, adding one, turning them off)
 <!--#if (IncludeUI) -->
-- [design-system.md](design-system.md) — the UI's tokens in two themes, the components the pages are built from, the contrast and voice rules, the tests that hold them, re-skinning, themes, mocks
+- [design-system.md](design-system.md) — the UI's tokens in two themes, the components the pages are built from, the contrast and voice rules, the tests that hold them, re-skinning, the themes and the theme switch, mocks
 <!--#endif -->
 - [deployment.md](deployment.md) — a one-host quick start (images, `aspire publish`, `.env`, `docker compose up`, the first probe), container images (tags, an SBOM), what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP and trace sampling, the telemetry reference (every source, meter, instrument, attribute and log event id, test-checked), outbox and idempotency runbooks
 - [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge
