@@ -16,6 +16,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   The starting palette is a green ink and accent on near-white, a lime accent on near-black. Two tokens
   were renamed for anyone who customised 0.1.x: `--fg` is `--ink` and `--border` is `--line`
   (`docs/upgrading.md`, step 7). No class and no markup changed.
+- **The design tokens export as JSON** for a design tool or a published design-system page:
+  `./scripts/export-design-tokens.sh [-o tokens.json]` writes one object per token in `tokens.css`, in
+  its order, with its value (a colour as its light and dark pair) and its usage, the token's *Role* in
+  `docs/design-system.md` (*Mocks and the export*). It needs only `sh` and `awk`, and
+  `DesignSystemTests` runs it and holds every name, value and usage to the token file and the doc. A
+  project generated with `--include-ui false` gets the script too; it says there is nothing to export.
 - **A `ui-reviewer` subagent** (`.claude/agents/`, with `--include-ui`) reads a change to a page, a
   layout or a stylesheet against the design system, the UI rules and accessibility, in a browser through
   the Playwright MCP when one is running, and reports; `.claude/rules/ui.md` asks for it before a UI
