@@ -545,13 +545,19 @@ plain text you can read too.
   it ([ADR-0014](docs/adr/0014-ai-documentation-architecture.md)).
 - **Path-scoped rules** in `.claude/rules/`, one per layer plus the tests and the tools, each loaded
   when an agent touches a file its glob matches: the domain rules arrive with the first edit under
-  `src/Core/Trellis.Domain/`.
+  `src/Core/Trellis.Domain/`. [`dependencies.md`](.claude/rules/dependencies.md) arrives with the
+  package and SDK files: asking before a package, the license ceilings, central versions, the order to
+  answer a NuGetAudit advisory that turns the build red, and an SDK bump.
 - **Skills** in `.claude/skills/`, step-by-step recipes:
   [`add-feature`](.claude/skills/add-feature/SKILL.md) (a checklist that names the test behind each
   enforced box), [`remove-feature`](.claude/skills/remove-feature/SKILL.md),
   [`add-integration`](.claude/skills/add-integration/SKILL.md),
-  [`add-migration`](.claude/skills/add-migration/SKILL.md), [`new-adr`](.claude/skills/new-adr/SKILL.md)
-  and [`run-app`](.claude/skills/run-app/SKILL.md). An agent follows them, and so can you.
+  [`add-migration`](.claude/skills/add-migration/SKILL.md), [`new-adr`](.claude/skills/new-adr/SKILL.md),
+  [`run-app`](.claude/skills/run-app/SKILL.md), [`finish-change`](.claude/skills/finish-change/SKILL.md)
+  (the gates CI runs, in its order, and the reviewers a change needs, before a commit; with `pr`, the
+  pull request filled from its template) and
+  [`upgrade-template`](.claude/skills/upgrade-template/SKILL.md) (a later template version adopted by
+  regenerating and diffing; it runs only when you type it). An agent follows them, and so can you.
 - **Reviewers** in `.claude/agents/`, five read-only subagents, each opening with what it owns, what it
   leaves to another and how they overlap, so a change read by several hears each point once:
   [`code-reviewer`](.claude/agents/code-reviewer.md) (correctness and the layer's conventions),
@@ -657,7 +663,7 @@ describes planned work that is not in the template yet; the marker goes when it 
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
 
 **Agent setups we learned from**
-- [Aspire](https://github.com/microsoft/aspire) by Microsoft (MIT): the *Owns* / *Out of scope* / *Overlap* lines that open each reviewer in `.claude/agents/`, and their "zero duplicate feedback" rule, from its `reviewing-aspire-architecture` agent.
+- [Aspire](https://github.com/microsoft/aspire) by Microsoft (MIT): the *Owns* / *Out of scope* / *Overlap* lines that open each reviewer in `.claude/agents/`, and their "zero duplicate feedback" rule, from its `reviewing-aspire-architecture` agent; and a finishing skill that runs the repository's gates and fills its pull-request template, from its `create-pr` skill (`finish-change`).
 - [ASP.NET Core](https://github.com/dotnet/aspnetcore) by Microsoft (MIT): the red/green proof a bug fix's test owes, that it "fails for the expected reason without the fix", from its Copilot instructions (`test-reviewer`).
 - [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) by Anthropic (Apache-2.0): a reviewer dedicated to a change's tests, the idea behind `test-reviewer` (`pr-test-analyzer` in its `pr-review-toolkit`), and the `security-reviewer` template in its `claude-code-setup` plugin, the starting point of ours; as ideas only, `hookify`'s `require-tests-run` Stop rule behind `stop-tests.sh` and `security-guidance`'s check at commit time behind `guard-commit.sh`.
 - [Claude Code documentation](https://code.claude.com/docs/en/hooks-guide) by Anthropic: the protect-files `PreToolUse` recipe that `guard-edits.sh` grew from, the best-practices example of a hook that guards the migrations folder, and the `stop_hook_active` guard that keeps `stop-tests.sh` from blocking twice in a row.

@@ -28,7 +28,8 @@ paths: ["tools/**/*.{cs,csproj}", ".github/**/*.{yml,yaml}", "docker-compose.yml
 ## CI supply-chain gates
 
 - **Central package management** (ADR-0029): versions live only in `Directory.Packages.props` (transitive pinning on); a package family that shares version floors moves in one Dependabot group (`.github/dependabot.yml`) — add a new family to its group in the same change. A package numbered after .NET (10.x on .NET 10) also needs a semver-major ignore there unless an existing pattern covers it: its next major comes with the next .NET, a migration made by hand.
-- **NuGetAudit** (`all` + `low`, `Directory.Build.props`) fails Release and CI builds on any advisory, transitive included (NU1901–NU1904). Playbook in `docs/development.md` ("Vulnerable packages"): upgrade, else pin the transitive in `Directory.Packages.props` with the advisory in a comment, else `NuGetAuditSuppress` one advisory with its reason. Never lower the level or the mode to get a build through.
+- **NuGetAudit** (`all` + `low`, `Directory.Build.props`) fails Release and CI builds on any advisory, transitive included (NU1901–NU1904). Playbook in `docs/development.md` ("Vulnerable packages"): upgrade, else pin the transitive in `Directory.Packages.props` with the advisory in a comment, else `NuGetAuditSuppress` one advisory with its reason. Never raise the level or narrow the mode to get a build through.
+- **Step by step**: adding a package, answering an advisory and bumping the SDK are in `.claude/rules/dependencies.md`, which loads with `Directory.Packages.props`, `Directory.Build.props`, `global.json`, `.github/dependabot.yml`, the SDK image and the tool manifest.
 <!--#if (TemplateSource) -->
 
 ## Template source only (this section never ships)

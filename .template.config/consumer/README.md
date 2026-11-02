@@ -89,7 +89,8 @@ against the `main` of its own moment, so consider a nightly `schedule:` trigger 
   decision records in `docs/adr/`.
 - `.claude/`: the agent toolkit, its skills, reviewers and hooks, beside the MCP servers in `.mcp.json`;
   [docs/INDEX.md](docs/INDEX.md) lists each one with when to use it, and `AGENTS.md` says which reviewer
-  a change needs.
+  a change needs. `/finish-change` runs the gates CI runs, and the reviewers, before a change is
+  committed or opened as a pull request.
 - [docs/features/invoices.md](docs/features/invoices.md): the reference slice. The `add-feature`,
   `remove-feature` and `add-integration` skills in `.claude/skills/` start from it.
 - [CHANGELOG.md](CHANGELOG.md): record this project's changes under `[Unreleased]`.
@@ -98,7 +99,8 @@ against the `main` of its own moment, so consider a nightly `schedule:` trigger 
 
 This solution was generated from a `dotnet new` template. .trellis\-template.json records the
 template package, its version, and the name and options used; [docs/upgrading.md](docs/upgrading.md)
-uses it to adopt a later template version. Keep it, unedited.
+uses it to adopt a later template version, and `/upgrade-template <version>` walks through that in
+Claude Code. Keep it, unedited.
 
 ## Licensing
 

@@ -66,7 +66,9 @@ after each layer.
       the unit of work (the outbox commits them), external side effects after them.
 - [ ] Permissions: a constant in `Authorization/Permissions.cs`, listed in `Permissions.All`, granted
       to a role in `Roles.Permissions`. The MigrationService and the test hosts seed from that map;
-      never grant one by hand.
+      never grant one by hand. Who else an endpoint lets through (any signed-in caller, anyone, a
+      further policy, the record's owner) and what each choice needs: `docs/features/auth.md`,
+      *Protecting an endpoint*.
 - [ ] A meter or `ActivitySource` is named `Trellis.<Area>`, instruments `trellis.<area>.<name>`
       with a unit, and each new name, unit and `[LoggerMessage]` event id gets its row in
       `docs/deployment.md`'s *Telemetry reference* [`TelemetryNamingTests`, both ways]; nothing to
@@ -182,7 +184,7 @@ after each layer.
 - [ ] Run the reviewers the change needs before finishing (AGENTS.md, *Boundaries*): `code-reviewer`;
       `architecture-guard` when a project or a package was added; `test-reviewer` for the new tests;
       `security-reviewer` when a permission, an allowlist or who may call an endpoint changed. Their
-      findings are claims to check against the code.
+      findings are claims to check against the code; then `/finish-change`.
 
 ## Not shown by the Invoices slice: decide deliberately
 
