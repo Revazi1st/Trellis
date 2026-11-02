@@ -19,7 +19,7 @@ paths: ["Directory.Packages.props", "Directory.Build.props", "global.json", ".gi
 2. Upgrade the direct reference when a newer version of it, or of the package that depends on the vulnerable one, brings the fix.
 3. Otherwise pin the transitive package: a `PackageVersion` at the patched version in `Directory.Packages.props` with a comment naming the advisory (the `Microsoft.OpenApi` entry is the model); delete the pin once the parent depends on a fixed version itself.
 4. Only when no fixed version exists, or the vulnerable code provably cannot be reached: one `<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-…" />` in `Directory.Build.props`, with why it does not apply and when to look again. One advisory per entry, never a whole package.
-5. Never lower `NuGetAuditLevel` or `NuGetAuditMode` to get a build through; raising the level is a decision for an ADR. NU1900 is not an advisory: the advisory data could not be downloaded, so retry once the feed is reachable.
+5. Never loosen the audit to get a build through: `NuGetAuditLevel` stays `low` (`moderate` is a decision recorded in an ADR, `docs/development.md` step 5), `NuGetAuditMode` stays `all`, `NuGetAudit` stays on. NU1900 is not an advisory: the advisory data could not be downloaded, so retry once the feed is reachable.
 
 ## Bumping the SDK
 

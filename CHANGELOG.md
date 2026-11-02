@@ -79,8 +79,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   target regenerated with the same name and options, take, merge or keep, the schema, the marker last.
   `.claude/rules/dependencies.md` loads with the package and SDK files: asking before a package, the
   license ceilings, central versions and Dependabot groups, the order to answer a NuGetAudit advisory,
-  and an SDK bump. `add-feature` points at *Protecting an endpoint* for who may call an endpoint, and
-  `docs/upgrading.md` installs the template as `<package>@<version>`, the separator current SDKs expect.
+  and an SDK bump. `add-feature` points at *Protecting an endpoint* for who may call an endpoint.
+  `docs/upgrading.md` installs the template as `<package>@<version>`, the separator current SDKs expect,
+  and tells the files you never touched by regenerating the version you started from and diffing it
+  against your tree: a diff against the target alone cannot tell your edit from the template's.
 
 ## [0.1.1] - 2026-10-26
 

@@ -47,10 +47,28 @@ option flags.
 | Take the template's side | Merge by hand | Keep yours |
 |---|---|---|
 | `scripts/` (template-owned tooling, no project edits expected) | `.claude/`: the rules describe your code, the skills and agents are procedures you may have adapted, and `remove-feature` has you edit both | `Migrations/`: **never overwrite**, your migration history is project-specific (see below) |
-| Files you never touched (`git diff --no-index` plus a clean working tree shows which) | `docs/adr/` and `docs/INDEX.md`: the template's ADRs are numbered 0001–0099 and arrive as new files or dated amendments (CI accepts the amendments an upgrade appends); yours start at 0100 (the `new-adr` skill), so the two never collide | `CHANGELOG.md`, `README.md`: the project's own |
+| Files you never touched: the baseline diff below leaves them out (copy the new tree's file, or delete yours when the template deleted it) | `docs/adr/` and `docs/INDEX.md`: the template's ADRs are numbered 0001–0099 and arrive as new files or dated amendments (CI accepts the amendments an upgrade appends); yours start at 0100 (the `new-adr` skill), so the two never collide | `CHANGELOG.md`, `README.md`: the project's own |
 | The marker, last: replace it with the new tree's copy once the upgrade is merged and green, so it records the version you now match | `AGENTS.md`, `docs/*.md`, workflows: template prose and settings you may have edited | |
 | | Your feature slices (`Features/*` beyond the shipped Invoices/Auth) and their `docs/features/*.md` | |
 | | `.csproj` / `Directory.Packages.props` additions, `appsettings*.json` values, endpoints and DI you added | |
+
+Which files you never touched is a question for the version you generated from, not the target:
+a diff between your tree and `/tmp/next` cannot tell your edit from the template's, or a file you
+added from one the template deleted. Generate the marker's own version the same way, with its
+options as recorded, into a second directory (a private hive keeps the target installed), and diff
+it against your tree:
+
+```bash
+dotnet new install <template.package>@<template.version> --debug:custom-hive /tmp/prev-hive
+dotnet new <template.shortName> -n <name> -o /tmp/prev --include-ui true --use-redis false … --debug:custom-hive /tmp/prev-hive
+git diff --no-index --name-status /tmp/prev . | grep -Ev '\./(\.git|artifacts)/'
+```
+
+`M` is a file you changed, `A` one you added and `D` a template file you deleted; a file the list
+leaves out is one you never touched, and one that `/tmp/prev` has and `/tmp/next` lacks is one the
+template deleted. The API's development signing key, the AppHost's ports and the dashboard URLs in
+`docs/development.md` differ on every generation and stay yours. For a `0.0.0-source` marker,
+install from a checkout of the template commit you used (`dotnet new install <checkout> …`).
 
 Commit the wholesale takes first, then work through the merge column file by file.
 

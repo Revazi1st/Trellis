@@ -33,7 +33,8 @@ proposed commit message, `commit` also commits, and `pr` commits and opens the p
       (`docs/development.md`, *Running part of the suite*), and a run that reports zero tests is a
       failure to look at, never a pass. A bug fix's test was seen failing without the fix, for the
       expected reason (`AGENTS.md`). IntegrationTests and ApiTests need Docker [CI *Build & Test*,
-      *Test (with coverage)*; the Stop hook reminds once when `src/` or `tools/` changed and no test ran].
+      *Test (with coverage)*; the Stop hook reminds once when a `.cs` or `.razor` file under `src/` or
+      `tools/` changed and no test ran].
 - [ ] **The OpenAPI snapshot**, when anything under `src/Presentation/Api/` changed (Api, Api.Common,
       Api.Contracts): `UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh test tests/Trellis.ApiTests`, then
       `git diff docs/api/openapi.v1.json`, read to the end: every operation, schema and status that moved
@@ -46,6 +47,12 @@ proposed commit message, `commit` also commits, and `pr` commits and opens the p
       and feature doc listed in `docs/INDEX.md`, every rule glob and relative link resolving [CI
       *Build & Test*, *ADR link check*]. A change to an existing ADR also runs
       `./scripts/check-adr-history.sh`: an accepted ADR only gains a dated amendment [CI *ADR history*].
+      <!--#if (TemplateSource) -->
+      In the template's source, also `./scripts/check-template-toggles.sh`: every directive alone on its
+      line and every symbol declared [CI *Build & Test*, *Template toggle check*]; and
+      `python3 eng/readme/render-diagrams.py --check`: the README's pictures match the tree, re-rendered
+      without `--check` [CI *Build & Test*, *README pictures are current*].
+      <!--#endif -->
 - [ ] **The CHANGELOG line**, when someone using the project would notice the change (behaviour, a
       contract, configuration, a fixed bug): one entry under `## [Unreleased]` in `CHANGELOG.md`, in
       their words; none for a refactor. Nothing fails without it, which is why it is a box: the next
