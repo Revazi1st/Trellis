@@ -5,7 +5,7 @@
 <div class="notifications" role="status" aria-live="polite">
     @if (Service.Current is { } shown)
     {
-        <p class="notice">
+        <p class="callout success">
             <span>@shown.Message</span>
             <button type="button" class="link-button" aria-label="Dismiss notification" @onclick="Service.Dismiss">✕</button>
         </p>

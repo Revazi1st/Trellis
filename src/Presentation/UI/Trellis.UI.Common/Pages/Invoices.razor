@@ -31,6 +31,8 @@ else if (_page.TotalCount == 0)
 }
 else
 {
+    @* Each cell's data-th repeats its header: below the breakpoint the rows read as blocks and every cell
+       leads with it. The link's cell has none, as its header is for screen readers only. *@
     <table class="grid">
         <thead>
             <tr><th>Customer</th><th>Status</th><th class="num">Total</th><th>Due</th><th>Created</th><th><span class="visually-hidden">Actions</span></th></tr>
@@ -39,11 +41,11 @@ else
             @foreach (InvoiceDto invoice in _page.Items)
             {
                 <tr>
-                    <td>@invoice.CustomerName</td>
-                    <td>@invoice.Status</td>
-                    <td class="num">@invoice.Total.ToString("N2") @invoice.Currency</td>
-                    <td>@invoice.DueDate?.ToString("yyyy-MM-dd")</td>
-                    <td>@invoice.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
+                    <td data-th="Customer">@invoice.CustomerName</td>
+                    <td data-th="Status"><span class="@StatusPill(invoice.Status)">@invoice.Status</span></td>
+                    <td data-th="Total" class="num">@invoice.Total.ToString("N2") @invoice.Currency</td>
+                    <td data-th="Due">@invoice.DueDate?.ToString("yyyy-MM-dd")</td>
+                    <td data-th="Created">@invoice.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
                     <td><NavLink href="@($"invoices/{invoice.Id}")" aria-label="@($"View the invoice for {invoice.CustomerName}")">View</NavLink></td>
                 </tr>
             }
@@ -51,9 +53,9 @@ else
     </table>
 
     <nav class="pager" aria-label="Pagination">
-        <button @onclick="() => LoadAsync(_filter, _page!.Page - 1)" disabled="@(!_page.HasPreviousPage)">Previous</button>
+        <button class="secondary" @onclick="() => LoadAsync(_filter, _page!.Page - 1)" disabled="@(!_page.HasPreviousPage)">Previous</button>
         <span aria-live="polite">Page @_page.Page of @_page.TotalPages (@_filter.Count(_page.TotalCount))</span>
-        <button @onclick="() => LoadAsync(_filter, _page!.Page + 1)" disabled="@(!_page.HasNextPage)">Next</button>
+        <button class="secondary" @onclick="() => LoadAsync(_filter, _page!.Page + 1)" disabled="@(!_page.HasNextPage)">Next</button>
     </nav>
 }
 
@@ -69,6 +71,18 @@ else
     private bool _authorized;
 
     private InvoiceFilter Requested => InvoiceFilter.From(StatusQuery);
+
+    /// <summary>
+    /// The classes of an invoice's status pill (docs/design-system.md, Status pill): paid is a success, voided
+    /// a danger, draft and issued neutral. The word is always in the pill; the tint only adds to it. The
+    /// detail page's summary renders the same pill through this one mapping.
+    /// </summary>
+    internal static string StatusPill(InvoiceStatus status) => status switch
+    {
+        InvoiceStatus.Paid => "pill success",
+        InvoiceStatus.Voided => "pill danger",
+        _ => "pill",
+    };
 
     protected override Task OnAuthorizedAsync()
     {
