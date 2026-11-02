@@ -2,7 +2,7 @@
 name: finish-change
 description: Run the repository's gates on a finished change in CI's order (format, Release build, tests, the OpenAPI snapshot, docs drift, links, the CHANGELOG line, the reviewers), then commit or open the pull request only when asked. Use when a change is done and about to be committed, pushed or opened as a pull request.
 argument-hint: "[commit|pr]"
-allowed-tools: Bash(./scripts/dotnet.sh:*), Bash(./scripts/check-docs-drift.sh:*), Bash(./scripts/check-adr-links.sh:*), Bash(./scripts/check-adr-history.sh:*), Bash(git status), Bash(git diff:*), Bash(git log:*)
+allowed-tools: Bash(./scripts/dotnet.sh:*), Bash(UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh:*), Bash(./scripts/check-docs-drift.sh:*), Bash(./scripts/check-adr-links.sh:*), Bash(./scripts/check-adr-history.sh:*), Bash(git status), Bash(git diff:*), Bash(git log:*)
 ---
 
 # Finish a change

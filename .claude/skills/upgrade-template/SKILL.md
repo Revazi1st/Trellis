@@ -1,7 +1,7 @@
 ---
 name: upgrade-template
 description: Adopt a later version of the template this project was generated from, as docs/upgrading.md describes: read the marker and the changelog between the versions, regenerate with the same name and options into a scratch directory, diff, take, merge or keep each file, settle the schema, run the gates and replace the marker last. Use when you choose to move the project to a newer template version.
-argument-hint: "<version>"
+argument-hint: "<version>, the number without the tag's v, e.g. 0.2.0"
 disable-model-invocation: true
 ---
 
