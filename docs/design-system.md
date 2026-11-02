@@ -356,7 +356,9 @@ or a published design-system page to import: an array with one object per custom
 declares under `:root`, in the file's order, each a `name`, a `value` and a `usage`. A colour's value is
 its pair, `{"light": "#rrggbb", "dark": "#rrggbb"}` in lower case; any other value is the string as
 written, its whitespace collapsed; the usage is the token's *Role* cell in the [Tokens](#tokens) tables,
-empty for a token without a row. The same files give the same bytes.
+empty for a token without a row. A value may not hold a `;`, `{` or `}` inside quotes or parentheses
+(a data URL, say): the script stops with exit 2 and names the token rather than write it cut short. The
+same files give the same bytes, on Linux and macOS alike.
 
 ```bash
 ./scripts/export-design-tokens.sh                  # the JSON on stdout

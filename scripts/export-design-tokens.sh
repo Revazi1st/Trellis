@@ -7,10 +7,12 @@
 #     { "name": "--space-4", "value": "1rem", "usage": "16 px" }
 #   ]
 # written 2-space indented, one key to a line. A colour, light-dark(#rrggbb, #rrggbb), becomes its two
-# values in lower case; any other value is the string as written, its whitespace collapsed. The usage is
-# the Role cell of the token's row in the doc's Tokens tables, "" for a token without one. The same
-# inputs give byte-identical output. DesignSystemTests (ArchitectureTests) runs it and holds every name
-# and value to tokens.css and every usage to the doc.
+# values in lower case; any other value is the string as written, its whitespace collapsed. A value may
+# not hold a ";", "{" or "}" inside quotes or parentheses (a data URL, say): the script stops with exit 2
+# and names the token rather than write it cut short. The usage is the Role cell of the token's row in
+# the doc's Tokens tables, "" for a token without one. The same inputs give byte-identical output, on
+# Linux and macOS alike. DesignSystemTests (ArchitectureTests) runs it and holds every name and value to
+# tokens.css and every usage to the doc.
 #
 # Usage:
 #   export-design-tokens.sh [-o <file>]   src/Presentation/UI/*.UI.Common/wwwroot/tokens.css and
@@ -81,7 +83,9 @@ fi
 # One awk program, all of it in BEGIN, reading both files by name from the environment (an operand
 # with "=" in it would be an assignment, and -v would expand its backslashes). POSIX awk only: the
 # escapes a gsub replacement takes differ between awks, so JSON strings are escaped a character at a
-# time, and the hex pattern is spelled out rather than written with an interval.
+# time; the hex pattern is spelled out rather than written with an interval; and a split separator is
+# a bracket expression, "[;]" and not ";", because the awk macOS ships also splits on every newline
+# when the separator is one plain character, which would cut a value written over two lines.
 export_tokens() {
   EXPORT_TOKENS_FILE="$tokens" EXPORT_DOC_FILE="$doc" awk '
     function trim(s) {
@@ -138,12 +142,38 @@ export_tokens() {
       close(file)
     }
 
-    # Every "--name: value;" in a :root body, in order; the text after the last ";" is not one.
+    # Stops the export: exit 2, the reason on stderr, nothing on stdout.
+    function stop(what) {
+      printf "export-design-tokens: %s: a value may not hold \";\", \"{\" or \"}\" inside quotes or parentheses\n", what | "cat 1>&2"
+      close("cat 1>&2")
+      exit 2
+    }
+
+    # 1 when s closes every quote and parenthesis it opens; a backslash escapes the character after it.
+    function closed(s,    i, n, c, quote, depth) {
+      quote = ""
+      depth = 0
+      n = length(s)
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (c == "\\") i++
+        else if (quote != "") { if (c == quote) quote = "" }
+        else if (c == "\"" || c == sq) quote = c
+        else if (c == "(") depth++
+        else if (c == ")") { if (--depth < 0) return 0 }
+      }
+      return quote == "" && depth == 0
+    }
+
+    # Every "--name: value;" in a :root body, in order; the text after the last ";" is not one. A ";"
+    # or a "}" inside quotes or parentheses has split the body there, so a part that leaves one open,
+    # the last part included, stops the export rather than lose the rest of the value or the block.
     function declarations(body,    parts, n, p, seg, name, value, i, rest) {
-      n = split(body, parts, ";")
-      for (p = 1; p < n; p++) {
+      n = split(body, parts, "[;]")
+      for (p = 1; p <= n; p++) {
         seg = trim(parts[p])
-        if (!match(seg, /^--[A-Za-z_][A-Za-z0-9_-]*[ \t\r\n]*:/)) continue
+        if (!closed(seg)) stop(match(seg, /^--[A-Za-z_][A-Za-z0-9_-]*/) ? substr(seg, 1, RLENGTH) : ":root")
+        if (p == n || !match(seg, /^--[A-Za-z_][A-Za-z0-9_-]*[ \t\r\n]*:/)) continue
         name = substr(seg, 3, RLENGTH - 3)
         sub(/[ \t\r\n]+$/, "", name)
         value = collapse(substr(seg, RLENGTH + 1))
@@ -200,9 +230,11 @@ export_tokens() {
           body = body c
         }
       }
+      if (depth != 0) stop(file ": its braces do not balance")
     }
 
     BEGIN {
+      sq = "\047"
       hex = "#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]"
       pair = "^light-dark[(] ?" hex " ?, ?" hex " ?[)]$"
       count = 0
@@ -227,7 +259,7 @@ export_tokens() {
 }
 
 if [ -n "$out" ]; then
-  export_tokens > "$out"
+  export_tokens > "$out" || { status=$?; rm -f "$out"; exit "$status"; }
   printf 'wrote %s\n' "$out"
 else
   export_tokens

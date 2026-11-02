@@ -22,7 +22,8 @@ namespace Trellis.ArchitectureTests;
 /// <item>every <c>var(--x)</c> a stylesheet reads is declared;</item>
 /// <item>the doc's token tables and the token file name the same tokens;</item>
 /// <item>the token export (<c>scripts/export-design-tokens.sh</c>) writes every token in the file's order,
-/// a colour as its light and dark value, with the Role cell of its row in the doc.</item>
+/// a colour as its light and dark value, with the Role cell of its row in the doc, and stops rather than
+/// write a value it would cut short.</item>
 /// </list>
 /// Each fact has a positive control below it: a scan that passes a clean codebase and a broken check
 /// alike proves nothing. The UI folder is found by shape, <c>src/Presentation/UI/*.UI.Common/wwwroot</c>,
@@ -450,6 +451,84 @@ public sealed partial class DesignSystemTests
             planted.Delete(recursive: true);
         }
     }
+
+    /// <summary>
+    /// Positive control for the export's one limit: a <c>;</c> inside quotes or parentheses would end a value early,
+    /// and a brace inside quotes would end or open a block, so the script stops with exit 2 and names what it would
+    /// have cut short, rather than write a shorter value or drop the tokens after it; <c>-o</c> leaves no file.
+    /// </summary>
+    [Theory]
+    [InlineData("--icon: url(\"data:image/svg+xml;utf8,<svg/>\");", "--icon:")]
+    [InlineData("--mask: url(data:image/svg+xml;utf8,<svg/>);", "--mask:")]
+    [InlineData("--quoted: \"a;b\";", "--quoted:")]
+    [InlineData("--closing: \"}\";", "--closing:")]
+    [InlineData("--opening: \"{\";", "braces do not balance")]
+    public async Task The_token_export_stops_rather_than_cut_a_value_short(string declaration, string named)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), WindowsSkipReason);
+
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DirectoryInfo planted = Directory.CreateTempSubdirectory("design-tokens-");
+        try
+        {
+            string tokens = Path.Combine(planted.FullName, TokenFileName);
+            string json = Path.Combine(planted.FullName, "tokens.json");
+            await File.WriteAllTextAsync(tokens, $":root {{\n  color-scheme: light dark;\n  {declaration}\n  --after: 1rem;\n}}\n", cancellationToken);
+
+            ExportRun run = await RunExportAsync("--tokens", tokens, "-o", json);
+
+            run.ExitCode.ShouldBe(2, $"{ExportScript} stops at {declaration} rather than cut the value short");
+            run.Errors.ShouldContain(named);
+            run.Output.ShouldBeEmpty();
+            File.Exists(json).ShouldBeFalse($"{ExportScript} left a file behind after stopping at {declaration}");
+        }
+        finally
+        {
+            planted.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Positive control for the export fact's check: a colour with a wrong value, a colour exported as a string, a
+    /// string exported as a colour, a string that differs from the declaration and a usage that differs from the
+    /// Role cell are each reported by name; a value the export collapsed onto one line is not.
+    /// </summary>
+    [Fact]
+    public void The_export_check_flags_a_wrong_colour_a_wrong_string_and_a_wrong_usage()
+    {
+        TokenSheet sheet = TokenSheet.Parse(
+            ":root { color-scheme: light dark; --ink: light-dark(#111111, #eeeeee); --line: light-dark(#222222, #dddddd); "
+            + "--space-1: 0.25rem; --radius: 4px; --stack: system-ui,\n    sans-serif; }");
+        List<ExportedToken> exported =
+        [
+            new("--ink", null, new ColourPair("#111111", "#eeeeef"), "Text"),
+            new("--line", "light-dark(#222222, #dddddd)", null, ""),
+            new("--space-1", "0.25 rem", null, ""),
+            new("--radius", null, new ColourPair("#000000", "#ffffff"), ""),
+            new("--stack", "system-ui, sans-serif", null, "Body"),
+        ];
+        Dictionary<string, string> roles = new(StringComparer.Ordinal) { ["ink"] = "Body", ["stack"] = "Body" };
+
+        ExportMismatches(sheet, exported, roles).ShouldBe(
+        [
+            $"--ink: exported light #111111, dark #eeeeef, but {TokenFileName} has light #111111, dark #eeeeee",
+            $"--ink: exported usage \"Text\", but its Role cell in {DesignDocument} is \"Body\"",
+            $"--line: exported \"light-dark(#222222, #dddddd)\", but {TokenFileName} has light #222222, dark #dddddd",
+            $"--space-1: exported \"0.25 rem\", but {TokenFileName} has \"0.25rem\"",
+            $"--radius: exported light #000000, dark #ffffff, but {TokenFileName} has \"4px\"",
+        ]);
+    }
+
+    [Theory]
+    [InlineData("a=Text", "| Token | Role | Used by |", "|---|---|---|", "| `--a` | Text | `body` |")]
+    [InlineData("a=Text", "| Token | Used by | Role |", "|---|---|---|", "| `--a` | `body` | Text |")]
+    [InlineData("a=first,b=", "| `--a` | first |", "| `--a` | second |", "| `--b` |")]
+    [InlineData("", "| `--a` and `--b` | Text |", "| `--a` (old) | Text |", "| `var(--a)` | Text |")]
+    public void The_role_reader_takes_the_column_headed_Role(string expected, params string[] lines)
+        => string.Join(',', RoleCells(lines.Select(static (text, index) => (index + 1, text)))
+                .OrderBy(static role => role.Key, StringComparer.Ordinal)
+                .Select(static role => $"{role.Key}={role.Value}"))
+            .ShouldBe(expected);
 
     private static DirectoryInfo FindWwwRoot()
     {
