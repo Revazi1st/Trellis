@@ -50,6 +50,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   every leg, one of them named `Zeta.Journal`, and `scripts/test-template.sh` does the same. The
   `finish-change` skill formats only the files the change touches and reports a formatter change
   anywhere else instead of committing it.
+- **`/finish-change` loads in a headless session, and never commits on `main`.** A `claude -p` run had
+  `/finish-change commit` refused outright while `add-feature` loaded: `finish-change` and
+  `add-migration` were the two skills that pre-approved commands in an `allowed-tools` frontmatter, and
+  neither does now (`.claude/settings.json` already allows the scripts and git commands they listed,
+  apart from the OpenAPI snapshot run). The Commit box now stops when the branch cannot be created
+  instead of committing on `main`.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

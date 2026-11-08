@@ -2,7 +2,6 @@
 name: finish-change
 description: Run the repository's gates on a finished change in CI's order (format, Release build, tests, the OpenAPI snapshot, docs drift, links, the CHANGELOG line, the reviewers), then commit or open the pull request only when asked. Use when a change is done and about to be committed, pushed or opened as a pull request.
 argument-hint: "[commit|pr]"
-allowed-tools: Bash(./scripts/dotnet.sh:*), Bash(UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh:*), Bash(./scripts/check-docs-drift.sh:*), Bash(./scripts/check-adr-links.sh:*), Bash(./scripts/check-adr-history.sh:*), Bash(git status), Bash(git diff:*), Bash(git log:*)
 ---
 
 # Finish a change
@@ -76,7 +75,8 @@ did not apply) and propose the commit message. Nothing is committed or pushed un
 
 ## Commit (`commit` or `pr`)
 
-- [ ] On `main`, branch first: `git switch -c <type>/<short-name>`.
+- [ ] On `main`, branch first: `git switch -c <type>/<short-name>`; if the branch cannot be created,
+      stop and say so, never commit on `main`.
 - [ ] One commit per concern, each green on its own: a refactor and the feature it makes room for are
       two commits, in that order, and the gates pass at each. Stage files by name from the first box's
       list, never `git add -A` over a tree that holds anything else.
