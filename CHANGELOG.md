@@ -8,6 +8,17 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+- **E-mail goes out through MailKit, and `aspire run` catches it in Mailpit.** The SMTP adapter
+  (`Email:Provider=Smtp`) submits with MailKit (MIT) in place of `System.Net.Mail.SmtpClient`, which
+  Microsoft no longer recommends for new code; the `Email:Smtp` settings, their boot checks and the
+  logging contract are unchanged, STARTTLS still fails a send rather than falling back to plaintext,
+  and a failure is still thrown for the outbox with the relay's reply left out, now as MailKit's
+  `SmtpCommandException` (status and error code kept) where it was `SmtpException`. In run mode only,
+  the AppHost starts Mailpit (`CommunityToolkit.Aspire.Hosting.MailPit`, image `axllent/mailpit`,
+  both MIT) and points the API at it, so the receipt of a paid invoice lands behind the `mailpit`
+  resource's **Inbox** link instead of in the log; `aspire publish` declares no catcher, so a
+  deployment still configures its own relay. Under `aspire run` the AppHost's settings outrank a relay
+  you put in user secrets: run the API from its launch profile to try a real one.
 - **The `--use-redis` cache is Valkey** (BSD-3-Clause) in place of the Redis server, whose 8.x
   releases are RSALv2, SSPLv1 or AGPLv3. The AppHost declares `AddValkey("cache")` with the image's
   major pinned (`valkey/valkey:9`), the `redis` service of `docker-compose.yml` and the generated CI

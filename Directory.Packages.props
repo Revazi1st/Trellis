@@ -81,6 +81,8 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.14" />
+    <!-- The SMTP adapter's client (Email/SmtpEmailSender.cs), MIT, with MimeKit (MIT) for the message. -->
+    <PackageVersion Include="MailKit" Version="4.18.2" />
   </ItemGroup>
 
   <ItemGroup Label="API">
@@ -116,6 +118,9 @@
     <!-- The cache server of the UseRedis option: Valkey, which the API reaches with the Redis client below
          (ADR-0011's amendment of 2026-11-08 keeps the Redis server's own image out). -->
     <PackageVersion Include="Aspire.Hosting.Valkey" Version="13.6.4" />
+    <!-- The run-mode mail catcher the API sends to under 'aspire run' (axllent/mailpit), MIT; it follows Aspire's
+         numbering a release behind, and Dependabot moves it with the Aspire group. -->
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.MailPit" Version="13.6.1" />
     <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.4" />
     <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.6.4" />
     <PackageVersion Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.6.4" />

@@ -40,6 +40,7 @@ updates:
           - "Microsoft.IdentityModel.*"
           - "Microsoft.OpenApi"
           - "Aspire.*"
+          - "CommunityToolkit.Aspire.*"   # the Mailpit tile; builds on Aspire.Hosting, so it moves with it
           - "Npgsql.*"
           - "dotnet-ef"
           - "MessagePack"   # transitive pin below Aspire.Hosting; must move with it

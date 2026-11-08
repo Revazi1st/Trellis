@@ -82,8 +82,8 @@ AppHost's `AddRedis` pulled the Redis 8 server, licensed RSALv2, SSPLv1 or AGPLv
 (Redis 7.2 and earlier were BSD-3-Clause), and `WithRedisInsight` its browser, under the SSPL. Every
 image the AppHost declares, and every image the workflows and the root compose file name, is now on an
 allowlist held by a test, `ContainerImageTests` in ArchitectureTests, each entry with the license it
-ships under: PostgreSQL and pgAdmin (PostgreSQL License), Valkey (BSD-3-Clause) and the Aspire
-dashboard of the compose output (MIT). An image off the list fails the test, and so does a resource
+ships under: PostgreSQL and pgAdmin (PostgreSQL License), Valkey (BSD-3-Clause), Mailpit, the mail
+catcher of run mode (MIT), and the Aspire dashboard of the compose output (MIT). An image off the list fails the test, and so does a resource
 whose image the scan cannot tell. The cache became Valkey, a fork of Redis 7.2 that speaks its
 protocol, so the API keeps its Redis client (`Aspire.StackExchange.Redis.DistributedCaching`, MIT)
 and `--use-redis` keeps its name; it has no browser tile. Adding an image is a license decision like

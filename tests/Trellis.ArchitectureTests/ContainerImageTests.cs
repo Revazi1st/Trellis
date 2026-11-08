@@ -34,6 +34,7 @@ public sealed partial class ContainerImageTests
         ["docker.io/dpage/pgadmin4"] = "PostgreSQL License: pgAdmin, the tile beside PostgreSQL (WithPgAdmin)",
         ["docker.io/valkey/valkey"] =
             "BSD-3-Clause: the Redis-protocol cache with --use-redis (AddValkey; the redis service of docker-compose.yml)",
+        ["docker.io/axllent/mailpit"] = "MIT: Mailpit, the mail catcher the API sends to in run mode (AddMailPit)",
         ["mcr.microsoft.com/dotnet/nightly/aspire-dashboard"] =
             "MIT: the Aspire dashboard the compose output runs (AddDockerComposeEnvironment)",
     };
@@ -112,6 +113,7 @@ public sealed partial class ContainerImageTests
     [InlineData("builder.AddKafka(\"events\");", AppHostFolder + "Program.cs", true)]
     [InlineData("builder.AddPostgres(\"postgres\").WithImageTag(\"18\").WithDataVolume().WithPgAdmin();", AppHostFolder + "Program.cs", false)]
     [InlineData("var cache = builder.AddValkey(\"cache\").WithImageTag(\"9\");", AppHostFolder + "Program.cs", false)]
+    [InlineData("var mailpit = builder.AddMailPit(\"mailpit\").WithUrlForEndpoint(\"http\", static url => url.DisplayText = \"Inbox\");", AppHostFolder + "Program.cs", false)]
     [InlineData("builder.AddProject<Projects.Api>(\"api\").WithReference(database).WaitFor(database);", AppHostFolder + "Program.cs", false)]
     [InlineData("builder.AddContainer(\"db\", \"docker.io/library/postgres:18\");", AppHostFolder + "Program.cs", false)]
     [InlineData("services:\n  cache:\n    image: redis:8\n", "docker-compose.yml", true)]

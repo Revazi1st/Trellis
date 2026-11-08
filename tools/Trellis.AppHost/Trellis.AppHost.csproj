@@ -23,6 +23,8 @@
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.Docker" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <!-- Mailpit, the mail catcher the API sends to in run mode only (Program.cs). -->
+    <PackageReference Include="CommunityToolkit.Aspire.Hosting.MailPit" />
     <!--#if (UseRedis) -->
     <PackageReference Include="Aspire.Hosting.Valkey" />
     <!--#endif -->

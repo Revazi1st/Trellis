@@ -50,7 +50,7 @@ placeholder variables at the top of the file name the response each value comes 
 | 5 | `POST /api/v1/invoices/{id}/issue` | `{"dueDate": "2099-12-31T00:00:00Z"}` | 204; a past date answers 400 `Invoice.DueDateInPast`. Step 3 again now shows it `Issued`, still first; the overdue list does not have it until 2099 |
 | 6 | `GET /api/v1/invoices/{id}` | | 200: status `Issued`, total 1200.00, and an `ETag` header to paste into `@etag` |
 | 7 | the same GET with `If-None-Match: {etag}` | | 304 and no body, until the invoice changes |
-| 8 | `POST /api/v1/invoices/{id}/pay` | | 204; seconds later the api logs `E-mail not sent (Email:Provider=Logging) …`: the outbox handed `invoices.paid.v1` to `SendReceiptOnInvoicePaid` after the commit |
+| 8 | `POST /api/v1/invoices/{id}/pay` | | 204; seconds later the receipt is in the `mailpit` resource's **Inbox** (the api logs `E-mail sent (Email:Provider=Smtp) …`), or, run without the AppHost, the api logs `E-mail not sent (Email:Provider=Logging) …`: the outbox handed `invoices.paid.v1` to `SendReceiptOnInvoicePaid` after the commit |
 | 9 | step 5 again with `If-Match: {etag}` | same as step 5 | 412 `Invoice.VersionMismatch`: paying moved the version past the ETag you read in step 6, so nothing changes (without the header: 409 `Invoice.AlreadyFinalized`) |
 | 10 | step 2 again, same key and body | same as step 2 | 201 with the same `Location` and `Idempotency-Replayed: true`; no second invoice exists |
 | 11 | `POST /api/v1/auth/register` | `{"email": "member@example.com", "password": "Member123!"}` | 200 (Development opens self-registration); a 409 `Auth.EmailAlreadyInUse` on later runs is fine |
@@ -148,7 +148,10 @@ Use-case slices, each = command/query + `internal sealed` handler: `CreateInvoic
 ## From a payment to its receipt
 
 Paying an invoice is one transaction; e-mailing the receipt is not. The command commits the invoice and
-the event together, answers, and the outbox delivers the event to its handlers afterwards:
+the event together, answers, and the outbox delivers the event to its handlers afterwards. The receipt
+goes through `IEmailSender`, whichever adapter `Email:Provider` picks: under `aspire run`, SMTP to the
+Mailpit catcher the AppHost starts, whose **Inbox** link shows it; run any other way, a masked log line
+until a relay is configured (`docs/development.md`, *Secrets*):
 
 ```mermaid
 sequenceDiagram

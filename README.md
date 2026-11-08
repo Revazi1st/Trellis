@@ -200,7 +200,8 @@ dashboard at <https://localhost:17171> (trust the development certificate once w
 `dotnet dev-certs https --trust`), its `http` profile at <http://localhost:15171>, and a generated
 solution picks free ports of its own when you create it. The dashboard lists `postgres`, the
 `migrations` worker (it migrates, seeds and exits while the API waits), the `api` with a **Scalar**
-link to its API reference, and the `web` UI.
+link to its API reference, the `web` UI, and `mailpit`, which catches the e-mail the API sends (run
+mode only: `aspire publish` leaves e-mail to your relay).
 
 No .NET SDK on your machine? Choose **Reopen in Dev Container**, start PostgreSQL with
 `docker compose up -d` (host port 5433), then run **Trellis.MigrationService** once, **Trellis.Api**
@@ -251,9 +252,9 @@ Idempotency-Key: {{createKey}}
 
 A 201 comes back with a `Location` header and the new `id`, which goes into `@invoiceId`. The next
 requests list the invoices (your draft comes first), add a line, issue it, read it back with its
-`ETag` and again with `If-None-Match` for a 304, and pay it. Seconds later the api's log shows the
-receipt (logged rather than sent until you configure SMTP), handed to `SendReceiptOnInvoicePaid` by
-the outbox after the commit. The last five requests show the guard rails: issuing again with the
+`ETag` and again with `If-None-Match` for a 304, and pay it. Seconds later the receipt, handed to
+`SendReceiptOnInvoicePaid` by the outbox after the commit, is in the `mailpit` resource's **Inbox**
+(run without the AppHost, the api logs it instead, until you configure SMTP). The last five requests show the guard rails: issuing again with the
 `ETag` from before the payment is a 412, the create replayed with the same key returns the first 201
 with `Idempotency-Replayed: true`, and a member who registers and signs in gets a 403 for a create.
 [docs/features/invoices.md](docs/features/invoices.md#try-it) tables all thirteen steps with their
@@ -265,7 +266,8 @@ invoice, then add a line, issue and pay it from its page.
 
 ### Look at the data
 
-Beside `postgres`, the dashboard has a **pgAdmin** tile, which opens without a login. The `cache`
+Beside `postgres`, the dashboard has a **pgAdmin** tile, which opens without a login, and the
+`mailpit` resource's **Inbox** link shows every e-mail the API sent. The `cache`
 resource of a solution generated with `--use-redis true` has no browser tile: RedisInsight is SSPL,
 which the license policy keeps out ([ADR-0011](docs/adr/0011-license-ceiling-policy.md)).
 
@@ -491,10 +493,11 @@ every replica shares. Keys
 come from one `CacheKeys` service (tenant-scoped under multi-tenancy), every write evicts after its
 commit, and a 404 is never cached ([ADR-0026](docs/adr/0026-read-caching.md)).
 
-**SMTP by configuration.** E-mail is logged, not sent, until `Email:Provider=Smtp` and an `Email:Smtp`
-section point at a relay, validated at boot only while selected. A failed send throws, so the outbox
-tries again; [docs/development.md](docs/development.md#secrets) has the user-secrets lines and a
-Mailpit recipe for seeing the mail on your machine.
+**SMTP by configuration.** E-mail goes out through MailKit once `Email:Provider=Smtp` and an
+`Email:Smtp` section point at a relay, validated at boot only while selected; until then it is logged,
+not sent. Under `aspire run` the AppHost points it at Mailpit, a mail catcher with an **Inbox** tile in
+the dashboard. A failed send throws, so the outbox tries again;
+[docs/development.md](docs/development.md#secrets) has the user-secrets lines for a real relay.
 
 **A dropped `Result` fails the build.** RSLT001, from `tools/Trellis.Analyzers`, is loaded into every
 project, the tests included: a discarded `Result`, `Error`, `IdentityResult` or UI `ApiResult<T>` is a

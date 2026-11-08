@@ -73,6 +73,19 @@ if (builder.ExecutionContext.IsRunMode)
 #if (IncludeUI)
     web.WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");
 #endif
+
+    // Mailpit (MIT) catches every e-mail the API sends, the receipt of a paid invoice among them, and shows it at
+    // the resource's "Inbox" link. The API submits over plain SMTP to the catcher's own endpoint without
+    // credentials, which SmtpOptionsValidator allows (credentials in clear it refuses), and Development, above,
+    // keeps the in-clear warning quiet. Nothing waits for it: a receipt sent before it listens fails, and the
+    // outbox sends it again. Run mode only: a deployment points Email:Smtp at a real relay (docs/deployment.md).
+    var mailpit = builder.AddMailPit(ServiceNames.Mail)
+        .WithUrlForEndpoint("http", static url => url.DisplayText = "Inbox");
+    api.WithEnvironment("Email__Provider", "Smtp")
+        .WithEnvironment("Email__Smtp__Host", mailpit.Resource.Host)
+        .WithEnvironment("Email__Smtp__Port", mailpit.Resource.Port)
+        .WithEnvironment("Email__Smtp__UseStartTls", "false")
+        .WithEnvironment("Email__Smtp__FromAddress", "billing@example.com");
 }
 
 if (builder.ExecutionContext.IsPublishMode)

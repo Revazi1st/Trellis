@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Mail;
 using System.Net.Sockets;
 using System.Text;
+using MailKit.Net.Smtp;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -18,8 +18,8 @@ namespace Trellis.ApiTests;
 
 /// <summary>
 /// The e-mail port's adapters as the hosts register them: <c>Email:Provider</c> picks the sender, no
-/// adapter writes a body or a full address, the SMTP adapter really talks SMTP (to a fake relay on a
-/// loopback socket), and the sending host (the API, through <c>AddOutboundIntegrations</c>) checks the
+/// adapter writes a body or a full address, the SMTP adapter really talks SMTP through MailKit (to a fake
+/// relay on a loopback socket), and the sending host (the API, through <c>AddOutboundIntegrations</c>) checks the
 /// section at boot — the relay only while SMTP is selected — and says so when e-mail goes nowhere or in clear.
 /// </summary>
 public sealed class EmailSenderTests
@@ -106,12 +106,49 @@ public sealed class EmailSenderTests
             relay, recipientReply: $"550 5.1.1 <{Recipient}>: Recipient address rejected", TestContext.Current.CancellationToken);
         await using ServiceProvider services = BuildServices(new CapturingLoggerProvider(), LocalRelay(relay));
 
-        SmtpException failure = await Should.ThrowAsync<SmtpException>(() => SendOneAsync(services));
+        SmtpCommandException failure = await Should.ThrowAsync<SmtpCommandException>(() => SendOneAsync(services));
         await conversation;
 
+        failure.ErrorCode.ShouldBe(SmtpErrorCode.RecipientNotAccepted);
         failure.StatusCode.ShouldBe(SmtpStatusCode.MailboxUnavailable);
+        failure.Mailbox.ShouldBeNull("MailKit's rejected mailbox is the full address");
         failure.Message.ShouldContain("j***@example.com");
         failure.ToString().ShouldNotContain(Recipient);
+    }
+
+    [Fact]
+    public async Task Send_WithStartTlsToARelayThatDoesNotOfferIt_FailsBeforeTheMessageLeaves()
+    {
+        // UseStartTls (the default) never falls back to plaintext: the fake offers no STARTTLS, so nothing past EHLO is sent.
+        using var relay = new TcpListener(IPAddress.Loopback, 0);
+        relay.Start();
+        Task<string> conversation = FakeRelayAsync(relay, recipientReply: "250 ok", TestContext.Current.CancellationToken);
+        await using ServiceProvider services = BuildServices(
+            new CapturingLoggerProvider(),
+            Relay("Email:Smtp:Host=127.0.0.1", $"Email:Smtp:Port={((IPEndPoint)relay.LocalEndpoint).Port}"));
+
+        await Should.ThrowAsync<NotSupportedException>(() => SendOneAsync(services));
+
+        string wire = await conversation;
+        wire.ShouldStartWith("EHLO");
+        wire.ShouldNotContain("MAIL FROM");
+        wire.ShouldNotContain(Recipient);
+    }
+
+    [Fact]
+    public async Task Send_WhenTheRelayHangsUpOnQuit_CountsTheAcceptedMessageAsSent()
+    {
+        // The relay accepted the message; a throw now would have the outbox send it a second time.
+        using var relay = new TcpListener(IPAddress.Loopback, 0);
+        relay.Start();
+        Task<string> conversation = FakeRelayAsync(relay, recipientReply: "250 ok", TestContext.Current.CancellationToken, answersQuit: false);
+        var logs = new CapturingLoggerProvider();
+        await using ServiceProvider services = BuildServices(logs, LocalRelay(relay));
+
+        await SendOneAsync(services);
+
+        (await conversation).ShouldContain("QUIT");
+        logs.All.ShouldHaveSingleItem().EventName.ShouldBe("EmailSent");
     }
 
     [Fact]
@@ -281,12 +318,14 @@ public sealed class EmailSenderTests
     }
 
     /// <summary>
-    /// Just enough of a relay for one plaintext submission: greets, answers RCPT with
-    /// <paramref name="recipientReply"/> and every other command 250 (221 for QUIT), swallows the DATA
-    /// block, and returns everything the client sent once it hangs up — with QUIT after a delivery, with a
-    /// connection reset after a failure.
+    /// Just enough of a relay for one plaintext submission: greets, answers EHLO with no extension (so no
+    /// STARTTLS and no AUTH), RCPT with <paramref name="recipientReply"/> and every other command 250 (221 for
+    /// QUIT, or a hang-up when <paramref name="answersQuit"/> is false), swallows the DATA block, and returns
+    /// everything the client sent once it hangs up — with QUIT after a delivery, with a connection reset after
+    /// a failure.
     /// </summary>
-    private static async Task<string> FakeRelayAsync(TcpListener listener, string recipientReply, CancellationToken cancellationToken)
+    private static async Task<string> FakeRelayAsync(
+        TcpListener listener, string recipientReply, CancellationToken cancellationToken, bool answersQuit = true)
     {
         using TcpClient connection = await listener.AcceptTcpClientAsync(cancellationToken);
         await using NetworkStream stream = connection.GetStream();
@@ -311,6 +350,11 @@ public sealed class EmailSenderTests
         {
             conversation.AppendLine(line);
             string verb = line.Split(' ', 2)[0].ToUpperInvariant();
+            if (verb == "QUIT" && !answersQuit)
+            {
+                break;
+            }
+
             if (verb == "DATA")
             {
                 await writer.WriteLineAsync("354 end with <CRLF>.<CRLF>");

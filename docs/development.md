@@ -80,8 +80,10 @@ dotnet user-secrets set "Authentication:SigningKey" "<random 32+ chars>" \
     --project src/Presentation/Api/Trellis.Api
 ```
 
-E-mail is logged, not sent, until you point the API at an SMTP relay the same way (port 587 with
-STARTTLS is the default; leave out the last two lines for a relay without authentication):
+Under `aspire run` the API's e-mail goes to Mailpit, a local mail catcher the AppHost starts in run
+mode only (below). Run any other way, it is logged, not sent, until you point the API at an SMTP relay
+the same way (port 587 with STARTTLS is the default; leave out the last two lines for a relay without
+authentication):
 
 ```bash
 api=src/Presentation/Api/Trellis.Api
@@ -92,10 +94,16 @@ dotnet user-secrets set "Email:Smtp:UserName" "<relay user>" --project $api
 dotnet user-secrets set "Email:Smtp:Password" "<relay password>" --project $api
 ```
 
-To see the mail without a relay, run a local catcher such as Mailpit
-(`docker run --rm -p 1025:1025 -p 8025:8025 axllent/mailpit`) and set `Email:Smtp:Host` to
-`localhost` (`host.docker.internal` from the dev container), `Email:Smtp:Port` to `1025` and
-`Email:Smtp:UseStartTls` to `false`, with no credentials; messages appear at <http://localhost:8025>.
+To see the mail without a relay, start the app with `aspire run`: the AppHost starts Mailpit and
+points the API's `Email` section at it (`Smtp`, its SMTP endpoint, `UseStartTls` off, no credentials,
+`billing@example.com` as the sender), and every message, the receipt of a paid invoice among them,
+appears behind the `mailpit` resource's **Inbox** link in the dashboard. The AppHost's settings reach
+the API as environment variables, which outrank user secrets, so a relay configured as above is used
+only when the API runs from its own launch profile. Without the AppHost (the dev container flow), run
+the catcher yourself (`docker run --rm -p 1025:1025 -p 8025:8025 axllent/mailpit`) and set
+`Email:Smtp:Host` to `localhost` (`host.docker.internal` from the dev container), `Email:Smtp:Port` to
+`1025` and `Email:Smtp:UseStartTls` to `false`, with no credentials; messages appear at
+<http://localhost:8025>.
 
 Run these where the app runs (dev container or local SDK) — user secrets live under that
 environment's home directory, so setting them through the ephemeral `./scripts/dotnet.sh`
@@ -159,7 +167,8 @@ dotnet run --project tools/Trellis.AppHost   # the same app, no CLI needed
 
 PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire dashboard, all
 wired together (with `--use-redis`, the Valkey `cache` too), plus pgAdmin as a dashboard tile that
-opens without a login; open the dashboard URL either command prints. This is the best loop when a host
+opens without a login and Mailpit, which catches the API's e-mail (its **Inbox** link opens it; see
+[Secrets](#secrets)); open the dashboard URL either command prints. This is the best loop when a host
 SDK is available. The Aspire CLI reads the AppHost path from the committed `aspire.config.json`
 (`appHost.path`), the project settings file it would otherwise create on first use.
 
@@ -254,9 +263,9 @@ project) and the `add-feature` skill point here rather than repeat it.
 |---|---|---|---|
 | `Domain.UnitTests` | the Domain and the SharedKernel in memory: every invariant and transition of an aggregate, the events it raises, value objects, specifications as predicates, the `Result` kernel | nothing | you add or change a rule of an aggregate or a value object |
 | `Application.UnitTests` | each handler's orchestration over faked ports (NSubstitute, `FakeTimeProvider`), the validators, event handlers, and the decorator pipeline itself (order, span, outcome line, validation) | nothing | you write a handler, a validator or an event handler, or touch a decorator: one folder per use case under `Features/<Feature>/<UseCase>/`, the validators' bounds in `Features/<Feature>/<Feature>CommandValidatorTests.cs` |
-| `ArchitectureTests` | the rules files hold: layer boundaries and every project under `src/` anchored to one, conventions by reflection and source scan (aggregates created through `Result`, no `throw` in the Domain, the use cases or the endpoints, time from `TimeProvider` and ids from their type, no sleep in a test, nothing silencing RSLT001), the error-code vocabulary, options validated at boot, telemetry names and the telemetry reference; with the UI, the design system (one token file writing every colour as a light/dark pair, contrast on every ground, every class documented, and the JSON export `scripts/export-design-tokens.sh` writes for a design tool true to the token file and the doc) and the UI rules a scan can see (no endpoint `[Authorize]`, no raw `HttpClient`, no inline script) | nothing | you introduce a convention: it gets a rule and a positive control, not just prose |
+| `ArchitectureTests` | the rules files hold: layer boundaries and every project under `src/` anchored to one, conventions by reflection and source scan (aggregates created through `Result`, no `throw` in the Domain, the use cases or the endpoints, time from `TimeProvider` and ids from their type, no sleep in a test, nothing silencing RSLT001), the error-code vocabulary, options validated at boot, telemetry names and the telemetry reference, every package and container image within the license ceilings; with the UI, the design system (one token file writing every colour as a light/dark pair, contrast on every ground, every class documented, and the JSON export `scripts/export-design-tokens.sh` writes for a design tool true to the token file and the doc) and the UI rules a scan can see (no endpoint `[Authorize]`, no raw `HttpClient`, no inline script) | nothing | you introduce a convention: it gets a rule and a positive control, not just prose |
 | `IntegrationTests` | Persistence against a real PostgreSQL: mappings and round trips, specifications translated to SQL, interceptors, concurrency, the outbox and the idempotency store, retention, the migration matching the model | Docker (Testcontainers starts PostgreSQL) | a query, a mapping, an interceptor or anything transactional changes |
-| `ApiTests` | the HTTP contract through the real pipeline: authentication and each endpoint's permission, problem details, idempotency, caching and conditional requests, the served OpenAPI document equal to the committed one, the reference integration over a scripted socket | Docker for the in-process tests (contract and serialization tests run without it). The Aspire E2E also needs `RUN_ASPIRE_E2E=1` and a local SDK or CI, otherwise it skips; CI runs it as its own step after the other suites, because its processes and Testcontainers would otherwise race for the same host ports; it drops the AppHost's postgres data volume and persistent lifetime (`appHost.UseThrowawayDatabase()`, which an Aspire test of your own calls too), so it runs its own container and database and never touches your `aspire run` ones | an endpoint answers something the fitness suites do not already pin: its own 404, a business 409, the field codes of its 400, a notable flow end to end |
+| `ApiTests` | the HTTP contract through the real pipeline: authentication and each endpoint's permission, problem details, idempotency, caching and conditional requests, the served OpenAPI document equal to the committed one, the reference integration over a scripted socket, the e-mail adapters (the SMTP one against a fake relay on a loopback socket) and, from the AppHost's app model without starting it, where `aspire run` sends the API's e-mail | Docker for the in-process tests (contract and serialization tests run without it). The Aspire E2E also needs `RUN_ASPIRE_E2E=1` and a local SDK or CI, otherwise it skips; CI runs it as its own step after the other suites, because its processes and Testcontainers would otherwise race for the same host ports; it drops the AppHost's postgres data volume and persistent lifetime (`appHost.UseThrowawayDatabase()`, which an Aspire test of your own calls too), so it runs its own container and database and never touches your `aspire run` ones | an endpoint answers something the fitness suites do not already pin: its own 404, a business 409, the field codes of its 400, a notable flow end to end |
 
 `tests/TestSupport/` is not a project: it holds the test files several projects share
 (`ResultAssertions.cs` with `ShouldBeSuccess()`, `Invoices/InvoiceFactory.cs`), each compiled into the

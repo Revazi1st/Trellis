@@ -16,6 +16,7 @@ public static class ServiceNames
     public const string Migrations = "migrations";
     public const string Api = "api";
     public const string Web = "web";
+    public const string Mail = "mailpit";
 #if (UseRedis)
     public const string Cache = "cache";
 #endif
