@@ -11,10 +11,11 @@
 # It runs scripts/check-template-toggles.sh, packs the template once (the working tree as it is,
 # untracked files included), installs the package into a private hive (--debug:custom-hive), so your
 # own template list is never touched, and then for each leg: instantiates it with the leg's flags,
-# regenerates the initial migration where the leg says so, builds Release, runs the generated ci.yml's
-# format check (dotnet format --verify-no-changes) and, on the legs Template CI tests, runs dotnet
-# test. A table of results follows, and the exit code is 1 when anything
-# failed. The working folder (under $TMPDIR) keeps every log and generated solution after a failure.
+# on the default leg runs scripts/ef.sh's first-migration command on the unbuilt tree, regenerates
+# the initial migration where the leg says so, builds Release, runs the generated ci.yml's format
+# check (dotnet format --verify-no-changes) and, on the legs Template CI tests, runs dotnet test. A
+# table of results follows, and the exit code is 1 when anything failed. The working folder (under
+# $TMPDIR) keeps every log and generated solution after a failure.
 #
 # Because it packs, the legs get the package's content, as an install from nuget.org does and as the
 # last step of Template CI's pack job checks; the instantiate job installs the source folder instead.
@@ -128,7 +129,7 @@ if [ "$list_only" -eq 1 ]; then
   printf '%-26s %-6s %-10s %s\n' LEG TESTED MIGRATION FLAGS
   while IFS='|' read -r name _ test regen args; do
     printf '%-26s %-6s %-10s %s\n' "$name" "$([ "$test" = 1 ] && echo yes || echo no)" \
-      "$([ "$regen" = 1 ] && echo regen || echo -)" "${args:-(defaults)}"
+      "$([ "$regen" = 1 ] && echo regen || { [ "$name" = default ] && echo probe; } || echo -)" "${args:-(defaults)}"
   done <<< "$records"
   exit 0
 fi
@@ -195,6 +196,14 @@ nupkg=$(find "$work/nupkg" -name '*.nupkg' | head -n 1)
 logged "$work/logs/pack.log" dotnet new install "$nupkg" --debug:custom-hive "$work/hive" \
   || { echo "error: the package did not install; working folder: $work" >&2; exit 1; }
 
+# Mirrors template-ci.yml's "First migration command on an unbuilt tree" step (the default leg
+# only), which is the command inside scripts/ef.sh's sh -c; runs in the generated folder.
+first_migration_probe() {
+  rm -rf artifacts &&
+    dotnet tool restore &&
+    dotnet restore ./*.slnx --verbosity quiet &&
+    dotnet dotnet-ef migrations has-pending-model-changes --project src/Infrastructure/*.Persistence
+}
 # Mirrors template-ci.yml's "Regenerate the initial migration" step; runs in the generated folder.
 regenerate_migration() {
   dotnet tool restore &&
@@ -226,7 +235,9 @@ run_leg() {  # name out test regen args
   local name="$1" out="$2" test="$3" regen="$4" args="$5"
   local dir="$work/$name" log="$work/logs/$name.log" started=$SECONDS
   local inst=- mig=- build=- fmt=- tst=- flags=()
-  [ "$regen" = 1 ] || mig=" "
+  # MIGRATION is the regeneration on the legs that regenerate, and the first-migration probe on the
+  # default leg, as in Template CI.
+  [ "$regen" = 1 ] || [ "$name" = default ] || mig=" "
   [ "$test" = 1 ] || tst=" "
   read -r -a flags <<< "$args" || true
 
@@ -238,6 +249,11 @@ run_leg() {  # name out test regen args
     inst=ok
   else
     inst=FAIL
+  fi
+
+  if [ "$inst" = ok ] && [ "$name" = default ]; then
+    echo "==> $name: the first migration command on an unbuilt tree (scripts/ef.sh's)"
+    if logged "$log" in_dir "$dir" first_migration_probe; then mig=ok; else mig=FAIL; fi
   fi
 
   if [ "$inst" = ok ] && [ "$regen" = 1 ]; then

@@ -22,6 +22,9 @@ fi
 #   TRELLIS_DESIGNTIME_DB="Host=host.docker.internal;Port=5433;Database=trellis;Username=postgres;Password=postgres"
 # Inside the container localhost is the container itself; the --add-host line makes
 # host.docker.internal resolve on Linux Docker Engine as well as Docker Desktop.
+# The solution is restored first: dotnet-ef reads the project's metadata before it builds, and that
+# needs the restore's assets file (NETSDK1004 otherwise), so a first migration works on a tree that
+# nothing has built yet. Quiet, not silent: a failed restore still prints its errors.
 exec "$DOCKER_BIN" run --rm \
   -v "$REPO_ROOT":/workspace \
   -w /workspace \
@@ -31,4 +34,4 @@ exec "$DOCKER_BIN" run --rm \
   -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
   -e DOTNET_NOLOGO=1 \
   "${TRELLIS_SDK_IMAGE:-trellis-sdk:10.0}" \
-  sh -c 'dotnet tool restore >/dev/null && dotnet dotnet-ef "$@"' ef "$@"
+  sh -c 'dotnet tool restore >/dev/null && dotnet restore ./*.slnx --verbosity quiet && dotnet dotnet-ef "$@"' ef "$@"

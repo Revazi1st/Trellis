@@ -56,6 +56,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   neither does now (`.claude/settings.json` already allows the scripts and git commands they listed,
   apart from the OpenAPI snapshot run). The Commit box now stops when the branch cannot be created
   instead of committing on `main`.
+- **`./scripts/ef.sh` works on a project nothing has built yet.** The first
+  `./scripts/ef.sh migrations add …` in a fresh clone failed with NETSDK1004 (`project.assets.json` not
+  found): dotnet-ef reads the project's metadata before it builds, and that needs a restore. The script
+  now restores the solution first, quietly (a failed restore still prints its errors).
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes
