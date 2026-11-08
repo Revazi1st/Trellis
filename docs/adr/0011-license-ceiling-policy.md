@@ -2,7 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-07-14
-- **Amended**: 2026-10-08 — scope: what ships, and what build-time analyzers and the template's own notice are; 2026-11-08 — more ids, banned by family, and a version ceiling the build cannot enforce (see the *Amendment* sections below)
+- **Amended**: 2026-10-08 — scope: what ships, and what build-time analyzers and the template's own notice are; 2026-11-08 — more ids, banned by family, a version ceiling the build cannot enforce, and the container images the AppHost and the compose files pull (see the *Amendment* sections below)
 
 ## Context
 
@@ -43,7 +43,7 @@ here so nobody has to guess:
   substantial portions of the template. It does not license the product: the generated README asks
   the project to add its own terms.
 
-## Amendment (2026-11-08): more ids, banned by family
+## Amendment (2026-11-08): more ids, banned by family, and the container images
 
 The 2026 wave reached further than the five packages above, and three more never were free for a
 product to ship. `LicenseCeilingPackageIds` gains them, each with its reason in the LICENSE CEILINGS
@@ -73,3 +73,18 @@ Maintenance Fee" EULA (`OsmfEula.txt`) and a `SponsorCheck` build task in its pa
 last plain MIT one. The id stays allowed below the ceiling, so it cannot go into
 `LicenseCeilingPackageIds`: the LICENSE CEILINGS comment names it, and a project that adds snapshot
 tests pins it below 33.0.0. Nothing here references it today.
+
+**The ceiling covers container images too.** A package is not the only thing a generated solution
+makes everyone pull: the AppHost starts containers in run mode and writes them into the compose file
+`aspire publish` produces, the root `docker-compose.yml` starts the development dependencies, and the
+workflows can run containers of their own. The `--use-redis` cache was the case that showed it: the
+AppHost's `AddRedis` pulled the Redis 8 server, licensed RSALv2, SSPLv1 or AGPLv3 since Redis 8.0
+(Redis 7.2 and earlier were BSD-3-Clause), and `WithRedisInsight` its browser, under the SSPL. Every
+image the AppHost declares, and every image the workflows and the root compose file name, is now on an
+allowlist held by a test, `ContainerImageTests` in ArchitectureTests, each entry with the license it
+ships under: PostgreSQL and pgAdmin (PostgreSQL License), Valkey (BSD-3-Clause) and the Aspire
+dashboard of the compose output (MIT). An image off the list fails the test, and so does a resource
+whose image the scan cannot tell. The cache became Valkey, a fork of Redis 7.2 that speaks its
+protocol, so the API keeps its Redis client (`Aspire.StackExchange.Redis.DistributedCaching`, MIT)
+and `--use-redis` keeps its name; it has no browser tile. Adding an image is a license decision like
+adding a package: read the license, then add the row with it.

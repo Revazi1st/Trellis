@@ -24,7 +24,7 @@
     <PackageReference Include="Aspire.Hosting.Docker" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
     <!--#if (UseRedis) -->
-    <PackageReference Include="Aspire.Hosting.Redis" />
+    <PackageReference Include="Aspire.Hosting.Valkey" />
     <!--#endif -->
   </ItemGroup>
 

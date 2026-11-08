@@ -35,7 +35,9 @@
                                       Not referenced; pin below 33.0.0 if snapshot tests are ever added.
     Enforced, not advisory: the build fails when any of these ids appears anywhere in a
     project's resolved package graph, transitive dependencies included (Directory.Build.props),
-    and Dependabot never proposes them (.github/dependabot.yml).
+    and Dependabot never proposes them (.github/dependabot.yml). The policy covers the container
+    images the AppHost and the compose files pull too: ContainerImageTests (ArchitectureTests)
+    holds each to an allowlist that names its license, which keeps out Redis 8 and RedisInsight.
     Rationale: docs/adr/0011-license-ceiling-policy.md
     ═══════════════════════════════════════════════════════════════════════════════════
     All versions below verified against nuget.org on 2026-11-08.
@@ -111,7 +113,9 @@
          a PackageVersion entry for it here triggers NU1009. -->
     <PackageVersion Include="Aspire.Hosting.Docker" Version="13.6.4" />
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.4" />
-    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.6.4" />
+    <!-- The cache server of the UseRedis option: Valkey, which the API reaches with the Redis client below
+         (ADR-0011's amendment of 2026-11-08 keeps the Redis server's own image out). -->
+    <PackageVersion Include="Aspire.Hosting.Valkey" Version="13.6.4" />
     <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.4" />
     <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.6.4" />
     <PackageVersion Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.6.4" />

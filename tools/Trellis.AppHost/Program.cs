@@ -27,9 +27,13 @@ var migrations = builder.AddProject<Projects.Trellis_MigrationService>(ServiceNa
     .WaitFor(database);
 
 #if (UseRedis)
-// RedisInsight beside the cache, as pgAdmin sits beside PostgreSQL: a dashboard tile to look at the keys.
-var cache = builder.AddRedis(ServiceNames.Cache)
-    .WithRedisInsight();
+// The cache is Valkey (BSD-3-Clause): it speaks the Redis protocol, so the API's Redis client
+// (Aspire.StackExchange.Redis) talks to it unchanged, while Redis 8 is RSALv2/SSPLv1/AGPLv3, which the
+// license policy keeps out with every image it does not list (ADR-0011, ContainerImageTests). Major pinned,
+// as postgres's is: the next one arrives by hand, not with an Aspire bump. No key browser beside it, as
+// pgAdmin sits beside PostgreSQL: RedisInsight is SSPL.
+var cache = builder.AddValkey(ServiceNames.Cache)
+    .WithImageTag("9");
 #endif
 
 var api = builder.AddProject<Projects.Trellis_Api>(ServiceNames.Api, static options => options.ExcludeLaunchProfile = true)

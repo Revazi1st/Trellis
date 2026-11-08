@@ -177,7 +177,7 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
-  # Dev-dependency images (postgres, redis) in docker-compose.yml.
+  # Dev-dependency images (postgres, and valkey under the redis profile) in docker-compose.yml.
   - package-ecosystem: docker-compose
     directory: "/"
     schedule:

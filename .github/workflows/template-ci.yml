@@ -235,7 +235,7 @@ jobs:
 
       # Everything runs for real: the Testcontainers suites and the Aspire E2E (InvoiceApiFlowTests),
       # which boots the generated AppHost under its new name (PostgreSQL, the migration worker, the
-      # API, Redis with --use-redis) as a consumer's first push to their own CI would. The E2E runs as
+      # API, the Valkey cache with --use-redis) as a consumer's first push to their own CI would. The E2E runs as
       # its own step after the suites, as the shipped ci.yml does: its processes and Testcontainers
       # would otherwise race for the same host ports. The AppHost starts Linux images, so that step
       # runs on Linux runners only (the Windows job below runs only the projects that need no Docker).

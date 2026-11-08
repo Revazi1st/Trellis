@@ -46,7 +46,7 @@ Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 | Flag | Default | What it adds |
 |---|---|---|
 | `--include-ui` | on | Blazor web UI (UI.Common + UI.Web), orchestrated by Aspire, with its design system (light and dark themes and a switch the user keeps, its tokens exportable as JSON for a design tool) and the `ui-reviewer` agent |
-| `--use-redis` | off | Redis distributed cache as a HybridCache L2 |
+| `--use-redis` | off | A Redis-protocol distributed cache (Valkey by default) as a HybridCache L2 |
 | `--use-serilog` | off | Serilog structured logging (console) alongside OpenTelemetry |
 | `--use-multitenancy` | off | Tenant seam: `tenant` claim on the principal, `TenantId` column + `"Tenant"` query filter on every aggregate root ¹ |
 | `--include-ui-tests` | off | Playwright browser tests for the Blazor UI (opt-in at run time) |
@@ -265,9 +265,9 @@ invoice, then add a line, issue and pay it from its page.
 
 ### Look at the data
 
-Beside `postgres`, the dashboard has a **pgAdmin** tile, and a solution generated with
-`--use-redis true` has a **RedisInsight** tile beside the `cache` resource too. Both open without a
-login.
+Beside `postgres`, the dashboard has a **pgAdmin** tile, which opens without a login. The `cache`
+resource of a solution generated with `--use-redis true` has no browser tile: RedisInsight is SSPL,
+which the license policy keeps out ([ADR-0011](docs/adr/0011-license-ceiling-policy.md)).
 
 ## Folder structure 📂
 
@@ -435,8 +435,9 @@ dotnet test Trellis.slnx                                  # everything; the Aspi
 **Conventions are tests, not prose.** `LayerDependencyTests` holds the arrows of the pictures above,
 `ConventionTests` refuses a handler that runs another use case, `ErrorCodeVocabularyTests` keeps every
 error code in `Area.Problem` form with one meaning, `OptionsConventionTests` boots the API with broken
-settings, `TelemetryNamingTests` holds the telemetry reference in `docs/deployment.md` to the code, and
-`EndpointMetadataTests` pins each endpoint's permission. Every rule has a positive control: a planted
+settings, `TelemetryNamingTests` holds the telemetry reference in `docs/deployment.md` to the code,
+`ContainerImageTests` admits only container images whose license it names, and `EndpointMetadataTests`
+pins each endpoint's permission. Every rule has a positive control: a planted
 violation it must catch (`PlantedViolations`).
 
 **Gates beyond the tests:**
@@ -484,8 +485,9 @@ minted at sign-in and from nowhere else: there is no tenant header, and a token 
 refused. Every aggregate root gets a `TenantId` column and a `"Tenant"` query filter by convention, so
 another tenant's invoice is a 404 ([ADR-0022](docs/adr/0022-tenant-on-the-principal.md)).
 
-**HybridCache, with Redis behind it.** `GET /invoices/{id}` is cache-aside: an in-memory copy for 30
-seconds always, and with `--use-redis` a Redis copy for five minutes that every replica shares. Keys
+**HybridCache, with Valkey behind it.** `GET /invoices/{id}` is cache-aside: an in-memory copy for 30
+seconds always, and with `--use-redis` a copy in Valkey, over the Redis protocol, for five minutes that
+every replica shares. Keys
 come from one `CacheKeys` service (tenant-scoped under multi-tenancy), every write evicts after its
 commit, and a 404 is never cached ([ADR-0026](docs/adr/0026-read-caching.md)).
 
@@ -519,8 +521,9 @@ The table at the top lists the options; this is what each one changes in the gen
 - **`--include-ui false`** leaves out `src/Presentation/UI/`, the UI client tests in
   `tests/Trellis.ApiTests/Ui/`, the design system (its doc, ADR-0032 and `DesignSystemTests`), the UI
   rule and the `ui-reviewer` agent, and the AppHost starts no `web` resource: an API-only solution.
-- **`--use-redis true`** adds the `cache` resource with its RedisInsight tile and makes Redis the
-  HybridCache L2. In the dev-container flow, `docker compose --profile redis up -d` starts it.
+- **`--use-redis true`** adds the `cache` resource, Valkey (`valkey/valkey:9`, BSD-3-Clause), and
+  makes it the HybridCache L2 through the Redis client, which speaks to it unchanged. In the
+  dev-container flow, `docker compose --profile redis up -d` starts it.
 - **`--use-serilog true`** sends the API's and the web host's logs through Serilog's console sink,
   while OpenTelemetry keeps exporting them (`SerilogExportTests`).
 - **`--use-multitenancy true`** adds `ITenantContext`, `TenantInterceptor` and the tenancy suites
@@ -658,6 +661,7 @@ describes planned work that is not in the template yet; the marker goes when it 
   - opening the API's root on its Scalar reference;
   - a short, ordered deployment page in Getting started;
   - a documentation website as the template's home: a landing page with the install command, feature cards and a three-step quick start; a Getting started / Architecture / Features sidebar with a linear path; an installation page with update and uninstall; one page per option that says what each choice adds and what to do after creation; an architecture page led by one ring diagram and the dependency rule; the documented version in the footer; a Testing page with one table of test projects and one run command; Astro + Starlight on GitHub Pages (ideas from cleanarchitecture.jasontaylor.dev; no code or CSS copied).
+- [dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit) by Mukesh Murugan (MIT): Valkey in place of Redis in the starter, as an idea.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.

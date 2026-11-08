@@ -8,6 +8,17 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+- **The `--use-redis` cache is Valkey** (BSD-3-Clause) in place of the Redis server, whose 8.x
+  releases are RSALv2, SSPLv1 or AGPLv3. The AppHost declares `AddValkey("cache")` with the image's
+  major pinned (`valkey/valkey:9`), the `redis` service of `docker-compose.yml` and the generated CI
+  start the same image, and the API keeps its Redis client, which speaks to Valkey unchanged; the
+  option, the `UseRedis` symbol and the `cache` resource keep their names. RedisInsight (SSPL) is
+  gone, so the cache has no browser tile. `ContainerImageTests` holds every image the AppHost
+  declares, the workflows run and the root compose file starts to an allowlist that names each one's
+  license, so an image that is not free to ship fails the tests (ADR-0011, amendment of 2026-11-08).
+  To move a 0.1.x solution: `Aspire.Hosting.Valkey` in place of `Aspire.Hosting.Redis` in the
+  AppHost, `AddValkey(...).WithImageTag("9")` in place of `AddRedis(...).WithRedisInsight()`, and
+  `valkey/valkey:9` with a `valkey-cli ping` health check in the compose file.
 - **More packages the build refuses** (ADR-0011, amendment of 2026-11-08). `LicenseCeilingPackageIds`
   gains `Hangfire.Core` and `Hangfire.Pro` (LGPL-3.0 or commercial), `TickerQ` and `TickerQ.Utilities`
   (a source-available agreement from 10.5.0), `NBomber` (not free for organizational use),

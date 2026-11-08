@@ -45,8 +45,9 @@ machine you deploy from. Each step names the section further down that explains 
    token.
 <!--#if (UseRedis) -->
 
-With `--use-redis`, `.env` also lists `CACHE_PASSWORD`, the password of the `cache` service, which
-stays on the internal network and restarts with Docker like the others.
+With `--use-redis`, the compose file has a `cache` service too: Valkey (`valkey/valkey:9`,
+BSD-3-Clause), which the API reaches with its Redis client. `.env` also lists `CACHE_PASSWORD`, its
+password; it stays on the internal network and restarts with Docker like the others.
 <!--#endif -->
 
 Before real traffic: TLS and the trusted-proxy lists at a reverse proxy in front of the API and the web
@@ -291,9 +292,10 @@ that calls the API is sampled as one trace.
 <!--#endif -->
 
 The invoice read cache keeps an entry 30 seconds in each API instance's memory (L1) and, with the
-`UseRedis` toggle, five minutes in Redis (L2). A write evicts the entry from its own instance and
-from Redis only, so with several replicas another replica can serve the previous state, ETag
-included, for up to 30 seconds; without Redis every replica caches on its own for the same 30 seconds.
+`UseRedis` toggle, five minutes in Valkey (L2, over the Redis protocol). A write evicts the entry from
+its own instance and from the shared L2 only, so with several replicas another replica can serve the
+previous state, ETag included, for up to 30 seconds; without the L2 every replica caches on its own for
+the same 30 seconds.
 
 ### Telemetry reference
 

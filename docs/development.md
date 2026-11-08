@@ -148,7 +148,7 @@ it forwards what `forwardPorts` declares, which is why 8080 is listed too. Never
 
 > Port **5433**, not 5432: a native PostgreSQL install commonly owns 5432, and the clash fails
 > confusingly — it connects, then rejects the password. Override with `POSTGRES_PORT` and match it
-> in the launch profile. Redis (for `--use-redis`) is behind a profile: `docker compose --profile redis up -d`.
+> in the launch profile. The cache for `--use-redis`, Valkey, is behind a profile: `docker compose --profile redis up -d`.
 
 ### With a local SDK
 
@@ -158,8 +158,8 @@ dotnet run --project tools/Trellis.AppHost   # the same app, no CLI needed
 ```
 
 PostgreSQL, the migration worker, the API, the Blazor web app, and the Aspire dashboard, all
-wired together, plus pgAdmin (and RedisInsight with `--use-redis`) as dashboard tiles that open
-without a login; open the dashboard URL either command prints. This is the best loop when a host
+wired together (with `--use-redis`, the Valkey `cache` too), plus pgAdmin as a dashboard tile that
+opens without a login; open the dashboard URL either command prints. This is the best loop when a host
 SDK is available. The Aspire CLI reads the AppHost path from the committed `aspire.config.json`
 (`appHost.path`), the project settings file it would otherwise create on first use.
 
