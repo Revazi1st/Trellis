@@ -75,6 +75,9 @@ jobs:
       - name: Hook self-test
         run: ./scripts/check-hooks.sh
 
+      - name: Doctor self-test
+        run: ./scripts/doctor.sh --self-test
+
 #if (TemplateSource)
       # Template source only: TemplateSource is a constant that is false whenever dotnet new runs,
       # so generated projects (which ship neither .template.config nor this script) never see this

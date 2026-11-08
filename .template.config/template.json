@@ -490,7 +490,7 @@
       ],
       "actionId": "cb9a6cf3-4f5c-4860-b9d2-03a574959774",
       "args": {
-        "+x": ".claude/hooks/docs-drift.sh .claude/hooks/guard-commit.sh .claude/hooks/guard-edits.sh .claude/hooks/stop-tests.sh scripts/check-adr-history.sh scripts/check-adr-links.sh scripts/check-docs-drift.sh scripts/check-hooks.sh scripts/dotnet.sh scripts/ef.sh scripts/export-design-tokens.sh scripts/export-openapi.sh"
+        "+x": ".claude/hooks/docs-drift.sh .claude/hooks/guard-commit.sh .claude/hooks/guard-edits.sh .claude/hooks/stop-tests.sh scripts/check-adr-history.sh scripts/check-adr-links.sh scripts/check-docs-drift.sh scripts/check-hooks.sh scripts/doctor.sh scripts/dotnet.sh scripts/ef.sh scripts/export-design-tokens.sh scripts/export-openapi.sh"
       },
       "continueOnError": true
     },

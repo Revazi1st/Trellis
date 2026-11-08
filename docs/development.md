@@ -9,6 +9,15 @@
 | **Aspire CLI 13.5 or later**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK; the AppHost is on Aspire 13.6.1, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app |
 | **PowerShell** (`pwsh`) | installing the Playwright browsers for the optional UI tests |
 
+`./scripts/doctor.sh` checks this machine against the table and changes nothing: the SDK on `PATH`
+against `global.json` (its version and `rollForward` band), Docker and the SDK image
+`./scripts/dotnet.sh` runs, the Aspire CLI, the development certificate, the AppHost's ports in
+`tools/Trellis.AppHost/Properties/launchSettings.json`, the engine endpoint the tests get
+(`DOCKER_HOST` and the Testcontainers overrides, [below](#docker-engines-other-than-docker-desktop)),
+git, and jq where a script needs it. Each check is one line, `ok`, `missing` (with the fix, and
+*optional* when a first run does without it) or `skip`, and the script exits 1 only when something a
+first run needs is missing. `./scripts/doctor.sh --self-test` runs every check against fakes, as CI does.
+
 No .NET SDK on the host? Build the SDK image once (base SDK + docker CLI, needed by
 Testcontainers/Aspire) and run every command through `./scripts/dotnet.sh`:
 

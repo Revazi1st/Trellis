@@ -174,6 +174,10 @@ shows how to depend on an API you do not own
   `dotnet run --project tools/Trellis.AppHost` starts the same app.
 - **PowerShell** (`pwsh`), only to install the browsers for the optional Playwright tests.
 
+Once the solution exists, run `./scripts/doctor.sh`: it checks each of these on your machine, the
+development certificate and the AppHost's ports too, changes nothing, and names the fix for anything
+missing.
+
 ### Create your solution
 
 ```bash
@@ -668,6 +672,7 @@ describes planned work that is not in the template yet; the marker goes when it 
 - [dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit) by Mukesh Murugan (MIT): Valkey in place of Redis in the starter, as an idea.
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
+- [dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit) by Mukesh Murugan (MIT): the `fsh doctor` idea, a check of the SDK, Docker, Aspire and the ports before a first run (`scripts/doctor.sh`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
 
 **Agent setups we learned from**
