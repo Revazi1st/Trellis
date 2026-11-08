@@ -30,6 +30,24 @@ public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser b
     private const int Laptop = 1280;
     private const int ViewportHeight = 900;
 
+    /// <summary>
+    /// The focused element's outline (style, width, colour, offset), then the one <c>outline: var(--focus-ring);
+    /// outline-offset: var(--focus-offset)</c> gives a probe at the end of the body, in the page's colour
+    /// scheme like the focused element; the script removes the probe again before it returns.
+    /// </summary>
+    private const string TheFocusedRingAndTheTokensRing = """
+        (() => {
+          const ring = s => [s.outlineStyle, s.outlineWidth, s.outlineColor, s.outlineOffset].join(' ');
+          const focused = ring(getComputedStyle(document.activeElement));
+          const probe = document.body.appendChild(document.createElement('span'));
+          probe.style.outline = 'var(--focus-ring)';
+          probe.style.outlineOffset = 'var(--focus-offset)';
+          const tokens = ring(getComputedStyle(probe));
+          probe.remove();
+          return [focused, tokens];
+        })()
+        """;
+
     private static readonly string[] Addresses = [Login, Register, InvoiceList, OverdueList, NewInvoice, InvoiceDetail];
     private static readonly int[] Widths = [Phone, Laptop];
     private static readonly string[] Schemes = [Light, Dark];
@@ -132,9 +150,15 @@ public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser b
             await page.Keyboard.PressAsync("Tab");
 
             await Assertions.Expect(page.Locator("header.topbar a").First).ToBeFocusedAsync();
-            string outline = await page.EvaluateAsync<string>("getComputedStyle(document.activeElement).outlineStyle");
-            outline.ShouldNotBe("none", StringComparer.Ordinal,
-                "the first top-bar link a keyboard reaches shows the focus ring (:focus-visible in app.css)");
+            // The focused link's ring against the one the tokens draw, so the check holds whatever a project
+            // sets them to and the browser's own ring (outline-style auto, 1 px) does not pass for app.css's.
+            string[] rings = await page.EvaluateAsync<string[]>(TheFocusedRingAndTheTokensRing);
+            string focused = rings[0];
+            string tokens = rings[1];
+            tokens.ShouldNotStartWith("none",
+                customMessage: $"--focus-ring in tokens.css draws an outline (resolved: {tokens})");
+            focused.ShouldBe(tokens, StringComparer.Ordinal,
+                "the first top-bar link a keyboard reaches shows the design system's focus ring, --focus-ring offset by --focus-offset (:focus-visible in app.css), not the browser's own");
         }
         finally
         {

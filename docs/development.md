@@ -227,6 +227,7 @@ RUN_UI_TESTS=1 UI_TESTS_BASE_URL=http://localhost:5170 dotnet test tests/Trellis
 
 Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-free
 (the same opt-in pattern as the Aspire E2E test).
+<!--#if (IncludeUI) -->
 
 `DesignSystemProofTests` is the design system's *Proof* ([docs/design-system.md](design-system.md#proof)):
 it saves a full-page screenshot of every page at 400 and 1280 px wide in both colour schemes, named
@@ -241,6 +242,7 @@ A test signs in through `Session.SignInAsAdminAsync`, on its own page: the circu
 full page load starts signed out and a signed-in test moves on through the app's links. The API allows ten
 sign-ins a minute from one address and every browser test signs in from the web host's, so a test that
 visits many protected pages signs in once (the proof's cases share one signed-in page).
+<!--#endif -->
 
 ## Tests
 

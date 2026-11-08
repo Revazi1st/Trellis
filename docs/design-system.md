@@ -368,10 +368,10 @@ With the optional `UiTests` project, CI takes that look on every run.
 new invoice, an invoice) at both widths in both schemes, saves a full-page screenshot of each, and fails a
 page that is wider than the window; one more screenshot has Dark chosen in the [theme switch](#theme-switch)
 over a light system, and one test tabs from the top of the page to the first top-bar link and checks that
-its [focus](#focus) ring shows. The `ui-tests` job keeps the screenshots for 14 days as the run's
-`ui-screenshots` artifact, passed or failed ([UI tests](development.md#ui-tests-optional) says where they
-land on your machine). Nothing compares them with a baseline, because fonts render differently from one
-machine to the next: a reviewer opens them and looks.
+it shows the system's [focus](#focus) ring, not the browser's own. The `ui-tests` job keeps the screenshots
+for 14 days as the run's `ui-screenshots` artifact, passed or failed ([UI tests](development.md#ui-tests-optional)
+says where they land on your machine). Nothing compares them with a baseline, because fonts render
+differently from one machine to the next: a reviewer opens them and looks.
 
 `DesignSystemTests` (`tests/*.ArchitectureTests/`, compiled with the UI) holds the system to its
 rules, each fact with a positive control that fails a planted violation:
