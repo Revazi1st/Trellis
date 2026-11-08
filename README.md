@@ -590,9 +590,10 @@ plain text you can read too.
 - **Drift gates**: the docs-drift hook (once per report) and CI's docs-drift job, the link check, the
   OpenAPI snapshot and the fitness tests turn the docs and the conventions into something a change can
   fail.
-- **[.mcp.json](.mcp.json)** wires up the Microsoft Learn, Context7 and Playwright MCP servers; the index
-  says when to reach for each, and points at the optional .NET plugins of `dotnet/skills` without
-  enabling any.
+- **[.mcp.json](.mcp.json)** wires up the Microsoft Learn, Context7, Playwright and Aspire MCP servers,
+  the last reading the running AppHost's logs, traces and resources under `aspire run`; the index says
+  when to reach for each, and points at the optional .NET plugins of `dotnet/skills` without enabling
+  any.
 
 The release runbook adds an agent dry run before each minor version: an agent builds one fixed feature
 in a freshly generated project with nothing but that repository to go on, and the existing gates judge
@@ -676,6 +677,7 @@ describes planned work that is not in the template yet; the marker goes when it 
 - [Claude Code documentation](https://code.claude.com/docs/en/hooks-guide) by Anthropic: the protect-files `PreToolUse` recipe that `guard-edits.sh` grew from, the best-practices example of a hook that guards the migrations folder, and the `stop_hook_active` guard that keeps `stop-tests.sh` from blocking twice in a row.
 - [gitleaks](https://github.com/gitleaks/gitleaks) by Zachary Rice (MIT): the documented pre-commit invocation (`gitleaks git --pre-commit --staged --redact`) that `guard-commit.sh` runs when gitleaks is installed.
 - [dotnet/skills](https://github.com/dotnet/skills) by Microsoft (MIT): the plugins `docs/INDEX.md` points at as optional installs (`dotnet`, `dotnet-test`, `dotnet-data`); nothing is copied or enabled.
+- [PlatformPlatform](https://github.com/platformplatform/PlatformPlatform) by Thomas Jespersen and contributors (MIT): the `.mcp.json` entry for the Aspire MCP server, as an idea.
 
 **Formats and conventions**
 - [Michael Nygard's ADR format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions): Status, Context, Decision, Consequences (ADR-0001).

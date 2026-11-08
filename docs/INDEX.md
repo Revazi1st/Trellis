@@ -69,10 +69,11 @@ Each opens with what it owns, what it leaves to another reviewer and how they ov
 They share the helpers in `common.sh`; `scripts/check-hooks.sh` is their self-test, run by CI, and `docs/development.md` (*Agent hooks*) says how to add one or turn them off.
 
 ## MCP servers and optional plugins
-`.mcp.json` declares three servers for the project; an interactive Claude Code session asks before it uses them (a headless `claude -p` run loads them without asking).
+`.mcp.json` declares four servers for the project; an interactive Claude Code session asks before it uses them (a headless `claude -p` run loads them without asking).
 - `microsoft-learn` — a .NET, ASP.NET Core, EF Core or Aspire API question: read the member's documentation before guessing its name, its overloads or its behaviour
 - `context7` — the current documentation of a third-party package Microsoft Learn does not cover; works without a key, and a `CONTEXT7_API_KEY` in the environment raises its limits
 - `playwright` — look at the running app in a browser (navigate, resize, read the accessibility tree, take a screenshot) instead of guessing what a page shows
+- `aspire` — the running AppHost's resources and their state, console and structured logs, traces, and a resource's start, stop or restart, instead of scraping the terminal (the `run-app` skill); it runs as `aspire agent mcp`, so it needs the Aspire CLI 13.5 or later on `PATH` and an `aspire run` in progress under the working directory
 
 Optional plugins: the `dotnet/skills` marketplace offers .NET plugins a collaborator may install for themselves (`claude plugin marketplace add dotnet/skills`, then choose from `/plugin`); this repository enables none. `dotnet` gives the agent a Roslyn language server with C#, refactoring and MSBuild skills, and needs a local .NET SDK. `dotnet-test` adds test-writing and test-quality agents with skills for running, filtering and measuring tests. `dotnet-data` adds EF Core query optimisation and data-driven ASP.NET Core scaffolding. Where a plugin's advice and a rule here disagree, the rule here wins.
 

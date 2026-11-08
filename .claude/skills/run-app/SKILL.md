@@ -16,6 +16,8 @@ dotnet run --project tools/Trellis.AppHost   # the same app without the Aspire C
 
 Then open the dashboard URL it prints; the API exposes Scalar at `/scalar/v1` (its root redirects there in Development), the web app serves the UI. Seeded admin: `admin@example.com` / `Admin123!`.
 
+Once the app is up under `aspire run`, the `aspire` MCP server (`.mcp.json`, started as `aspire agent mcp`) is how you read it: the resources and their state, each resource's console and structured logs, the traces, and a resource's start, stop or restart, instead of scraping the terminal or guessing from the dashboard. It finds the running AppHost under the working directory; an interactive session asks before using it, and without the Aspire CLI on PATH it does not start (the dashboard's URL is then the way in).
+
 ## Containerized smoke (no local SDK)
 Aspire can't orchestrate from the container, but you can run the pieces as sibling containers on one network to verify a change end-to-end:
 1. `postgres:18`, the image the AppHost and `docker-compose.yml` run (POSTGRES_PASSWORD=postgres, POSTGRES_DB=trellis).

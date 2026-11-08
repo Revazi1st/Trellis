@@ -154,6 +154,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `docs/upgrading.md` installs the template as `<package>@<version>`, the separator current SDKs expect,
   and tells the files you never touched by regenerating the version you started from and diffing it
   against your tree: a diff against the target alone cannot tell your edit from the template's.
+- **The running app for an agent to read.** `.mcp.json` gains the Aspire MCP server
+  (`aspire agent mcp`): while `aspire run` is up, an agent reads the AppHost's resources, logs and
+  traces through it and can restart a resource. It needs the Aspire CLI 13.5 or later on `PATH`, and
+  an interactive Claude Code session asks before using it (`docs/INDEX.md`, the `run-app` skill).
 
 ## [0.1.1] - 2026-10-26
 
