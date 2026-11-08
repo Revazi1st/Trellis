@@ -41,6 +41,15 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   ceiling the build cannot enforce: `Verify` from 33.0.0 ships a maintenance-fee agreement in its
   package, so pin it below 33 if you add snapshot tests. `LicenseCeilingTests` keeps the list, the
   comment and Dependabot's ignores naming the same ids.
+- **A new project passes its own format check, whatever its name.** A project generated as `Acme.Shop`
+  failed the Format check of its own `ci.yml` on the first push, with 183 IMPORTS errors:
+  `.editorconfig` set `dotnet_sort_system_directives_first`, which turns on `dotnet format`'s
+  using-order check, and that order sorts by the full name, so the shipped files were in order only for
+  a name that sorts where Trellis does (after Shouldly, before Xunit). The key is gone (IDE0005 and the
+  file-scoped, outside-namespace usings stay), Template CI runs the generated `ci.yml`'s Format check on
+  every leg, one of them named `Zeta.Journal`, and `scripts/test-template.sh` does the same. The
+  `finish-change` skill formats only the files the change touches and reports a formatter change
+  anywhere else instead of committing it.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       # KEEP IN SYNC with scripts/test-template.sh, which runs these legs on a maintainer's machine:
       # it reads this list (one key per line, args in double quotes; a new key needs teaching there)
-      # and its run_leg mirrors the Instantiate, Regenerate, Build and Test steps below.
+      # and its run_leg mirrors the Instantiate, Regenerate, Build, Format and Test steps below.
       matrix:
         include:
           - name: default
@@ -74,7 +74,9 @@ jobs:
             test: true
           - name: no-ui-with-serilog
             args: "--include-ui false --use-serilog true"
-            out: Acme.Journal
+            # A name that sorts after Xunit, where the others sort before Microsoft: the format
+            # check below holds at both ends of the alphabet.
+            out: Zeta.Journal
             test: true
           - name: no-ui-with-multitenancy
             args: "--include-ui false --use-multitenancy true"
@@ -237,6 +239,13 @@ jobs:
       - name: Build generated solution
         working-directory: ../generated
         run: dotnet build ./*.slnx -c Release
+
+      # The generated ci.yml's Format check, word for word, on every leg: a project must pass its own
+      # format gate the day it is generated, whatever its name sorts next to (Microsoft, Xunit) and
+      # whatever options it was generated with. KEEP IN SYNC with scripts/test-template.sh.
+      - name: Format check (generated)
+        working-directory: ../generated
+        run: dotnet format ./*.slnx --no-restore --verify-no-changes --severity warn
 
       # Everything runs for real: the Testcontainers suites and the Aspire E2E (InvoiceApiFlowTests),
       # which boots the generated AppHost under its new name (PostgreSQL, the migration worker, the

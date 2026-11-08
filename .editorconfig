@@ -21,9 +21,12 @@ end_of_line = lf
 [*.cs]
 # ── Usings & namespaces ─────────────────────────────────────────────────────
 csharp_style_namespace_declarations = file_scoped:error
-dotnet_sort_system_directives_first = true
 csharp_using_directive_placement = outside_namespace:error
 dotnet_diagnostic.IDE0005.severity = warning        # remove unnecessary usings
+# No using-order key on purpose (dotnet_sort_system_directives_first, dotnet_separate_import_directive_groups):
+# dotnet format checks the order of usings only while one of them is set, and both sort by the full name.
+# The solution's own namespaces start with its name, which sorts before Microsoft for one name (Acme.*) and
+# after Xunit for another (Zeta.*), so no one order in the source passes that check under every name.
 
 # ── Language preferences ────────────────────────────────────────────────────
 csharp_style_var_for_built_in_types = false:suggestion

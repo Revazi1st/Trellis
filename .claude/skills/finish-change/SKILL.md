@@ -19,9 +19,11 @@ proposed commit message, `commit` also commits, and `pr` commits and opens the p
       touches, untracked ones included, and set anything unrelated aside before going on. Every box
       below keys on this list, and a stray file rides into the commit and into every reviewer's reading
       of the change.
-- [ ] **Format, then verify.** `./scripts/dotnet.sh format Trellis.slnx`, then
-      `./scripts/dotnet.sh format Trellis.slnx --verify-no-changes --severity warn`, which must report
-      nothing [CI *Build & Test*, step *Format check*].
+- [ ] **Format, then verify.** Format the files this change touches,
+      `./scripts/dotnet.sh format Trellis.slnx --include <the files from Scope the diff>`, then verify
+      the whole solution with `./scripts/dotnet.sh format Trellis.slnx --verify-no-changes --severity warn`,
+      which must report nothing [CI *Build & Test*, step *Format check*]. A formatter change to a file
+      outside that list is debt that was there before: stop and report it, never part of this commit.
 - [ ] **Release build.** `./scripts/dotnet.sh build Trellis.slnx -c Release`: Release turns every
       warning into an error, RSLT001 (a discarded `Result`) and NuGetAudit's advisories included
       [CI *Build & Test*, *Build (warnings as errors)*]. RSLT001 or CS9057: `docs/development.md`,
