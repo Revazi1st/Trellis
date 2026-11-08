@@ -1,3 +1,4 @@
+using System.Globalization;
 using NSubstitute;
 using Shouldly;
 using Trellis.Application.Features.Invoices.AddInvoiceLine;
@@ -23,15 +24,16 @@ public sealed class AddInvoiceLineCommandHandlerTests
         invoice.Lines.ShouldHaveSingleItem().Amount.Amount.ShouldBe(150.50m);
     }
 
+    // The rows are strings: an attribute cannot hold a decimal, and a double row would be converted at runtime (MA0244).
     [Theory]
-    [InlineData(-1)]
-    [InlineData(10.999)]
-    [InlineData(1_000_000_000_000_000)]
-    public async Task Handle_InvalidAmount_FailsAtTheAmountField(decimal amount)
+    [InlineData("-1")]
+    [InlineData("10.999")]
+    [InlineData("1000000000000000000")]
+    public async Task Handle_InvalidAmount_FailsAtTheAmountField(string amount)
     {
         Invoice invoice = Loaded(InvoiceFactory.Draft());
 
-        var result = await Handle(new AddInvoiceLineCommand(invoice.Id, "Design", amount));
+        var result = await Handle(new AddInvoiceLineCommand(invoice.Id, "Design", decimal.Parse(amount, CultureInfo.InvariantCulture)));
 
         result.Error.ShouldBeOfType<FieldError>().Field.ShouldBe(nameof(AddInvoiceLineCommand.Amount));
         result.Error.Code.ShouldStartWith("Money.");
