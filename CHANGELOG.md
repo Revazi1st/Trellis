@@ -8,6 +8,17 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+- **More packages the build refuses** (ADR-0011, amendment of 2026-11-08). `LicenseCeilingPackageIds`
+  gains `Hangfire.Core` and `Hangfire.Pro` (LGPL-3.0 or commercial), `TickerQ` and `TickerQ.Utilities`
+  (a source-available agreement from 10.5.0), `NBomber` (not free for organizational use),
+  `Duende.IdentityServer` (commercial), `NServiceBus` (RPL-1.5 or commercial), and
+  `MySql.EntityFrameworkCore` with `MySql.Data` (GPL-2.0): a direct reference, or one that arrives
+  under another package, fails the build, Dependabot never proposes them, and the LICENSE CEILINGS
+  comment in `Directory.Packages.props` gives each its reason. A family is refused through the package
+  all its members depend on (`Hangfire.AspNetCore` through `Hangfire.Core`). The comment also names a
+  ceiling the build cannot enforce: `Verify` from 33.0.0 ships a maintenance-fee agreement in its
+  package, so pin it below 33 if you add snapshot tests. `LicenseCeilingTests` keeps the list, the
+  comment and Dependabot's ignores naming the same ids.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes
