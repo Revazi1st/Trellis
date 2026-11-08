@@ -474,7 +474,22 @@ jobs:
         env:
           RUN_UI_TESTS: "1"
           UI_TESTS_BASE_URL: http://localhost:5170
+          # The test process runs in the build output (artifacts/bin/Trellis.UiTests/release), where the
+          # screenshots would land by default; the upload below reads this folder instead.
+          UI_TESTS_SCREENSHOTS: ${{ github.workspace }}/tests/Trellis.UiTests/TestResults/screenshots
         run: dotnet test tests/Trellis.UiTests -c Release --no-build
+
+      # docs/design-system.md (Proof): every page at 400 and 1280 px in both colour schemes, for a reviewer to
+      # open from the run's artifacts. Kept whether the tests passed or not: a failing page is the one to look
+      # at. Nothing compares them with earlier ones (font rendering differs per machine).
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ui-screenshots
+          path: tests/Trellis.UiTests/TestResults/screenshots
+          retention-days: 14
+          if-no-files-found: warn
 
 #endif
   docs-drift:

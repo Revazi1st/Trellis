@@ -36,6 +36,17 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   names the component (`.theme`, `.theme-select`) and says how to remove it; a browser flow in the
   optional `UiTests` project proves the choice survives a reload and a link out of the error page and
   wins over a light system, and that a host without the script keeps working.
+- **Screenshots at 400 and 1280 px in both themes, kept by CI** (with `--include-ui-tests`).
+  `DesignSystemProofTests` in the optional `UiTests` project opens every page (sign-in, create account,
+  the invoice list and its Overdue filter, a new invoice, an invoice) at both widths in light and dark,
+  saves a full-page screenshot of each and fails a page that scrolls sideways; one more screenshot has
+  Dark chosen in the switch over a light system, and one test tabs from the top of the page to the first
+  top-bar link and checks its focus ring shows. The screenshots go to `UI_TESTS_SCREENSHOTS` (by default
+  `TestResults/screenshots` under the test run's working directory), and the `ui-tests` job in `ci.yml`
+  uploads them as the `ui-screenshots` artifact, kept 14 days, passed or failed. Nothing compares them
+  with a baseline: fonts render differently per machine, so a reviewer looks (`docs/design-system.md`,
+  *Proof*). The browser tests sign in through one helper, `Session.SignInAsAdminAsync`, and the proof's
+  protected pages share one signed-in page: the API allows ten sign-ins a minute from the web host.
 - **The design tokens export as JSON** for a design tool or a published design-system page:
   `./scripts/export-design-tokens.sh [-o tokens.json]` writes one object per token in `tokens.css`, in
   its order, with its value (a colour as its light and dark pair) and its usage, the token's *Role* in
