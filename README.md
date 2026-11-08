@@ -629,8 +629,7 @@ agents alike.
 
 Trellis takes ideas from other people's work. Each line names what was taken; nothing below is a
 verbatim copy, so the MIT, BSD and Apache notices stay with their projects. Templates we only compared
-against are not listed (ADR-0002 names them). A line marked *when adopted* or *once imported*
-describes planned work that is not in the template yet; the marker goes when it lands.
+against are not listed (ADR-0002 names them).
 
 **Templates and libraries we learned from**
 - [clean-architecture](https://github.com/amantinband/clean-architecture) by Amichai Mantinband (MIT):
@@ -644,8 +643,7 @@ describes planned work that is not in the template yet; the marker goes when it 
   - the Testing section mapping each test type onto the layers it exercises, and where to invest;
   - the authorization how-to format, one snippet then who passes, and the self-or-admin idea behind our ownership recipe;
   - the show-the-code README sections;
-  - the visual walkthrough-style README: an icon on each heading, a request for a star, the domain before the architecture, a request walkthrough and pictures of the folders and the tests (the pictures and the words are our own);
-  - *when adopted*: feature-first folders in the persistence adapter.
+  - the visual walkthrough-style README: an icon on each heading, a request for a star, the domain before the architecture, a request walkthrough and pictures of the folders and the tests (the pictures and the words are our own).
 - [Trellis](https://github.com/xavierjohn/Trellis) by Xavier John (MIT; no affiliation, the shared name is a coincidence):
   - lease-fenced outbox bookkeeping writes, and sibling event handlers run on every attempt with only the failed ones retried;
   - failing fast when a `Result` reaches JSON, a failed `Result` that names its code, and compiler-guarded `Error` access;

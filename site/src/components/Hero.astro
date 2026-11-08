@@ -12,8 +12,9 @@ import { nugetUrl, packageId, packagePublished, quickstart } from '../data/repo.
 
 const { data } = Astro.locals.starlightRoute.entry;
 const stage = data.stage;
-// Under the terminal: the frontmatter's note until the package is on nuget.org, then where it is.
-const fine = packagePublished ? `<a href="${nugetUrl}">${packageId} on nuget.org</a>` : stage?.fine;
+// Under the terminal: where the package is, once it is on nuget.org (until then, a preview build's
+// banner says how to install from a clone).
+const fine = packagePublished ? `<a href="${nugetUrl}">${packageId} on nuget.org</a>` : null;
 const { title = data.title, tagline, actions = [] } = data.hero ?? {};
 const lines = [
   { cmd: quickstart.install },
