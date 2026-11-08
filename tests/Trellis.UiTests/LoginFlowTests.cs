@@ -96,12 +96,7 @@ public sealed class LoginFlowTests
         await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
-        await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/login");
-        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await page.FillAsync("input[autocomplete='username']", UiTestEnvironment.SeededAdminEmail);
-        await page.FillAsync("input[autocomplete='current-password']", UiTestEnvironment.SeededAdminPassword);
-        await page.ClickAsync("button[type='submit']");
-        await page.WaitForURLAsync("**/invoices", new() { Timeout = 15_000 });
+        await Session.SignInAsAdminAsync(page);
 
         // Navigate via the nav link: per-circuit tokens do not survive a full page load (ADR-0007),
         // so a GotoAsync here would bounce back to the login page.
@@ -131,12 +126,7 @@ public sealed class LoginFlowTests
         await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
-        await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/login");
-        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await page.FillAsync("input[autocomplete='username']", UiTestEnvironment.SeededAdminEmail);
-        await page.FillAsync("input[autocomplete='current-password']", UiTestEnvironment.SeededAdminPassword);
-        await page.ClickAsync("button[type='submit']");
-        await page.WaitForURLAsync("**/invoices", new() { Timeout = 15_000 });
+        await Session.SignInAsAdminAsync(page);
 
         // Create, add a line, issue due in 30 days: never overdue today. In-app navigation only (ADR-0007).
         await page.ClickAsync("a.nav-link:has-text('New')");

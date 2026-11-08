@@ -227,6 +227,22 @@ RUN_UI_TESTS=1 UI_TESTS_BASE_URL=http://localhost:5170 dotnet test tests/Trellis
 
 Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-free
 (the same opt-in pattern as the Aspire E2E test).
+<!--#if (IncludeUI) -->
+
+`DesignSystemProofTests` is the design system's *Proof* ([docs/design-system.md](design-system.md#proof)):
+it saves a full-page screenshot of every page at 400 and 1280 px wide in both colour schemes, named
+`<page>-<width>-<scheme>.png` (and `invoices-1280-dark-switch.png`, Dark chosen in the switch over a light
+system), and fails a page that scrolls sideways. They go to the folder
+`UI_TESTS_SCREENSHOTS` names, by default `TestResults/screenshots` under the test run's working directory,
+which is the build output (`artifacts/bin/Trellis.UiTests/debug/TestResults/screenshots` after the
+commands above). CI's `ui-tests` job keeps them for 14 days as the run's `ui-screenshots` artifact, passed
+or failed. Nothing compares them with earlier ones: a reviewer opens them.
+
+A test signs in through `Session.SignInAsAdminAsync`, on its own page: the circuit holds the tokens, so a
+full page load starts signed out and a signed-in test moves on through the app's links. The API allows ten
+sign-ins a minute from one address and every browser test signs in from the web host's, so a test that
+visits many protected pages signs in once (the proof's cases share one signed-in page).
+<!--#endif -->
 
 ## Tests
 

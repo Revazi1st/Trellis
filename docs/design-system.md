@@ -363,6 +363,16 @@ bottom on `--surface` under a two-pixel `--danger` edge, with a `.reload` link a
 A change is looked at 400 px and 1280 px wide, in both colour schemes, before it is finished: no horizontal
 overflow at the phone width, the page at `--page-width` on the laptop.
 
+With the optional `UiTests` project, CI takes that look on every run.
+`DesignSystemProofTests` opens each page (sign-in, create account, the invoice list and its Overdue filter, a
+new invoice, an invoice) at both widths in both schemes, saves a full-page screenshot of each, and fails a
+page that is wider than the window; one more screenshot has Dark chosen in the [theme switch](#theme-switch)
+over a light system, and one test tabs from the top of the page to the first top-bar link and checks that
+it shows the system's [focus](#focus) ring, not the browser's own. The `ui-tests` job keeps the screenshots
+for 14 days as the run's `ui-screenshots` artifact, passed or failed ([UI tests](development.md#ui-tests-optional)
+says where they land on your machine). Nothing compares them with a baseline, because fonts render
+differently from one machine to the next: a reviewer opens them and looks.
+
 `DesignSystemTests` (`tests/*.ArchitectureTests/`, compiled with the UI) holds the system to its
 rules, each fact with a positive control that fails a planted violation:
 
@@ -378,7 +388,8 @@ rules, each fact with a positive control that fails a planted violation:
 - `Every_variable_a_stylesheet_reads_is_declared`: every `var(--…)` in `app.css` names a token or an
   alias the stylesheet declares.
 - `The_design_doc_and_the_token_file_name_the_same_tokens`: the [Tokens](#tokens) tables and
-  `tokens.css` name the same set, both ways.
+  `tokens.css` name the same set, both ways, and a code span anywhere in this document that is a
+  double-hyphen name is a token `tokens.css` declares (write a command-line option as plain text here).
 
 The `ui-reviewer` subagent (`.claude/agents/ui-reviewer.md`) reads a change to a page, a layout or a
 stylesheet against this document, `.claude/rules/ui.md` and the accessibility each component owes, in a

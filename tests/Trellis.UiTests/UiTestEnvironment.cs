@@ -11,6 +11,16 @@ internal static class UiTestEnvironment
     public static string WebBaseUrl =>
         Environment.GetEnvironmentVariable("UI_TESTS_BASE_URL") ?? "https://localhost:7170";
 
+    /// <summary>
+    /// Where <see cref="DesignSystemProofTests"/> saves its screenshots: UI_TESTS_SCREENSHOTS, else
+    /// TestResults/screenshots under the working directory, which under <c>dotnet test</c> is the build output
+    /// (artifacts/bin/Trellis.UiTests/debug or release). CI names a folder in the checkout and uploads it.
+    /// </summary>
+    public static string ScreenshotRoot =>
+        Path.GetFullPath(Environment.GetEnvironmentVariable("UI_TESTS_SCREENSHOTS") is { Length: > 0 } directory
+            ? directory
+            : Path.Combine("TestResults", "screenshots"));
+
     public const string SeededAdminEmail = "admin@example.com";
     public const string SeededAdminPassword = "Admin123!";
 }
