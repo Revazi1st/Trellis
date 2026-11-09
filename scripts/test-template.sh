@@ -256,7 +256,8 @@ run_leg() {  # name out test regen args
     if logged "$log" in_dir "$dir" first_migration_probe; then mig=ok; else mig=FAIL; fi
   fi
 
-  if [ "$inst" = ok ] && [ "$regen" = 1 ]; then
+  # A failed probe stays FAIL: the regeneration would only overwrite the result.
+  if [ "$inst" = ok ] && [ "$regen" = 1 ] && [ "$mig" != FAIL ]; then
     echo "==> $name: regenerate the initial migration"
     if logged "$log" in_dir "$dir" regenerate_migration; then mig=ok; else mig=FAIL; fi
   fi
