@@ -20,7 +20,8 @@ and Aspire orchestration.
 ## Run it
 
 You need Docker and the .NET 10 SDK; `aspire run` also needs the Aspire CLI
-(`dotnet tool install -g Aspire.Cli`).
+(`dotnet tool install -g Aspire.Cli`). `./scripts/doctor.sh` checks them, the development certificate
+and the AppHost's ports on your machine, changes nothing, and names the fix for anything missing.
 
 ```bash
 # PostgreSQL, the migration job, the app and the Aspire dashboard:

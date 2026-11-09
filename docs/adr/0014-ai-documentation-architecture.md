@@ -6,6 +6,7 @@
 - **Amended**: 2026-10-25 — the one doc set is also rendered as the template's website, from `docs/` in place (see *Amendment (2026-10-25)* below)
 <!--#endif -->
 - **Amended**: 2026-10-26 — reviewers declare what they own, the index lists the agents, hooks and MCP servers, a rare skill may ship hidden, and the docs-sync ladder gains *ask* rungs (see *Amendment (2026-10-26)* below)
+- **Amended**: 2026-11-08 — `.mcp.json` gains the Aspire MCP server, a local command that reads and drives the running AppHost (see *Amendment (2026-11-08)* below)
 
 ## Context
 
@@ -53,3 +54,17 @@ on a link or an anchor that points nowhere. A generated project gets neither the
   may ask the person before an edit the conventions reserve to a generator or to their judgement. A hook
   ships with a self-test, and none is the only guard: each stays backed by an `AGENTS.md` instruction
   and, where one exists, a CI check.
+
+## Amendment (2026-11-08): the Aspire MCP server
+
+- **`.mcp.json` ships a fourth server, `aspire`**, started as `aspire agent mcp`. Unlike the other three
+  it is neither a hosted URL nor a package fetched on first use: it is the Aspire CLI the developer
+  installed, so it needs the Aspire CLI 13.5 or later on `PATH` (`./scripts/doctor.sh` reports whether
+  it is there and new enough), and without it the server does not start.
+- **It reads the running app**: while an `aspire run` is in progress under the working directory, it
+  lists the AppHost's resources and their state, each resource's console and structured logs, and the
+  traces, so an agent reads them instead of scraping the terminal or guessing from the dashboard
+  (`docs/INDEX.md`, the `run-app` skill). With no AppHost running it has nothing to read.
+- **It also acts on it**: it can start, stop and restart a resource of the `aspire run` in progress.
+  It is approved on first use like the others: an interactive Claude Code session asks before using it,
+  and a headless `claude -p` run loads it without asking.

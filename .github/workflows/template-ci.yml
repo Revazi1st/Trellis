@@ -150,6 +150,11 @@ jobs:
         working-directory: ../generated
         run: bash scripts/check-hooks.sh
 
+      # Run as an executable, so this also proves the chmod post-action lists it.
+      - name: Generated doctor self-test
+        working-directory: ../generated
+        run: ./scripts/doctor.sh --self-test
+
       - name: Lint the generated workflows
         working-directory: ../generated
         run: docker run --rm -v "$PWD:/repo" --workdir /repo "$ACTIONLINT_IMAGE" -color .github/workflows/*.yml

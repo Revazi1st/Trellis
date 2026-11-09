@@ -154,6 +154,16 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `docs/upgrading.md` installs the template as `<package>@<version>`, the separator current SDKs expect,
   and tells the files you never touched by regenerating the version you started from and diffing it
   against your tree: a diff against the target alone cannot tell your edit from the template's.
+- **A check of your machine before the first run, and the running app for an agent to read.**
+  `./scripts/doctor.sh` prints one line per prerequisite, `ok`, `missing` with the fix, or `skip`: a
+  .NET SDK on `PATH` that `global.json` accepts (or that `./scripts/dotnet.sh` builds and tests without
+  one), Docker and the SDK image, the Aspire CLI, the development certificate, the AppHost's ports, the
+  engine endpoint the Testcontainers tests get, git, and jq where a script needs it. It changes nothing
+  and exits 1 only when something a first run needs is missing; `--self-test` runs every check against
+  fakes, and CI runs it (`docs/development.md`, *Prerequisites*). `.mcp.json` gains the Aspire MCP
+  server (`aspire agent mcp`): while `aspire run` is up, an agent reads the AppHost's resources, logs
+  and traces through it and can restart a resource. It needs the Aspire CLI 13.5 or later on `PATH`,
+  and an interactive Claude Code session asks before using it (`docs/INDEX.md`, the `run-app` skill).
 
 ## [0.1.1] - 2026-10-26
 

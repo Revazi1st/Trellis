@@ -7,6 +7,8 @@ description: Run the Trellis app to see it working. Use when asked to start, run
 
 **Full stack (`aspire run`) needs a local .NET 10 SDK** — it cannot run in the SDK container (ADR-0008).
 
+First run `./scripts/doctor.sh`: one line per prerequisite (the SDK against `global.json`, Docker and the SDK image, the Aspire CLI, the development certificate, the AppHost's ports, the Testcontainers endpoint), `ok`, `missing` with the fix, or `skip`, and exit 1 when something the run needs is missing. It changes nothing, and neither do you unasked: tell the user the fix a `missing` line names (an install, an image to build, a certificate to trust, a process holding a port) rather than applying it.
+
 Prerequisites (docs/development.md, "Prerequisites"): the .NET 10 SDK, Docker, and the **Aspire CLI 13.5 or later**, a separate install from the SDK — `dotnet tool install -g Aspire.Cli`, check with `aspire --version`. If `aspire` is not on PATH, use the CLI-free command below rather than installing tools on the user's machine unasked. `pwsh` is needed only for the Playwright UI tests. With a local SDK:
 
 ```bash
@@ -15,6 +17,8 @@ dotnet run --project tools/Trellis.AppHost   # the same app without the Aspire C
 ```
 
 Then open the dashboard URL it prints; the API exposes Scalar at `/scalar/v1` (its root redirects there in Development), the web app serves the UI. Seeded admin: `admin@example.com` / `Admin123!`.
+
+Once the app is up under `aspire run`, the `aspire` MCP server (`.mcp.json`, started as `aspire agent mcp`) is how you read it: the resources and their state, each resource's console and structured logs, the traces, and a resource's start, stop or restart, instead of scraping the terminal or guessing from the dashboard. It finds the running AppHost under the working directory; an interactive session asks before using it, and without the Aspire CLI on PATH it does not start (the dashboard's URL is then the way in).
 
 ## Containerized smoke (no local SDK)
 Aspire can't orchestrate from the container, but you can run the pieces as sibling containers on one network to verify a change end-to-end:

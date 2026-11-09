@@ -174,6 +174,10 @@ shows how to depend on an API you do not own
   `dotnet run --project tools/Trellis.AppHost` starts the same app.
 - **PowerShell** (`pwsh`), only to install the browsers for the optional Playwright tests.
 
+Once the solution exists, run `./scripts/doctor.sh`: it checks each of these but PowerShell on your
+machine, the development certificate and the AppHost's ports too, changes nothing, and names the fix
+for anything missing.
+
 ### Create your solution
 
 ```bash
@@ -590,9 +594,10 @@ plain text you can read too.
 - **Drift gates**: the docs-drift hook (once per report) and CI's docs-drift job, the link check, the
   OpenAPI snapshot and the fitness tests turn the docs and the conventions into something a change can
   fail.
-- **[.mcp.json](.mcp.json)** wires up the Microsoft Learn, Context7 and Playwright MCP servers; the index
-  says when to reach for each, and points at the optional .NET plugins of `dotnet/skills` without
-  enabling any.
+- **[.mcp.json](.mcp.json)** wires up the Microsoft Learn, Context7, Playwright and Aspire MCP servers,
+  the last reading the running AppHost's logs, traces and resources under `aspire run`; the index says
+  when to reach for each, and points at the optional .NET plugins of `dotnet/skills` without enabling
+  any.
 
 The release runbook adds an agent dry run before each minor version: an agent builds one fixed feature
 in a freshly generated project with nothing but that repository to go on, and the existing gates judge
@@ -624,8 +629,7 @@ agents alike.
 
 Trellis takes ideas from other people's work. Each line names what was taken; nothing below is a
 verbatim copy, so the MIT, BSD and Apache notices stay with their projects. Templates we only compared
-against are not listed (ADR-0002 names them). A line marked *when adopted* or *once imported*
-describes planned work that is not in the template yet; the marker goes when it lands.
+against are not listed (ADR-0002 names them).
 
 **Templates and libraries we learned from**
 - [clean-architecture](https://github.com/amantinband/clean-architecture) by Amichai Mantinband (MIT):
@@ -639,8 +643,7 @@ describes planned work that is not in the template yet; the marker goes when it 
   - the Testing section mapping each test type onto the layers it exercises, and where to invest;
   - the authorization how-to format, one snippet then who passes, and the self-or-admin idea behind our ownership recipe;
   - the show-the-code README sections;
-  - the visual walkthrough-style README: an icon on each heading, a request for a star, the domain before the architecture, a request walkthrough and pictures of the folders and the tests (the pictures and the words are our own);
-  - *when adopted*: feature-first folders in the persistence adapter.
+  - the visual walkthrough-style README: an icon on each heading, a request for a star, the domain before the architecture, a request walkthrough and pictures of the folders and the tests (the pictures and the words are our own).
 - [Trellis](https://github.com/xavierjohn/Trellis) by Xavier John (MIT; no affiliation, the shared name is a coincidence):
   - lease-fenced outbox bookkeeping writes, and sibling event handlers run on every attempt with only the failed ones retried;
   - failing fast when a `Result` reaches JSON, a failed `Result` that names its code, and compiler-guarded `Error` access;
@@ -664,7 +667,7 @@ describes planned work that is not in the template yet; the marker goes when it 
   - opening the API's root on its Scalar reference;
   - a short, ordered deployment page in Getting started;
   - a documentation website as the template's home: a landing page with the install command, feature cards and a three-step quick start; a Getting started / Architecture / Features sidebar with a linear path; an installation page with update and uninstall; one page per option that says what each choice adds and what to do after creation; an architecture page led by one ring diagram and the dependency rule; the documented version in the footer; a Testing page with one table of test projects and one run command; Astro + Starlight on GitHub Pages (ideas from cleanarchitecture.jasontaylor.dev; no code or CSS copied).
-- [dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit) by Mukesh Murugan (MIT): Valkey in place of Redis in the starter, as an idea.
+- [dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit) by Mukesh Murugan (MIT): Valkey in place of Redis in the starter, as an idea; the `fsh doctor` idea, a check of the SDK, Docker, Aspire and the ports before a first run (`scripts/doctor.sh`).
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
@@ -676,6 +679,7 @@ describes planned work that is not in the template yet; the marker goes when it 
 - [Claude Code documentation](https://code.claude.com/docs/en/hooks-guide) by Anthropic: the protect-files `PreToolUse` recipe that `guard-edits.sh` grew from, the best-practices example of a hook that guards the migrations folder, and the `stop_hook_active` guard that keeps `stop-tests.sh` from blocking twice in a row.
 - [gitleaks](https://github.com/gitleaks/gitleaks) by Zachary Rice (MIT): the documented pre-commit invocation (`gitleaks git --pre-commit --staged --redact`) that `guard-commit.sh` runs when gitleaks is installed.
 - [dotnet/skills](https://github.com/dotnet/skills) by Microsoft (MIT): the plugins `docs/INDEX.md` points at as optional installs (`dotnet`, `dotnet-test`, `dotnet-data`); nothing is copied or enabled.
+- [PlatformPlatform](https://github.com/platformplatform/PlatformPlatform) by Thomas Jespersen and contributors (MIT): the `.mcp.json` entry for the Aspire MCP server, as an idea.
 
 **Formats and conventions**
 - [Michael Nygard's ADR format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions): Status, Context, Decision, Consequences (ADR-0001).
