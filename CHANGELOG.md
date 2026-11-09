@@ -81,6 +81,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `security-reviewer` described their work as reviewing "a Trellis change", which a project generated as
   `Acme.Shop` got as "a Acme.Shop change"; they review "a change to Acme.Shop" now, and Template CI
   fails a generated project with a sentence that reads "a <name>" after the rename.
+- **`.claude/hooks/common.sh` is generated executable.** It was the one hook script without the
+  executable bit, so the `chmod +x scripts/*.sh .claude/hooks/*.sh` that the template's instructions and
+  `ci.yml` give left a mode change in a project generated a minute before. It ships executable, the
+  chmod post-action lists it, and `scripts/check-hooks.sh` checks its mode like the hooks'.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

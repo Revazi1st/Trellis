@@ -32,7 +32,10 @@ fail() {
   [ "$#" -eq 0 ] || printf '  %s\n' "$@"
 }
 
-# --- every hook script parses, and every hook is executable (Claude Code runs it directly) ---
+# --- every hook script parses, and every one is executable (Claude Code runs the hooks directly) ---
+# common.sh is only sourced, but it is executable too: the documented chmod (.claude/hooks/*.sh, in
+# the template's post-action and ci.yml) covers it, and a mode that differs from the committed one
+# shows as a change in a project generated a minute ago.
 for f in "$hooks"/*.sh; do
   [ -e "$f" ] || continue
   name="${f#"$root"/}"
@@ -40,10 +43,9 @@ for f in "$hooks"/*.sh; do
   if ! out="$(bash -n "$f" 2>&1)"; then
     fail "$name does not parse (bash -n)" "$out"
   fi
-  case "$f" in */common.sh) continue ;; esac
   cases=$((cases + 1))
   if [ ! -x "$f" ]; then
-    fail "$name is not executable: Claude Code cannot run it" "chmod +x $name, and commit the mode (git update-index --chmod=+x $name)"
+    fail "$name is not executable: Claude Code runs the hooks directly, and the documented chmod covers every script here" "chmod +x $name, and commit the mode (git update-index --chmod=+x $name)"
   fi
 done
 
