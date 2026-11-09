@@ -45,13 +45,15 @@ machine you deploy from. Each step names the section further down that explains 
    token.
 <!--#if (UseRedis) -->
 
-With `--use-redis`, `.env` also lists `CACHE_PASSWORD`, the password of the `cache` service, which
-stays on the internal network and restarts with Docker like the others.
+With `--use-redis`, the compose file has a `cache` service too: Valkey (`valkey/valkey:9`,
+BSD-3-Clause), which the API reaches with its Redis client. `.env` also lists `CACHE_PASSWORD`, its
+password; it stays on the internal network and restarts with Docker like the others.
 <!--#endif -->
 
 Before real traffic: TLS and the trusted-proxy lists at a reverse proxy in front of the API and the web
-host ([Edge TLS](#edge-tls-and-forwarded-headers)), real e-mail (`Email__Provider`), and backups of the
-PostgreSQL volume. The Aspire dashboard listens on the server's loopback only: open it through an SSH
+host ([Edge TLS](#edge-tls-and-forwarded-headers)), real e-mail (`Email__Provider`: the Mailpit catcher
+`aspire run` starts is not published, so the API logs mail instead of sending it until you set it), and
+backups of the PostgreSQL volume. The Aspire dashboard listens on the server's loopback only: open it through an SSH
 tunnel ([below](#docker-compose-what-aspire-publish-produces)). Another target, Azure Container Apps or
 Kubernetes, is an extension of your own: the Aspire hosting package for it in the AppHost, and the
 migration job as a step the rollout waits on ([Migrations](#migrations-a-one-shot-pre-deploy-job)).
@@ -98,7 +100,7 @@ model `aspire run` uses. What the publish step of Aspire 13.6 writes, and what i
 |---|---|---|
 | `postgres` | `postgres:18`, a named data volume, port 5432 on the internal `aspire` network only (`expose:`), password from `POSTGRES_PASSWORD` in `.env`, `restart: unless-stopped` | Set a strong `POSTGRES_PASSWORD`; plan backups of the volume. Keep the major version pinned: a data volume does not survive a major upgrade |
 | `migrations` | `${MIGRATIONS_IMAGE}`, no ports, starts once PostgreSQL has *started* (not once it is ready; the job's retrying execution strategy rides out a normal start-up), `Seed__AdminPassword` from `SEED_ADMIN_PASSWORD` in `.env` | Fill `SEED_ADMIN_PASSWORD` (the job refuses the default outside Development); consider `Seed__AdminEmail`. No restart policy: it is a one-shot job, and rerunning `docker compose up` reruns it safely |
-| `api` | `${API_IMAGE}`, published as `"${API_PORT}"` (the container port on an **ephemeral host port**), starts only after `migrations` exited 0, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, `Authentication__SigningKey` from `SIGNING_KEY` in `.env`, `restart: unless-stopped` | Fill `SIGNING_KEY` (the API refuses to boot without it); add `Email__Provider`, `Registration__Mode` if wanted and the `ForwardedHeaders__*` lists (below); publish a fixed host port or none (behind the proxy) |
+| `api` | `${API_IMAGE}`, published as `"${API_PORT}"` (the container port on an **ephemeral host port**), starts only after `migrations` exited 0, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, `Authentication__SigningKey` from `SIGNING_KEY` in `.env`, `restart: unless-stopped` | Fill `SIGNING_KEY` (the API refuses to boot without it); add `Email__Provider` and the `Email__Smtp__*` relay (there is no Mailpit service: the AppHost starts the catcher in run mode only), `Registration__Mode` if wanted and the `ForwardedHeaders__*` lists (below); publish a fixed host port or none (behind the proxy) |
 | `web` (with the UI) | `${WEB_IMAGE}`, `"${WEB_PORT}"` on an ephemeral host port, service discovery pointed at `http://api:${API_PORT}`, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, `restart: unless-stopped` | Reach it only through the proxy (below) |
 | `compose-dashboard` | The Aspire dashboard (`mcr.microsoft.com/dotnet/nightly/aspire-dashboard`), its UI published on the host's loopback only (`127.0.0.1:18888`), OTLP on 18889/18890 internal, `restart: always`; every .NET service exports its logs, metrics and traces to it | Reach it over an SSH tunnel, or replace it with your own collector (below) |
 
@@ -172,7 +174,7 @@ fails the rollout, not the first request.
 | `Seed__AdminPassword` | yes (migration job, fresh DB) | Bootstrap admin credential; seeding refuses the default outside Development. The published compose file reads it from `SEED_ADMIN_PASSWORD` in `.env`. |
 | `Seed__TenantId` | no (multi-tenancy only) | Tenant of the bootstrap admin and the Development demo data; default `default`. |
 | `Registration__Mode` | no | `Closed` (default): `POST /auth/register` answers 403 and accounts come from an administrator or the seeder. `Open`: anyone can create a Member account, which can read business data — set it only when that is intended. Any other value stops the API at boot. |
-| `Email__Provider` / `Email__Smtp__*` | yes, in effect | `Smtp`: each message goes to the relay in `Email__Smtp__Host`, `__Port` (587), `__FromAddress` and, both or neither, `__UserName` / `__Password` (a secret), upgraded with STARTTLS — a relay that does not offer it fails the send. Checked at API boot only while `Smtp` is selected. A failed send is retried by the outbox, whose error records the status code and masked recipient, never the relay's reply; delivery is at least once, so a crash after the relay accepted can send a message twice. Not supported: implicit TLS (port 465 stops the API at boot) and OAuth2 (XOAUTH2) — either is a new adapter (`Infrastructure/Email`). `__UseStartTls=false` sends in clear, for a local mail catcher: refused with credentials, a startup warning outside Development. `Logging` (shipped): e-mail is **not sent** — each message becomes one log line (masked recipient, subject, length) and the API logs a startup warning outside Development. `None`: discard on purpose. Any other value stops the API at boot. |
+| `Email__Provider` / `Email__Smtp__*` | yes, in effect | `Smtp`: each message goes, through MailKit, to the relay in `Email__Smtp__Host`, `__Port` (587), `__FromAddress` and, both or neither, `__UserName` / `__Password` (a secret), upgraded with STARTTLS — a relay that does not offer it fails the send. Checked at API boot only while `Smtp` is selected. A failed send is retried by the outbox, whose error records the status code and masked recipient, never the relay's reply; delivery is at least once, so a crash after the relay accepted can send a message twice. Not supported: implicit TLS (port 465 stops the API at boot) and OAuth2 (XOAUTH2) — either is a new adapter (`Infrastructure/Email`). `__UseStartTls=false` sends in clear, for a local mail catcher: refused with credentials, a startup warning outside Development. `Logging` (shipped): e-mail is **not sent** — each message becomes one log line (masked recipient, subject, length) and the API logs a startup warning outside Development. `None`: discard on purpose. Any other value stops the API at boot. |
 | `ExternalApis__ExchangeRates__BaseUrl` / `__TimeoutSeconds` / `__MaxRetries` | no | The reference integration: Frankfurter v2 (`https://api.frankfurter.dev/v2/`), 10 s per attempt, 2 retries. Validated at API boot only — the migration job does not register outbound integrations. |
 | `ForwardedHeaders__KnownProxies__0…` / `ForwardedHeaders__KnownNetworks__0…` | behind ingress | IPs / CIDR ranges of trusted proxies. Without them `X-Forwarded-For` is ignored (loopback-only default — spoof-safe) and every caller shares the ingress IP's rate-limit bucket. `aspire publish` output sets `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`; that switch cannot widen trust — with no list configured the API keeps the loopback-only default and logs a startup warning naming these settings (ADR-0021). A Blazor Server web host signs everyone in from one address: 10 logins/min per web host, by design. |
 | `Kestrel__Limits__MaxRequestBodySize` / `Kestrel__Limits__MaxRequestHeadersTotalSize` | no | Request caps in bytes: 1 MB body (larger → 413) and 32 KB of headers by default. Raise per endpoint for a real upload, not globally. |
@@ -291,9 +293,10 @@ that calls the API is sampled as one trace.
 <!--#endif -->
 
 The invoice read cache keeps an entry 30 seconds in each API instance's memory (L1) and, with the
-`UseRedis` toggle, five minutes in Redis (L2). A write evicts the entry from its own instance and
-from Redis only, so with several replicas another replica can serve the previous state, ETag
-included, for up to 30 seconds; without Redis every replica caches on its own for the same 30 seconds.
+`UseRedis` toggle, five minutes in Valkey (L2, over the Redis protocol). A write evicts the entry from
+its own instance and from the shared L2 only, so with several replicas another replica can serve the
+previous state, ETag included, for up to 30 seconds; without the L2 every replica caches on its own for
+the same 30 seconds.
 
 ### Telemetry reference
 

@@ -189,9 +189,9 @@ jobs:
       # other single hash (check-template-toggles.sh enforces this).
 #endif
 ##if (UseRedis)
-#      ## The API's HybridCache L2 (AddRedisDistributedCache in Program.cs) needs Redis, which
-#      ## docker-compose.yml starts under its redis profile on host port 6379.
-#      - name: Start PostgreSQL and Redis
+#      ## The API's HybridCache L2 (AddRedisDistributedCache in Program.cs) needs a Redis-protocol
+#      ## cache: Valkey, which docker-compose.yml starts as its redis service on host port 6379.
+#      - name: Start PostgreSQL and Valkey
 #        run: docker compose --profile redis up -d --wait postgres redis
 ##else
       - name: Start PostgreSQL
@@ -279,7 +279,7 @@ jobs:
 
 #endif
 ##if (UseRedis)
-#      - name: Start PostgreSQL and Redis
+#      - name: Start PostgreSQL and Valkey
 #        run: docker compose --profile redis up -d --wait postgres redis
 ##else
       - name: Start PostgreSQL
@@ -426,7 +426,7 @@ jobs:
         uses: ./.github/actions/setup-dotnet
 
 ##if (UseRedis)
-#      - name: Start PostgreSQL and Redis
+#      - name: Start PostgreSQL and Valkey
 #        run: docker compose --profile redis up -d --wait
 ##else
       - name: Start PostgreSQL

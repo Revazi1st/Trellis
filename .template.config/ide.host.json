@@ -19,7 +19,7 @@
     {
       "id": "UseRedis",
       "name": {
-        "text": "Use Redis cache"
+        "text": "Use a Redis-protocol cache (Valkey)"
       },
       "isVisible": true
     },

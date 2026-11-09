@@ -10,18 +10,37 @@
     LICENSE CEILINGS — DO NOT CROSS (applies to humans and AI agents alike)
 
     The following packages moved to commercial licenses (or, for Moq, broke the trust a
-    build dependency needs). This solution deliberately avoids them; never add or upgrade to:
+    build dependency needs), or never were free for a product to ship. This solution
+    deliberately avoids them; never add or upgrade to:
       • MediatR >= 13.0.0            (Lucky Penny, RPL-1.5/commercial) — we hand-roll CQRS handlers
       • AutoMapper >= 15.0.0         (Lucky Penny, RPL-1.5/commercial) — we map manually
       • FluentAssertions >= 8.0.0    (Xceed, proprietary)              — we use Shouldly
       • MassTransit >= 9.0.0         (Massient, commercial)            — use Wolverine/Rebus if messaging is needed
       • Moq, any version             (4.20.0 shipped SponsorLink)      — we use NSubstitute
+      • Hangfire.Core, Hangfire.Pro  (Hangfire OÜ, LGPL-3.0 or commercial; Pro commercial only) — a BackgroundService
+      • TickerQ >= 10.5.0            (Arcenox, source-available "TickerQ Software License Agreement",
+                                      effective 2026-10-13; 10.4.x was MIT OR Apache-2.0)        — a BackgroundService
+      • NBomber, any version         (NBomber LLC, license v3.2: "not free for organizational use") — no load-test tool ships
+      • Duende.IdentityServer        (Duende, commercial; the Community Edition is revenue-capped) — the API's own JWT endpoints (ADR-0007)
+      • NServiceBus                  (Particular, RPL-1.5 or commercial) — the outbox (ADR-0018); Wolverine/Rebus if a bus is needed
+      • MySql.EntityFrameworkCore    (Oracle, GPL-2.0 with the Universal FOSS Exception) — PostgreSQL through Npgsql
+    The build matches whole ids, so a family is refused through the package all its members
+    depend on: Hangfire.Core, NServiceBus, Duende.IdentityServer, TickerQ.Utilities (under
+    TickerQ.EntityFrameworkCore and TickerQ.Dashboard, same agreement) and MySql.Data (the
+    ADO.NET driver under MySql.EntityFrameworkCore, same license). LicenseCeilingPackageIds in
+    Directory.Build.props holds the list.
+    A version ceiling the build cannot enforce, because the id stays allowed below it:
+      • Verify >= 33.0.0             (the nupkg ships an "Open Source Maintenance Fee" EULA, OsmfEula.txt,
+                                      and a SponsorCheck build task; 32.0.1 was the last plain MIT package).
+                                      Not referenced; pin below 33.0.0 if snapshot tests are ever added.
     Enforced, not advisory: the build fails when any of these ids appears anywhere in a
     project's resolved package graph, transitive dependencies included (Directory.Build.props),
-    and Dependabot never proposes them (.github/dependabot.yml).
+    and Dependabot never proposes them (.github/dependabot.yml). The policy covers the container
+    images the AppHost and the compose files pull too: ContainerImageTests (ArchitectureTests)
+    holds each to an allowlist that names its license, which keeps out Redis 8 and RedisInsight.
     Rationale: docs/adr/0011-license-ceiling-policy.md
     ═══════════════════════════════════════════════════════════════════════════════════
-    All versions below verified against nuget.org on 2026-09-25.
+    All versions below verified against nuget.org on 2026-11-08.
   -->
 
   <ItemGroup Label="Analyzers (all projects)">
@@ -62,6 +81,8 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.14" />
+    <!-- The SMTP adapter's client (Email/SmtpEmailSender.cs), MIT, with MimeKit (MIT) for the message. -->
+    <PackageVersion Include="MailKit" Version="4.18.2" />
   </ItemGroup>
 
   <ItemGroup Label="API">
@@ -94,7 +115,12 @@
          a PackageVersion entry for it here triggers NU1009. -->
     <PackageVersion Include="Aspire.Hosting.Docker" Version="13.6.4" />
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.4" />
-    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.6.4" />
+    <!-- The cache server of the UseRedis option: Valkey, which the API reaches with the Redis client below
+         (ADR-0011's amendment of 2026-11-08 keeps the Redis server's own image out). -->
+    <PackageVersion Include="Aspire.Hosting.Valkey" Version="13.6.4" />
+    <!-- The run-mode mail catcher the API sends to under 'aspire run' (axllent/mailpit), MIT; it follows Aspire's
+         numbering a release behind, and Dependabot moves it with the Aspire group. -->
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.MailPit" Version="13.6.1" />
     <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.4" />
     <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.6.4" />
     <PackageVersion Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.6.4" />

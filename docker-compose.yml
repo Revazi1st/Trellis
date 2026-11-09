@@ -2,7 +2,7 @@
 # (see the "http (dev container)" launch profiles) or from `aspire run`.
 #
 #   docker compose up -d                    # postgres
-#   docker compose --profile redis up -d    # postgres + redis (for --use-redis)
+#   docker compose --profile redis up -d    # postgres + the Redis-protocol cache, Valkey (for --use-redis)
 #
 # Ports are published on the host so both a host IDE and the dev container can
 # reach them (the dev container connects via host.docker.internal).
@@ -31,13 +31,16 @@ services:
       timeout: 5s
       retries: 20
 
+  # The cache for --use-redis: Valkey, which speaks the Redis protocol under a BSD-3-Clause license
+  # (the Redis 8 server is RSALv2/SSPLv1/AGPLv3; ADR-0011). The service and its profile keep the
+  # toggle's name. Major pinned to match the Aspire AppHost.
   redis:
-    image: redis:8
+    image: valkey/valkey:9
     profiles: ["redis"]
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 20

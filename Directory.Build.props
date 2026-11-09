@@ -70,9 +70,15 @@
        of an innocent-looking package either. Dependabot's ignore list covers the bot-upgrade path.
        CAUTION: 'dotnet new' evaluates Condition attributes containing item syntax (%/@) and mangles
        them in generated output (the reason this repo uses XML-comment conditionals, ADR-0010) —
-       hence the double-Exclude intersections and the property-only Error conditions. -->
+       hence the double-Exclude intersections and the property-only Error conditions.
+       The targets match whole ids, case-insensitively (an item Exclude), never a prefix, so a family
+       is refused through the package every member of it depends on, which the resolved-graph target
+       then finds: Hangfire.Core under Hangfire.AspNetCore and the storage packages, NServiceBus under
+       every NServiceBus.* package, Duende.IdentityServer under its EF Core and ASP.NET Core Identity
+       packages, TickerQ.Utilities under TickerQ.EntityFrameworkCore and TickerQ.Dashboard (which do
+       not depend on TickerQ itself), and MySql.Data under MySql.EntityFrameworkCore. -->
   <PropertyGroup Label="License ceilings">
-    <LicenseCeilingPackageIds>MediatR;AutoMapper;FluentAssertions;MassTransit;Moq</LicenseCeilingPackageIds>
+    <LicenseCeilingPackageIds>MediatR;AutoMapper;FluentAssertions;MassTransit;Moq;Hangfire.Core;Hangfire.Pro;TickerQ;TickerQ.Utilities;NBomber;Duende.IdentityServer;NServiceBus;MySql.EntityFrameworkCore;MySql.Data</LicenseCeilingPackageIds>
   </PropertyGroup>
 
   <Target Name="EnforceLicenseCeilings" BeforeTargets="CollectPackageReferences">

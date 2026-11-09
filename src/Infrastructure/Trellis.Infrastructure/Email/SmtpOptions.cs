@@ -8,18 +8,19 @@ namespace Trellis.Infrastructure.Email;
 /// the annotations below itself, because <c>ValidateDataAnnotations()</c> would apply them whatever the
 /// provider, and a deployment that keeps the logging stand-in or discards mail owes this section nothing.
 /// <para>
-/// What the BCL client speaks, and so what this adapter supports: SMTP submission upgraded with STARTTLS
-/// (port 587) and username/password authentication. Not supported: implicit TLS ("SMTPS", port 465 — the
-/// client would wait for a greeting the relay never sends in clear, so that port is refused at boot), OAuth2
-/// (XOAUTH2, which Microsoft 365 and Gmail now push accounts towards) and HTTP-API providers. Each of those
-/// is a new adapter beside this one, not a setting.
+/// What this adapter speaks, over MailKit's client: SMTP submission upgraded with STARTTLS (port 587), plain
+/// SMTP to a local catcher, and username/password authentication. Not supported: implicit TLS ("SMTPS", port
+/// 465 — the adapter connects in clear and would wait for a greeting the relay never sends in clear, so that
+/// port is refused at boot), OAuth2 (XOAUTH2, which Microsoft 365 and Gmail now push accounts towards) and
+/// HTTP-API providers. Each of those is a new adapter beside this one (MailKit's client already speaks the
+/// first two), not a setting.
 /// </para>
 /// </summary>
 public sealed class SmtpOptions
 {
     public const string SectionName = "Email:Smtp";
 
-    /// <summary>Implicit TLS, which <see cref="System.Net.Mail.SmtpClient"/> never speaks.</summary>
+    /// <summary>Implicit TLS, which this adapter does not speak: it connects in clear and upgrades with STARTTLS.</summary>
     public const int ImplicitTlsPort = 465;
 
     /// <summary>The relay's host name, e.g. <c>smtp.example.com</c>.</summary>

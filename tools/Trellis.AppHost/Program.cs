@@ -27,9 +27,13 @@ var migrations = builder.AddProject<Projects.Trellis_MigrationService>(ServiceNa
     .WaitFor(database);
 
 #if (UseRedis)
-// RedisInsight beside the cache, as pgAdmin sits beside PostgreSQL: a dashboard tile to look at the keys.
-var cache = builder.AddRedis(ServiceNames.Cache)
-    .WithRedisInsight();
+// The cache is Valkey (BSD-3-Clause): it speaks the Redis protocol, so the API's Redis client
+// (Aspire.StackExchange.Redis) talks to it unchanged, while Redis 8 is RSALv2/SSPLv1/AGPLv3, which the
+// license policy keeps out with every image it does not list (ADR-0011, ContainerImageTests). Major pinned,
+// as postgres's is: the next one arrives by hand, not with an Aspire bump. No key browser beside it, as
+// pgAdmin sits beside PostgreSQL: RedisInsight is SSPL.
+var cache = builder.AddValkey(ServiceNames.Cache)
+    .WithImageTag("9");
 #endif
 
 var api = builder.AddProject<Projects.Trellis_Api>(ServiceNames.Api, static options => options.ExcludeLaunchProfile = true)
@@ -69,6 +73,19 @@ if (builder.ExecutionContext.IsRunMode)
 #if (IncludeUI)
     web.WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");
 #endif
+
+    // Mailpit (MIT) catches every e-mail the API sends, the receipt of a paid invoice among them, and shows it at
+    // the resource's "Inbox" link. The API submits over plain SMTP to the catcher's own endpoint without
+    // credentials, which SmtpOptionsValidator allows (credentials in clear it refuses), and Development, above,
+    // keeps the in-clear warning quiet. Nothing waits for it: a receipt sent before it listens fails, and the
+    // outbox sends it again. Run mode only: a deployment points Email:Smtp at a real relay (docs/deployment.md).
+    var mailpit = builder.AddMailPit(ServiceNames.Mail)
+        .WithUrlForEndpoint("http", static url => url.DisplayText = "Inbox");
+    api.WithEnvironment("Email__Provider", "Smtp")
+        .WithEnvironment("Email__Smtp__Host", mailpit.Resource.Host)
+        .WithEnvironment("Email__Smtp__Port", mailpit.Resource.Port)
+        .WithEnvironment("Email__Smtp__UseStartTls", "false")
+        .WithEnvironment("Email__Smtp__FromAddress", "billing@example.com");
 }
 
 if (builder.ExecutionContext.IsPublishMode)

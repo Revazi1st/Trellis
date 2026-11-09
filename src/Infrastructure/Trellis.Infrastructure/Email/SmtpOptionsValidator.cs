@@ -25,8 +25,8 @@ internal sealed class SmtpOptionsValidator(IOptions<EmailOptions> email) : IVali
 
         if (options.Port == SmtpOptions.ImplicitTlsPort)
         {
-            failures.Add("Email:Smtp:Port 465 is implicit TLS (SMTPS), which System.Net.Mail cannot speak. "
-                + "Use the relay's STARTTLS submission port, normally 587.");
+            failures.Add("Email:Smtp:Port 465 is implicit TLS (SMTPS), which this adapter does not speak: it connects in "
+                + "clear and upgrades with STARTTLS. Use the relay's STARTTLS submission port, normally 587.");
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromAddress) && !MailAddress.TryCreate(options.FromAddress, out _))

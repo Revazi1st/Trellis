@@ -40,6 +40,7 @@ updates:
           - "Microsoft.IdentityModel.*"
           - "Microsoft.OpenApi"
           - "Aspire.*"
+          - "CommunityToolkit.Aspire.*"   # the Mailpit tile; builds on Aspire.Hosting, so it moves with it
           - "Npgsql.*"
           - "dotnet-ef"
           - "MessagePack"   # transitive pin below Aspire.Hosting; must move with it
@@ -63,13 +64,23 @@ updates:
           - "Testcontainers*"
           - "Respawn"
           - "NetArchTest*"
-    # Never let bots cross the license ceilings (ADR-0011).
+    # Never let bots cross the license ceilings (ADR-0011): one entry per id in LicenseCeilingPackageIds
+    # (Directory.Build.props).
     ignore:
       - dependency-name: "MediatR"
       - dependency-name: "AutoMapper"
       - dependency-name: "FluentAssertions"
       - dependency-name: "MassTransit"
       - dependency-name: "Moq"
+      - dependency-name: "Hangfire.Core"
+      - dependency-name: "Hangfire.Pro"
+      - dependency-name: "TickerQ"
+      - dependency-name: "TickerQ.Utilities"
+      - dependency-name: "NBomber"
+      - dependency-name: "Duende.IdentityServer"
+      - dependency-name: "NServiceBus"
+      - dependency-name: "MySql.EntityFrameworkCore"
+      - dependency-name: "MySql.Data"
       # The Roslyn the analyzer references must stay at or below the compiler of the SDK in global.json:
       # an older compiler cannot load the analyzer, and Release turns that warning (CS9057) into an
       # error. It is raised by hand with an SDK bump (docs/development.md, "Bumping the SDK"); patch
@@ -167,7 +178,7 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
-  # Dev-dependency images (postgres, redis) in docker-compose.yml.
+  # Dev-dependency images (postgres, and valkey under the redis profile) in docker-compose.yml.
   - package-ecosystem: docker-compose
     directory: "/"
     schedule:
