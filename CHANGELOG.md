@@ -45,11 +45,14 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   failed the Format check of its own `ci.yml` on the first push, with 183 IMPORTS errors:
   `.editorconfig` set `dotnet_sort_system_directives_first`, which turns on `dotnet format`'s
   using-order check, and that order sorts by the full name, so the shipped files were in order only for
-  a name that sorts where Trellis does (after Shouldly, before Xunit). The key is gone (IDE0005 and the
-  file-scoped, outside-namespace usings stay), Template CI runs the generated `ci.yml`'s Format check on
-  every leg, one of them named `Zeta.Journal`, and `scripts/test-template.sh` does the same. The
-  `finish-change` skill formats only the files the change touches and reports a formatter change
-  anywhere else instead of committing it.
+  a name that sorts where Trellis does (after Shouldly, before Xunit). The key stays in the template's
+  own source behind the `TemplateSource` conditional, so a generated project starts without it: the
+  IDEs still sort `System` usings first by default, and nothing checks the order until you opt in by
+  adding `dotnet_sort_system_directives_first = true` to `.editorconfig`, restoring and running
+  `dotnet format` once (the comment there says how). Template CI runs the generated `ci.yml`'s Format
+  check on every leg, one of them named `Zeta.Journal` so a name that sorts after Xunit is covered, and
+  `scripts/test-template.sh` does the same. The `finish-change` skill formats only the files the change
+  touches and reports a formatter change anywhere else instead of committing it.
 - **`/finish-change` loads in a headless session, and never commits on `main`.** A `claude -p` run had
   `/finish-change commit` refused outright while `add-feature` loaded: `finish-change` and
   `add-migration` were the two skills that pre-approved commands in an `allowed-tools` frontmatter, and
