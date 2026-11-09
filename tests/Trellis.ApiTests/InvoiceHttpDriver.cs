@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using Shouldly;
-using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
 using Xunit;
 
@@ -11,7 +9,8 @@ namespace Trellis.ApiTests;
 /// <summary>
 /// The Invoice use cases as one-line arrange steps over HTTP, paired with IntegrationTests'
 /// <c>InvoiceDriver</c>: each sends a valid request (overridable per argument) as the client's user,
-/// fails naming the status and the problem's <c>code</c> if the API refused it, and returns the invoice's
+/// fails naming the status and the problem's <c>code</c> if the API refused it
+/// (<see cref="HttpResponseAssertions.ShouldAnswerAsync"/>), and returns the invoice's
 /// id. Arrange only: a test about an endpoint's answer sends its own request and asserts on the response
 /// (<c>IdempotentPostExtensions</c> for a create with a fresh key). A value the test depends on is passed
 /// at the call site, never left to a default.
@@ -67,29 +66,4 @@ internal static class InvoiceHttpDriver
     }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
-
-    /// <summary>Fails unless the API answered <paramref name="expected"/>, naming what it answered instead and why.</summary>
-    private static async Task ShouldAnswerAsync(this HttpResponseMessage response, HttpStatusCode expected)
-    {
-        if (response.StatusCode == expected)
-        {
-            return;
-        }
-
-        string body = await response.Content.ReadAsStringAsync(Ct);
-        string? code = null;
-        try
-        {
-            code = JsonSerializer.Deserialize<ProblemResponse>(body, JsonSerializerOptions.Web)?.Code;
-        }
-        catch (JsonException)
-        {
-            // Not a problem document: the body below says what it is.
-        }
-
-        throw new ShouldAssertException(
-            $"{response.RequestMessage?.Method} {response.RequestMessage?.RequestUri?.PathAndQuery}{Environment.NewLine}" +
-            $"    should answer {(int)expected} but answered {(int)response.StatusCode} {code ?? "(no problem code)"}{Environment.NewLine}" +
-            $"    {body}");
-    }
 }

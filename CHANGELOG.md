@@ -138,6 +138,13 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `AppDbContext.ConfigureConventions` lists the converted value objects, `Roles.Permissions` the role map.
   `.claude/rules/persistence.md` says converting a type is a migration and a line in the feature doc, with
   no ADR edit.
+- **The test helpers a second feature needs are shared.** `ShouldAnswerAsync`, the status check that
+  names the request, the problem `code` and the body when an arrange step is refused, was private to
+  `InvoiceHttpDriver`; it is now `HttpResponseAssertions.ShouldAnswerAsync` in ApiTests, for every
+  `{Feature}HttpDriver`. `StronglyTypedIdParsingTests` moved out of `Domain.UnitTests/Invoices/` and became
+  one theory over every `IStronglyTypedId<>` the Domain declares (a version-7 `New()`, the parse round
+  trip, text that is not a `Guid` turned down), so your IDs are covered with no test of their own and the
+  check survives `remove-feature`.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

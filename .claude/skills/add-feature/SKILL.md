@@ -169,8 +169,11 @@ after each layer.
       `<Compile Include="..\TestSupport\{Feature}\{Feature}Factory.cs" Link="TestSupport\{Feature}\{Feature}Factory.cs" />`
       in each csproj; an IntegrationTests `{Feature}Driver` (`IServiceProvider` extensions, one per use
       case, each running the real handler and returning the id) and an ApiTests `{Feature}HttpDriver`
-      (`HttpClient` extensions, the create over `PostWithIdempotencyKeyAsync`). Arrange-only, no generic
-      `SendAsync`, never in a toggle-conditional file.
+      (`HttpClient` extensions, the create over `PostWithIdempotencyKeyAsync`, each step checked with
+      the shared `HttpResponseAssertions.ShouldAnswerAsync(expected)`, which names the status, the problem
+      `code` and the body; no driver writes its own). Arrange-only, no generic `SendAsync`, never in a
+      toggle-conditional file. A new strongly-typed ID needs no parsing test: the Domain.UnitTests
+      `StronglyTypedIdParsingTests` theory finds every `IStronglyTypedId<>` in the Domain.
 - [ ] Handler tests in `Application.UnitTests/Features/{Feature}/{UseCase}/{UseCase}CommandHandlerTests.cs`
       (namespaces follow the folders), and the validators' bounds in
       `Features/{Feature}/{Feature}CommandValidatorTests.cs`: the maximum accepted and one more rejected
