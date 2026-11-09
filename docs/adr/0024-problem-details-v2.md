@@ -6,6 +6,7 @@
 - **Refines**: ADR-0021 (the 401/403/429 writers it introduced now go through the problem-details service).
 - **Amended**: 2026-10-11 — `Result.Combine` merges only validation failures; a handler names the request field of a value-object or aggregate-rule error (`AtField`); a `Result` never reaches JSON (see *Amendment* below)
 - **Amended**: 2026-10-11 — every 5xx `detail` is the catalogue sentence; the 503 and 412 titles; the field of a body value of the wrong type; `WWW-Authenticate` on every 401; two more idempotency outcomes (see *Second amendment* below); and a correction to rule 5: an uncoded `Must` arrives as `Validation.Predicate`, not `Validation.Invalid`, so the validator convention test refuses it
+- **Amended**: 2026-11-10 — `Request.InvalidValue` carries one of two fixed sentences: the wrong-type one, or the NUL one for a body string holding U+0000 (see *Amendment (2026-11-10)* below)
 
 ## Context
 
@@ -252,3 +253,25 @@ like the rest of the filter's outcomes. `ProblemDetailsContractTests` has a row 
 `CustomResults.Problem` maps it to 412 with the title "Precondition failed" and, as a 4xx, the error's
 own description (`Invoice.VersionMismatch`: reload and try again). `ProblemDetailsContractTests` has the
 412 row.
+
+## Amendment (2026-11-10): `Request.InvalidValue` carries one of two fixed sentences
+
+**A body string holding U+0000 is named like a value of the wrong type.** PostgreSQL's `text` stores no
+NUL, so a body string holding one reached the first query or save that carried it and answered a 500.
+`NulFreeStringJsonConverter`, registered by `AddApiCommon` beside the strongly-typed-id converter, now
+refuses it while the body binds, and `ProblemCatalog.Malformed` answers it the way the second amendment
+answers a value of the wrong type: a 400 `Request.Malformed` whose `errors[]` holds one
+`Request.InvalidValue` entry naming the member by the serializer's path (`customerName`, `email`).
+
+**The entry's `description` is one of two fixed sentences, never the serializer's message.** The second
+amendment made it one fixed sentence; it is now "The value is not of the type this field expects." for a
+conversion failure, or `ProblemCatalog.NulCharacterDescription` ("The value holds a NUL character
+(U+0000), which this field does not accept.") for a string the converter refused, chosen by the
+exception's type (`NulCharacterException`), never by its text. No code changes: the top level stays
+`Request.Malformed` and the entry `Request.InvalidValue`, so a client that branches on `code`, as *What
+consumers may rely on* says it should, handles a NUL with no change, and the sentence is for people.
+Rule 5 and *What consumers may rely on* therefore read: `errors[]` is on every Result-produced 400 and on a
+400 naming a body value of the wrong type or a body string holding U+0000.
+`ProblemDetailsContractTests.A_NUL_character_in_a_body_string_is_a_400_that_names_the_field` is the row:
+a NUL in each string of the create, in a line's description and in sign-in's e-mail, each a 400 naming
+its member with `Request.InvalidValue` and the NUL sentence.
