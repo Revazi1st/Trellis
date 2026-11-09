@@ -488,6 +488,12 @@ JSON
   expect "a role grant changed without the threat model" docs-drift.sh remind "docs/threat-model.md"
   printf '# Threat model\n' > "$repo/docs/threat-model.md"
   expect "a role grant changed with the threat model" docs-drift.sh silent
+  # That session heard the report already, so the hook would be silent with the drift still there: only
+  # a clean run deletes the record.
+  cases=$((cases + 1))
+  if [ -e "$repo/.git/claude-hooks/docs-drift.last" ]; then
+    fail "docs-drift.sh: a role grant changed with the threat model still drifts (its record is left in .git/claude-hooks/docs-drift.last)"
+  fi
   project="$root"
 else
   echo "check-hooks: git is not on PATH; the docs-drift cases were skipped."

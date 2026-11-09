@@ -71,7 +71,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `UniqueConstraintErrors` is now the list, and `UniqueConstraintTests` walks the model: a unique index
   or key that is neither registered there nor named a fault on purpose, with the reason no two requests
   can race to it, fails it, and so does a name the model no longer holds. A single-column uuid or
-  database-numbered primary key needs no row.
+  database-numbered primary key needs no row; the walk cannot tell a uuid a request chooses from one
+  minted for the row, so register or list the key of an aggregate whose id a client supplies yourself.
 - **A change to the role grants owes the threat model.** `scripts/check-docs-drift.sh` asked for a
   `docs/threat-model.md` update when authentication, hardening or identity code changed, but not for
   `Application/Authorization/`, where `Roles.Permissions` decides who may call each endpoint, so granting

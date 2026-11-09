@@ -27,9 +27,10 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
 
     /// <summary>
     /// The unique constraints whose violation is a defect, each with the reason no two requests can race to
-    /// it. A single-column primary key no request supplies is one by its shape and has no row
-    /// (<see cref="IsFaultByItsShape"/>). A new unique index or key goes into <c>UniqueConstraintErrors</c>
-    /// when two requests can race to it, and here, with its reason, when they cannot.
+    /// it. A single-column uuid or database-numbered primary key has no row: the walk takes it as minted for
+    /// the row (<see cref="IsFaultByItsShape"/>), so a uuid key whose value a request chooses is registered or
+    /// listed here by hand. A new unique index or key goes into <c>UniqueConstraintErrors</c> when two
+    /// requests can race to it, and here, with its reason, when they cannot.
     /// </summary>
     private static readonly Dictionary<string, string> FaultOnPurpose = new(StringComparer.Ordinal)
     {
@@ -100,9 +101,14 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
             registered: ["IX_PlantedCustomers_Code", "IX_PlantedCustomers_Renamed"],
             faultOnPurpose: new Dictionary<string, string>(StringComparer.Ordinal) { ["PK_PlantedGone"] = "a dropped table" });
 
-        // The unique e-mail and the composite key are flagged; the registered code, the uuid key and the
-        // database-numbered key are not.
-        string[] undecided = ["IX_PlantedCustomers_Email", "PK_PlantedTags"];
+        // Flagged: the unique e-mail, the uuid alternate key, the string key, the integer key the database
+        // does not number and the composite key. Not flagged: the registered code, the uuid primary key and
+        // the database-numbered one.
+        string[] undecided =
+        [
+            "AK_PlantedCustomers_ExternalId", "IX_PlantedCustomers_Email", "PK_PlantedCodes", "PK_PlantedNumbers",
+            "PK_PlantedTags",
+        ];
         string[] notInModel = ["IX_PlantedCustomers_Renamed", "PK_PlantedGone"];
         audit.Undecided.ShouldBe(undecided);
         audit.NotInModel.ShouldBe(notInModel);
@@ -146,10 +152,12 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
     }
 
     /// <summary>
-    /// A single-column primary key whose value no request supplies: a uuid minted for the row (an ID type's
-    /// <c>New()</c>, <c>Guid.CreateVersion7()</c>, EF's generator) or a number the database assigns. Two rows
-    /// with one are a defect, not a race. A key a request chooses (a client-supplied id) is not this shape's,
-    /// and is registered or listed like any other.
+    /// A single-column primary key taken as minted for the row: any uuid (an ID type's <c>New()</c>,
+    /// <c>Guid.CreateVersion7()</c>, EF's generator) or a number the database assigns. Two rows with one are a
+    /// defect, not a race. The model cannot tell a uuid the domain mints from one a request chooses (both are
+    /// configured <c>ValueGeneratedNever()</c>), so this passes every uuid primary key: an aggregate whose id a
+    /// request supplies registers its key in <c>UniqueConstraintErrors</c> or lists it in
+    /// <see cref="FaultOnPurpose"/>, and the walk does not ask for it.
     /// </summary>
     private static bool IsFaultByItsShape(IKey key) =>
         key.IsPrimaryKey()
@@ -160,8 +168,10 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
     private sealed record ConstraintAudit(IReadOnlyList<string> Undecided, IReadOnlyList<string> NotInModel);
 
     /// <summary>
-    /// A model built for the control and never connected: a uuid key, a database-numbered key, a composite
-    /// key and two unique indexes, as property bags so no entity class goes unused.
+    /// A model built for the control and never connected, as property bags so no entity class goes unused:
+    /// the two keys the shape passes (a uuid primary key, a database-numbered one), the single-column keys it
+    /// must still flag (a uuid alternate key, a string primary key, an integer one the database does not
+    /// number), a composite key and two unique indexes.
     /// </summary>
     private sealed class PlantedContext() : DbContext(
         new DbContextOptionsBuilder<PlantedContext>().UseNpgsql("Host=planted.invalid").Options)
@@ -171,11 +181,23 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
             modelBuilder.SharedTypeEntity<Dictionary<string, object>>("PlantedCustomers", static customer =>
             {
                 customer.Property<Guid>("Id");
+                customer.Property<Guid>("ExternalId");
                 customer.Property<string>("Email");
                 customer.Property<string>("Code");
                 customer.HasKey("Id");
+                customer.HasAlternateKey("ExternalId");
                 customer.HasIndex("Email").IsUnique();
                 customer.HasIndex("Code").IsUnique();
+            });
+            modelBuilder.SharedTypeEntity<Dictionary<string, object>>("PlantedCodes", static code =>
+            {
+                code.Property<string>("Code");
+                code.HasKey("Code");
+            });
+            modelBuilder.SharedTypeEntity<Dictionary<string, object>>("PlantedNumbers", static number =>
+            {
+                number.Property<int>("Number").ValueGeneratedNever();
+                number.HasKey("Number");
             });
             modelBuilder.SharedTypeEntity<Dictionary<string, object>>("PlantedNotes", static note =>
             {
