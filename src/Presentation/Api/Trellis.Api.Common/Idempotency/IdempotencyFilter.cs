@@ -130,7 +130,13 @@ public sealed class IdempotencyFilter : IEndpointFilter
         }
     }
 
-    /// <summary>A 4xx the command's own pipeline produced, other than the primary key's <see cref="IdempotencyErrors.Duplicate"/>.</summary>
+    /// <summary>
+    /// A 4xx the command's own pipeline produced, other than the primary key's <see cref="IdempotencyErrors.Duplicate"/>.
+    /// It assumes a 4xx is never post-commit, since the unit-of-work decorator commits only on a success
+    /// <c>Result</c> and every endpoint maps success to a 2xx, so the re-read never finds this request's own
+    /// reservation: an endpoint that committed and then answered a 4xx would find its own key in flight and leave
+    /// it <c>InFlight</c>.
+    /// </summary>
     private static bool MayHaveLostTheRace(object? result) => result switch
     {
         INestedHttpResult nested => MayHaveLostTheRace(nested.Result),
