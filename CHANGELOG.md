@@ -65,6 +65,13 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `Unable to find a project reference for project configuration item '…UI.Common.csproj'`. Every test
   box, the OpenAPI snapshot run included, now passes `-c Release --no-build` as `ci.yml` does, and so
   does `add-feature`'s last box; `docs/development.md` (*When the build fails*) explains the message.
+- **Every unique index is decided on, and the persistence rule no longer goes stale.**
+  `.claude/rules/persistence.md` named the registered unique constraints "today", so it was wrong after
+  the first feature with a unique key, and an agent is not always allowed to edit `.claude/`. The map in
+  `UniqueConstraintErrors` is now the list, and `UniqueConstraintTests` walks the model: a unique index
+  or key that is neither registered there nor named a fault on purpose, with the reason no two requests
+  can race to it, fails it, and so does a name the model no longer holds. A single-column uuid or
+  database-numbered primary key needs no row.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes
