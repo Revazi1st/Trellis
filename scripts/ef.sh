@@ -25,6 +25,10 @@ fi
 # The solution is restored first: dotnet-ef reads the project's metadata before it builds, and that
 # needs the restore's assets file (NETSDK1004 otherwise), so a first migration works on a tree that
 # nothing has built yet. Quiet, not silent: a failed restore still prints its errors.
+#if (TemplateSource)
+# KEEP IN SYNC with template-ci.yml's "First migration command on an unbuilt tree" step and
+# scripts/test-template.sh's first_migration_probe, which run this command without the container.
+#endif
 exec "$DOCKER_BIN" run --rm \
   -v "$REPO_ROOT":/workspace \
   -w /workspace \

@@ -198,7 +198,9 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   `.claude/rules/application.md` (one aggregate per command; tracked loads, check everything, then
   mutate).
 - **A business key that must be unique** (a code, an e-mail): a unique index whose constraint name is
-  pinned and registered in `UniqueConstraintErrors`, raced in a test (`.claude/rules/persistence.md`).
+  pinned and registered in `UniqueConstraintErrors`, raced in a test; one no two requests can race to
+  is a row in `UniqueConstraintTests.FaultOnPurpose` with its reason instead
+  (`.claude/rules/persistence.md`).
 - **Work on a timer**: `docs/architecture.md`, *Scheduled use cases*.
 - **Telling another system**: an integration event from a translate-and-send handler,
   `docs/architecture.md`; being told by one (a webhook): the `add-integration` skill, step 7.
