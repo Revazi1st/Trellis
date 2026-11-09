@@ -27,18 +27,20 @@ proposed commit message, `commit` also commits, and `pr` commits and opens the p
       warning into an error, RSLT001 (a discarded `Result`) and NuGetAudit's advisories included
       [CI *Build & Test*, *Build (warnings as errors)*]. RSLT001 or CS9057: `docs/development.md`,
       *When the build fails*; an advisory or a package: `.claude/rules/dependencies.md`.
-- [ ] **Tests, narrowed, then whole.** First the project you touched, narrowed to what changed
-      (`./scripts/dotnet.sh test tests/Trellis.Application.UnitTests --filter-class '*CommandHandlerTests'`,
-      or `--filter-method`), then everything: `./scripts/dotnet.sh test Trellis.slnx`. Never filter the
-      `.slnx`: every other project then runs zero tests and exits 8, red although yours passed
+- [ ] **Tests, narrowed, then whole**, on the Release build above, as CI runs them: `-c Release
+      --no-build`, so no Debug build follows the Release one (a fix made after the build means building
+      again). First the project you touched, narrowed to what changed
+      (`./scripts/dotnet.sh test tests/Trellis.Application.UnitTests -c Release --no-build --filter-class '*CommandHandlerTests'`,
+      or `--filter-method`), then everything: `./scripts/dotnet.sh test Trellis.slnx -c Release --no-build`.
+      Never filter the `.slnx`: every other project then runs zero tests and exits 8, red although yours passed
       (`docs/development.md`, *Running part of the suite*), and a run that reports zero tests is a
       failure to look at, never a pass. A bug fix's test was seen failing without the fix, for the
       expected reason (`AGENTS.md`). IntegrationTests and ApiTests need Docker [CI *Build & Test*,
       *Test (with coverage)*; the Stop hook reminds once when a `.cs` or `.razor` file under `src/` or
       `tools/` changed and no test ran].
 - [ ] **The OpenAPI snapshot**, when anything under `src/Presentation/Api/` changed (Api, Api.Common,
-      Api.Contracts): `UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh test tests/Trellis.ApiTests`, then
-      `git diff docs/api/openapi.v1.json`, read to the end: every operation, schema and status that moved
+      Api.Contracts): `UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh test tests/Trellis.ApiTests -c Release --no-build`,
+      then `git diff docs/api/openapi.v1.json`, read to the end: every operation, schema and status that moved
       is one the change meant to move, and anything else is a contract change nobody asked for
       [`OpenApiSnapshotTests`; CI *API contract* diffs the running app's document against the file].
 - [ ] **Docs drift and links.** `./scripts/check-docs-drift.sh --working-tree`: the feature doc,

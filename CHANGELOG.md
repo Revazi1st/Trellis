@@ -60,6 +60,11 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `./scripts/ef.sh migrations add …` in a fresh clone failed with NETSDK1004 (`project.assets.json` not
   found): dotnet-ef reads the project's metadata before it builds, and that needs a restore. The script
   now restores the solution first, quietly (a failed restore still prints its errors).
+- **`/finish-change` tests the Release build, as CI does.** Its test boxes ran a plain `dotnet test`
+  right after the Release build, which built the solution again in Debug and, with the UI, could stop on
+  `Unable to find a project reference for project configuration item '…UI.Common.csproj'`. Every test
+  box, the OpenAPI snapshot run included, now passes `-c Release --no-build` as `ci.yml` does, and so
+  does `add-feature`'s last box; `docs/development.md` (*When the build fails*) explains the message.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

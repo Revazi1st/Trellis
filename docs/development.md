@@ -373,6 +373,15 @@ tenant (created on first use); `TenantIsolationTests` is the worked example.
   references. Build with the SDK `global.json` names (`dotnet --version` from the repository root
   shows which one runs); an IDE that hosts an older Roslyn only loses the squiggle, while the
   command-line build still enforces the rule. *Bumping the SDK* below says how far the pin may move.
+<!--#if (IncludeUI) -->
+- **`Unable to find a project reference for project configuration item '…UI.Common.csproj'`**
+  (`Microsoft.NET.Sdk.StaticWebAssets.References.targets`, reported for the UI.Web project) right after
+  a build in the other configuration: `dotnet build -c Release`, then a plain `dotnet test`, which
+  builds Debug. UI.Web's static-web-assets manifest is still the other configuration's (every project
+  builds into the one `artifacts/` tree, `Directory.Build.props`). Build the solution again in the
+  configuration you test in, or test the Release build as CI does:
+  `dotnet test Trellis.slnx -c Release --no-build`.
+<!--#endif -->
 
 ## When a request fails
 

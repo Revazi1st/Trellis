@@ -180,8 +180,9 @@ after each layer.
 - [ ] The new endpoints' requests in `src/Presentation/Api/Trellis.Api/Trellis.Api.http`, and the
       feature doc opening like `invoices.md`: the domain in plain words, a state diagram when the
       aggregate has a lifecycle, and a *Try it* table matching those requests.
-- [ ] `dotnet build Trellis.slnx -c Release && dotnet test Trellis.slnx` (or `./scripts/dotnet.sh …`
-      without a local SDK), then `dotnet format --verify-no-changes`.
+- [ ] `dotnet build Trellis.slnx -c Release && dotnet test Trellis.slnx -c Release --no-build` (or
+      `./scripts/dotnet.sh …` without a local SDK), the tests on the Release build as CI runs them, then
+      `dotnet format Trellis.slnx --verify-no-changes --severity warn`.
 - [ ] Run the reviewers the change needs before finishing (AGENTS.md, *Boundaries*): `code-reviewer`;
       `architecture-guard` when a project or a package was added; `test-reviewer` for the new tests;
       `security-reviewer` when a permission, an allowlist or who may call an endpoint changed. Their
