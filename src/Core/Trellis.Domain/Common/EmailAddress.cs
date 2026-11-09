@@ -5,10 +5,11 @@ namespace Trellis.Domain.Common;
 /// <summary>
 /// Validated email address value object; construct via <see cref="Create"/>. Deliberately shallow:
 /// real deliverability is proven by sending mail, not by a regex. The checks are the ones a mail system
-/// would refuse outright — the length limits, one <c>@</c>, no whitespace, no empty or hyphen-edged
-/// domain label, no leading, trailing or doubled dot — and any other character is allowed, so an
-/// internationalized address (<c>dörte@exämple.de</c>) is accepted as typed. A single scalar, so it can be
-/// mapped as a converted column where one needs an index (<see cref="IScalarValueObject{TSelf, TValue}"/>).
+/// would refuse outright — the length limits, one <c>@</c>, no whitespace or control character (a NUL
+/// included), no empty or hyphen-edged domain label, no leading, trailing or doubled dot — and any other
+/// character is allowed, so an internationalized address (<c>dörte@exämple.de</c>) is accepted as typed. A
+/// single scalar, so it can be mapped as a converted column where one needs an index
+/// (<see cref="IScalarValueObject{TSelf, TValue}"/>).
 /// </summary>
 public sealed record EmailAddress : IScalarValueObject<EmailAddress, string>
 {
@@ -39,7 +40,7 @@ public sealed record EmailAddress : IScalarValueObject<EmailAddress, string>
         if (atIndex <= 0
             || atIndex == trimmed.Length - 1
             || trimmed.IndexOf('@', atIndex + 1) >= 0
-            || trimmed.Any(char.IsWhiteSpace))
+            || trimmed.Any(static c => char.IsWhiteSpace(c) || char.IsControl(c)))
         {
             return EmailAddressErrors.Invalid;
         }

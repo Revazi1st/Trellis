@@ -37,6 +37,8 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
 {
     private const string ExceptionSecret = "boom: Host=db.internal;Password=hunter2";
 
+    private const string SignIn = "auth/login";
+
     [Fact]
     public async Task Validation_failure_lists_each_field_with_its_json_path_and_rule_code()
     {
@@ -161,6 +163,37 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         string raw = await response.Content.ReadAsStringAsync(ct);
         raw.ShouldNotContain("converted");
         raw.ShouldNotContain("System.");
+    }
+
+    /// <summary>
+    /// PostgreSQL's <c>text</c> stores no U+0000, so a body string holding one reached the first query or save
+    /// that carried it and came back a 500 (Npgsql's 22021: the create and the line on the save, sign-in on the
+    /// account lookup). It is refused while the body binds, naming the member, whichever endpoint it was sent
+    /// to. The bodies hold the JSON escape a client sends.
+    /// </summary>
+    [Theory]
+    [InlineData("invoices", """{"customerName":"Acme\u0000Ltd","customerEmail":"billing@acme.com","currency":"USD"}""", "customerName")]
+    [InlineData("invoices", """{"customerName":"Acme","customerEmail":"a\u0000@example.com","currency":"USD"}""", "customerEmail")]
+    [InlineData("invoices/{id}/lines", """{"description":"Design\u0000","amount":10}""", "description")]
+    [InlineData(SignIn, """{"email":"admin\u0000@inprocess.test","password":"any-password"}""", "email")]
+    public async Task A_NUL_character_in_a_body_string_is_a_400_that_names_the_field(string route, string body, string field)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        // Sign-in is anonymous and rate-limited per caller: it goes from a client of its own, without a token.
+        HttpClient client = route == SignIn ? factory.CreateClient() : await factory.CreateAdminClientAsync(ct);
+        string path = route.Contains("{id}", StringComparison.Ordinal)
+            ? $"/api/v1/{route.Replace("{id}", (await client.CreateInvoiceAsync()).ToString(), StringComparison.Ordinal)}"
+            : $"/api/v1/{route}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+        request.Headers.Add(ApiHeaders.IdempotencyKey, Guid.CreateVersion7().ToString());
+        HttpResponseMessage response = await client.SendAsync(request, ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.BadRequest, "Request.Malformed", path, ct);
+        WireFieldError only = problem.Errors.ShouldNotBeNull().ShouldHaveSingleItem();
+        only.Field.ShouldBe(field);
+        only.Code.ShouldBe(ProblemCatalog.InvalidValueCode);
+        only.Description.ShouldBe(ProblemCatalog.NulCharacterDescription);
     }
 
     [Fact]

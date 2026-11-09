@@ -24,6 +24,7 @@ public static class OpenApiDocumentExtensions
             options.AddDocumentTransformer<SecuritySchemeTransformer>();
             options.AddDocumentTransformer<ProblemComponentsDocumentTransformer>();
             options.AddSchemaTransformer<StronglyTypedIdSchemaTransformer>();
+            options.AddSchemaTransformer<StringSchemaTransformer>();
             options.AddSchemaTransformer<DecimalSchemaTransformer>();
             options.AddSchemaTransformer<StringEnumSchemaTransformer>();
             options.AddOperationTransformer<SecurityRequirementOperationTransformer>();

@@ -36,6 +36,8 @@ public sealed class EmailAddressTests
     [InlineData("no@dot")]
     [InlineData("spa ce@example.com")]
     [InlineData("tab\tinside@example.com")]
+    [InlineData("nul\0inside@example.com")]   // a control character: no mail system takes one, and PostgreSQL text stores no U+0000
+    [InlineData("del\u007Finside@example.com")]
     [InlineData("user..name@example.com")]   // doubled dot in the local part
     [InlineData(".user@example.com")]        // leading dot
     [InlineData("user.@example.com")]        // trailing dot

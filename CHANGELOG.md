@@ -89,6 +89,15 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   executable bit, so the `chmod +x scripts/*.sh .claude/hooks/*.sh` that the template's instructions and
   `ci.yml` give left a mode change in a project generated a minute before. It ships executable, the
   chmod post-action lists it, and `scripts/check-hooks.sh` checks its mode like the hooks'.
+- **A NUL character in a request is a 400, not a 500.** PostgreSQL's `text` stores no U+0000, so a body
+  string holding one (`"Acme\u0000Ltd"`) reached the first query or save that carried it and came back
+  500 `Server.Failure`: creating an invoice or adding a line, and signing in. `AddApiCommon` now
+  registers `NulFreeStringJsonConverter` beside the strongly-typed-id converter, which refuses such a
+  string while the body binds, on every endpoint, yours included, as 400 `Request.Malformed` whose
+  `errors[]` names the member (`Request.InvalidValue`); responses are written as before, and so is the
+  OpenAPI document (`StringSchemaTransformer` gives `string` back the type the generator leaves out for a
+  type with a converter of its own). `EmailAddress` also refuses a control character
+  (`EmailAddress.Invalid`). A feature of yours needs no NUL check of its own (`.claude/rules/api.md`).
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

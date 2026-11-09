@@ -15,7 +15,7 @@ namespace Trellis.Api.Common;
 
 public static class DependencyInjection
 {
-    /// <summary>Cross-cutting API-host plumbing: problem details (one shape for every 4xx/5xx) + exception handlers, current user, typed-ID JSON.</summary>
+    /// <summary>Cross-cutting API-host plumbing: problem details (one shape for every 4xx/5xx) + exception handlers, current user, typed-ID JSON, NUL-free strings.</summary>
     public static IServiceCollection AddApiCommon(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
@@ -44,8 +44,13 @@ public static class DependencyInjection
         // never counts as an incident.
         services.Configure<RouteHandlerOptions>(static options => options.ThrowOnBadRequest = true);
 
+        // A body string holding U+0000 is a 400 naming its field here, before it reaches PostgreSQL's text
+        // (which stores none) as a 500 from the first query or save (NulFreeStringJsonConverter).
         services.Configure<JsonOptions>(static options =>
-            options.SerializerOptions.Converters.Add(new StronglyTypedIdJsonConverterFactory()));
+        {
+            options.SerializerOptions.Converters.Add(new StronglyTypedIdJsonConverterFactory());
+            options.SerializerOptions.Converters.Add(new NulFreeStringJsonConverter());
+        });
 
         return services;
     }

@@ -130,11 +130,18 @@ public static class ProblemCatalog
     public const string InvalidValueCode = "Request.InvalidValue";
 
     /// <summary>
+    /// The <c>description</c> of the <see cref="InvalidValueCode"/> entry for a body string holding U+0000, which
+    /// <see cref="NulFreeStringJsonConverter"/> refuses while the body binds: PostgreSQL's <c>text</c> stores none.
+    /// </summary>
+    public const string NulCharacterDescription = "The value holds a NUL character (U+0000), which this field does not accept.";
+
+    /// <summary>
     /// A request the framework could not bind: malformed or missing JSON, an unparsable route or query value,
     /// an oversized body, a non-JSON content type. The exception's message names a parameter or a limit,
     /// never a stack, so it is the <c>detail</c>. When the body was valid JSON with a value of the wrong type,
     /// <c>errors[]</c> names the member by the path the serializer reported (<c>lines[1].amount</c>) with a
-    /// fixed sentence: the serializer's own message names CLR types and is never echoed.
+    /// fixed sentence: the serializer's own message names CLR types and is never echoed. A string holding
+    /// U+0000 is named the same way, with <see cref="NulCharacterDescription"/>.
     /// </summary>
     public static ProblemDescriptor Malformed(BadHttpRequestException exception) => exception.StatusCode switch
     {
@@ -151,8 +158,11 @@ public static class ProblemCatalog
     private static WireFieldError[]? InvalidValueOf(BadHttpRequestException exception)
         => exception.InnerException is JsonException { InnerException: not JsonException } json
            && JsonFieldPath.FromSerializerPath(json.Path) is { } field
-            ? [new WireFieldError(field, InvalidValueCode, "The value is not of the type this field expects.")]
+            ? [new WireFieldError(field, InvalidValueCode, InvalidValueDescription(json))]
             : null;
+
+    private static string InvalidValueDescription(JsonException failure)
+        => failure is NulCharacterException ? NulCharacterDescription : "The value is not of the type this field expects.";
 
     /// <summary>
     /// The code and title for a response that reached the client with a status but no body (an unknown
