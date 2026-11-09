@@ -30,9 +30,9 @@ public sealed partial class MigrationSnapshotTests
 
         written.ShouldNotBeEmpty($"no model snapshot or migration designer under {MigrationsFolder}; is the repository root right?");
         written.Select(path => VersionDrift(props, Path.GetFileName(path), File.ReadAllText(path))).OfType<string>().ShouldBeEmpty(
-            "regenerate the initial migration on the pinned EF Core: ./scripts/ef.sh migrations remove --project "
-            + "src/Infrastructure/Trellis.Persistence, then ./scripts/ef.sh migrations add InitialCreate --project "
-            + "src/Infrastructure/Trellis.Persistence (docs/development.md)");
+            "regenerate the initial migration on the pinned EF Core: env -u TRELLIS_DESIGNTIME_DB ./scripts/ef.sh "
+            + "migrations remove --force --project src/Infrastructure/Trellis.Persistence, then ./scripts/ef.sh "
+            + "migrations add InitialCreate --project src/Infrastructure/Trellis.Persistence (docs/development.md)");
     }
 
     /// <summary>

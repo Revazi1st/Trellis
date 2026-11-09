@@ -97,7 +97,11 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `errors[]` names the member (`Request.InvalidValue`); responses are written as before, and so is the
   OpenAPI document (`StringSchemaTransformer` gives `string` back the type the generator leaves out for a
   type with a converter of its own). `EmailAddress` also refuses a control character
-  (`EmailAddress.Invalid`). A feature of yours needs no NUL check of its own (`.claude/rules/api.md`).
+  (`EmailAddress.Invalid`). A body string of a feature of yours needs no NUL check of its own, and a
+  route value cannot carry one (Kestrel refuses `%00` in a path before routing, which `RequestLimitTests`
+  pins); a string bound from the query reaches the handler as sent, so a `?search=` filter of yours
+  refuses U+0000 in its query's validator, and `EndpointContractTests.Every_query_value_of_a_GET_refuses_a_NUL`
+  fails on any GET that answers a NUL in its query with anything but a 400 (`.claude/rules/api.md`).
 - **A create that loses a same-key race on a unique business key hears the idempotency answer.** Two
   concurrent requests under one `Idempotency-Key` were decided by the key's primary key only when both
   reached their commit; a feature of yours with a unique business key (an e-mail, a code) let the second
@@ -123,7 +127,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   and that moved blocks are not model changes. `migrations remove` is written with `--force` in
   `docs/development.md`, `docs/upgrading.md`, the `add-migration` and `upgrade-template` skills and the
   edit hook's hint: without it the command stops when no database answers its check, as in the SDK
-  container.
+  container. With it, a database the design-time connection reaches that applied the migration has it
+  reverted first (`InitialCreate`'s `Down` drops every table), so the regenerate steps run it as
+  `env -u TRELLIS_DESIGNTIME_DB ./scripts/ef.sh migrations remove --force …`, where none answers.
 - **`docs/features/invoices.md` names the codes a client actually gets.** It listed
   `Invoice.EmptyCustomerName`, `Invoice.CustomerNameTooLong` and the line-description pair as the API's
   400s, but the command's validator checks the same Domain constants first, so through the API a blank or
@@ -148,8 +154,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 - **Every list's paging bounds are checked at the wire, yours included.** A query's validator repeats
   `PagingLimits`' bounds as literals (Application cannot see the contracts), so each list re-tested them
   by hand. `EndpointContractTests.Every_paged_list_holds_its_documented_bounds_at_the_wire` reads every
-  GET the served OpenAPI document gives a `page` and a `pageSize` and sends each bound and one past it: a
-  validator whose literal drifts fails it, and a new list needs no bounds test of its own
+  GET the served OpenAPI document gives a `page` and a `pageSize` and sends each bound and one past it,
+  expecting a 200 inside (a 404 too for a nested list, whose route gets a fresh id) and a 400 naming the
+  field outside: a validator whose literal drifts fails it, and a new list needs no bounds test of its own
   (`.claude/rules/api.md`, List endpoints).
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type

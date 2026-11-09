@@ -225,9 +225,11 @@ jobs:
             echo "::error::The generated README.md is not the consumer stub (it does not name $marker)."
             fail=1
           fi
+          # A test sits under the generated name (tests/Acme.Shop.ArchitectureTests/), hence the unquoted
+          # glob: a shipped copy expands it, and with none it stays literal, so -e is false.
           for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md .claude/rules/site.md eng/readme \
                    scripts/check-template-toggles.sh scripts/test-template.sh site .github/workflows/site.yml \
-                   docs/adr/0031-documentation-site.md tests/Trellis.ArchitectureTests/MigrationSnapshotTests.cs; do
+                   docs/adr/0031-documentation-site.md tests/*.ArchitectureTests/MigrationSnapshotTests.cs; do
             if [ -e "$f" ]; then
               echo "::error::$f is the template repository's own material and must not ship."
               fail=1
