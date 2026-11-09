@@ -77,6 +77,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `Application/Authorization/`, where `Roles.Permissions` decides who may call each endpoint, so granting
   a role a new permission went through unasked. That folder counts now, in CI and in the edit hook's
   reminder, and `AGENTS.md` says so.
+- **The reviewer agents read right under your project's name.** `code-reviewer`, `test-reviewer` and
+  `security-reviewer` described their work as reviewing "a Trellis change", which a project generated as
+  `Acme.Shop` got as "a Acme.Shop change"; they review "a change to Acme.Shop" now, and Template CI
+  fails a generated project with a sentence that reads "a <name>" after the rename.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

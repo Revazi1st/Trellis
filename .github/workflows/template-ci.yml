@@ -126,6 +126,14 @@ jobs:
             fail=1
           fi
 
+          # The engine renames Trellis to the project's name, so a shipped sentence must read right
+          # after the rename: "a change to Trellis", never "a Trellis change", which ships as "a
+          # Acme.Shop change". Checked here, on what ships, so every file type and no excluded file counts.
+          if grep -rInwiF "${skip[@]}" 'a ${{ matrix.out }}' .; then
+            echo "::error::A sentence reads 'a ${{ matrix.out }} …' after the rename (listed above): its source says 'a Trellis …'; write 'a change to Trellis' instead."
+            fail=1
+          fi
+
           # The template does not ship its maintainer-only scripts (check-template-toggles.sh,
           # test-template.sh); a workflow step that runs one belongs in a block conditioned on the
           # TemplateSource symbol (see ci.yml); a hook or an agent file that names one, likewise.
