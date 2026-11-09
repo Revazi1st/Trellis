@@ -5,6 +5,7 @@
 - **Amended**: 2026-10-08 — account lockout, and why it stays visible (see *Amendment* below)
 - **Amended**: 2026-10-11 — adding or swapping the token issuer is not a contained change (see *Amendment (2026-10-11)* below)
 - **Amended**: 2026-10-18 — a missing user id never broke auditing; what it does to the audit columns now (see *Amendment (2026-10-18)* below)
+- **Amended**: 2026-11-09 — the role-to-permission map is `Roles.Permissions`, not this record (see *Amendment (2026-11-09)* below)
 
 ## Context
 
@@ -85,3 +86,25 @@ the claims transformation is therefore stamped with its token's name claim, or w
 none: an audit trail that cannot be joined to a user, not a failure. Ownership and the idempotency key's
 per-user scope break as stated. `docs/features/auth.md` (*Adding an external identity provider*) says
 the same.
+
+## Amendment (2026-11-09): the role map is the code's
+
+### Why
+
+The Decision says the MigrationService seeds "Member = invoices:read". That was the reference slice's
+whole map, and it stops being true the moment a feature grants Member another read permission (a
+`Customer` feature's `customers:read`, say). An accepted record only takes amendments, so such a change
+is right and leaves the record wrong.
+
+### Decision
+
+- **The role-to-permission map is `Roles.Permissions`** (`Application/Authorization/Permissions.cs`),
+  which the MigrationService and the test hosts seed from: Administrator holds every permission
+  (`Permissions.All`), Member the read permissions. "Member = invoices:read" in the Decision is the
+  reference slice's instance of that, not a limit.
+- **Granting a feature's permission needs no edit here**: the `add-feature` skill grants it to a role in
+  `Roles.Permissions`, and `EndpointMetadataTests` pins which permission each endpoint requires.
+
+### Consequences
+
+- A feature that adds a read permission for Member leaves this record true.

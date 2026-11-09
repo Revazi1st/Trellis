@@ -131,6 +131,13 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   callers without a validator (the seeder). The doc says so, `ProblemDetailsContractTests` pins the
   over-long name on the wire, and the `add-feature` skill asks a feature doc to list such a rule as
   `Validation.General` with the domain code in brackets.
+- **Two ADRs stop listing what your first feature changes.** ADR-0006 said `EmailAddress` and `Currency`
+  stay complex types, and ADR-0007 that Member holds `invoices:read`; a feature that converts a value
+  object for its unique index, or grants Member its own read permission, made either false, and an
+  accepted record only takes amendments. Each gains an amendment of 2026-11-09 pointing at the code:
+  `AppDbContext.ConfigureConventions` lists the converted value objects, `Roles.Permissions` the role map.
+  `.claude/rules/persistence.md` says converting a type is a migration and a line in the feature doc, with
+  no ADR edit.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes
