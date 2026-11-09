@@ -106,6 +106,13 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   with a 4xx and answers from the first request's reservation: 409 `Idempotency.InFlight`, the replayed
   201 or 409 `Idempotency.Duplicate` (ADR-0018, amendment of 2026-11-09). It costs one lookup, on failed
   keyed requests only.
+- **A list of yours reuses the paged envelope instead of copying it.** `ToPagedResponse(map)` lived in
+  the Invoices slice's `ContractMappings`, so a second list wrote its own copy, passing the envelope's four
+  counts and two flags by position (a swapped `TotalCount` and `TotalPages` compiles), and removing the
+  Invoices slice took the original with it. It is now `PagedResponseMappings` in Api.Common
+  (`using Trellis.Api.Common.Http;`), written with named arguments; a slice maps only its item.
+  `ConventionTests` fails on a `new PagedResponse<…>(…)` or a method declared to return one anywhere
+  else under `src/`. If you copied the old mapping into a feature, delete the copy and call the shared one.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

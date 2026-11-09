@@ -43,6 +43,16 @@ public sealed partial class ConventionTests
     /// </summary>
     private static readonly Dictionary<string, string> ClockAndIdAllowlist = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The files under <c>src/</c> that may build a <c>PagedResponse</c>, keyed by repository-relative path, each
+    /// with its reason: the shared mapping every list calls, and nothing per feature.
+    /// </summary>
+    private static readonly Dictionary<string, string> PagedResponseAllowlist = new(StringComparer.Ordinal)
+    {
+        ["src/Presentation/Api/Trellis.Api.Common/Http/PagedResponseMappings.cs"] =
+            "the one PagedList-to-envelope mapping; every list endpoint calls ToPagedResponse(map)",
+    };
+
     /// <summary>The test files that may name a sleep, keyed by repository-relative path, each with its reason.</summary>
     private static readonly Dictionary<string, string> SleepAllowlist = new(StringComparer.Ordinal)
     {
@@ -420,6 +430,42 @@ public sealed partial class ConventionTests
         => ClockOrIdReadsIn(new SourceFile("Planted.cs", code)).Any().ShouldBe(flagged);
 
     [Fact]
+    public void The_paged_envelope_is_built_only_by_the_shared_mapping()
+    {
+        // PagedResponse takes four ints and two bools by position, so a hand-written copy that swaps
+        // TotalCount and TotalPages compiles and passes a test that happens to use equal numbers. A list
+        // endpoint maps with Api.Common's ToPagedResponse(map) instead (api.md, List endpoints); a slice's
+        // own mapping maps the item, never the envelope.
+        List<SourceFile> scanned = [.. RepositorySource.CSharpFiles("src")];
+
+        scanned.ShouldNotBeEmpty("the paged-envelope scan found no file under src/; is the repository root right?");
+        SourceScan.StaleEntries(scanned, PagedResponseAllowlist, PagedResponseBuildsIn).ShouldBeEmpty();
+        SourceScan.Violations(scanned, PagedResponseAllowlist, PagedResponseBuildsIn).ShouldBeEmpty(
+            "return result.Value.ToPagedResponse(item => item.ToDto()) (Trellis.Api.Common.Http.PagedResponseMappings) "
+            + "and map only the item in the feature's ContractMappings");
+    }
+
+    /// <summary>
+    /// Positive control for the paged-envelope scan, which expects zero hits outside its allowlist: a
+    /// constructor call, qualified or not, and a method declared to return the envelope (the dry run's
+    /// per-feature copy, which builds it with a target-typed <c>new(…)</c>) are found; the envelope as a
+    /// type argument of an endpoint's or a client's return type, a call to the shared mapping, a field and
+    /// the record's own declaration are not. The scan reads <c>src/</c> only, so the rows are written out whole.
+    /// </summary>
+    [Theory]
+    [InlineData("return new PagedResponse<CustomerDto>([], 1, 20, 0, 0, false, false);", true)]
+    [InlineData("=> new Trellis.Api.Contracts.Common.PagedResponse<TOut>(items, 1, 20, 0, 0, false, false);", true)]
+    [InlineData("public static PagedResponse<CustomerDto> ToPagedResponse(this PagedList<CustomerResponse> page)", true)]
+    [InlineData("public static Trellis.Api.Contracts.Common.PagedResponse<TOut> ToPagedResponse<TIn, TOut>(", true)]
+    [InlineData("private static async Task<Results<Ok<PagedResponse<InvoiceDto>>, ProblemHttpResult>> Handle(", false)]
+    [InlineData("Task<ApiResult<PagedResponse<InvoiceDto>>> ListAsync(", false)]
+    [InlineData("? TypedResults.Ok(result.Value.ToPagedResponse(static i => i.ToDto()))", false)]
+    [InlineData("private PagedResponse<InvoiceDto>? _page;", false)]
+    [InlineData("public sealed record PagedResponse<T>(", false)]
+    public void The_paged_envelope_scan_flags_a_copy_and_not_a_use(string code, bool flagged)
+        => PagedResponseBuildsIn(new SourceFile("Planted.cs", code)).Any().ShouldBe(flagged);
+
+    [Fact]
     public void Tests_move_time_and_never_sleep()
     {
         // A test that waits on the machine's clock is slow when it passes and flaky when the machine is busy
@@ -552,6 +598,9 @@ public sealed partial class ConventionTests
 
     private static IEnumerable<int> SleepsIn(SourceFile file) => Sleep().Matches(file.Code).Select(static m => m.Index);
 
+    private static IEnumerable<int> PagedResponseBuildsIn(SourceFile file)
+        => PagedResponseConstruction().Matches(file.Code).Select(static m => m.Index);
+
     private static bool DerivesFromGeneric(Type type, Type openGeneric)
     {
         for (Type? current = type.BaseType; current is not null; current = current.BaseType)
@@ -601,4 +650,12 @@ public sealed partial class ConventionTests
     /// </summary>
     [GeneratedRegex(@"\bThread\.Sleep\(|\bTask\.Delay\((?>\s*)(?!Timeout\.Infinite)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Sleep();
+
+    /// <summary>
+    /// <c>new PagedResponse&lt;</c>, qualified or not, or a method declared to return a <c>PagedResponse&lt;…&gt;</c>:
+    /// the type at the start of a declaration (not a type argument, which follows <c>&lt;</c> or <c>,</c>), its
+    /// arguments (one level of nesting), then a member name and its parameter or type-parameter list.
+    /// </summary>
+    [GeneratedRegex(@"\bnew\s+(?:[\w.]+\.)?PagedResponse\s*<|(?<![<,]\s*)(?<![\w.])(?:[\w.]+\.)?PagedResponse<[^<>]*(?:<[^<>]*>[^<>]*)*>\s+\w+\s*[<(]", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex PagedResponseConstruction();
 }

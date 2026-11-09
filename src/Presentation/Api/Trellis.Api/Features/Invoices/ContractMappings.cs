@@ -5,12 +5,6 @@ namespace Trellis.Api.Features.Invoices;
 
 internal static class ContractMappings
 {
-    public static Trellis.Api.Contracts.Common.PagedResponse<TOut> ToPagedResponse<TIn, TOut>(
-        this Trellis.SharedKernel.Specifications.PagedList<TIn> page, System.Func<TIn, TOut> map)
-        => new(
-            [.. System.Linq.Enumerable.Select(page.Items, map)],
-            page.Page, page.PageSize, page.TotalCount, page.TotalPages, page.HasNextPage, page.HasPreviousPage);
-
     public static InvoiceDto ToDto(this InvoiceResponse response)
         => new(
             response.Id,

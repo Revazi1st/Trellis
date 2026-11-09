@@ -118,8 +118,10 @@ after each layer.
       there; it carries the tenant under multi-tenancy); every write that changes the cached state
       evicts it with `CancellationToken.None` [`InvoiceReadCacheTests` is the model].
 - [ ] Lists bind `page`/`pageSize` inline with `[Range(PagingLimits...)]` and return
-      `PagedResponse<T>` [`OpenApiDocumentTests`]; a GET that honours `If-None-Match` declares
-      `.SupportsConditionalGet()` and uses `HttpRequest.IsNotModified(etag)`.
+      `PagedResponse<T>` [`OpenApiDocumentTests`]: map with the shared `.ToPagedResponse(map)` from
+      Api.Common, never a per-feature copy or a `new PagedResponse<T>(...)`
+      [`ConventionTests.The_paged_envelope_is_built_only_by_the_shared_mapping`]. A GET that honours
+      `If-None-Match` declares `.SupportsConditionalGet()` and uses `HttpRequest.IsNotModified(etag)`.
 - [ ] Multi-tenancy: the tenant comes from the signed `tenant` claim only (ADR-0022). Never put a
       tenant on a contract, a route, a query string or a header.
 - [ ] **Regenerate the OpenAPI document**: `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`
