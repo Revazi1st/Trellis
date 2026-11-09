@@ -667,10 +667,9 @@ against are not listed (ADR-0002 names them).
   - opening the API's root on its Scalar reference;
   - a short, ordered deployment page in Getting started;
   - a documentation website as the template's home: a landing page with the install command, feature cards and a three-step quick start; a Getting started / Architecture / Features sidebar with a linear path; an installation page with update and uninstall; one page per option that says what each choice adds and what to do after creation; an architecture page led by one ring diagram and the dependency rule; the documented version in the footer; a Testing page with one table of test projects and one run command; Astro + Starlight on GitHub Pages (ideas from cleanarchitecture.jasontaylor.dev; no code or CSS copied).
-- [dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit) by Mukesh Murugan (MIT): Valkey in place of Redis in the starter, as an idea.
+- [dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit) by Mukesh Murugan (MIT): Valkey in place of Redis in the starter, as an idea; the `fsh doctor` idea, a check of the SDK, Docker, Aspire and the ports before a first run (`scripts/doctor.sh`).
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
-- [dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit) by Mukesh Murugan (MIT): the `fsh doctor` idea, a check of the SDK, Docker, Aspire and the ports before a first run (`scripts/doctor.sh`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
 
 **Agent setups we learned from**
