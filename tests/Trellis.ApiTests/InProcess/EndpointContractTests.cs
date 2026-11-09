@@ -249,6 +249,43 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     /// <summary>
+    /// Positive control for the selection: <see cref="PagedListsIn"/> picks the GETs
+    /// <see cref="Every_paged_list_holds_its_documented_bounds_at_the_wire"/> calls, and an empty pick passes that
+    /// theory with nothing called. Empty is a legitimate pick once remove-feature has run, so the theory cannot
+    /// refuse one; this proves the reader still takes the served document's shape instead. Fed one path item, it
+    /// takes a GET with <c>page</c> and <c>pageSize</c> in its query, beside a route value or not, and nothing else.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"get":{"parameters":[{"name":"page","in":"query"},{"name":"pageSize","in":"query"}]}}""", true)]
+    [InlineData("""{"get":{"parameters":[{"name":"id","in":"path","required":true},{"name":"page","in":"query"},{"name":"pageSize","in":"query"}]}}""", true)]
+    [InlineData("""{"get":{"parameters":[{"name":"id","in":"path","required":true},{"name":"page","in":"query"}]}}""", false)]
+    [InlineData("""{"post":{"parameters":[{"name":"page","in":"query"},{"name":"pageSize","in":"query"}]}}""", false)]
+    [InlineData("""{"get":{"parameters":[{"name":"page","in":"path","required":true},{"name":"pageSize","in":"path","required":true}]}}""", false)]
+    [InlineData("""{"get":{}}""", false)]
+    public void The_paged_list_reader_takes_only_a_GET_with_page_and_pageSize_in_its_query(string pathItem, bool listed)
+    {
+        const string path = "/api/v1/customers/{id}/orders";
+        using JsonDocument document = JsonDocument.Parse($$"""{"paths":{"{{path}}":""" + pathItem + "}}");
+        List<string> expected = listed ? [path] : [];
+
+        PagedListsIn(document).ShouldBe(
+            expected,
+            "PagedListsIn reads the served OpenAPI document: paths.<path>.get.parameters[] with in: query and the "
+            + "names page and pageSize; when its reading drifts from that shape the bounds theory passes with nothing called");
+    }
+
+    /// <summary>Positive control for the fill: a list with a route value is called with a parsable id in its slot.</summary>
+    [Fact]
+    public void The_route_value_filler_puts_a_fresh_id_in_each_route_value_slot()
+    {
+        string filled = WithFreshRouteValues("/api/v1/customers/{id}/orders");
+
+        string.Join('/', filled.Split('/').Select(static segment => Guid.TryParse(segment, out _) ? "<guid>" : segment)).ShouldBe(
+            "/api/v1/customers/<guid>/orders",
+            $"WithFreshRouteValues replaces each {{routeValue}} segment with a fresh Guid and keeps every other segment; it gave {filled}");
+    }
+
+    /// <summary>
     /// A NUL (U+0000) in a GET's query value is a 400, never a 200 or a 500 (api.md, Problem details). The JSON
     /// converter refuses one only in a body string; a query value reaches the handler as sent, and a plain
     /// <c>string</c> carrying it fails the first query in PostgreSQL. Each parameter the served document gives a
