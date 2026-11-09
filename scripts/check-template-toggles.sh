@@ -5,8 +5,10 @@
 # solution, JSON and Razor files, and the .template.config/consumer/ stubs the second source ships)
 # must be a symbol declared in template.json (a typo'd symbol silently strips code).
 #
-# YAML files (workflows, compose, dependabot) get two more checks, because the template engine
-# processes hash-comment conditionals in them: a conditional directive must sit alone on its line
+# YAML files (workflows, compose, dependabot) and .editorconfig get two more checks, because the
+# template engine processes hash-comment conditionals in them (in .editorconfig since SDK 6.0.100,
+# where a TemplateSource block keeps the using-order key out of generated projects; to editorconfig
+# itself the directive lines are comments): a conditional directive must sit alone on its line
 # (the engine matches the token ANYWHERE in a line, so one inside a run: script or a comment
 # silently drops the rest of the file from generated output), and the directives must balance.
 # Files the template excludes from its output (template-ci.yml, release.yml) are not checked.
@@ -87,9 +89,9 @@ for s in $used; do
   fi
 done
 
-# --- YAML: directives alone on their line, balanced, parenthesised, declared symbols only ---
+# --- YAML and .editorconfig: directives alone on their line, balanced, parenthesised, declared symbols only ---
 # Prints "ERR<TAB>line<TAB>message" and "SYM<TAB>line<TAB>symbol" records for one file.
-yaml_conditionals() {
+hash_conditionals() {
   awk '
     function report(msg) { printf "ERR\t%d\t%s\n", FNR, msg }
     {
@@ -158,8 +160,8 @@ yaml_conditionals() {
   ' "$1"
 }
 
-yaml_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./artifacts -o -name node_modules \
-    -o -name bin -o -name obj -o -name TestResults \) -prune -o -type f \( -name '*.yml' -o -name '*.yaml' \) -print \
+hash_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./artifacts -o -name node_modules \
+    -o -name bin -o -name obj -o -name TestResults \) -prune -o -type f \( -name '*.yml' -o -name '*.yaml' -o -name .editorconfig \) -print \
   | sed 's|^\./||' | sort)
 
 # Source-only files (excluded from the template output) are never processed by the engine:
@@ -186,7 +188,7 @@ source_only() {
   return 1
 }
 
-for f in $yaml_files; do
+for f in $hash_files; do
   if source_only "$f"; then
     continue
   fi
@@ -199,7 +201,7 @@ for f in $yaml_files; do
       echo "::error file=$f,line=$line::template conditional uses '$value', which is not a symbol declared in template.json"
       fail=1
     fi
-  done <<< "$(yaml_conditionals "$f")"
+  done <<< "$(hash_conditionals "$f")"
 done
 
 # --- Markdown and shell: a directive stands alone on its line ---
@@ -316,6 +318,6 @@ while IFS=$'\x1f' read -r condition glob; do
 done <<< "$(jq -r '.sources[] | (.modifiers // [])[] | (.condition // "") as $c | (.exclude // [])[] | "\($c)\u001f\(.)"' .template.config/template.json)"
 
 if [ "$fail" -eq 0 ]; then
-  echo "template-toggle check passed — hosts cover all booleans, all #if symbols are declared, YAML/Markdown/shell conditionals are well-formed, every exclude glob matches a tracked or git-ignored path."
+  echo "template-toggle check passed — hosts cover all booleans, all #if symbols are declared, YAML/.editorconfig/Markdown/shell conditionals are well-formed, every exclude glob matches a tracked or git-ignored path."
 fi
 exit "$fail"

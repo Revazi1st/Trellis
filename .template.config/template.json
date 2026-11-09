@@ -110,7 +110,7 @@
       "parameters": {
         "value": "false"
       },
-      "description": "Always false once the engine runs, so a block conditioned on it survives only in the template's own repository, which nothing ever processes (example: the ci.yml step that runs the maintainer-only check-template-toggles.sh). No 'datatype', for the same reason as nameIsDottedAlphanumeric."
+      "description": "Always false once the engine runs, so a block conditioned on it survives only in the template's own repository, which nothing ever processes (examples: the ci.yml step that runs the maintainer-only check-template-toggles.sh; the using-order key dotnet_sort_system_directives_first in .editorconfig, which turns on dotnet format's IMPORTS check for the template's own files, sorted under its name, and would fail a generated project whose namespaces sort elsewhere). No 'datatype', for the same reason as nameIsDottedAlphanumeric."
     },
     "templatePackageId": {
       "type": "generated",
