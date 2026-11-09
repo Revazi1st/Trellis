@@ -13,7 +13,7 @@ using Trellis.Persistence;
 namespace Trellis.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261011131954_InitialCreate")]
+    [Migration("20261109030823_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -21,7 +21,7 @@ namespace Trellis.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);

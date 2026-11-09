@@ -86,7 +86,7 @@ until the upgrade is merged. It needs the `dotnet` CLI on the host or in the dev
       `docs/INDEX.md`; `MigrationDriftTests` fails when the migrations no longer match the model.]
 - [ ] **Settle the schema** (`docs/upgrading.md`, step 5) when the new version changes the persistence
       model or you turned on a schema-affecting option. No deployed database: regenerate the initial
-      migration (`./scripts/ef.sh migrations remove --project src/Infrastructure/Trellis.Persistence`,
+      migration (`./scripts/ef.sh migrations remove --force --project src/Infrastructure/Trellis.Persistence`,
       then `./scripts/ef.sh migrations add InitialCreate --project src/Infrastructure/Trellis.Persistence`).
       A deployed database: add a migration on top
       (`./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence`) and

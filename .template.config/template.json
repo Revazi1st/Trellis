@@ -373,6 +373,7 @@
         "docs/releasing.md",
         ".claude/rules/site.md",
         "docs/adr/0031-documentation-site.md",
+        "tests/Trellis.ArchitectureTests/MigrationSnapshotTests.cs",
         "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",

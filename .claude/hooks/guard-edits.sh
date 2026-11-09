@@ -34,7 +34,7 @@ file="${REL_ROOT:-$PROJECT_DIR}/$rel"
 migrations='/(src/Infrastructure/[^/]+\.Persistence)/Migrations/'
 if [[ "/$rel" =~ $migrations ]]; then
   project="${BASH_REMATCH[1]}"
-  decide ask "$rel is a generated migration: migrations are generated, never hand-edited (AGENTS.md, .claude/rules/persistence.md). To change one that is not applied anywhere yet, remove it and generate it again: ./scripts/ef.sh migrations remove --project $project, change the model, then ./scripts/ef.sh migrations add <Name> --project $project (the add-migration skill). A data migration (SQL the model cannot express) is the one reason to edit by hand."
+  decide ask "$rel is a generated migration: migrations are generated, never hand-edited (AGENTS.md, .claude/rules/persistence.md). To change one that is not applied anywhere yet, remove it and generate it again: ./scripts/ef.sh migrations remove --force --project $project, change the model, then ./scripts/ef.sh migrations add <Name> --project $project (the add-migration skill). A data migration (SQL the model cannot express) is the one reason to edit by hand."
 fi
 
 case "/$rel" in
