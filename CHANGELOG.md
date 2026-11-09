@@ -72,6 +72,11 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   or key that is neither registered there nor named a fault on purpose, with the reason no two requests
   can race to it, fails it, and so does a name the model no longer holds. A single-column uuid or
   database-numbered primary key needs no row.
+- **A change to the role grants owes the threat model.** `scripts/check-docs-drift.sh` asked for a
+  `docs/threat-model.md` update when authentication, hardening or identity code changed, but not for
+  `Application/Authorization/`, where `Roles.Permissions` decides who may call each endpoint, so granting
+  a role a new permission went through unasked. That folder counts now, in CI and in the edit hook's
+  reminder, and `AGENTS.md` says so.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

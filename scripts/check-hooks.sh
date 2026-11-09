@@ -472,6 +472,20 @@ JSON
   expect "a drift report from the checkout cwd is in (a worktree, say)" docs-drift.sh remind "docs/features/widgets.md"
   project="$work/missing"
   expect "a project folder that does not exist" docs-drift.sh silent
+  # The role grants live in Application/Authorization (Roles.Permissions): widening one is a change to
+  # who may call an endpoint, which docs/threat-model.md answers for.
+  repo="$work/drift-authorization"
+  mkdir -p "$repo/scripts" "$repo/src/Core/Acme.Application/Authorization" "$repo/docs"
+  git init -q --template= "$repo"
+  cp "$root/scripts/check-docs-drift.sh" "$repo/scripts/"
+  printf 'namespace Acme;\n' > "$repo/src/Core/Acme.Application/Authorization/Permissions.cs"
+  project="$repo"
+  payload <<JSON
+{"session_id":"session-authorization","transcript_path":"$work/none.jsonl","cwd":"$repo","permission_mode":"default","hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"$repo/src/Core/Acme.Application/Authorization/Permissions.cs","old_string":"a","new_string":"b","replace_all":false},"tool_response":{"success":true},"tool_use_id":"toolu_drift_authorization"}
+JSON
+  expect "a role grant changed without the threat model" docs-drift.sh remind "docs/threat-model.md"
+  printf '# Threat model\n' > "$repo/docs/threat-model.md"
+  expect "a role grant changed with the threat model" docs-drift.sh silent
   project="$root"
 else
   echo "check-hooks: git is not on PATH; the docs-drift cases were skipped."
