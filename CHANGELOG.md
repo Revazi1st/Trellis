@@ -124,6 +124,13 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `docs/development.md`, `docs/upgrading.md`, the `add-migration` and `upgrade-template` skills and the
   edit hook's hint: without it the command stops when no database answers its check, as in the SDK
   container.
+- **`docs/features/invoices.md` names the codes a client actually gets.** It listed
+  `Invoice.EmptyCustomerName`, `Invoice.CustomerNameTooLong` and the line-description pair as the API's
+  400s, but the command's validator checks the same Domain constants first, so through the API a blank or
+  over-long name or description is `Validation.General` naming the field; the domain codes guard the
+  callers without a validator (the seeder). The doc says so, `ProblemDetailsContractTests` pins the
+  over-long name on the wire, and the `add-feature` skill asks a feature doc to list such a rule as
+  `Validation.General` with the domain code in brackets.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

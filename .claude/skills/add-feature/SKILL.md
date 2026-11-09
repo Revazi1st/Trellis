@@ -28,7 +28,9 @@ after each layer.
       transition or a concurrent write, 412 for a stale `If-Match`, 422 only for
       `Idempotency.FingerprintMismatch` (never for validation); the chooser is in
       `.claude/rules/domain.md`. Permissions, idempotency, paging bounds and the code shape are
-      enforced by tests below, so the doc does not restate them.
+      enforced by tests below, so the doc does not restate them. A domain rule the validator also
+      checks (a required value, a length) appears in the errors table as `Validation.General`, with
+      the domain code in brackets as the guard behind it: through the API the validator answers first.
 
 ## Domain (`src/Core/Trellis.Domain/{Feature}/`) — new aggregate only
 

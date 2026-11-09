@@ -72,6 +72,26 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     }
 
     [Fact]
+    public async Task A_domain_limit_the_validator_also_checks_answers_as_the_validator_names_it()
+    {
+        // Invoice.Create refuses an over-long name with Invoice.CustomerNameTooLong, but through the API the
+        // command's validator checks the same Domain constant first: the wire sees Validation.General and the
+        // rule's code, and the domain's code guards only the callers without a validator (the seeder).
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        string overLong = new('n', Invoice.CustomerNameMaxLength + 1);
+
+        HttpResponseMessage response = await admin.PostWithIdempotencyKeyAsync(
+            "/api/v1/invoices", new CreateInvoiceRequest(overLong, "long@name.co", "USD"), ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.BadRequest, "Validation.General", "/api/v1/invoices", ct);
+        WireFieldError only = problem.Errors.ShouldNotBeNull().ShouldHaveSingleItem();
+        only.Field.ShouldBe("customerName");
+        only.Code.ShouldBe("Validation.MaximumLength");
+        (await response.Content.ReadAsStringAsync(ct)).ShouldNotContain(InvoiceErrors.CustomerNameTooLong.Code);
+    }
+
+    [Fact]
     public async Task A_single_value_object_error_keeps_its_own_code_and_names_its_field()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
