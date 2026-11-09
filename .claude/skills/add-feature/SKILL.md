@@ -200,7 +200,7 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
 - **A business key that must be unique** (a code, an e-mail): a unique index whose constraint name is
   pinned and registered in `UniqueConstraintErrors`, raced in a test; one no two requests can race to
   is a row in `UniqueConstraintTests.FaultOnPurpose` with its reason instead
-  (`.claude/rules/persistence.md`).
+  (`.claude/rules/persistence.md`); the idempotency filter answers a same-key loser from the store.
 - **Work on a timer**: `docs/architecture.md`, *Scheduled use cases*.
 - **Telling another system**: an integration event from a translate-and-send handler,
   `docs/architecture.md`; being told by one (a webhook): the `add-integration` skill, step 7.

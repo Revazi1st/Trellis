@@ -98,6 +98,14 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   OpenAPI document (`StringSchemaTransformer` gives `string` back the type the generator leaves out for a
   type with a converter of its own). `EmailAddress` also refuses a control character
   (`EmailAddress.Invalid`). A feature of yours needs no NUL check of its own (`.claude/rules/api.md`).
+- **A create that loses a same-key race on a unique business key hears the idempotency answer.** Two
+  concurrent requests under one `Idempotency-Key` were decided by the key's primary key only when both
+  reached their commit; a feature of yours with a unique business key (an e-mail, a code) let the second
+  fail on the first one's row before that, so it answered your feature's 409 (an e-mail already in use)
+  for a create that succeeded. `IdempotencyFilter` now asks the store again when a keyed request fails
+  with a 4xx and answers from the first request's reservation: 409 `Idempotency.InFlight`, the replayed
+  201 or 409 `Idempotency.Duplicate` (ADR-0018, amendment of 2026-11-09). It costs one lookup, on failed
+  keyed requests only.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes
