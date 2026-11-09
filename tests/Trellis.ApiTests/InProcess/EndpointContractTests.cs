@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Shouldly;
 using Trellis.Api.Common.Idempotency;
 using Trellis.Api.Contracts.Common;
@@ -177,6 +178,77 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
         };
         addLine.Headers.Add(ApiHeaders.IdempotencyKey, key);
         (await secondAdmin.SendAsync(addLine, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// Every paged list holds the bounds it documents (api.md, List endpoints). The endpoint declares them from
+    /// <see cref="PagingLimits"/>, but Application cannot see the contracts, so each query's validator repeats
+    /// them as literals; this keeps the two together for every GET the served document gives a <c>page</c> and
+    /// a <c>pageSize</c>, so a new list needs no bounds test of its own. Inside the bounds is not a 400 (a 200
+    /// for a list without a route value; one with a route value gets a fresh id, so a 404 may follow), one past
+    /// either bound is a 400 naming that field.
+    /// </summary>
+    [Theory]
+    [InlineData("page", PagingLimits.MinPage, true)]
+    [InlineData("page", PagingLimits.MaxPage, true)]
+    [InlineData("page", PagingLimits.MinPage - 1, false)]
+    [InlineData("page", PagingLimits.MaxPage + 1, false)]
+    [InlineData("pageSize", PagingLimits.MinPageSize, true)]
+    [InlineData("pageSize", PagingLimits.MaxPageSize, true)]
+    [InlineData("pageSize", PagingLimits.MinPageSize - 1, false)]
+    [InlineData("pageSize", PagingLimits.MaxPageSize + 1, false)]
+    public async Task Every_paged_list_holds_its_documented_bounds_at_the_wire(string parameter, int value, bool accepted)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient admin = await factory.CreateAdminClientAsync(ct);
+        using JsonDocument document = JsonDocument.Parse(await factory.CreateClient().GetStringAsync("/openapi/v1.json", ct));
+
+        List<string> violations = [];
+        foreach (string list in PagedListsIn(document))
+        {
+            string uri = $"{WithFreshRouteValues(list)}?{parameter}={value}";
+            using HttpResponseMessage response = await admin.GetAsync(uri, ct);
+            string body = await response.Content.ReadAsStringAsync(ct);
+            bool hasRouteValue = list.Contains('{', StringComparison.Ordinal);
+            if (accepted ? response.StatusCode == HttpStatusCode.BadRequest || (!hasRouteValue && response.StatusCode != HttpStatusCode.OK)
+                         : !IsValidationOf(response, body, parameter))
+            {
+                violations.Add($"GET {uri} answered {(int)response.StatusCode}, expected {(accepted ? "200" : $"400 naming {parameter}")}: {body}");
+            }
+        }
+
+        violations.ShouldBeEmpty(
+            "a list's query validator holds PagingLimits' bounds (InclusiveBetween(PagingLimits.MinPage..MaxPage, MinPageSize..MaxPageSize) as literals)");
+    }
+
+    /// <summary>The paths whose GET takes both paging parameters in its query, in document order.</summary>
+    private static List<string> PagedListsIn(JsonDocument document)
+        => document.RootElement.GetProperty("paths").EnumerateObject()
+            .Where(static path => path.Value.TryGetProperty("get", out JsonElement get)
+                                  && get.TryGetProperty("parameters", out JsonElement parameters)
+                                  && QueryParameterNames(parameters).IsSupersetOf(["page", "pageSize"]))
+            .Select(static path => path.Name)
+            .ToList();
+
+    private static HashSet<string> QueryParameterNames(JsonElement parameters)
+        => [.. parameters.EnumerateArray()
+            .Where(static p => p.TryGetProperty("in", out JsonElement location) && location.GetString() == "query")
+            .Select(static p => p.GetProperty("name").GetString()!)];
+
+    /// <summary>The path with each <c>{routeValue}</c> segment replaced by a fresh id.</summary>
+    private static string WithFreshRouteValues(string template)
+        => string.Join('/', template.Split('/').Select(static segment => segment.StartsWith('{') ? Guid.CreateVersion7().ToString() : segment));
+
+    /// <summary>A 400 <c>Validation.General</c> whose one field error is <paramref name="field"/>.</summary>
+    private static bool IsValidationOf(HttpResponseMessage response, string body, string field)
+    {
+        if (response.StatusCode != HttpStatusCode.BadRequest)
+        {
+            return false;
+        }
+
+        ProblemResponse? problem = JsonSerializer.Deserialize<ProblemResponse>(body, JsonSerializerOptions.Web);
+        return problem is { Code: "Validation.General", Errors: [{ Field: var named }] } && named == field;
     }
 
     private static async Task<HttpResponseMessage> PostCreateAsync(

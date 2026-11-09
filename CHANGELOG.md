@@ -145,6 +145,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   one theory over every `IStronglyTypedId<>` the Domain declares (a version-7 `New()`, the parse round
   trip, text that is not a `Guid` turned down), so your IDs are covered with no test of their own and the
   check survives `remove-feature`.
+- **Every list's paging bounds are checked at the wire, yours included.** A query's validator repeats
+  `PagingLimits`' bounds as literals (Application cannot see the contracts), so each list re-tested them
+  by hand. `EndpointContractTests.Every_paged_list_holds_its_documented_bounds_at_the_wire` reads every
+  GET the served OpenAPI document gives a `page` and a `pageSize` and sends each bound and one past it: a
+  validator whose literal drifts fails it, and a new list needs no bounds test of its own
+  (`.claude/rules/api.md`, List endpoints).
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes
