@@ -99,7 +99,7 @@ public class ApiFactory : WebApplicationFactory<apihost::Program>, IAsyncLifetim
             services.Insert(0, ServiceDescriptor.Transient<IStartupFilter, ClientAddressStartupFilter>()));
         builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(Time));
 #if (UseRedis)
-        // The UseRedis toggle wires a Redis L2 into HybridCache via Aspire; there is no Redis in
+        // The UseRedis toggle wires a Redis-protocol L2 (Valkey) into HybridCache via Aspire; there is no cache server in
         // this host, so drop the distributed cache and run L1-only — otherwise every cache touch 500s.
         // Aspire registers a Redis health check alongside it; without this setting /health answers 503.
         builder.UseSetting("Aspire:StackExchange:Redis:DisableHealthChecks", "true");

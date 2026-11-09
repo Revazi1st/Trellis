@@ -91,7 +91,7 @@ builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 builder.Services.AddOutboxProcessing(builder.Configuration);
 builder.Services.AddDataRetention(builder.Configuration);
 
-// HybridCache: in-memory L1 always; a Redis L2 is added below when the UseRedis feature is enabled.
+// HybridCache: in-memory L1 always; a Redis-protocol L2 (Valkey) is added below when the UseRedis feature is enabled.
 // The write endpoints remove an invoice's entry, but RemoveAsync reaches only THIS instance's L1 (and the
 // shared L2): with several API replicas, another replica's L1 keeps serving its copy until it expires. So
 // L1 lives 30 seconds, the bound on cross-replica staleness; with UseRedis the shared L2 keeps entries for
@@ -103,7 +103,7 @@ builder.Services.AddHybridCache(static cache => cache.DefaultEntryOptions = new 
     LocalCacheExpiration = TimeSpan.FromSeconds(30),
 });
 #if (UseRedis)
-// Aspire registers an IDistributedCache backed by the cache Redis resource, which HybridCache uses as its L2.
+// Aspire registers an IDistributedCache backed by the cache resource (Valkey, speaking the Redis protocol), which HybridCache uses as its L2.
 builder.AddRedisDistributedCache(ServiceNames.Cache);
 #endif
 

@@ -58,3 +58,7 @@ L1 bound above therefore reaches writes too: a client that met a 412 and reloads
 be handed the same stale `ETag` from that replica's L1 and meet a second 412 until the entry expires.
 ADR-0025's amendment records the consequence and the remedy, which is the one stated here for 304s:
 lower `LocalCacheExpiration`, or read that resource uncached.
+
+## Amendment (2026-11-09)
+
+The L2 server is Valkey (BSD-3-Clause), started by the AppHost as the `cache` resource in place of Redis 8.x, whose licence the ceiling policy refuses since ADR-0011's amendment of 2026-11-08; the protocol, the client (`Aspire.StackExchange.Redis.DistributedCaching`), the `--use-redis` flag and everything above about the L1 bound are unchanged. Where the text above says "Redis" as a server, read Valkey.

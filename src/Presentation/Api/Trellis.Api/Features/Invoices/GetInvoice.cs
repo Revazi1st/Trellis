@@ -33,7 +33,7 @@ internal sealed class GetInvoice : IEndpoint
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        // Cache-aside: served from HybridCache (in-memory L1, optional Redis L2), invalidated by the write endpoints.
+        // Cache-aside: served from HybridCache (in-memory L1, optional Redis-protocol L2), invalidated by the write endpoints.
         string cacheKey = cacheKeys.Invoice(id.Value);
         InvoiceDto? dto = await cache.GetOrCreateAsync(
             cacheKey,

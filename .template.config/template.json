@@ -43,7 +43,7 @@
       "type": "parameter",
       "datatype": "bool",
       "defaultValue": "false",
-      "displayName": "Use Redis cache",
+      "displayName": "Use a Redis-protocol cache (Valkey)",
       "description": "Add a Redis-protocol distributed cache (HybridCache L2), Valkey by default, and wire it into the Aspire AppHost."
     },
     "UseSerilog": {
