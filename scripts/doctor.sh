@@ -9,7 +9,8 @@
 #   .NET SDK         one on PATH that global.json accepts (its version within its rollForward band);
 #                    without one, ./scripts/dotnet.sh builds and tests in the SDK container, but
 #                    aspire run needs a local SDK (ADR-0008)
-#   Docker           the engine answers (docker info), with the CLI found as scripts/dotnet.sh finds it
+#   Docker           the engine answers (docker info, and Podman's own version field when the CLI is
+#                    podman or its docker shim), with the CLI found as scripts/dotnet.sh finds it
 #                    (DOCKER_BIN, then Docker Desktop's ~/.docker/bin)
 #   SDK image        the image scripts/dotnet.sh runs (its name read from that script, its override
 #                    variable honoured), and the one line that builds it
@@ -19,12 +20,14 @@
 #                    with a local SDK only)
 #   AppHost ports    every localhost port tools/*.AppHost/Properties/launchSettings.json names (each
 #                    applicationUrl and every *_URL or *_URLS value) is free: lsof names a holder, and
-#                    a connection (nc -z, else bash's /dev/tcp) finds one lsof cannot list; reported,
+#                    a connection (nc -z, else bash's /dev/tcp) finds one lsof cannot list, or that an
+#                    lsof ignoring -iTCP (BusyBox's lists every open file) never answers for; reported,
 #                    never freed
 #   Testcontainers   the engine endpoint scripts/dotnet.sh hands the tests: DOCKER_HOST,
 #                    TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE and, inside a container such as the dev
 #                    container, TESTCONTAINERS_HOST_OVERRIDE (docs/development.md, "Docker engines
-#                    other than Docker Desktop")
+#                    other than Docker Desktop"); optional with a local SDK, where the tests can run
+#                    on the host
 #   git, jq          git for the docs-drift and ADR checks and the commit hook; jq only where a script
 #                    under scripts/ requires it
 #
@@ -35,6 +38,9 @@
 #                           "doctor self-test passed: N cases" or each failing case with its output
 # POSIX sh (dash included), awk, sed and grep. Nothing outside the temporary folder is written.
 set -u
+# cd prints the folder it finds through CDPATH, which would land in $here beside the folder itself
+# (sh scripts/doctor.sh, with CDPATH holding .), and every path below would point nowhere.
+unset CDPATH
 
 here=$(cd "$(dirname "$0")" && pwd -P)
 self="$here/$(basename "$0")"
@@ -170,12 +176,16 @@ ports_of() {
 port_holder() {
   asked=0
   if command -v lsof >/dev/null 2>&1; then
-    asked=1
-    who=$(lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR == 2 { print $1 " (pid " $2 ")" }')
+    listing=$(lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null)
+    # Only a LISTEN row on this port names a holder: BusyBox's lsof ignores the flags, lists every
+    # open file and exits 0.
+    who=$(printf '%s\n' "$listing" | awk -v p=":$1" '$NF == "(LISTEN)" && substr($(NF - 1), length($(NF - 1)) - length(p) + 1) == p { print $1 " (pid " $2 ")"; exit }')
     if [ -n "$who" ]; then
       echo "$who"
       return 0
     fi
+    # lsof answered "nobody" only when it printed nothing; a listing without that row answered nothing.
+    [ -z "$listing" ] && asked=1
   fi
   # lsof lists only this user's processes; a connection finds everyone's.
   if command -v nc >/dev/null 2>&1; then
@@ -210,7 +220,13 @@ run_checks() {
   find_docker
   engine=0 server=""
   # With --format, docker info exits 0 and prints an empty version when the engine does not answer.
-  [ -n "$docker" ] && server=$("$docker" info --format '{{.ServerVersion}}' 2>/dev/null) && [ -n "$server" ] && engine=1
+  # Podman's info (DOCKER_BIN=podman, or its docker shim) has no ServerVersion and fails on it; its own
+  # field answers there, and neither does when the engine is down.
+  if [ -n "$docker" ]; then
+    server=$("$docker" info --format '{{.ServerVersion}}' 2>/dev/null)
+    [ -n "$server" ] || server=$("$docker" info --format '{{.Version.Version}}' 2>/dev/null)
+    [ -n "$server" ] && engine=1
+  fi
   image=$(sdk_image)
   image_here=0
   [ "$engine" = 1 ] && [ -n "$image" ] && "$docker" image inspect "$image" >/dev/null 2>&1 && image_here=1
@@ -312,7 +328,7 @@ run_checks() {
 $ports
 EOF
       if [ "$blind" = 1 ]; then
-        say skip "AppHost ports: no lsof, nc or bash to check $(echo "$ports" | awk '{ printf "%s%s", (NR > 1 ? " " : ""), $1 }') with"
+        say skip "AppHost ports: no lsof that lists listeners (BusyBox's does not), nc or bash to check $(echo "$ports" | awk '{ printf "%s%s", (NR > 1 ? " " : ""), $1 }') with"
       elif [ -n "$busy" ]; then
         lack 1 "AppHost ports in use: $busy; stop what holds them (an AppHost already running?) or change $(rel "$settings"); doctor frees nothing"
       else
@@ -324,9 +340,12 @@ EOF
   # --- Testcontainers: the engine endpoint the tests get ---
   inside=0
   for marker in $container_markers; do [ -e "$marker" ] && inside=1; done
+  # An endpoint only ./scripts/dotnet.sh's container cannot use is needed only when there is no local SDK.
+  opt=""
+  [ "$container" = 0 ] && opt="optional with a local SDK, where the tests can run on the host; "
   case "${DOCKER_HOST:-}" in
     tcp://127.* | tcp://localhost* | tcp://\[::1\]* | tcp://0.0.0.0*)
-      lack "$container" "Testcontainers: DOCKER_HOST=$DOCKER_HOST is not reachable from a container, so the tests ./scripts/dotnet.sh runs cannot reach the engine; use an address a container reaches (docs/development.md, \"Docker engines other than Docker Desktop\")"
+      lack "$container" "Testcontainers: ${opt}DOCKER_HOST=$DOCKER_HOST is not reachable from a container, so the tests ./scripts/dotnet.sh runs cannot reach the engine; use an address a container reaches (docs/development.md, \"Docker engines other than Docker Desktop\")"
       ;;
     tcp://*)
       say ok "Testcontainers: DOCKER_HOST=$DOCKER_HOST, passed through; published ports at ${TESTCONTAINERS_HOST_OVERRIDE:-the DOCKER_HOST address}"
@@ -345,15 +364,15 @@ EOF
         where=$socket
       fi
       if [ "$inside" = 1 ] && [ -z "${TESTCONTAINERS_HOST_OVERRIDE:-}" ]; then
-        lack 0 "Testcontainers: inside a container, the tests reach the containers they start through the host: set TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal, as the dev container does"
+        lack 0 "Testcontainers: optional for a first run, but inside a container the tests reach the containers they start through the host: set TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal, as the dev container does"
       elif [ -z "${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-}" ] && [ "$os" != Darwin ] && [ ! -e "$socket" ]; then
-        lack "$container" "Testcontainers: ./scripts/dotnet.sh would mount $socket, which does not exist; point DOCKER_HOST=unix://<path> at your engine's socket (docs/development.md, \"Docker engines other than Docker Desktop\")"
+        lack "$container" "Testcontainers: ${opt}./scripts/dotnet.sh would mount $socket, which does not exist; point DOCKER_HOST=unix://<path> at your engine's socket (docs/development.md, \"Docker engines other than Docker Desktop\")"
       else
         say ok "Testcontainers: the engine at $where; published ports at ${TESTCONTAINERS_HOST_OVERRIDE:-host.docker.internal}"
       fi
       ;;
     *)
-      lack "$container" "Testcontainers: DOCKER_HOST=$DOCKER_HOST; ./scripts/dotnet.sh takes unix:// and tcp:// only (docs/development.md, \"Docker engines other than Docker Desktop\")"
+      lack "$container" "Testcontainers: ${opt}DOCKER_HOST=$DOCKER_HOST; ./scripts/dotnet.sh takes unix:// and tcp:// only (docs/development.md, \"Docker engines other than Docker Desktop\")"
       ;;
   esac
 
@@ -397,9 +416,9 @@ self_test() {
   bin="$work/bin" sys="$work/sys" state="$work/state" repo="$work/repo" out="$work/out"
   mkdir -p "$bin" "$sys" "$state" "$repo/scripts" "$repo/tools/Acme.AppHost/Properties"
 
-  # The utilities the checks and the fakes use, and nothing else: a real dotnet, docker or lsof on
-  # this machine never answers in a fake's place.
-  for tool in awk sed grep head cat; do
+  # The utilities the script, its checks and the fakes use, and nothing else: a real dotnet, docker or
+  # lsof on this machine never answers in a fake's place.
+  for tool in awk sed grep head cat dirname basename; do
     found=$(command -v "$tool") || {
       echo "doctor self-test: $tool is not on PATH"
       exit 1
@@ -446,9 +465,13 @@ JSON
   *) exit 2 ;;
 esac"
     fake docker "case \"\$1\" in
-  info) case \"\$(cat '$state/engine')\" in
-      up) echo 28.0.1 ;;
-      quiet) echo ;; # what docker info --format prints, exiting 0, when the engine does not answer
+  info) case \"\$(cat '$state/engine'):\$3\" in
+      'up:{{.ServerVersion}}') echo 28.0.1 ;;
+      # Podman's info has no ServerVersion: the template fails, and its own Version.Version answers.
+      'podman:{{.Version.Version}}') echo 5.2.1 ;;
+      # What docker info --format prints, exiting 0, when the engine does not answer.
+      'quiet:{{.ServerVersion}}') echo ;;
+      up:* | podman:* | quiet:*) echo 'template: info: cannot evaluate the field' >&2; exit 125 ;;
       *) echo 'Cannot connect to the Docker daemon' >&2; exit 1 ;;
     esac ;;
   image) grep -qxF \"\$3\" '$state/images' ;;
@@ -627,6 +650,19 @@ cat '$state/listening' '$state/hidden' | grep -q \"^\$port \""
   exits 0
   line ok "Docker: the engine answers"
 
+  label="Podman as DOCKER_BIN, whose info has no ServerVersion"
+  reset
+  mv "$bin/docker" "$bin/podman"
+  echo podman > "$state/engine"
+  run DOCKER_BIN=podman
+  exits 0
+  line ok "Docker: the engine answers (server 5.2.1)"
+  line ok "SDK image acme-sdk:10.0, which ./scripts/dotnet.sh runs"
+  echo down > "$state/engine"
+  run DOCKER_BIN=podman
+  exits 1
+  line missing "Docker: the engine does not answer (podman info)"
+
   label="no docker CLI at all"
   reset
   rm "$bin/docker"
@@ -698,7 +734,24 @@ cat '$state/listening' '$state/hidden' | grep -q \"^\$port \""
   rm "$bin/lsof" "$bin/nc" "$bin/bash"
   run
   exits 0
-  line skip "AppHost ports: no lsof, nc or bash to check 41001 41002 41003 41004 41005 41006 with"
+  line skip "AppHost ports: no lsof that lists listeners (BusyBox's does not), nc or bash to check 41001 41002 41003 41004 41005 41006 with"
+
+  label="BusyBox's lsof, which ignores -iTCP and lists every open file"
+  reset
+  fake lsof "printf '1\t/bin/busybox\t0\t/dev/pts/0\n4242\t/usr/bin/dotnet\t3\tsocket:[9]\n'"
+  run
+  exits 0
+  line ok "AppHost ports free: 41001 41002 41003 41004 41005 41006"
+  never busybox
+  echo '41003 - -' > "$state/listening"
+  run
+  exits 1
+  line missing "AppHost ports in use: 41003 (ASPNETCORE_URLS) held by a process; stop what holds them"
+  never busybox
+  rm "$bin/nc" "$bin/bash"
+  run
+  exits 0
+  line skip "AppHost ports: no lsof that lists listeners (BusyBox's does not), nc or bash to check 41001"
 
   label="no AppHost launch settings, and no Aspire CLI"
   reset
@@ -715,12 +768,14 @@ cat '$state/listening' '$state/hidden' | grep -q \"^\$port \""
   run DOCKER_HOST=tcp://127.0.0.1:2375
   exits 1
   line missing "Testcontainers: DOCKER_HOST=tcp://127.0.0.1:2375 is not reachable from a container"
+  never "Testcontainers: optional"
 
   label="DOCKER_HOST on a loopback TCP address, with a local SDK"
   reset
   run DOCKER_HOST=tcp://localhost:2375
   exits 0
-  line missing "is not reachable from a container"
+  line missing "Testcontainers: optional with a local SDK, where the tests can run on the host; DOCKER_HOST=tcp://localhost:2375 is not reachable from a container"
+  line doctor: "ready for a first run; 1 optional missing"
 
   label="DOCKER_HOST on another TCP address"
   reset
@@ -732,16 +787,25 @@ cat '$state/listening' '$state/hidden' | grep -q \"^\$port \""
   rm "$bin/dotnet"
   run DOCKER_HOST=ssh://me@build-box
   exits 1
-  line missing "./scripts/dotnet.sh takes unix:// and tcp:// only"
+  line missing "Testcontainers: DOCKER_HOST=ssh://me@build-box; ./scripts/dotnet.sh takes unix:// and tcp:// only"
+  reset
+  run DOCKER_HOST=ssh://me@build-box
+  exits 0
+  line missing "Testcontainers: optional with a local SDK, where the tests can run on the host; DOCKER_HOST=ssh://me@build-box"
 
   label="a Linux socket that does not exist"
   reset
   rm "$work/docker.sock" "$bin/dotnet"
   run
   exits 1
-  line missing "./scripts/dotnet.sh would mount $work/docker.sock, which does not exist"
+  line missing "Testcontainers: ./scripts/dotnet.sh would mount $work/docker.sock, which does not exist"
   run DOCKER_HOST="unix://$work/rootless.sock"
   line missing "would mount $work/rootless.sock"
+  reset
+  rm "$work/docker.sock"
+  run
+  exits 0
+  line missing "Testcontainers: optional with a local SDK, where the tests can run on the host; ./scripts/dotnet.sh would mount $work/docker.sock"
 
   label="macOS mounts the engine VM's socket"
   reset
@@ -761,7 +825,7 @@ cat '$state/listening' '$state/hidden' | grep -q \"^\$port \""
   : > "$work/dockerenv"
   run
   exits 0
-  line missing "set TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal, as the dev container does"
+  line missing "Testcontainers: optional for a first run, but inside a container the tests reach the containers they start through the host: set TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal, as the dev container does"
   run TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal
   line ok "published ports at host.docker.internal"
 
@@ -779,6 +843,24 @@ cat '$state/listening' '$state/hidden' | grep -q \"^\$port \""
   run
   exits 0
   line missing "jq: optional for a first run; scripts/needs-jq.sh needs it"
+
+  # The whole script, run the way its usage line shows, under a CDPATH that makes cd print the folder
+  # it finds: every path is derived from where the script sits, so a doubled one leaves global.json,
+  # scripts/dotnet.sh and the launch settings unread, and the report quietly short.
+  label="sh scripts/doctor.sh under a CDPATH that holds the checkout"
+  reset
+  (
+    unset DOCKER_HOST DOCKER_BIN TESTCONTAINERS_HOST_OVERRIDE TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE ACME_SDK_IMAGE
+    cd "$repo" || exit 99
+    CDPATH="$repo" HOME="$work/home" PATH="$bin:$sys" /bin/sh scripts/doctor.sh
+  ) > "$out" 2>&1
+  code=$?
+  exits 0
+  line ok ".NET SDK 10.0.403 on PATH, which global.json accepts (10.0.403, rollForward latestFeature)"
+  line ok "SDK image acme-sdk:10.0, which ./scripts/dotnet.sh runs"
+  line ok "AppHost ports free: 41001 41002 41003 41004 41005 41006 (tools/Acme.AppHost/Properties/launchSettings.json)"
+  line ok "jq 1.7.1, which scripts/needs-jq.sh needs"
+  never "scripts/doctor.sh"
 
   if [ "$failed" -ne 0 ]; then
     echo "doctor self-test failed: $failed of $cases cases."

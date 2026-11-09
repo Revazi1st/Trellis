@@ -174,9 +174,9 @@ shows how to depend on an API you do not own
   `dotnet run --project tools/Trellis.AppHost` starts the same app.
 - **PowerShell** (`pwsh`), only to install the browsers for the optional Playwright tests.
 
-Once the solution exists, run `./scripts/doctor.sh`: it checks each of these on your machine, the
-development certificate and the AppHost's ports too, changes nothing, and names the fix for anything
-missing.
+Once the solution exists, run `./scripts/doctor.sh`: it checks each of these but PowerShell on your
+machine, the development certificate and the AppHost's ports too, changes nothing, and names the fix
+for anything missing.
 
 ### Create your solution
 
