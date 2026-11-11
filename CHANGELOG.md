@@ -164,6 +164,14 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   server (`aspire agent mcp`): while `aspire run` is up, an agent reads the AppHost's resources, logs
   and traces through it and can restart a resource. It needs the Aspire CLI 13.5 or later on `PATH`,
   and an interactive Claude Code session asks before using it (`docs/INDEX.md`, the `run-app` skill).
+- **Aspire 13.6.5** (`Aspire.Hosting`, `Aspire.Hosting.AppHost` through the `Aspire.AppHost.Sdk` pin in the AppHost
+  project, and every `Aspire.*` package with them): GHSA-f7vh-h5g3-7jrh (CVE-2026-120006, an elevation of
+  privilege in Aspire, high) is published against every version below 13.6.5, and `NuGetAudit` turns it into
+  NU1903, an error in every Release build, until the graph moves. The floors the new packages set move with
+  them: `Microsoft.Extensions.Hosting` and `Microsoft.Extensions.Diagnostics.HealthChecks` to 10.0.14, and
+  through the EF health check EF Core itself (`Microsoft.EntityFrameworkCore`, `.Design`,
+  `Microsoft.AspNetCore.Identity.EntityFrameworkCore`) to 10.0.14, the version `dotnet-ef` already had. The
+  shipped `InitialCreate` still reads `ProductVersion` 10.0.13; the next regeneration rewrites it.
 
 ## [0.1.1] - 2026-10-26
 
