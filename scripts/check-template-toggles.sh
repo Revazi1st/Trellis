@@ -5,10 +5,11 @@
 # solution, JSON and Razor files, and the .template.config/consumer/ stubs the second source ships)
 # must be a symbol declared in template.json (a typo'd symbol silently strips code).
 #
-# YAML files (workflows, compose, dependabot) and .editorconfig get two more checks, because the
-# template engine processes hash-comment conditionals in them (in .editorconfig since SDK 6.0.100,
-# where a TemplateSource block keeps the using-order key out of generated projects; to editorconfig
-# itself the directive lines are comments): a conditional directive must sit alone on its line
+# YAML files (workflows, compose, dependabot), .editorconfig, .gitignore, .gitattributes, .dockerignore
+# and Dockerfile get two more checks, because the template engine processes hash-comment conditionals
+# in them (the SDK 10.0.403 engine lists them as one group; in .editorconfig a TemplateSource block
+# keeps the using-order key out of generated projects, and to editorconfig itself the directive lines
+# are comments): a conditional directive must sit alone on its line
 # (the engine matches the token ANYWHERE in a line, so one inside a run: script or a comment
 # silently drops the rest of the file from generated output), and the directives must balance.
 # Files the template excludes from its output (template-ci.yml, release.yml) are not checked.
@@ -161,7 +162,7 @@ hash_conditionals() {
 }
 
 hash_files=$(find . \( -path ./.git -o -path ./.claude/worktrees -o -path ./artifacts -o -name node_modules \
-    -o -name bin -o -name obj -o -name TestResults \) -prune -o -type f \( -name '*.yml' -o -name '*.yaml' -o -name .editorconfig \) -print \
+    -o -name bin -o -name obj -o -name TestResults \) -prune -o -type f \( -name '*.yml' -o -name '*.yaml' -o -name .editorconfig -o -name .gitignore -o -name .gitattributes -o -name .dockerignore -o -name Dockerfile \) -print \
   | sed 's|^\./||' | sort)
 
 # Source-only files (excluded from the template output) are never processed by the engine:

@@ -42,7 +42,7 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   package, so pin it below 33 if you add snapshot tests. `LicenseCeilingTests` keeps the list, the
   comment and Dependabot's ignores naming the same ids.
 - **A new project passes its own format check, whatever its name.** A project generated as `Acme.Shop`
-  failed the Format check of its own `ci.yml` on the first push, with 183 IMPORTS errors:
+  failed the Format check of its own `ci.yml` on the first push, with an IMPORTS error in nearly every file:
   `.editorconfig` set `dotnet_sort_system_directives_first`, which turns on `dotnet format`'s
   using-order check, and that order sorts by the full name, so the shipped files were in order only for
   a name that sorts where Trellis does (after Shouldly, before Xunit). The key stays in the template's
