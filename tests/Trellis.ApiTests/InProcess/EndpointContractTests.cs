@@ -252,11 +252,14 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
     /// Positive control for the selection: <see cref="PagedListsIn"/> picks the GETs
     /// <see cref="Every_paged_list_holds_its_documented_bounds_at_the_wire"/> calls, and an empty pick passes that
     /// theory with nothing called. Empty is a legitimate pick once remove-feature has run, so the theory cannot
-    /// refuse one; this proves the reader still takes the served document's shape instead. Fed one path item, it
-    /// takes a GET with <c>page</c> and <c>pageSize</c> in its query, beside a route value or not, and nothing else.
+    /// refuse one; this proves the reader takes each shape a list's path item has. Fed one path item, it takes a
+    /// GET with <c>page</c> and <c>pageSize</c> in its query, beside a route value or another query value (a
+    /// <c>?status=</c> or <c>?search=</c> filter) or not, and nothing else. That the served document still has
+    /// these shapes is <see cref="The_lists_read_from_the_query_are_the_GETs_that_answer_a_paged_response"/>.
     /// </summary>
     [Theory]
     [InlineData("""{"get":{"parameters":[{"name":"page","in":"query"},{"name":"pageSize","in":"query"}]}}""", true)]
+    [InlineData("""{"get":{"parameters":[{"name":"status","in":"query"},{"name":"page","in":"query"},{"name":"pageSize","in":"query"}]}}""", true)]
     [InlineData("""{"get":{"parameters":[{"name":"id","in":"path","required":true},{"name":"page","in":"query"},{"name":"pageSize","in":"query"}]}}""", true)]
     [InlineData("""{"get":{"parameters":[{"name":"id","in":"path","required":true},{"name":"page","in":"query"}]}}""", false)]
     [InlineData("""{"post":{"parameters":[{"name":"page","in":"query"},{"name":"pageSize","in":"query"}]}}""", false)]
@@ -272,6 +275,26 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
             expected,
             "PagedListsIn reads the served OpenAPI document: paths.<path>.get.parameters[] with in: query and the "
             + "names page and pageSize; when its reading drifts from that shape the bounds theory passes with nothing called");
+    }
+
+    /// <summary>
+    /// The selection agrees with the served document: the GETs <see cref="PagedListsIn"/> reads from their query
+    /// parameters are the GETs whose 200 answers a <see cref="PagedResponse{T}"/> (api.md, List endpoints: a list
+    /// binds both and returns the envelope). A reading that drifts from the document leaves a list out of
+    /// <see cref="Every_paged_list_holds_its_documented_bounds_at_the_wire"/>, which still passes; it fails here
+    /// instead, and so does a list that answers the envelope without both parameters. Both sides are empty once
+    /// remove-feature has run, and still equal.
+    /// </summary>
+    [Fact]
+    public async Task The_lists_read_from_the_query_are_the_GETs_that_answer_a_paged_response()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using JsonDocument document = JsonDocument.Parse(await factory.CreateClient().GetStringAsync("/openapi/v1.json", ct));
+
+        PagedListsIn(document).ShouldBe(
+            GetsAnsweringAPagedResponseIn(document),
+            "every GET whose 200 is a PagedResponse takes page and pageSize in its query, and PagedListsIn reads exactly "
+            + "those; a list missing from the left is one the bounds theory never calls");
     }
 
     /// <summary>Positive control for the fill: a list with a route value is called with a parsable id in its slot.</summary>
@@ -333,6 +356,24 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
                                   && QueryParameterNames(parameters).ToHashSet(StringComparer.Ordinal).IsSupersetOf(["page", "pageSize"]))
             .Select(static path => path.Name)
             .ToList();
+
+    /// <summary>The paths whose GET answers its 200 with a <see cref="PagedResponse{T}"/> schema, in document order.</summary>
+    private static List<string> GetsAnsweringAPagedResponseIn(JsonDocument document)
+        => document.RootElement.GetProperty("paths").EnumerateObject()
+            .Where(static path => path.Value.TryGetProperty("get", out JsonElement get)
+                                  && get.TryGetProperty("responses", out JsonElement responses)
+                                  && responses.TryGetProperty("200", out JsonElement ok)
+                                  && ok.TryGetProperty("content", out JsonElement content)
+                                  && content.EnumerateObject().Any(static media => IsPagedResponse(media.Value)))
+            .Select(static path => path.Name)
+            .ToList();
+
+    /// <summary>A media type whose schema references a closed <see cref="PagedResponse{T}"/>, which the generator names <c>PagedResponseOf{Item}</c>.</summary>
+    private static bool IsPagedResponse(JsonElement media)
+        => media.TryGetProperty("schema", out JsonElement schema)
+           && schema.TryGetProperty("$ref", out JsonElement reference)
+           && reference.GetString() is { } target
+           && target.StartsWith($"#/components/schemas/{nameof(PagedResponse<>)}Of", StringComparison.Ordinal);
 
     private static IEnumerable<string> QueryParameterNames(JsonElement parameters)
         => parameters.EnumerateArray()

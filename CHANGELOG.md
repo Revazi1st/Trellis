@@ -94,14 +94,16 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   500 `Server.Failure`: creating an invoice or adding a line, and signing in. `AddApiCommon` now
   registers `NulFreeStringJsonConverter` beside the strongly-typed-id converter, which refuses such a
   string while the body binds, on every endpoint, yours included, as 400 `Request.Malformed` whose
-  `errors[]` names the member (`Request.InvalidValue`); responses are written as before, and so is the
-  OpenAPI document (`StringSchemaTransformer` gives `string` back the type the generator leaves out for a
-  type with a converter of its own). `EmailAddress` also refuses a control character
-  (`EmailAddress.Invalid`). A body string of a feature of yours needs no NUL check of its own, and a
-  route value cannot carry one (Kestrel refuses `%00` in a path before routing, which `RequestLimitTests`
-  pins); a string bound from the query reaches the handler as sent, so a `?search=` filter of yours
-  refuses U+0000 in its query's validator, and `EndpointContractTests.Every_query_value_of_a_GET_refuses_a_NUL`
-  fails on any GET that answers a NUL in its query with anything but a 400 (`.claude/rules/api.md`).
+  `errors[]` names the member (`Request.InvalidValue`); responses are written as before, and so are the
+  OpenAPI document's string schemas (`StringSchemaTransformer` gives `string` back the type the generator
+  leaves out for a type with a converter of its own), while its `ProblemResponse` and `FieldError`
+  descriptions now name a string holding U+0000 beside a value of the wrong type. `EmailAddress` also
+  refuses a control character (`EmailAddress.Invalid`). A body string of a feature of yours needs no NUL
+  check of its own, and a route value cannot carry one (Kestrel refuses `%00` in a path before routing,
+  which `RequestLimitTests` pins); a string bound from the query reaches the handler as sent, so a
+  `?search=` filter of yours refuses U+0000 in its query's validator, and
+  `EndpointContractTests.Every_query_value_of_a_GET_refuses_a_NUL` fails on any GET that answers a NUL in
+  its query with anything but a 400 (`.claude/rules/api.md`).
 - **A create that loses a same-key race on a unique business key hears the idempotency answer.** Two
   concurrent requests under one `Idempotency-Key` were decided by the key's primary key only when both
   reached their commit; a feature of yours with a unique business key (an e-mail, a code) let the second
@@ -157,7 +159,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   GET the served OpenAPI document gives a `page` and a `pageSize` and sends each bound and one past it,
   expecting a 200 inside (a 404 too for a nested list, whose route gets a fresh id) and a 400 naming the
   field outside: a validator whose literal drifts fails it, and a new list needs no bounds test of its own
-  (`.claude/rules/api.md`, List endpoints).
+  (`.claude/rules/api.md`, List endpoints). The GETs it reads are held to the GETs whose 200 is a
+  `PagedResponse<T>`, so a list with a filter of its own beside the paging pair (`?status=`, `?search=`)
+  is never left out unseen, and a list that answers the envelope without both parameters fails.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

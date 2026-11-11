@@ -261,8 +261,9 @@ documents its error responses by shape — 400 where there is input, 404 where a
 a write to an addressed resource (and the `Idempotency-Key` header, the `Idempotency-Replayed` response
 header, the duplicate and in-flight 409 and the fingerprint-mismatch 422 on every `RequireIdempotency()`
 endpoint), `If-Match` and the 412 on the four conditional writes, 401/403 on secured ones, 429 and 500
-everywhere — all referencing the `ProblemResponse` component generated from the Contracts record; the
-201 declares `Location`. The document is committed at
+everywhere — all referencing the `ProblemResponse` component generated from the Contracts record, whose
+description says when `errors[]` is present (a Result-produced 400, and a 400 whose body held a value of
+the wrong type or a string holding U+0000, each entry a `FieldError`); the 201 declares `Location`. The document is committed at
 `docs/api/openapi.v1.json` as the server serialises it: `OpenApiSnapshotTests` compares it with the
 in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` or
 `scripts/export-openapi.sh` regenerates it) and CI diffs it against the running app.

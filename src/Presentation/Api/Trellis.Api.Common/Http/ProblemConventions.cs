@@ -25,7 +25,7 @@ public static class ProblemExtensions
     /// <summary>The stable machine discriminator, <c>Area.Problem</c>: what clients branch on.</summary>
     public const string Code = "code";
 
-    /// <summary>The per-field failures of a 400 produced from a <see cref="Result"/>, or of a body value of the wrong type: <c>[{ field, code, description }]</c>.</summary>
+    /// <summary>The per-field failures of a 400 produced from a <see cref="Result"/>, or of a body value of the wrong type or a body string holding U+0000: <c>[{ field, code, description }]</c>.</summary>
     public const string Errors = "errors";
 
     /// <summary>The same value as the <c>X-Correlation-ID</c> response header.</summary>
@@ -125,7 +125,8 @@ public static class ProblemCatalog
 
     /// <summary>
     /// The <c>errors[]</c> entry of a body that parsed as JSON but holds a value of the wrong type for a
-    /// member: <c>"amount": "abc"</c>, <c>"dueDate": "tomorrow"</c>, a string where a number belongs.
+    /// member: <c>"amount": "abc"</c>, <c>"dueDate": "tomorrow"</c>, a string where a number belongs; or a
+    /// string holding U+0000, described by <see cref="NulCharacterDescription"/>.
     /// </summary>
     public const string InvalidValueCode = "Request.InvalidValue";
 

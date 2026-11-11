@@ -1508,7 +1508,7 @@
             "description": "Human sentence describing the failure; safe to show to the user."
           }
         },
-        "description": "One failure inside a 400 ProblemResponse: a validation failure, or a body value of the wrong type (`Request.InvalidValue`)."
+        "description": "One failure inside a 400 ProblemResponse: a validation failure, or a body value of the wrong type or a body string holding U+0000 (`Request.InvalidValue`)."
       },
       "InvoiceDto": {
         "required": [
@@ -1793,10 +1793,10 @@
             "items": {
               "$ref": "#/components/schemas/FieldError"
             },
-            "description": "The individual failures of a 400: each validation failure, or the body member whose value had the wrong type."
+            "description": "The individual failures of a 400: each validation failure, or the body member whose value had the wrong type or held U+0000."
           }
         },
-        "description": "RFC 9457 problem document (ADR-0024): every 4xx/5xx response. Branch on `code` (`type` is `urn:problem-type:{code}`); `title` and `detail` are for people; `errors[]` is present on a 400 produced from a Result and on a 400 whose body held a value of the wrong type (`Request.InvalidValue`), absent otherwise; `correlationId` equals the X-Correlation-ID response header."
+        "description": "RFC 9457 problem document (ADR-0024): every 4xx/5xx response. Branch on `code` (`type` is `urn:problem-type:{code}`); `title` and `detail` are for people; `errors[]` is present on a 400 produced from a Result and on a 400 whose body held a value of the wrong type or a string holding U+0000 (`Request.InvalidValue`), absent otherwise; `correlationId` equals the X-Correlation-ID response header."
       },
       "RefreshRequest": {
         "required": [

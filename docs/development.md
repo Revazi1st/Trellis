@@ -405,7 +405,7 @@ spans as `enduser.id`. Then let the `code` name the stage that refused the reque
 | `code` | Refused by |
 |---|---|
 | `Http.*` | the host, before any endpoint: an unknown route, a wrong method, the 30 s request timeout |
-| `Request.*` | binding: unreadable JSON, a value of the wrong type (`errors[]` names the field), a body too large or not JSON |
+| `Request.*` | binding: unreadable JSON, a value of the wrong type or a string holding U+0000 (`errors[]` names the field), a body too large or not JSON |
 | `Auth.Unauthenticated`, `Auth.Forbidden`, `RateLimit.Exceeded` | authentication, authorization, rate limiting; the other `Auth.*` codes are the Auth use cases' own |
 | `Idempotency.*` | the idempotency filter; `Idempotency.Duplicate` also comes from the commit, when two first requests raced |
 | `Validation.General` | a validator, or a value object the handler attributed with `AtField`: each `errors[]` entry's own `code` says which (`Validation.NotEmpty` against `EmailAddress.Invalid`) |

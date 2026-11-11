@@ -154,11 +154,13 @@ learns that its own request is a conflict.
   sees it: in flight (409 `Idempotency.InFlight` with `Retry-After`), completed with a replayable body
   (the replay), completed without one (409 `Idempotency.Duplicate`), or completed for another body (422
   `Idempotency.FingerprintMismatch`, the key reused). Nothing found means no same-key request committed,
-  and the 4xx is the request's own answer. A 4xx can be answered from the store because a 4xx is never
-  post-commit: the unit-of-work decorator (`UnitOfWorkDecorators`) commits only on a success `Result` and
-  every endpoint maps success to a 2xx, so the re-read never finds the request's own reservation, and a
-  consumer endpoint that committed and then answered a 4xx would find its own key in flight, answer the
-  409, and leave the key `InFlight`.
+  and the 4xx is the request's own answer. A 4xx can be answered from the store because, on an endpoint
+  that declares `RequireIdempotency`, nothing commits the request's `AppDbContext` except the unit-of-work
+  decorator (`UnitOfWorkDecorators`), which commits only on a success `Result`, and the endpoint maps that
+  success to a 2xx; so the re-read never finds the request's own reservation. A handler that saves
+  through Identity's `UserManager` before it fails breaks that condition: sign-in's lockout count
+  (`AccessFailedAsync`, then a 401) saves the same context, reservation included. Keyed, such an endpoint
+  would find its own key in flight, answer 409 and leave the key `InFlight`.
 - **The primary key's verdict stands.** A loser whose commit did reach the primary key already answers
   `Idempotency.Duplicate`, so the filter does not ask again; the 2026-10-08 race is unchanged.
 - **Only failures pay for it.** One extra `SELECT`, on a keyed request that failed with a 4xx; a success
