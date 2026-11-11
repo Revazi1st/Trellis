@@ -55,6 +55,7 @@
        major updates). Transitive pinning also applies it to Microsoft.EntityFrameworkCore.Design's
        Roslyn dependency, so it cannot sit below that floor either (5.0.0 for EF Core 10.0.x). -->
   <ItemGroup Label="Analyzer project">
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.6.5" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
   </ItemGroup>
