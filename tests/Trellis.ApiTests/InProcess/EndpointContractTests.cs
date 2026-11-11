@@ -297,14 +297,17 @@ public sealed class EndpointContractTests(ApiFactory factory) : IClassFixture<Ap
             + "those; a list missing from the left is one the bounds theory never calls");
     }
 
-    /// <summary>Positive control for the fill: a list with a route value is called with a parsable id in its slot.</summary>
+    /// <summary>
+    /// Positive control for the fill: a list with route values is called with a parsable id in each slot, whatever
+    /// the slots are named, so a filler keyed on one literal name fails here.
+    /// </summary>
     [Fact]
     public void The_route_value_filler_puts_a_fresh_id_in_each_route_value_slot()
     {
-        string filled = WithFreshRouteValues("/api/v1/customers/{id}/orders");
+        string filled = WithFreshRouteValues("/api/v1/customers/{customerId}/orders/{orderId}/lines");
 
         string.Join('/', filled.Split('/').Select(static segment => Guid.TryParse(segment, out _) ? "<guid>" : segment)).ShouldBe(
-            "/api/v1/customers/<guid>/orders",
+            "/api/v1/customers/<guid>/orders/<guid>/lines",
             $"WithFreshRouteValues replaces each {{routeValue}} segment with a fresh Guid and keeps every other segment; it gave {filled}");
     }
 

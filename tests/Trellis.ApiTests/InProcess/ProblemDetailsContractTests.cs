@@ -194,6 +194,7 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
     [Theory]
     [InlineData("invoices", """{"customerName":"Acme\u0000Ltd","customerEmail":"billing@acme.com","currency":"USD"}""", "customerName")]
     [InlineData("invoices", """{"customerName":"Acme","customerEmail":"a\u0000@example.com","currency":"USD"}""", "customerEmail")]
+    [InlineData("invoices", """{"customerName":"Acme","customerEmail":"billing@acme.com","currency":"US\u0000"}""", "currency")]
     [InlineData("invoices/{id}/lines", """{"description":"Design\u0000","amount":10}""", "description")]
     [InlineData(SignIn, """{"email":"admin\u0000@inprocess.test","password":"any-password"}""", "email")]
     public async Task A_NUL_character_in_a_body_string_is_a_400_that_names_the_field(string route, string body, string field)
