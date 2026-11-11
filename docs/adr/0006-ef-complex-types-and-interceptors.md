@@ -3,6 +3,7 @@
 - **Status**: accepted — the in-transaction domain-event dispatch (interceptor 1 below) is superseded by ADR-0018 (transactional outbox); the value-object mapping, soft-delete and auditing stand
 - **Date**: 2026-07-14
 - **Amended**: 2026-10-11 — concurrency at the aggregate boundary by convention, value objects nesting value objects, and converted columns for a single-value value object that needs an index (see *Amendment (2026-10-11)* below)
+- **Amended**: 2026-11-09 — the code, not this record, lists which value objects are converted (see *Amendment (2026-11-09)* below)
 
 ## Context
 
@@ -72,3 +73,26 @@ edits of one aggregate both commit, silently.
   already a complex type renames nothing (the column keeps its name) but is a model change, so it comes
   with a migration.
 
+## Amendment (2026-11-09): the code lists the converted value objects
+
+### Why
+
+The decision named the shipped slice's instances as if they were the rule's: `Money`/`EmailAddress` "map
+this way", and the 2026-10-11 amendment says `EmailAddress` and `Currency` "stay complex types until an
+application needs the index". The first feature that needs the index makes both sentences false: a
+`Customer` with a unique e-mail converts `EmailAddress`, as the amendment prescribes, and the record then
+contradicts the model, because an accepted record only takes amendments and nothing asked for one.
+
+### Decision
+
+- **Value objects map as complex types by default; `AppDbContext.ConfigureConventions` is the list of
+  converted ones**, one `HaveConversion<ScalarValueObjectConverter<…>>` line per type. Where this record
+  names a type (`Money` and `EmailAddress` in the Decision, `EmailAddress` and `Currency` in the
+  2026-10-11 amendment), it describes the reference slice as shipped, not any later model.
+- **Converting a type needs no edit here.** It is a model change with a migration and a line in the doc of
+  the feature that needs the index (`.claude/rules/persistence.md`).
+
+### Consequences
+
+- A feature that converts a value object leaves this record true, and the reviewer reads the decision in
+  `ConfigureConventions` and the feature doc rather than in a list here.

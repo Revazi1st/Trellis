@@ -4,6 +4,7 @@
 - **Amended**: 2026-10-08 — idempotency v2: the reservation rides the command's unit of work and the stored response is replayed (see *Amendment* below)
 - **Amended**: 2026-10-11 — declared unique constraints: every registered constraint becomes its `Result`, any unregistered constraint still throws (see *Amendment (2026-10-11)* below)
 - **Amended**: 2026-10-11 — one `Idempotency-Key` value per request, a key an endpoint may require, and one owner for every `Idempotency.*` code (see *Second amendment (2026-10-11)* below)
+- **Amended**: 2026-11-09 — a concurrent first that fails on the winner's data is answered from the store, not with the feature's own error (see *Amendment (2026-11-09)* below)
 - **Date**: 2026-07-16
 
 ## Context
@@ -131,3 +132,48 @@ ADR-0024's second amendment records the wire contract of both outcomes (status, 
   while a write to an existing invoice still runs without one), `ProblemDetailsContractTests` (the
   `Idempotency.KeyRequired` row), the OpenAPI snapshot (the header is required on the create only),
   `ErrorCodeVocabularyTests` (one meaning per code).
+
+## Amendment (2026-11-09): the store re-check for a loser that fails first
+
+### Why
+
+The 2026-10-08 amendment says two concurrent firsts resolve at the primary key. That holds while both
+reach their commit, which the reference slice guarantees only because `Invoice` has no unique business
+key; the `add-feature` skill tells every feature with one to add a registered unique index. With one,
+the loser can fail on the winner's data before its reservation ever meets `PK_IdempotencyKeys`: the
+feature's own uniqueness lookup finds the row the winner just committed, or the business index fires
+before the primary key inside the same commit. Either way the loser answers the feature's 409 (an
+e-mail already in use) for a create that succeeded, and a client that retried after a lost response
+learns that its own request is a conflict.
+
+### Decision
+
+- **A failed keyed request asks the store again.** When the endpoint returns a 4xx for a request that
+  carried a key, `IdempotencyFilter` repeats the lookup it made before reserving. The winner's
+  reservation committed in the same transaction as the row the loser failed on, so the untracked re-read
+  sees it: in flight (409 `Idempotency.InFlight` with `Retry-After`), completed with a replayable body
+  (the replay), completed without one (409 `Idempotency.Duplicate`), or completed for another body (422
+  `Idempotency.FingerprintMismatch`, the key reused). Nothing found means no same-key request committed,
+  and the 4xx is the request's own answer. A 4xx can be answered from the store because, on an endpoint
+  that declares `RequireIdempotency`, nothing commits the request's `AppDbContext` except the unit-of-work
+  decorator (`UnitOfWorkDecorators`), which commits only on a success `Result`, and the endpoint maps that
+  success to a 2xx; so the re-read never finds the request's own reservation. A handler that saves
+  through Identity's `UserManager` before it fails breaks that condition: sign-in's lockout count
+  (`AccessFailedAsync`, then a 401) saves the same context, reservation included. Keyed, such an endpoint
+  would find its own key in flight, answer 409 and leave the key `InFlight`.
+- **The primary key's verdict stands.** A loser whose commit did reach the primary key already answers
+  `Idempotency.Duplicate`, so the filter does not ask again; the 2026-10-08 race is unchanged.
+- **Only failures pay for it.** One extra `SELECT`, on a keyed request that failed with a 4xx; a success
+  and a request without a key cost nothing new. A 5xx is not re-checked: it is a fault, not a lost race.
+
+### Consequences
+
+- A feature with a unique business key needs nothing of its own for its idempotent create: the loser of
+  a same-key race hears an `Idempotency.*` answer or the replay, never its feature's conflict code.
+- A same-key request that fails for a reason of its own while another one commits hears the store's
+  answer instead of its own 4xx; with the same body that answer is the truth about the key, and with a
+  different body it is the 422 the reused key earns anyway.
+- Fitness: `IdempotencyReplayTests.A_concurrent_first_that_fails_on_the_winners_data_is_answered_from_the_store_not_with_its_own_409`
+  (a derived host whose create handler fails the second of two same-key requests with a conflict once
+  the first committed; the loser answers `Idempotency.InFlight`, `Idempotency.Duplicate` or the replayed
+  201), beside the primary-key race the 2026-10-08 amendment already lists.

@@ -9,7 +9,7 @@ namespace Trellis.Api.Contracts.Common;
 /// <see cref="Status"/> and <see cref="Code"/> on every problem it writes (ADR-0024; the OpenAPI schema
 /// requires exactly those), but a problem can come from an intermediary rather than from this API, and a
 /// server older than the client may predate a member. <see cref="Errors"/> is present on a 400 validation
-/// problem and on a 400 whose body held a value of the wrong type, and absent otherwise;
+/// problem and on a 400 whose body held a value of the wrong type or a string holding U+0000, and absent otherwise;
 /// <see cref="Detail"/> is absent on a bare 404/405.
 /// </para>
 /// </summary>
@@ -21,7 +21,7 @@ namespace Trellis.Api.Contracts.Common;
 /// <param name="Code">Stable machine discriminator, <c>Area.Problem</c> (e.g. <c>Auth.AccountLockedOut</c>).</param>
 /// <param name="CorrelationId">The same value as the <c>X-Correlation-ID</c> response header.</param>
 /// <param name="TraceId">W3C trace id of the request.</param>
-/// <param name="Errors">The individual failures of a 400: each validation failure, or the body member whose value had the wrong type.</param>
+/// <param name="Errors">The individual failures of a 400: each validation failure, or the body member whose value had the wrong type or held U+0000.</param>
 public sealed record ProblemResponse(
     string? Type,
     string? Title,

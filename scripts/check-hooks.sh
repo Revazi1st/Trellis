@@ -140,7 +140,7 @@ expect "the snapshot spelled <project>/./docs/./api/…" guard-edits.sh ask
 write "$root/src/../../elsewhere/docs/api/openapi.v1.json" '{}'
 expect "a path that climbs out of the project" guard-edits.sh silent
 edit "$root/.claude/worktrees/wt/$persistence/Migrations/20250101000000_X.cs" 'a' 'b'
-expect "a migration in a worktree under .claude/worktrees/" guard-edits.sh ask "migrations remove --project $persistence"
+expect "a migration in a worktree under .claude/worktrees/" guard-edits.sh ask "migrations remove --force --project $persistence"
 write "$root/.claude/worktrees/wt/docs/api/openapi.v1.json" '{}'
 expect "the snapshot in a worktree under .claude/worktrees/" guard-edits.sh ask
 if [ "$has_git" = 1 ]; then

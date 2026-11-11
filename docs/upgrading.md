@@ -79,7 +79,11 @@ upgrading (`--use-multitenancy` adds `TenantId` columns to every aggregate table
 and `AspNetUsers`):
 
 - **No deployed database yet**: keep the pre-release convention: regenerate the initial
-  migration (`./scripts/ef.sh migrations remove` + `migrations add InitialCreate`).
+  migration (`env -u TRELLIS_DESIGNTIME_DB ./scripts/ef.sh migrations remove --force` +
+  `migrations add InitialCreate`). `--force` removes the files when no database answers the
+  command's check, and first reverts the migration on a database it reaches that applied it
+  (`InitialCreate`'s `Down` drops every table); with `TRELLIS_DESIGNTIME_DB` unset none answers
+  (`docs/development.md`).
 - **Deployed database**: add a new migration on top
   (`./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence`)
   and never regenerate `InitialCreate`: the database's `__EFMigrationsHistory` already records

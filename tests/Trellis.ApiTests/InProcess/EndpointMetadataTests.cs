@@ -477,8 +477,9 @@ internal sealed class OwnCacheControlStartupFilter : IStartupFilter
 }
 
 /// <summary>
-/// Request-size limits are enforced by Kestrel, which TestServer does not emulate, so this fixture
-/// runs the API on a real Kestrel listener (WebApplicationFactory.UseKestrel, .NET 10).
+/// Request-size limits and the request target's decoding are enforced by Kestrel, which TestServer does
+/// not emulate, so this fixture runs the API on a real Kestrel listener (WebApplicationFactory.UseKestrel,
+/// .NET 10).
 /// </summary>
 public sealed class RequestLimitTests(RequestLimitTests.KestrelApiFactory factory) : IClassFixture<RequestLimitTests.KestrelApiFactory>
 {
@@ -508,6 +509,21 @@ public sealed class RequestLimitTests(RequestLimitTests.KestrelApiFactory factor
             "/api/v1/auth/login", new LoginRequest("nobody@nowhere.dev", "wrong-password"), TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    /// <summary>
+    /// A NUL (U+0000) in the path never reaches routing, so no route value carries one into a handler or to
+    /// PostgreSQL (api.md, Problem details): Kestrel's decoder refuses <c>%00</c> in the request target and
+    /// answers 400 itself. The same path without it is the unknown route's 404.
+    /// </summary>
+    [Fact]
+    public async Task A_NUL_in_the_path_is_refused_before_routing()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient client = factory.CreateClient();
+
+        (await client.GetAsync("/api/v1/no-such-route/ab", ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await client.GetAsync("/api/v1/no-such-route/a%00b", ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     /// <summary>The API host on a real Kestrel listener (dynamic port).</summary>

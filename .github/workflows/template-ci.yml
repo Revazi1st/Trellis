@@ -142,6 +142,21 @@ jobs:
             fail=1
           fi
 
+          # The engine replaces a port symbol's literal (17171 and the others in template.json) wherever it
+          # appears, and a migration id, a timestamp, can contain one: the shipped [Migration] attribute is
+          # then rewritten under a file still named after the real id, and 'migrations remove' in the
+          # generated project finds nothing to remove. MigrationSnapshotTests refuses such an id in the
+          # template repository; this is the same check on what shipped.
+          for designer in src/Infrastructure/*.Persistence/Migrations/*.Designer.cs; do
+            [ -e "$designer" ] || continue
+            id=$(sed -n 's/.*\[Migration("\([^"]*\)")\].*/\1/p' "$designer" | head -n 1)
+            file=$(basename "$designer" .Designer.cs)
+            if [ "$id" != "$file" ]; then
+              echo "::error file=$designer::the [Migration] attribute says '$id' but the file is '$file': a literal in the id was rewritten by the engine (a port symbol's replaces value in template.json); regenerate the migration at another minute."
+              fail=1
+            fi
+          done
+
           junk=$(find . \( "${prune[@]}" \) -prune -o \( -name .DS_Store -o -name 'appsettings.*.local.json' -o -name '*.pfx' \) -print)
           if [ -n "$junk" ]; then
             echo "::error::Files that must never ship are in the generated output:"
@@ -225,9 +240,11 @@ jobs:
             echo "::error::The generated README.md is not the consumer stub (it does not name $marker)."
             fail=1
           fi
+          # A test sits under the generated name (tests/Acme.Shop.ArchitectureTests/), hence the unquoted
+          # glob: a shipped copy expands it, and with none it stays literal, so -e is false.
           for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md .claude/rules/site.md eng/readme \
                    scripts/check-template-toggles.sh scripts/test-template.sh site .github/workflows/site.yml \
-                   docs/adr/0031-documentation-site.md; do
+                   docs/adr/0031-documentation-site.md tests/*.ArchitectureTests/MigrationSnapshotTests.cs; do
             if [ -e "$f" ]; then
               echo "::error::$f is the template repository's own material and must not ship."
               fail=1

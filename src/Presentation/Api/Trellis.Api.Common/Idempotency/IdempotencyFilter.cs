@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.DependencyInjection;
 using Trellis.Api.Common.Http;
 using Trellis.Api.Common.Results;
@@ -18,8 +19,12 @@ namespace Trellis.Api.Common.Idempotency;
 /// <item>No reservation yet: one is tracked in the request's unit of work and the handler runs. The
 /// command's commit persists the reservation with the aggregate and the outbox — a command that fails
 /// leaves nothing behind, and two concurrent firsts resolve at the primary key (the loser's commit is
-/// <see cref="IdempotencyErrors.Duplicate"/>, 409). Once the response has gone out its status, content
-/// type, body (up to the endpoint's replay cap) and <c>Location</c> are stored against the reservation.</item>
+/// <see cref="IdempotencyErrors.Duplicate"/>, 409) or, when the loser fails on the winner's data first (a
+/// feature's uniqueness check finds the row the winner committed, or its unique index fires before the
+/// primary key), at the store re-check: a 4xx from a keyed request asks the store again and answers from
+/// the winner's reservation, never with the feature's own 409. Once the response has gone out its status,
+/// content type, body (up to the endpoint's replay cap) and <c>Location</c> are stored against the
+/// reservation.</item>
 /// <item>Completed, same request (method, path and body fingerprint): the stored response is replayed
 /// byte for byte with <c>Idempotency-Replayed: true</c>. Over the cap, or ended by a fault after the
 /// commit, there is no body to replay and the retry is a 409 <see cref="IdempotencyErrors.Duplicate"/>
@@ -92,23 +97,57 @@ public sealed class IdempotencyFilter : IEndpointFilter
         }
 
         store.Reserve(key, fingerprint);
-        object? result;
+        object? result = await RunReservedAsync(context, next, store, key);
+
+        // A same-key request that committed while this one ran makes this failure the loser's, not the
+        // caller's: the winner's reservation committed with the row this one failed on, so the untracked
+        // re-read finds it in flight or completed. One extra SELECT, on failed keyed requests only. The
+        // primary key's own verdict (Duplicate, from the commit) is already the answer.
+        if (MayHaveLostTheRace(result) && await AnswerFromStoreAsync(http, store, key, fingerprint) is { } winner)
+        {
+            return winner;
+        }
+
+        int maxReplayBodyBytes = metadata?.MaxReplayBodyBytes ?? DefaultMaxReplayBodyBytes;
+        return new CompletingResult(result, key, store, maxReplayBodyBytes);
+    }
+
+    /// <summary>The endpoint, with the reservation tracked in its unit of work.</summary>
+    private static async ValueTask<object?> RunReservedAsync(
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next, IIdempotencyStore store, string key)
+    {
         try
         {
-            result = await next(context);
+            return await next(context);
         }
         catch (Exception)
         {
             // Before the commit the reservation was never written and the store drops it; after the
             // commit (post-commit work that threw despite the rule above) the command applied, so the
             // reservation is completed without a response and the retry is a 409, not a re-run.
-            await CompletingResult.RecordAsync(http, store, key, StoredResponse.Unavailable(StatusCodes.Status500InternalServerError));
+            await CompletingResult.RecordAsync(context.HttpContext, store, key, StoredResponse.Unavailable(StatusCodes.Status500InternalServerError));
             throw;
         }
-
-        int maxReplayBodyBytes = metadata?.MaxReplayBodyBytes ?? DefaultMaxReplayBodyBytes;
-        return new CompletingResult(result, key, store, maxReplayBodyBytes);
     }
+
+    /// <summary>
+    /// A 4xx the command's own pipeline produced, other than the primary key's <see cref="IdempotencyErrors.Duplicate"/>.
+    /// It assumes that on an endpoint declaring <c>RequireIdempotency</c> nothing commits the request's
+    /// <c>AppDbContext</c> but the unit-of-work decorator, which commits only on a success <c>Result</c>, and that the
+    /// endpoint maps that success to a 2xx; so the re-read never finds this request's own reservation. A handler
+    /// that saves through Identity's <c>UserManager</c> before it fails (sign-in's lockout count) breaks that: the
+    /// save writes the tracked reservation too, so, keyed, it would find its own key in flight, answer 409 and
+    /// leave the key <c>InFlight</c>.
+    /// </summary>
+    private static bool MayHaveLostTheRace(object? result) => result switch
+    {
+        INestedHttpResult nested => MayHaveLostTheRace(nested.Result),
+        ProblemHttpResult { StatusCode: >= StatusCodes.Status400BadRequest and < StatusCodes.Status500InternalServerError } problem
+            => !(problem.ProblemDetails.Extensions.TryGetValue(ProblemExtensions.Code, out object? code)
+                 && string.Equals(code as string, IdempotencyErrors.Duplicate.Code, StringComparison.Ordinal)),
+        IStatusCodeHttpResult { StatusCode: >= StatusCodes.Status400BadRequest and < StatusCodes.Status500InternalServerError } => true,
+        _ => false,
+    };
 
     /// <summary>
     /// Hashing the (user, method, route, key) composite gives the stored key a fixed length and keeps the

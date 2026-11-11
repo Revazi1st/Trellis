@@ -89,6 +89,83 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   executable bit, so the `chmod +x scripts/*.sh .claude/hooks/*.sh` that the template's instructions and
   `ci.yml` give left a mode change in a project generated a minute before. It ships executable, the
   chmod post-action lists it, and `scripts/check-hooks.sh` checks its mode like the hooks'.
+- **A NUL character in a request is a 400, not a 500.** PostgreSQL's `text` stores no U+0000, so a body
+  string holding one (`"Acme\u0000Ltd"`) reached the first query or save that carried it and came back
+  500 `Server.Failure`: creating an invoice or adding a line, and signing in. `AddApiCommon` now
+  registers `NulFreeStringJsonConverter` beside the strongly-typed-id converter, which refuses such a
+  string while the body binds, on every endpoint, yours included, as 400 `Request.Malformed` whose
+  `errors[]` names the member (`Request.InvalidValue`); responses are written as before, and so are the
+  OpenAPI document's string schemas (`StringSchemaTransformer` gives `string` back the type the generator
+  leaves out for a type with a converter of its own), while its `ProblemResponse` and `FieldError`
+  descriptions now name a string holding U+0000 beside a value of the wrong type. `EmailAddress` also
+  refuses a control character (`EmailAddress.Invalid`). A body string of a feature of yours needs no NUL
+  check of its own, and a route value cannot carry one (Kestrel refuses `%00` in a path before routing,
+  which `RequestLimitTests` pins); a string bound from the query reaches the handler as sent, so a
+  `?search=` filter of yours refuses U+0000 in its query's validator, and
+  `EndpointContractTests.Every_query_value_of_a_GET_refuses_a_NUL` fails on any GET that answers a NUL in
+  its query with anything but a 400 (`.claude/rules/api.md`).
+- **A create that loses a same-key race on a unique business key hears the idempotency answer.** Two
+  concurrent requests under one `Idempotency-Key` were decided by the key's primary key only when both
+  reached their commit; a feature of yours with a unique business key (an e-mail, a code) let the second
+  fail on the first one's row before that, so it answered your feature's 409 (an e-mail already in use)
+  for a create that succeeded. `IdempotencyFilter` now asks the store again when a keyed request fails
+  with a 4xx and answers from the first request's reservation: 409 `Idempotency.InFlight`, the replayed
+  201 or 409 `Idempotency.Duplicate` (ADR-0018, amendment of 2026-11-09). It costs one lookup, on failed
+  keyed requests only.
+- **A list of yours reuses the paged envelope instead of copying it.** `ToPagedResponse(map)` lived in
+  the Invoices slice's `ContractMappings`, so a second list wrote its own copy, passing the envelope's four
+  counts and two flags by position (a swapped `TotalCount` and `TotalPages` compiles), and removing the
+  Invoices slice took the original with it. It is now `PagedResponseMappings` in Api.Common
+  (`using Trellis.Api.Common.Http;`), written with named arguments; a slice maps only its item.
+  `ConventionTests` fails on a `new PagedResponse<…>(…)` or a method declared to return one anywhere
+  else under `src/`. If you copied the old mapping into a feature, delete the copy and call the shared one.
+- **Your first migration shows your model change, not the template's EF version.** The shipped
+  `InitialCreate` and model snapshot were written by EF Core 10.0.12 while the project pins 10.0.13, so
+  the first `migrations add` in a new project rewrote the version line too. `InitialCreate` is
+  regenerated on the pinned EF Core (its id is now `20261111173434_InitialCreate`, its `Up` and `Down`
+  unchanged); upgrading a project whose database already applied the old one, keep yours
+  (`docs/upgrading.md`, step 5). A migration id that contains one of the template's port literals (`17171`
+  and the AppHost's other launch-profile ports, which the engine replaces wherever they appear) shipped with
+  its `[Migration]` attribute rewritten under a file still named after the real id; a maintainer-only fact
+  now refuses such an id and Template CI's content gate compares every generated migration's attribute with
+  its file name. The `add-migration` skill now says why a project whose name sorts before
+  `Microsoft` sees the snapshot's entity blocks move on its first migration (EF orders them by CLR name),
+  and that moved blocks are not model changes. `migrations remove` is written with `--force` in
+  `docs/development.md`, `docs/upgrading.md`, the `add-migration` and `upgrade-template` skills and the
+  edit hook's hint: without it the command stops when no database answers its check, as in the SDK
+  container. With it, a database the design-time connection reaches that applied the migration has it
+  reverted first (`InitialCreate`'s `Down` drops every table), so the regenerate steps run it as
+  `env -u TRELLIS_DESIGNTIME_DB ./scripts/ef.sh migrations remove --force …`, where none answers.
+- **`docs/features/invoices.md` names the codes a client actually gets.** It listed
+  `Invoice.EmptyCustomerName`, `Invoice.CustomerNameTooLong` and the line-description pair as the API's
+  400s, but the command's validator checks the same Domain constants first, so through the API a blank or
+  over-long name or description is `Validation.General` naming the field; the domain codes guard the
+  callers without a validator (the seeder). The doc says so, `ProblemDetailsContractTests` pins the
+  over-long name on the wire, and the `add-feature` skill asks a feature doc to list such a rule as
+  `Validation.General` with the domain code in brackets.
+- **Two ADRs stop listing what your first feature changes.** ADR-0006 said `EmailAddress` and `Currency`
+  stay complex types, and ADR-0007 that Member holds `invoices:read`; a feature that converts a value
+  object for its unique index, or grants Member its own read permission, made either false, and an
+  accepted record only takes amendments. Each gains an amendment of 2026-11-09 pointing at the code:
+  `AppDbContext.ConfigureConventions` lists the converted value objects, `Roles.Permissions` the role map.
+  `.claude/rules/persistence.md` says converting a type is a migration and a line in the feature doc, with
+  no ADR edit.
+- **The test helpers a second feature needs are shared.** `ShouldAnswerAsync`, the status check that
+  names the request, the problem `code` and the body when an arrange step is refused, was private to
+  `InvoiceHttpDriver`; it is now `HttpResponseAssertions.ShouldAnswerAsync` in ApiTests, for every
+  `{Feature}HttpDriver`. `StronglyTypedIdParsingTests` moved out of `Domain.UnitTests/Invoices/` and became
+  one theory over every `IStronglyTypedId<>` the Domain declares (a version-7 `New()`, the parse round
+  trip, text that is not a `Guid` turned down), so your IDs are covered with no test of their own and the
+  check survives `remove-feature`.
+- **Every list's paging bounds are checked at the wire, yours included.** A query's validator repeats
+  `PagingLimits`' bounds as literals (Application cannot see the contracts), so each list re-tested them
+  by hand. `EndpointContractTests.Every_paged_list_holds_its_documented_bounds_at_the_wire` reads every
+  GET the served OpenAPI document gives a `page` and a `pageSize` and sends each bound and one past it,
+  expecting a 200 inside (a 404 too for a nested list, whose route gets a fresh id) and a 400 naming the
+  field outside: a validator whose literal drifts fails it, and a new list needs no bounds test of its own
+  (`.claude/rules/api.md`, List endpoints). The GETs it reads are held to the GETs whose 200 is a
+  `PagedResponse<T>`, so a list with a filter of its own beside the paging pair (`?status=`, `?search=`)
+  is never left out unseen, and a list that answers the envelope without both parameters fails.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

@@ -44,7 +44,8 @@
          are maintainer material: generated projects get the stubs in
          .template.config/consumer/ instead. So is the documentation site (site/, its node_modules
          and build output included, the site.yml workflow that deploys it, and its decision
-         record, ADR-0031, whose docs/INDEX.md line is a TemplateSource block). template.json
+         record, ADR-0031, whose docs/INDEX.md line is a TemplateSource block), and the fact that holds
+         the shipped migrations to the pinned EF Core (MigrationSnapshotTests). template.json
          itself is listed because the package carries the stamped copy (StampTemplateVersion
          below). -->
     <TemplateContentExclude>
@@ -71,6 +72,7 @@
       ..\..\docs\releasing.md;
       ..\..\.claude\rules\site.md;
       ..\..\docs\adr\0031-documentation-site.md;
+      ..\..\tests\Trellis.ArchitectureTests\MigrationSnapshotTests.cs;
       ..\..\README.md;
       ..\..\CHANGELOG.md;
       ..\..\CONTRIBUTING.md;

@@ -12,8 +12,12 @@ using Trellis.Api.Common.Http;
 using Trellis.Api.Common.Idempotency;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
+using Trellis.Application.Abstractions;
+using Trellis.Application.Features.Invoices.CreateInvoice;
+using Trellis.Domain.Invoices;
 using Trellis.Persistence;
 using Trellis.SharedKernel.Domain;
+using Trellis.SharedKernel.Messaging;
 using Trellis.SharedKernel.Results;
 using Xunit;
 
@@ -120,6 +124,58 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         (await retry.Content.ReadAsByteArrayAsync(ct)).ShouldBe(await created.Content.ReadAsByteArrayAsync(ct));
     }
 
+    /// <summary>
+    /// The primary key decides a race only when both requests reach their commit. A feature with a unique
+    /// business key (an e-mail, a code) lets the loser fail on the winner's data first: its uniqueness check
+    /// finds the row the winner just committed, or the business index fires before the primary key. The
+    /// loser must not answer the feature's 409 for a create that succeeded, so the filter asks the store
+    /// again and answers from the winner's reservation. The derived host's create handler stands in for that
+    /// check: the first request waits until the second is past the lookup, then runs the real pipeline and
+    /// commits; the second waits for that commit and answers <c>Test.Taken</c>.
+    /// </summary>
+    [Fact]
+    public async Task A_concurrent_first_that_fails_on_the_winners_data_is_answered_from_the_store_not_with_its_own_409()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        var race = new UniquenessRace();
+        var racing = factory.WithTestServices(services =>
+            Wrap<ICommandHandler<CreateInvoiceCommand, InvoiceId>>(services, inner => new RacingCreateHandler(inner, race)));
+        HttpClient client = await factory.CreateAdminClientOnAsync(racing, ct);
+        string key = Guid.NewGuid().ToString();
+        var request = new CreateInvoiceRequest("Unique Key Ltd", "unique@replay.io", "USD");
+
+        HttpResponseMessage[] responses = await Task.WhenAll(
+            PostCreateAsync(client, key, request, ct),
+            PostCreateAsync(client, key, request, ct));
+
+        HttpResponseMessage created = responses.Single(static r =>
+            r.StatusCode == HttpStatusCode.Created && !r.Headers.Contains(IdempotencyFilter.ReplayedHeaderName));
+        byte[] createdBody = await created.Content.ReadAsByteArrayAsync(ct);
+        HttpResponseMessage loser = responses.Single(r => !ReferenceEquals(r, created));
+        string loserBody = await loser.Content.ReadAsStringAsync(ct);
+        loserBody.ShouldNotContain(RacingCreateHandler.Taken.Code);
+        if (loser.StatusCode == HttpStatusCode.Created)
+        {
+            // The winner had stored its response by the time the loser asked again: a replay.
+            loser.Headers.GetValues(IdempotencyFilter.ReplayedHeaderName).ShouldHaveSingleItem().ShouldBe("true");
+            (await loser.Content.ReadAsByteArrayAsync(ct)).ShouldBe(createdBody);
+        }
+        else
+        {
+            // Still in flight, or completed without a replayable body: a 409 the client knows how to read.
+            loser.StatusCode.ShouldBe(HttpStatusCode.Conflict, loserBody);
+            loser.ShouldBeProblemJson();
+            JsonSerializer.Deserialize<ProblemResponse>(loserBody, JsonSerializerOptions.Web).ShouldNotBeNull(loserBody)
+                .Code.ShouldBeOneOf(IdempotencyErrors.InFlight.Code, IdempotencyErrors.Duplicate.Code);
+        }
+
+        // One invoice: the key's retry replays the winner.
+        HttpResponseMessage retry = await PostCreateAsync(client, key, request, ct);
+        retry.StatusCode.ShouldBe(HttpStatusCode.Created);
+        retry.Headers.GetValues(IdempotencyFilter.ReplayedHeaderName).ShouldHaveSingleItem().ShouldBe("true");
+        (await retry.Content.ReadAsByteArrayAsync(ct)).ShouldBe(createdBody);
+    }
+
     [Fact]
     public async Task A_retry_while_the_first_request_is_still_running_is_a_409_in_flight_until_it_completes()
     {
@@ -130,7 +186,7 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         // The gate opens after the command committed and before the response goes out: the exact window
         // in which a second request finds the reservation but no response.
         var gate = new PostCommitGate();
-        var gated = factory.WithTestServices(services => WrapCache(services, inner => new GatedHybridCache(inner, gate)));
+        var gated = factory.WithTestServices(services => Wrap<HybridCache>(services, inner => new GatedHybridCache(inner, gate)));
         HttpClient client = await factory.CreateAdminClientOnAsync(gated, ct);
         string key = Guid.NewGuid().ToString();
 
@@ -229,14 +285,18 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         return await client.SendAsync(message, ct);
     }
 
-    /// <summary>Wraps the app's own <see cref="HybridCache"/> registration, whatever it is.</summary>
-    private static void WrapCache(IServiceCollection services, Func<HybridCache, HybridCache> wrap)
+    /// <summary>Wraps the app's own registration of <typeparamref name="TService"/>, whatever it is, keeping its lifetime.</summary>
+    private static void Wrap<TService>(IServiceCollection services, Func<TService, TService> wrap)
+        where TService : class
     {
-        ServiceDescriptor original = services.Last(static d => d.ServiceType == typeof(HybridCache));
+        ServiceDescriptor original = services.Last(static d => d.ServiceType == typeof(TService) && !d.IsKeyedService);
         services.Remove(original);
-        services.AddSingleton<HybridCache>(provider => wrap((HybridCache)(original.ImplementationInstance
-            ?? original.ImplementationFactory?.Invoke(provider)
-            ?? ActivatorUtilities.CreateInstance(provider, original.ImplementationType!))));
+        services.Add(new ServiceDescriptor(
+            typeof(TService),
+            provider => wrap((TService)(original.ImplementationInstance
+                ?? original.ImplementationFactory?.Invoke(provider)
+                ?? ActivatorUtilities.CreateInstance(provider, original.ImplementationType!))),
+            original.Lifetime));
     }
 
     /// <summary>Releases every arrival once <paramref name="participants"/> have arrived: the two racing commits start together.</summary>
@@ -263,6 +323,44 @@ public sealed class IdempotencyReplayTests(ApiFactory factory) : IClassFixture<A
         {
             await barrier.ArriveAsync().WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
             return await inner.CommitAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>Which of two racing creates arrived first, and the two moments the other one waits for.</summary>
+    private sealed class UniquenessRace
+    {
+        private int _arrived;
+
+        public TaskCompletionSource SecondArrived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource FirstCommitted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool ArriveFirst() => Interlocked.Increment(ref _arrived) == 1;
+    }
+
+    /// <summary>
+    /// Outermost around the app's create pipeline. The first arrival commits through it once the second has
+    /// passed the filter's lookup; the second never reaches it and fails the way a feature's uniqueness check
+    /// fails once the winner's row exists.
+    /// </summary>
+    private sealed class RacingCreateHandler(ICommandHandler<CreateInvoiceCommand, InvoiceId> inner, UniquenessRace race)
+        : ICommandHandler<CreateInvoiceCommand, InvoiceId>
+    {
+        public static readonly Error Taken = Error.Conflict("Test.Taken", "The unique key is taken by the request that committed first.");
+
+        public async Task<Result<InvoiceId>> Handle(CreateInvoiceCommand command, CancellationToken cancellationToken)
+        {
+            if (race.ArriveFirst())
+            {
+                await race.SecondArrived.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+                Result<InvoiceId> created = await inner.Handle(command, cancellationToken);
+                race.FirstCommitted.TrySetResult();
+                return created;
+            }
+
+            race.SecondArrived.TrySetResult();
+            await race.FirstCommitted.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            return Taken;
         }
     }
 

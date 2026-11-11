@@ -28,7 +28,9 @@ after each layer.
       transition or a concurrent write, 412 for a stale `If-Match`, 422 only for
       `Idempotency.FingerprintMismatch` (never for validation); the chooser is in
       `.claude/rules/domain.md`. Permissions, idempotency, paging bounds and the code shape are
-      enforced by tests below, so the doc does not restate them.
+      enforced by tests below, so the doc does not restate them. A domain rule the validator also
+      checks (a required value, a length) appears in the errors table as `Validation.General`, with
+      the domain code in brackets as the guard behind it: through the API the validator answers first.
 
 ## Domain (`src/Core/Trellis.Domain/{Feature}/`) — new aggregate only
 
@@ -118,8 +120,10 @@ after each layer.
       there; it carries the tenant under multi-tenancy); every write that changes the cached state
       evicts it with `CancellationToken.None` [`InvoiceReadCacheTests` is the model].
 - [ ] Lists bind `page`/`pageSize` inline with `[Range(PagingLimits...)]` and return
-      `PagedResponse<T>` [`OpenApiDocumentTests`]; a GET that honours `If-None-Match` declares
-      `.SupportsConditionalGet()` and uses `HttpRequest.IsNotModified(etag)`.
+      `PagedResponse<T>` [`OpenApiDocumentTests`]: map with the shared `.ToPagedResponse(map)` from
+      Api.Common, never a per-feature copy or a `new PagedResponse<T>(...)`
+      [`ConventionTests.The_paged_envelope_is_built_only_by_the_shared_mapping`]. A GET that honours
+      `If-None-Match` declares `.SupportsConditionalGet()` and uses `HttpRequest.IsNotModified(etag)`.
 - [ ] Multi-tenancy: the tenant comes from the signed `tenant` claim only (ADR-0022). Never put a
       tenant on a contract, a route, a query string or a header.
 - [ ] **Regenerate the OpenAPI document**: `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`
@@ -165,8 +169,11 @@ after each layer.
       `<Compile Include="..\TestSupport\{Feature}\{Feature}Factory.cs" Link="TestSupport\{Feature}\{Feature}Factory.cs" />`
       in each csproj; an IntegrationTests `{Feature}Driver` (`IServiceProvider` extensions, one per use
       case, each running the real handler and returning the id) and an ApiTests `{Feature}HttpDriver`
-      (`HttpClient` extensions, the create over `PostWithIdempotencyKeyAsync`). Arrange-only, no generic
-      `SendAsync`, never in a toggle-conditional file.
+      (`HttpClient` extensions, the create over `PostWithIdempotencyKeyAsync`, each step checked with
+      the shared `HttpResponseAssertions.ShouldAnswerAsync(expected)`, which names the status, the problem
+      `code` and the body; no driver writes its own). Arrange-only, no generic `SendAsync`, never in a
+      toggle-conditional file. A new strongly-typed ID needs no parsing test: the Domain.UnitTests
+      `StronglyTypedIdParsingTests` theory finds every `IStronglyTypedId<>` in the Domain.
 - [ ] Handler tests in `Application.UnitTests/Features/{Feature}/{UseCase}/{UseCase}CommandHandlerTests.cs`
       (namespaces follow the folders), and the validators' bounds in
       `Features/{Feature}/{Feature}CommandValidatorTests.cs`: the maximum accepted and one more rejected
@@ -200,7 +207,7 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
 - **A business key that must be unique** (a code, an e-mail): a unique index whose constraint name is
   pinned and registered in `UniqueConstraintErrors`, raced in a test; one no two requests can race to
   is a row in `UniqueConstraintTests.FaultOnPurpose` with its reason instead
-  (`.claude/rules/persistence.md`).
+  (`.claude/rules/persistence.md`); the idempotency filter answers a same-key loser from the store.
 - **Work on a timer**: `docs/architecture.md`, *Scheduled use cases*.
 - **Telling another system**: an integration event from a translate-and-send handler,
   `docs/architecture.md`; being told by one (a webhook): the `add-integration` skill, step 7.

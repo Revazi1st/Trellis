@@ -224,9 +224,17 @@ fresh tenant. See ADR-0019 and ADR-0022.
 Because this adds a column, **regenerate the initial migration** in the generated project:
 
 ```bash
-./scripts/ef.sh migrations remove --project src/Infrastructure/Trellis.Persistence
+env -u TRELLIS_DESIGNTIME_DB ./scripts/ef.sh migrations remove --force --project src/Infrastructure/Trellis.Persistence
 ./scripts/ef.sh migrations add InitialCreate --project src/Infrastructure/Trellis.Persistence
 ```
+
+`--force` because `migrations remove` otherwise asks a database whether the migration was applied and
+stops when none answers. With it, the command reverts the migration on the database the design-time
+connection reaches, when that database applied it (`InitialCreate`'s `Down` drops every table), then
+removes the files; when no database answers, it warns that it could not check and removes the files.
+`env -u TRELLIS_DESIGNTIME_DB` makes sure none answers: `scripts/ef.sh` forwards that variable into the
+SDK container, where the design-time factory's `localhost` default is the container itself. Use it only
+on a migration no database you keep has applied.
 
 ## UI tests (optional)
 
@@ -397,7 +405,7 @@ spans as `enduser.id`. Then let the `code` name the stage that refused the reque
 | `code` | Refused by |
 |---|---|
 | `Http.*` | the host, before any endpoint: an unknown route, a wrong method, the 30 s request timeout |
-| `Request.*` | binding: unreadable JSON, a value of the wrong type (`errors[]` names the field), a body too large or not JSON |
+| `Request.*` | binding: unreadable JSON, a value of the wrong type or a string holding U+0000 (`errors[]` names the field), a body too large or not JSON |
 | `Auth.Unauthenticated`, `Auth.Forbidden`, `RateLimit.Exceeded` | authentication, authorization, rate limiting; the other `Auth.*` codes are the Auth use cases' own |
 | `Idempotency.*` | the idempotency filter; `Idempotency.Duplicate` also comes from the commit, when two first requests raced |
 | `Validation.General` | a validator, or a value object the handler attributed with `AtField`: each `errors[]` entry's own `code` says which (`Validation.NotEmpty` against `EmailAddress.Invalid`) |

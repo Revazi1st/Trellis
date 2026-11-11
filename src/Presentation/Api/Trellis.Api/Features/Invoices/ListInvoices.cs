@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Trellis.Api.Common.Authentication;
 using Trellis.Api.Common.Endpoints;
+using Trellis.Api.Common.Http;
 using Trellis.Api.Common.Results;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
