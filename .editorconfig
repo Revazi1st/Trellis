@@ -21,7 +21,17 @@ end_of_line = lf
 [*.cs]
 # ── Usings & namespaces ─────────────────────────────────────────────────────
 csharp_style_namespace_declarations = file_scoped:error
+# Order of usings: dotnet format checks it (IMPORTS) only while dotnet_sort_system_directives_first or
+# dotnet_separate_import_directive_groups is present, with any value, and it sorts by the full name. The
+# shipped files were sorted under the template's name, which this solution's own namespaces replace
+# (Acme.* sorts before Microsoft, Zed.* after Xunit), so a generated solution starts with neither key;
+# the IDEs still sort System-first by default, and nothing checks the result. To have CI enforce the
+# order: add dotnet_sort_system_directives_first = true here (never '= false': that reorders the System
+# usings too), restore, run 'dotnet format Trellis.slnx' (or ./scripts/dotnet.sh format Trellis.slnx)
+# once, and commit the result.
+#if (TemplateSource)
 dotnet_sort_system_directives_first = true
+#endif
 csharp_using_directive_placement = outside_namespace:error
 dotnet_diagnostic.IDE0005.severity = warning        # remove unnecessary usings
 

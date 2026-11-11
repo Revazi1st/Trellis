@@ -11,9 +11,11 @@
 # It runs scripts/check-template-toggles.sh, packs the template once (the working tree as it is,
 # untracked files included), installs the package into a private hive (--debug:custom-hive), so your
 # own template list is never touched, and then for each leg: instantiates it with the leg's flags,
-# regenerates the initial migration where the leg says so, builds Release and, on the legs Template
-# CI tests, runs dotnet test. A table of results follows, and the exit code is 1 when anything
-# failed. The working folder (under $TMPDIR) keeps every log and generated solution after a failure.
+# on the default leg runs scripts/ef.sh's first-migration command on the unbuilt tree, regenerates
+# the initial migration where the leg says so, builds Release, runs the generated ci.yml's format
+# check (dotnet format --verify-no-changes) and, on the legs Template CI tests, runs dotnet test. A
+# table of results follows, and the exit code is 1 when anything failed. The working folder (under
+# $TMPDIR) keeps every log and generated solution after a failure.
 #
 # Because it packs, the legs get the package's content, as an install from nuget.org does and as the
 # last step of Template CI's pack job checks; the instantiate job installs the source folder instead.
@@ -127,7 +129,7 @@ if [ "$list_only" -eq 1 ]; then
   printf '%-26s %-6s %-10s %s\n' LEG TESTED MIGRATION FLAGS
   while IFS='|' read -r name _ test regen args; do
     printf '%-26s %-6s %-10s %s\n' "$name" "$([ "$test" = 1 ] && echo yes || echo no)" \
-      "$([ "$regen" = 1 ] && echo regen || echo -)" "${args:-(defaults)}"
+      "$([ "$regen" = 1 ] && echo regen || { [ "$name" = default ] && echo probe; } || echo -)" "${args:-(defaults)}"
   done <<< "$records"
   exit 0
 fi
@@ -194,6 +196,14 @@ nupkg=$(find "$work/nupkg" -name '*.nupkg' | head -n 1)
 logged "$work/logs/pack.log" dotnet new install "$nupkg" --debug:custom-hive "$work/hive" \
   || { echo "error: the package did not install; working folder: $work" >&2; exit 1; }
 
+# Mirrors template-ci.yml's "First migration command on an unbuilt tree" step (the default leg
+# only), which is the command inside scripts/ef.sh's sh -c; runs in the generated folder.
+first_migration_probe() {
+  rm -rf artifacts &&
+    dotnet tool restore &&
+    dotnet restore ./*.slnx --verbosity quiet &&
+    dotnet dotnet-ef migrations has-pending-model-changes --project src/Infrastructure/*.Persistence
+}
 # Mirrors template-ci.yml's "Regenerate the initial migration" step; runs in the generated folder.
 regenerate_migration() {
   dotnet tool restore &&
@@ -201,6 +211,8 @@ regenerate_migration() {
     dotnet dotnet-ef migrations add InitialCreate --project src/Infrastructure/*.Persistence
 }
 build_solution() { dotnet build ./*.slnx -c Release; }
+# Mirrors template-ci.yml's "Format check (generated)" step, the generated ci.yml's Format check.
+format_solution() { dotnet format ./*.slnx --no-restore --verify-no-changes --severity warn; }
 test_solution() {
   dotnet test ./*.slnx -c Release --no-build || return
   [ "$e2e" = 1 ] || return 0
@@ -216,14 +228,16 @@ in_dir() {  # $1 = folder, rest = command (a function above, or a program)
 }
 
 # Results, one entry per leg (indexed arrays: macOS still ships bash 3.2).
-r_name=() r_inst=() r_mig=() r_build=() r_test=() r_time=()
+r_name=() r_inst=() r_mig=() r_build=() r_fmt=() r_test=() r_time=()
 failed=0
 
 run_leg() {  # name out test regen args
   local name="$1" out="$2" test="$3" regen="$4" args="$5"
   local dir="$work/$name" log="$work/logs/$name.log" started=$SECONDS
-  local inst=- mig=- build=- tst=- flags=()
-  [ "$regen" = 1 ] || mig=" "
+  local inst=- mig=- build=- fmt=- tst=- flags=()
+  # MIGRATION is the regeneration on the legs that regenerate, and the first-migration probe on the
+  # default leg, as in Template CI.
+  [ "$regen" = 1 ] || [ "$name" = default ] || mig=" "
   [ "$test" = 1 ] || tst=" "
   read -r -a flags <<< "$args" || true
 
@@ -237,7 +251,13 @@ run_leg() {  # name out test regen args
     inst=FAIL
   fi
 
-  if [ "$inst" = ok ] && [ "$regen" = 1 ]; then
+  if [ "$inst" = ok ] && [ "$name" = default ]; then
+    echo "==> $name: the first migration command on an unbuilt tree (scripts/ef.sh's)"
+    if logged "$log" in_dir "$dir" first_migration_probe; then mig=ok; else mig=FAIL; fi
+  fi
+
+  # A failed probe stays FAIL: the regeneration would only overwrite the result.
+  if [ "$inst" = ok ] && [ "$regen" = 1 ] && [ "$mig" != FAIL ]; then
     echo "==> $name: regenerate the initial migration"
     if logged "$log" in_dir "$dir" regenerate_migration; then mig=ok; else mig=FAIL; fi
   fi
@@ -247,7 +267,12 @@ run_leg() {  # name out test regen args
     if logged "$log" in_dir "$dir" build_solution; then build=ok; else build=FAIL; fi
   fi
 
-  if [ "$build" = ok ] && [ "$test" = 1 ]; then
+  if [ "$build" = ok ]; then
+    echo "==> $name: dotnet format --verify-no-changes"
+    if logged "$log" in_dir "$dir" format_solution; then fmt=ok; else fmt=FAIL; fi
+  fi
+
+  if [ "$fmt" = ok ] && [ "$test" = 1 ]; then
     echo "==> $name: dotnet test (RUN_ASPIRE_E2E=$e2e)"
     if logged "$log" in_dir "$dir" test_solution; then tst=ok; else tst=FAIL; fi
   fi
@@ -257,9 +282,10 @@ run_leg() {  # name out test regen args
   r_inst+=("$inst")
   r_mig+=("$mig")
   r_build+=("$build")
+  r_fmt+=("$fmt")
   r_test+=("$tst")
   r_time+=("$((elapsed / 60))m$(printf '%02d' $((elapsed % 60)))s")
-  case "$inst $mig $build $tst" in
+  case "$inst $mig $build $fmt $tst" in
     *FAIL*) failed=1 ;;
   esac
 }
@@ -269,10 +295,10 @@ while IFS='|' read -r name out test regen args; do
 done <<< "$legs"
 
 echo
-printf '%-26s %-12s %-10s %-6s %-6s %s\n' LEG INSTANTIATE MIGRATION BUILD TEST TIME
+printf '%-26s %-12s %-10s %-6s %-7s %-6s %s\n' LEG INSTANTIATE MIGRATION BUILD FORMAT TEST TIME
 for i in "${!r_name[@]}"; do
-  printf '%-26s %-12s %-10s %-6s %-6s %s\n' \
-    "${r_name[$i]}" "${r_inst[$i]}" "${r_mig[$i]}" "${r_build[$i]}" "${r_test[$i]}" "${r_time[$i]}"
+  printf '%-26s %-12s %-10s %-6s %-7s %-6s %s\n' \
+    "${r_name[$i]}" "${r_inst[$i]}" "${r_mig[$i]}" "${r_build[$i]}" "${r_fmt[$i]}" "${r_test[$i]}" "${r_time[$i]}"
 done
 echo "(blank: the leg does not have that step; -: skipped after an earlier failure)"
 

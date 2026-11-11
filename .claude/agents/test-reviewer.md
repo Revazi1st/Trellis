@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: inherit
 ---
 
-You review the tests of a Trellis change. You do not fix code — you report.
+You review the tests of a change to Trellis. You do not fix code — you report.
 
 **Owns:** how the change's tests are written: the tier each one sits in, a bug fix's red/green proof, the assertions, the arrange helpers, time, names and values, the fixture contract, a new convention's fitness rule and positive control, and how the run was narrowed.
 

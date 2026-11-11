@@ -2,7 +2,6 @@
 name: finish-change
 description: Run the repository's gates on a finished change in CI's order (format, Release build, tests, the OpenAPI snapshot, docs drift, links, the CHANGELOG line, the reviewers), then commit or open the pull request only when asked. Use when a change is done and about to be committed, pushed or opened as a pull request.
 argument-hint: "[commit|pr]"
-allowed-tools: Bash(./scripts/dotnet.sh:*), Bash(UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh:*), Bash(./scripts/check-docs-drift.sh:*), Bash(./scripts/check-adr-links.sh:*), Bash(./scripts/check-adr-history.sh:*), Bash(git status), Bash(git diff:*), Bash(git log:*)
 ---
 
 # Finish a change
@@ -19,25 +18,29 @@ proposed commit message, `commit` also commits, and `pr` commits and opens the p
       touches, untracked ones included, and set anything unrelated aside before going on. Every box
       below keys on this list, and a stray file rides into the commit and into every reviewer's reading
       of the change.
-- [ ] **Format, then verify.** `./scripts/dotnet.sh format Trellis.slnx`, then
-      `./scripts/dotnet.sh format Trellis.slnx --verify-no-changes --severity warn`, which must report
-      nothing [CI *Build & Test*, step *Format check*].
+- [ ] **Format, then verify.** Format the files this change touches,
+      `./scripts/dotnet.sh format Trellis.slnx --include <the files from Scope the diff>`, then verify
+      the whole solution with `./scripts/dotnet.sh format Trellis.slnx --verify-no-changes --severity warn`,
+      which must report nothing [CI *Build & Test*, step *Format check*]. A formatter change to a file
+      outside that list is debt that was there before: stop and report it, never part of this commit.
 - [ ] **Release build.** `./scripts/dotnet.sh build Trellis.slnx -c Release`: Release turns every
       warning into an error, RSLT001 (a discarded `Result`) and NuGetAudit's advisories included
       [CI *Build & Test*, *Build (warnings as errors)*]. RSLT001 or CS9057: `docs/development.md`,
       *When the build fails*; an advisory or a package: `.claude/rules/dependencies.md`.
-- [ ] **Tests, narrowed, then whole.** First the project you touched, narrowed to what changed
-      (`./scripts/dotnet.sh test tests/Trellis.Application.UnitTests --filter-class '*CommandHandlerTests'`,
-      or `--filter-method`), then everything: `./scripts/dotnet.sh test Trellis.slnx`. Never filter the
-      `.slnx`: every other project then runs zero tests and exits 8, red although yours passed
+- [ ] **Tests, narrowed, then whole**, on the Release build above, as CI runs them: `-c Release
+      --no-build`, so no Debug build follows the Release one (a fix made after the build means building
+      again). First the project you touched, narrowed to what changed
+      (`./scripts/dotnet.sh test tests/Trellis.Application.UnitTests -c Release --no-build --filter-class '*CommandHandlerTests'`,
+      or `--filter-method`), then everything: `./scripts/dotnet.sh test Trellis.slnx -c Release --no-build`.
+      Never filter the `.slnx`: every other project then runs zero tests and exits 8, red although yours passed
       (`docs/development.md`, *Running part of the suite*), and a run that reports zero tests is a
       failure to look at, never a pass. A bug fix's test was seen failing without the fix, for the
       expected reason (`AGENTS.md`). IntegrationTests and ApiTests need Docker [CI *Build & Test*,
       *Test (with coverage)*; the Stop hook reminds once when a `.cs` or `.razor` file under `src/` or
       `tools/` changed and no test ran].
 - [ ] **The OpenAPI snapshot**, when anything under `src/Presentation/Api/` changed (Api, Api.Common,
-      Api.Contracts): `UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh test tests/Trellis.ApiTests`, then
-      `git diff docs/api/openapi.v1.json`, read to the end: every operation, schema and status that moved
+      Api.Contracts): `UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh test tests/Trellis.ApiTests -c Release --no-build`,
+      then `git diff docs/api/openapi.v1.json`, read to the end: every operation, schema and status that moved
       is one the change meant to move, and anything else is a contract change nobody asked for
       [`OpenApiSnapshotTests`; CI *API contract* diffs the running app's document against the file].
 - [ ] **Docs drift and links.** `./scripts/check-docs-drift.sh --working-tree`: the feature doc,
@@ -74,7 +77,8 @@ did not apply) and propose the commit message. Nothing is committed or pushed un
 
 ## Commit (`commit` or `pr`)
 
-- [ ] On `main`, branch first: `git switch -c <type>/<short-name>`.
+- [ ] On `main`, branch first: `git switch -c <type>/<short-name>`; if the branch cannot be created,
+      stop and say so, never commit on `main`.
 - [ ] One commit per concern, each green on its own: a refactor and the feature it makes room for are
       two commits, in that order, and the gates pass at each. Stage files by name from the first box's
       list, never `git add -A` over a tree that holds anything else.

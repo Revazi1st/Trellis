@@ -105,6 +105,27 @@ and results vary between models and attempts: it is a smoke test of the guidance
 agent finishes the way a generated project's agent is told to, with `/finish-change`, so the run puts
 that skill's gates and reviewers to the test as well.
 
+The harness decides what the run can show, so set it up for the template's own configuration to
+govern:
+
+- **Trust the generated folder before the launch.** A `claude -p` run in a folder nobody trusted
+  ignores the project's `.claude/settings.json` allow rules (stderr says `Ignoring N
+  permissions.allow entries … this workspace has not been trusted`), so the harness's `--allowedTools`
+  list stands in for the template's, and a command the template forgot to allow never shows as a
+  denial. Set `projects["<the generated folder>"].hasTrustDialogAccepted` to `true` in
+  `~/.claude.json` first, and keep only the harness's own additions on its command line.
+- **Record the hooks.** Run with `--output-format stream-json --verbose --include-hook-events`:
+  without the last flag the stream carries no PreToolUse, PostToolUse or Stop hook output, and the
+  judge cannot see what a hook decided or reminded.
+- **Judge the tree as generated, and the change as finished.** Before the agent starts,
+  `dotnet format <name>.slnx --verify-no-changes --severity warn` on the generated tree must pass (a
+  failure there is the template's, whatever the agent does next); after the finishing commit,
+  `scripts/check-docs-drift.sh <the generation commit>` reads the agent's whole change against the
+  generation, beside the gates above.
+- **On a usage limit, resume the same session** (`claude -p --resume <session id>`) rather than
+  committing the work in progress on `main` and starting over: the new session loses the reviewers'
+  findings, and the judge can no longer tell the operator's commit from the agent's.
+
 ## Cutting a release
 
 1. **Pick the version.** First read the dependency bumps that merged on their own since the last

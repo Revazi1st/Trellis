@@ -32,7 +32,10 @@ fail() {
   [ "$#" -eq 0 ] || printf '  %s\n' "$@"
 }
 
-# --- every hook script parses, and every hook is executable (Claude Code runs it directly) ---
+# --- every hook script parses, and every one is executable (Claude Code runs the hooks directly) ---
+# common.sh is only sourced, but it is executable too: the documented chmod (.claude/hooks/*.sh, in
+# the template's post-action and ci.yml) covers it, and a mode that differs from the committed one
+# shows as a change in a project generated a minute ago.
 for f in "$hooks"/*.sh; do
   [ -e "$f" ] || continue
   name="${f#"$root"/}"
@@ -40,10 +43,9 @@ for f in "$hooks"/*.sh; do
   if ! out="$(bash -n "$f" 2>&1)"; then
     fail "$name does not parse (bash -n)" "$out"
   fi
-  case "$f" in */common.sh) continue ;; esac
   cases=$((cases + 1))
   if [ ! -x "$f" ]; then
-    fail "$name is not executable: Claude Code cannot run it" "chmod +x $name, and commit the mode (git update-index --chmod=+x $name)"
+    fail "$name is not executable: Claude Code runs the hooks directly, and the documented chmod covers every script here" "chmod +x $name, and commit the mode (git update-index --chmod=+x $name)"
   fi
 done
 
@@ -472,6 +474,26 @@ JSON
   expect "a drift report from the checkout cwd is in (a worktree, say)" docs-drift.sh remind "docs/features/widgets.md"
   project="$work/missing"
   expect "a project folder that does not exist" docs-drift.sh silent
+  # The role grants live in Application/Authorization (Roles.Permissions): widening one is a change to
+  # who may call an endpoint, which docs/threat-model.md answers for.
+  repo="$work/drift-authorization"
+  mkdir -p "$repo/scripts" "$repo/src/Core/Acme.Application/Authorization" "$repo/docs"
+  git init -q --template= "$repo"
+  cp "$root/scripts/check-docs-drift.sh" "$repo/scripts/"
+  printf 'namespace Acme;\n' > "$repo/src/Core/Acme.Application/Authorization/Permissions.cs"
+  project="$repo"
+  payload <<JSON
+{"session_id":"session-authorization","transcript_path":"$work/none.jsonl","cwd":"$repo","permission_mode":"default","hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"$repo/src/Core/Acme.Application/Authorization/Permissions.cs","old_string":"a","new_string":"b","replace_all":false},"tool_response":{"success":true},"tool_use_id":"toolu_drift_authorization"}
+JSON
+  expect "a role grant changed without the threat model" docs-drift.sh remind "docs/threat-model.md"
+  printf '# Threat model\n' > "$repo/docs/threat-model.md"
+  expect "a role grant changed with the threat model" docs-drift.sh silent
+  # That session heard the report already, so the hook would be silent with the drift still there: only
+  # a clean run deletes the record.
+  cases=$((cases + 1))
+  if [ -e "$repo/.git/claude-hooks/docs-drift.last" ]; then
+    fail "docs-drift.sh: a role grant changed with the threat model still drifts (its record is left in .git/claude-hooks/docs-drift.last)"
+  fi
   project="$root"
 else
   echo "check-hooks: git is not on PATH; the docs-drift cases were skipped."

@@ -1,7 +1,6 @@
 ---
 name: add-migration
 description: Create an EF Core migration the correct way for Trellis (containerized dotnet-ef). Use when the persistence model changed.
-allowed-tools: Bash(./scripts/ef.sh:*), Bash(./scripts/dotnet.sh:*)
 ---
 
 # Add a migration

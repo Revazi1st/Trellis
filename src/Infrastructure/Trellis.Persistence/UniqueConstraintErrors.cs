@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -22,7 +23,9 @@ namespace Trellis.Persistence;
 /// <para>
 /// <c>UniqueConstraintTests</c> guards the map itself at the commit boundary: a registered constraint comes
 /// back as its <see cref="Result"/>, and an unregistered one beside it (Identity's <c>RoleNameIndex</c>)
-/// still throws, so a map widened to "any unique violation is a Conflict" fails it.
+/// still throws, so a map widened to "any unique violation is a Conflict" fails it. It also walks the
+/// model: every unique index and key is registered here or named there as a fault on purpose, with the
+/// reason no two requests can race to it, and every name below is one the model still holds.
 /// </para>
 /// </summary>
 internal static class UniqueConstraintErrors
@@ -35,6 +38,9 @@ internal static class UniqueConstraintErrors
         // Two registrations of one e-mail both passed Identity's lookups; its unique user name (the e-mail) decides.
         [ApplicationUserConfiguration.UserNameIndexName] = AuthErrors.EmailAlreadyInUse,
     }.ToFrozenDictionary(StringComparer.Ordinal);
+
+    /// <summary>The constraint names the map registers, which <c>UniqueConstraintTests</c> holds to the model.</summary>
+    public static ImmutableArray<string> RegisteredNames => ByConstraintName.Keys;
 
     /// <summary>
     /// The error a registered unique constraint's violation stands for. False for every other failure,

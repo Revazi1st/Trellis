@@ -41,6 +41,54 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   ceiling the build cannot enforce: `Verify` from 33.0.0 ships a maintenance-fee agreement in its
   package, so pin it below 33 if you add snapshot tests. `LicenseCeilingTests` keeps the list, the
   comment and Dependabot's ignores naming the same ids.
+- **A new project passes its own format check, whatever its name.** A project generated as `Acme.Shop`
+  failed the Format check of its own `ci.yml` on the first push, with an IMPORTS error in nearly every file:
+  `.editorconfig` set `dotnet_sort_system_directives_first`, which turns on `dotnet format`'s
+  using-order check, and that order sorts by the full name, so the shipped files were in order only for
+  a name that sorts where Trellis does (after Shouldly, before Xunit). The key stays in the template's
+  own source behind the `TemplateSource` conditional, so a generated project starts without it: the
+  IDEs still sort `System` usings first by default, and nothing checks the order until you opt in by
+  adding `dotnet_sort_system_directives_first = true` to `.editorconfig`, restoring and running
+  `dotnet format` once (the comment there says how). Template CI runs the generated `ci.yml`'s Format
+  check on every leg, one of them named `Zeta.Journal` so a name that sorts after Xunit is covered, and
+  `scripts/test-template.sh` does the same. The `finish-change` skill formats only the files the change
+  touches and reports a formatter change anywhere else instead of committing it.
+- **`/finish-change` loads in a headless session, and never commits on `main`.** A `claude -p` run had
+  `/finish-change commit` refused outright while `add-feature` loaded: `finish-change` and
+  `add-migration` were the two skills that pre-approved commands in an `allowed-tools` frontmatter, and
+  neither does now (`.claude/settings.json` already allows the scripts and git commands they listed,
+  apart from the OpenAPI snapshot run). The Commit box now stops when the branch cannot be created
+  instead of committing on `main`.
+- **`./scripts/ef.sh` works on a project nothing has built yet.** The first
+  `./scripts/ef.sh migrations add …` in a fresh clone failed with NETSDK1004 (`project.assets.json` not
+  found): dotnet-ef reads the project's metadata before it builds, and that needs a restore. The script
+  now restores the solution first, quietly (a failed restore still prints its errors).
+- **`/finish-change` tests the Release build, as CI does.** Its test boxes ran a plain `dotnet test`
+  right after the Release build, which built the solution again in Debug and, with the UI, could stop on
+  `Unable to find a project reference for project configuration item '…UI.Common.csproj'`. Every test
+  box, the OpenAPI snapshot run included, now passes `-c Release --no-build` as `ci.yml` does, and so
+  does `add-feature`'s last box; `docs/development.md` (*When the build fails*) explains the message.
+- **Every unique index is decided on, and the persistence rule no longer goes stale.**
+  `.claude/rules/persistence.md` named the registered unique constraints "today", so it was wrong after
+  the first feature with a unique key, and an agent is not always allowed to edit `.claude/`. The map in
+  `UniqueConstraintErrors` is now the list, and `UniqueConstraintTests` walks the model: a unique index
+  or key that is neither registered there nor named a fault on purpose, with the reason no two requests
+  can race to it, fails it, and so does a name the model no longer holds. A single-column uuid or
+  database-numbered primary key needs no row; the walk cannot tell a uuid a request chooses from one
+  minted for the row, so register or list the key of an aggregate whose id a client supplies yourself.
+- **A change to the role grants owes the threat model.** `scripts/check-docs-drift.sh` asked for a
+  `docs/threat-model.md` update when authentication, hardening or identity code changed, but not for
+  `Application/Authorization/`, where `Roles.Permissions` decides who may call each endpoint, so granting
+  a role a new permission went through unasked. That folder counts now, in CI and in the edit hook's
+  reminder, and `AGENTS.md` says so.
+- **The reviewer agents read right under your project's name.** `code-reviewer`, `test-reviewer` and
+  `security-reviewer` described their work as reviewing "a Trellis change", which a project generated as
+  `Acme.Shop` got as "a Acme.Shop change"; they review "a change to Acme.Shop" now, and Template CI
+  fails a generated project with a sentence that reads "a <name>" after the rename.
+- **`.claude/hooks/common.sh` is generated executable.** It was the one hook script without the
+  executable bit, so the `chmod +x scripts/*.sh .claude/hooks/*.sh` that the template's instructions and
+  `ci.yml` give left a mode change in a project generated a minute before. It ships executable, the
+  chmod post-action lists it, and `scripts/check-hooks.sh` checks its mode like the hooks'.
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes

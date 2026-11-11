@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fails if code changed without the doc that describes it changing too (ADR-0014):
 #   - a feature's code                                         -> docs/features/<feature>.md
-#   - authentication, hardening, identity or the Auth feature  -> docs/threat-model.md
+#   - authentication, authorization (the role grants), hardening, identity or the Auth feature
+#                                                              -> docs/threat-model.md
 #   - the UI's stylesheets and layout                          -> docs/design-system.md
 #
 # "A feature's code" is every folder the feature docs describe, mapped to ONE doc by its name
@@ -143,9 +144,9 @@ if [ -n "$design_changed" ] && ! grep -qxF 'docs/design-system.md' <<< "$changed
   fail=1
 fi
 
-security_changed="$(printf '%s\n' "$changed" | grep -E '^src/.*/(Authentication|Hardening|Identity|Features/Auth)/' || true)"
+security_changed="$(printf '%s\n' "$changed" | grep -E '^src/.*/(Authentication|Authorization|Hardening|Identity|Features/Auth)/' || true)"
 if [ -n "$security_changed" ] && ! grep -qxF 'docs/threat-model.md' <<< "$changed"; then
-  report "Authentication, hardening or identity code changed without a docs/threat-model.md update:"
+  report "Authentication, authorization, hardening or identity code changed without a docs/threat-model.md update:"
   printf '%s\n' "$security_changed" | sed 's/^/  /'
   fail=1
 fi

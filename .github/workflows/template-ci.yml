@@ -39,7 +39,8 @@ jobs:
       fail-fast: false
       # KEEP IN SYNC with scripts/test-template.sh, which runs these legs on a maintainer's machine:
       # it reads this list (one key per line, args in double quotes; a new key needs teaching there)
-      # and its run_leg mirrors the Instantiate, Regenerate, Build and Test steps below.
+      # and its run_leg mirrors the Instantiate, first-migration, Regenerate, Build, Format and Test
+      # steps below.
       matrix:
         include:
           - name: default
@@ -74,7 +75,9 @@ jobs:
             test: true
           - name: no-ui-with-serilog
             args: "--include-ui false --use-serilog true"
-            out: Acme.Journal
+            # A name that sorts after Xunit, where the others sort before Microsoft: the format
+            # check below holds at both ends of the alphabet.
+            out: Zeta.Journal
             test: true
           - name: no-ui-with-multitenancy
             args: "--include-ui false --use-multitenancy true"
@@ -120,6 +123,14 @@ jobs:
 
           if grep -rInF "${skip[@]}" 'TRELLIS_' .; then
             echo "::error::TRELLIS_ tokens survived instantiation (listed above)."
+            fail=1
+          fi
+
+          # The engine renames Trellis to the project's name, so a shipped sentence must read right
+          # after the rename: "a change to Trellis", never "a Trellis change", which ships as "a
+          # Acme.Shop change". Checked here, on what ships, so every file type and no excluded file counts.
+          if grep -rInwiF "${skip[@]}" 'a ${{ matrix.out }}' .; then
+            echo "::error::A sentence reads 'a ${{ matrix.out }} …' after the rename (listed above): its source says 'a Trellis …'; write 'a change to Trellis' instead."
             fail=1
           fi
 
@@ -225,6 +236,20 @@ jobs:
 
           exit "$fail"
 
+      # A consumer's first migration on a tree nothing has built yet, as scripts/ef.sh runs it inside
+      # the SDK container: dotnet-ef reads the project's metadata before it builds, and that needs the
+      # restore's assets file (NETSDK1004 without it), so ef.sh restores the solution first. Read-only,
+      # so the steps after it see the tree as generated. KEEP IN SYNC with the command inside ef.sh's
+      # sh -c, and with scripts/test-template.sh.
+      - name: First migration command on an unbuilt tree
+        if: ${{ matrix.name == 'default' }}
+        working-directory: ../generated
+        run: |
+          rm -rf artifacts
+          dotnet tool restore
+          dotnet restore ./*.slnx --verbosity quiet
+          dotnet dotnet-ef migrations has-pending-model-changes --project src/Infrastructure/*.Persistence
+
       - name: Regenerate the initial migration
         if: ${{ matrix.regenerate-migration }}
         working-directory: ../generated
@@ -237,6 +262,13 @@ jobs:
       - name: Build generated solution
         working-directory: ../generated
         run: dotnet build ./*.slnx -c Release
+
+      # The generated ci.yml's Format check, word for word, on every leg: a project must pass its own
+      # format gate the day it is generated, whatever its name sorts next to (Microsoft, Xunit) and
+      # whatever options it was generated with. KEEP IN SYNC with scripts/test-template.sh.
+      - name: Format check (generated)
+        working-directory: ../generated
+        run: dotnet format ./*.slnx --no-restore --verify-no-changes --severity warn
 
       # Everything runs for real: the Testcontainers suites and the Aspire E2E (InvoiceApiFlowTests),
       # which boots the generated AppHost under its new name (PostgreSQL, the migration worker, the

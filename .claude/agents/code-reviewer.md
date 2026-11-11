@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Reviews a Trellis change for correctness and the conventions of the layers it touches. Use after any change under src/, before it is committed.
+description: Reviews a change to Trellis for correctness and the conventions of the layers it touches. Use after any change under src/, before it is committed.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
