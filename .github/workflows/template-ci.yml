@@ -142,6 +142,21 @@ jobs:
             fail=1
           fi
 
+          # The engine replaces a port symbol's literal (17171 and the others in template.json) wherever it
+          # appears, and a migration id, a timestamp, can contain one: the shipped [Migration] attribute is
+          # then rewritten under a file still named after the real id, and 'migrations remove' in the
+          # generated project finds nothing to remove. MigrationSnapshotTests refuses such an id in the
+          # template repository; this is the same check on what shipped.
+          for designer in src/Infrastructure/*.Persistence/Migrations/*.Designer.cs; do
+            [ -e "$designer" ] || continue
+            id=$(sed -n 's/.*\[Migration("\([^"]*\)")\].*/\1/p' "$designer" | head -n 1)
+            file=$(basename "$designer" .Designer.cs)
+            if [ "$id" != "$file" ]; then
+              echo "::error file=$designer::the [Migration] attribute says '$id' but the file is '$file': a literal in the id was rewritten by the engine (a port symbol's replaces value in template.json); regenerate the migration at another minute."
+              fail=1
+            fi
+          done
+
           junk=$(find . \( "${prune[@]}" \) -prune -o \( -name .DS_Store -o -name 'appsettings.*.local.json' -o -name '*.pfx' \) -print)
           if [ -n "$junk" ]; then
             echo "::error::Files that must never ship are in the generated output:"
