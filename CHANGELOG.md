@@ -122,7 +122,7 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 - **Your first migration shows your model change, not the template's EF version.** The shipped
   `InitialCreate` and model snapshot were written by EF Core 10.0.12 while the project pins 10.0.13, so
   the first `migrations add` in a new project rewrote the version line too. `InitialCreate` is
-  regenerated on the pinned EF Core (its id is now `20261109030823_InitialCreate`, its `Up` and `Down`
+  regenerated on the pinned EF Core (its id is now `20261111171711_InitialCreate`, its `Up` and `Down`
   unchanged); upgrading a project whose database already applied the old one, keep yours
   (`docs/upgrading.md`, step 5). The `add-migration` skill now says why a project whose name sorts before
   `Microsoft` sees the snapshot's entity blocks move on its first migration (EF orders them by CLR name),
