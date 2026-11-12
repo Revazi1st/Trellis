@@ -326,6 +326,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   pages Invoices has (a list, a detail page, a form per write, the typed client, the nav link, the
   render tests), or a sentence in the feature doc's *UI* section saying the feature is API-only and
   why, which `ui-reviewer` reads.
+- **A fix for a reviewer's finding goes back to the reviewer.** `/finish-change` asked only for the
+  gates to run again after a fix, so a blocking finding fixed by changing a shared value object (which
+  changes what every feature using it accepts) was committed with no second look. Its reviewer box,
+  `AGENTS.md` and `add-feature`'s review box now send a fix that changes `src/` back to the reviewer
+  that raised the finding, scoped to the fix's diff, and to `code-reviewer` as well when it touches a
+  type outside the feature's folders; the box is done when that pass finds nothing new.
 
 ## [0.1.1] - 2026-10-26
 

@@ -208,7 +208,11 @@ after each layer.
 - [ ] Run the reviewers the change needs before finishing (AGENTS.md, *Boundaries*): `code-reviewer`;
       `architecture-guard` when a project or a package was added; `test-reviewer` for the new tests;
       `security-reviewer` when a permission, an allowlist or who may call an endpoint changed. Their
-      findings are claims to check against the code; then `/finish-change`.
+      findings are claims to check against the code. A fix for a blocking or should-fix finding that
+      changes `src/` goes back to the reviewer that raised it, scoped to the fix's diff, and to
+      `code-reviewer` too when it touches a type outside the feature's folders (a shared value object
+      changes what every feature using it accepts); done when that pass finds nothing new. Then
+      `/finish-change`.
 
 ## Not shown by the Invoices slice: decide deliberately
 
