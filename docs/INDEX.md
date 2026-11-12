@@ -64,7 +64,7 @@ Each opens with what it owns, what it leaves to another reviewer and how they ov
 - [guard-edits.sh](../.claude/hooks/guard-edits.sh) — `PreToolUse` on `Edit|Write`: asks the person before an edit under `Migrations/` or of `docs/api/openapi.v1.json` (the reason names the regenerate command), a new `.csproj`, or an edit that adds a package (`Directory.Packages.props`, a `.csproj`) or a `<Project>` to the `.slnx`; silent otherwise
 - [guard-commit.sh](../.claude/hooks/guard-commit.sh) — `PreToolUse` on `Bash`, for a `git commit`: denies when gitleaks, if installed, finds a secret in the staged changes; asks when the subject is not `type(scope): subject`
 - [stop-tests.sh](../.claude/hooks/stop-tests.sh) — `Stop`: blocks the stop once when the session changed `.cs` or `.razor` code under `src/` or `tools/` and ran no `dotnet test`
-- [docs-drift.sh](../.claude/hooks/docs-drift.sh) — `PostToolUse` on `Edit|Write`: runs `scripts/check-docs-drift.sh --working-tree` and, when code changed without the doc that describes it, adds a reminder to the agent's context, once per session for a given report; a non-blocking reminder (CI's docs-drift job is the guarantee)
+- [docs-drift.sh](../.claude/hooks/docs-drift.sh) — `PostToolUse` on `Edit|Write`: runs `scripts/check-docs-drift.sh --working-tree` and, when code changed without the doc that describes it (or a feature doc lacks a heading the `add-feature` skill names), adds a reminder to the agent's context, once per session for a given report; a non-blocking reminder (CI's docs-drift job is the guarantee)
 
 They share the helpers in `common.sh`; `scripts/check-hooks.sh` is their self-test, run by CI, and `docs/development.md` (*Agent hooks*) says how to add one or turn them off.
 

@@ -340,6 +340,18 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   index is the rule and decides the race, and a `MustAsync` validator never does the lookup. The bullet
   also says an e-mail key is case-insensitive like Auth's (a nondeterministic ICU collation, or a
   normalized column as Identity's `NormalizedUserName`), with a test row in another case.
+- **Every feature doc has the same headings, and each decision a place in it.** The `add-feature`
+  skill asked for a doc "shaped like `invoices.md`" without naming the parts, and for the shapes the
+  reference slice does not show it said "decide deliberately" without saying where the decision is
+  written, so a new feature's doc put its endpoints table inside *API* and recorded ownership only in
+  the threat model. The skill now names the H2s (`The domain in plain words`, `Try it`,
+  `Where the code lives`, `Domain`, `Application`, `Persistence`, `API`, `UI` with the UI, `Tests`,
+  `Endpoints`), and a closing box asks for one sentence per shape the feature could have had (owner
+  or business-wide, cached or not, `If-Match` or not, offset or keyset, reactions or none, a page or
+  none); `invoices.md` gains the *Ownership* paragraph to copy. `scripts/check-docs-drift.sh`, in CI
+  and in the edit hook's reminder, fails a feature doc the change touches or owes that lacks one of
+  those headings, for a feature with an aggregate (a `Domain/<Feature>/` folder); an integration's doc
+  keeps its own shape. `scripts/check-hooks.sh` has the case.
 
 ## [0.1.1] - 2026-10-26
 

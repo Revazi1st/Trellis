@@ -494,6 +494,28 @@ JSON
   if [ -e "$repo/.git/claude-hooks/docs-drift.last" ]; then
     fail "docs-drift.sh: a role grant changed with the threat model still drifts (its record is left in .git/claude-hooks/docs-drift.last)"
   fi
+  # A feature with an aggregate (a Domain/<Feature>/ folder) keeps the headings the add-feature skill
+  # names: a copy of invoices.md without its closing table's heading is reported, naming it. A project
+  # that removed the reference slice has no invoices.md, and the headings alone stand in for it.
+  repo="$work/drift-headings"
+  mkdir -p "$repo/scripts" "$repo/src/Core/Acme.Domain/Invoices" "$repo/docs/features"
+  git init -q --template= "$repo"
+  cp "$root/scripts/check-docs-drift.sh" "$repo/scripts/"
+  printf 'namespace Acme;\n' > "$repo/src/Core/Acme.Domain/Invoices/Invoice.cs"
+  if [ -f "$root/docs/features/invoices.md" ]; then
+    cp "$root/docs/features/invoices.md" "$work/invoices-whole.md"
+  else
+    printf '## %s\n' 'The domain in plain words' 'Try it' 'Where the code lives' Domain Application \
+      Persistence API UI Tests Endpoints > "$work/invoices-whole.md"
+  fi
+  grep -v '^## Endpoints' "$work/invoices-whole.md" > "$repo/docs/features/invoices.md"
+  project="$repo"
+  payload <<JSON
+{"session_id":"session-headings","transcript_path":"$work/none.jsonl","cwd":"$repo","permission_mode":"default","hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"$repo/docs/features/invoices.md","old_string":"a","new_string":"b","replace_all":false},"tool_response":{"success":true},"tool_use_id":"toolu_drift_headings"}
+JSON
+  expect "a feature doc without one of the headings" docs-drift.sh remind "## Endpoints"
+  cp "$work/invoices-whole.md" "$repo/docs/features/invoices.md"
+  expect "a feature doc with every heading" docs-drift.sh silent
   project="$root"
 else
   echo "check-hooks: git is not on PATH; the docs-drift cases were skipped."

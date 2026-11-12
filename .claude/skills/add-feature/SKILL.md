@@ -15,7 +15,7 @@ after each layer.
 
 - [ ] Before any code, draft `docs/features/{feature}.md` from the business description; it becomes
       the feature doc CI requires anyway [`check-docs-drift.sh`]. Record only the business content,
-      shaped like `invoices.md`:
+      shaped like `invoices.md` (its headings are named under *Tests and docs* below):
       - the domain in plain words, its terms turned into the types you will write (aggregate, child
         entities, value objects);
       - the lifecycle: states, transitions, the rule each one checks and the error code each refusal
@@ -196,9 +196,13 @@ after each layer.
       arrange step ends in `ShouldBeSuccess()` [RSLT001 fails the Release build on a dropped `Result`,
       an awaited one included, in tests too; a deliberate drop is `_ = …` with a reason].
 - [ ] **`docs/features/{feature}.md`** (kebab-case: `ExchangeRates` → `exchange-rates.md`), shaped
-      like `invoices.md`, plus a line in `docs/INDEX.md` [`check-docs-drift.sh`: a change under the
-      feature's folders without its doc fails CI]. A load-bearing decision gets an ADR (the `new-adr`
-      skill).
+      like `invoices.md`, with its H2s in that order: `The domain in plain words`, `Try it`,
+      `Where the code lives`, `Domain`, `Application`, `Persistence`, `API` (with *Errors*,
+      *Idempotency*, *Caching*, *Concurrency* and *Paging* paragraphs as they apply), `UI` (with the
+      UI), `Tests` and `Endpoints` (the table); plus a line in `docs/INDEX.md`
+      [`check-docs-drift.sh`: a change under the feature's folders without its doc fails CI, and so
+      does the doc of a feature with a `Domain/{Feature}/` folder that lacks one of those headings].
+      A load-bearing decision gets an ADR (the `new-adr` skill).
 - [ ] The new endpoints' requests in `src/Presentation/Api/Trellis.Api/Trellis.Api.http`, and the
       feature doc opening like `invoices.md`: the domain in plain words, a state diagram when the
       aggregate has a lifecycle, and a *Try it* table matching those requests.
@@ -249,3 +253,11 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   pair as an opaque cursor the client sends back. There is no total count and no jumping to page 40,
   and the response is not the `PagedResponse<T>` envelope, so a cursor envelope is a contract
   decision for an ADR.
+
+- [ ] Each shape the feature could have had gets one sentence in its doc's matching section, how it
+      is handled or "none, because …": owner-scoped or business-wide (*API*, as `invoices.md`'s
+      *Ownership* paragraph); cached or not (*Caching*); ETag and `If-Match` or not (*Concurrency*);
+      offset or keyset paging (*Paging*); reactions and integration events or none (*Application*).
+      <!--#if (IncludeUI) -->
+      A page or none goes in its *UI* section, as the UI section's first box says.
+      <!--#endif -->

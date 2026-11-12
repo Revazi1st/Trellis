@@ -17,6 +17,11 @@
 #                                                      name contains (InvoiceDetail -> Invoices)
 # Shared code the feature docs cover but no single feature owns (Domain/Common, Contracts/Common,
 # a page or entity no feature claims) needs some docs/features/*.md change.
+# A feature doc this change touches or owes, for a feature with an aggregate (a src/Core/*.Domain/<Feature>/
+# folder), carries the H2s the add-feature skill names, so every decision has the same place in every
+# doc: The domain in plain words, Try it, Where the code lives, Domain, Application, Persistence, API,
+# UI (with the UI), Tests, Endpoints. An integration's doc (exchange-rates.md) or a cross-cutting one
+# (auth.md) has no aggregate folder and keeps its own shape.
 # The design system is one doc for the files that are the system, not a feature's:
 #   src/Presentation/UI/*.UI.Common/{wwwroot,Layout}/**  -> docs/design-system.md
 #
@@ -70,6 +75,25 @@ kebab() { printf '%s' "$1" | sed -E 's/([a-z0-9])([A-Z])/\1-\2/g' | tr '[:upper:
 known_features="$( (find src -path '*/Features/*' -prune -type d -name '[A-Z]*' 2>/dev/null || true;
                     find src/Core -path '*.Domain/*' -prune -type d 2>/dev/null || true) \
   | sed 's|.*/||' | grep -vxE 'Common|bin|obj' | sort -u || true)"
+
+# The features with an aggregate, whose docs carry the headings below.
+domain_features="$( (find src/Core -path '*.Domain/*' -prune -type d 2>/dev/null || true) \
+  | sed 's|.*/||' | grep -vxE 'Common|bin|obj' | sort -u || true)"
+
+# The H2s of such a doc, one per line; a heading may go on after its name ("## API (`src/…`)").
+required_headings='The domain in plain words
+Try it
+Where the code lives
+Domain
+Application
+Persistence
+API
+Tests
+Endpoints'
+#if (IncludeUI)
+required_headings="$required_headings
+UI"
+#endif
 
 # feature_of <path>: prints the feature that owns the path, "*" when the feature docs cover it but
 # no single feature does, nothing when no feature doc covers it.
@@ -136,6 +160,29 @@ if [ -n "$shared" ] && [ -z "$feature_doc_changed" ]; then
   printf '%s\n' "$shared"
   fail=1
 fi
+
+# The feature docs in scope: every one this change touches, and the doc of every feature whose code changed.
+scoped_docs="$( (printf '%s\n' "$feature_doc_changed"
+  printf '%s\n' "$owned" | cut -f1 | grep -vx '\*' | sort -u | while IFS= read -r feature; do
+    if [ -n "$feature" ]; then printf 'docs/features/%s.md\n' "$(kebab "$feature")"; fi
+  done) | grep -v '^$' | sort -u || true)"
+
+for doc in $scoped_docs; do
+  [ -f "$doc" ] || continue   # a missing doc is reported above
+  owner=""
+  for feature in $domain_features; do
+    if [ "docs/features/$(kebab "$feature").md" = "$doc" ]; then owner="$feature"; fi
+  done
+  [ -n "$owner" ] || continue   # no aggregate: an integration's or a cross-cutting doc keeps its own shape
+  missing="$(printf '%s\n' "$required_headings" | while IFS= read -r heading; do
+    grep -qE "^## ${heading}( |\$)" "$doc" || printf '  ## %s\n' "$heading"
+  done)"
+  if [ -n "$missing" ]; then
+    report "$doc lacks headings a feature with an aggregate carries (the add-feature skill names them, in invoices.md's order):"
+    printf '%s\n' "$missing"
+    fail=1
+  fi
+done
 
 design_changed="$(printf '%s\n' "$changed" | grep -E '^src/Presentation/UI/[^/]+\.UI\.Common/(wwwroot|Layout)/' || true)"
 if [ -n "$design_changed" ] && ! grep -qxF 'docs/design-system.md' <<< "$changed"; then

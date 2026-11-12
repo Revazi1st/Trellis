@@ -204,6 +204,8 @@ failed are retried; a credited handler never runs again for that row (ADR-0023).
 
 One `IEndpoint` class per use case on `/api/v1/invoices…`, each `.RequirePermission(Permissions.Invoices.Read|Write)`, mapping `Result` → `TypedResults`/`CustomResults.Problem`. Wire contracts in `Api.Contracts/Invoices/`.
 
+**Ownership**: invoices are business-wide on purpose. A caller with `invoices:read` sees every invoice and one with `invoices:write` may change any of them; no invoice records an owner, so nothing narrows a list or a lookup to the caller. A feature whose records only their owner may see gives the aggregate a domain `OwnerId`, scopes its specifications by it so another caller's record is the same 404 as a missing one, and keys its read cache by owner or skips it (`docs/features/auth.md`, *Protecting an endpoint*).
+
 **Error contract** (ADR-0024): every failure is an RFC 9457 problem with a stable `code` (what clients branch on), `type` = `urn:problem-type:{code}`, a human `title`, `detail`, `instance`, `traceId` and `correlationId`. A 400 carries `errors[]` — one `{field, code, description}` per failure, `field` being the request's JSON path (validator failures: `customerName` / `Validation.NotEmpty`; value-object and aggregate-rule errors the handler attributes with `AtField`: `customerEmail` / `EmailAddress.Invalid` for `"a@b"`, `dueDate` / `Invoice.DueDateInPast`) or `null` for a whole-request error (`Invoice.NoLines`). `POST /invoices {"customerName":"","customerEmail":"x","currency":"USD"}` answers:
 
 ```json
