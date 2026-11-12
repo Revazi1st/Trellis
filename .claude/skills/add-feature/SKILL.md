@@ -208,6 +208,8 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   pinned and registered in `UniqueConstraintErrors`, raced in a test; one no two requests can race to
   is a row in `UniqueConstraintTests.FaultOnPurpose` with its reason instead
   (`.claude/rules/persistence.md`); the idempotency filter answers a same-key loser from the store.
+  With multi-tenancy it is unique per tenant by convention (`.claude/rules/persistence.md`): the
+  configuration names no tenant [`TenancyTests`, all-options leg].
 - **Work on a timer**: `docs/architecture.md`, *Scheduled use cases*.
 - **Telling another system**: an integration event from a translate-and-send handler,
   `docs/architecture.md`; being told by one (a webhook): the `add-integration` skill, step 7.

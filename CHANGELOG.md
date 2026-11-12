@@ -297,6 +297,19 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   through the EF health check EF Core itself (`Microsoft.EntityFrameworkCore`, `.Design`,
   `Microsoft.AspNetCore.Identity.EntityFrameworkCore`) to 10.0.14, the version `dotnet-ef` already had. The
   shipped `InitialCreate` still reads `ProductVersion` 10.0.13; the next regeneration rewrites it.
+- **With multi-tenancy, a unique business key is unique per tenant.** The tenant convention gave every
+  aggregate root its `TenantId` column, index and filter but left the root's own unique indexes global,
+  so a key a feature of yours declares unique (a customer's e-mail, a code) disagreed with its own
+  lookup: the tenant-filtered "is it taken?" query answered free, the index answered taken, and the
+  create failed with a 409 that told the caller another tenant holds the value. The convention in
+  `AppDbContext` now puts `TenantId` first in every unique index an aggregate root declares, under the
+  name the index had, with its filter and per-column settings kept, so a configuration still names no
+  tenant and `UniqueConstraintErrors` maps the constraint whichever way the option is set; Identity's
+  indexes stay global (ADR-0022, amendment of 2026-11-12). `TenancyTests` fails on a unique index of an
+  aggregate that `TenantId` does not lead, with a probe aggregate as its control. Declare a business key
+  as a unique index: an alternate key (`HasAlternateKey`) is not rewritten. The shipped `InitialCreate`
+  is unchanged; a multi-tenant project regenerates it as before, and one that already has a unique index
+  on an aggregate gets `(TenantId, key)` from its next migration.
 
 ## [0.1.1] - 2026-10-26
 

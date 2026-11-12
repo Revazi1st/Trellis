@@ -1,11 +1,13 @@
 #if (UseMultitenancy)
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NSubstitute;
 using Shouldly;
 using Trellis.Application;
@@ -139,7 +141,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
 
     /// <summary>
     /// The fitness test behind the convention: a second aggregate must ship isolated without anyone
-    /// remembering to wire it. Runs against the real provider's model.
+    /// remembering to wire it, its unique keys unique per tenant. Runs against the real provider's model.
     /// </summary>
     [Fact]
     public void Every_aggregate_root_is_tenant_scoped_by_convention()
@@ -153,12 +155,67 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
 
         foreach (IEntityType aggregate in aggregates)
         {
-            string name = aggregate.ClrType.Name;
-            aggregate.FindProperty(TenantInterceptor.TenantIdProperty).ShouldNotBeNull($"{name} has no TenantId shadow column");
-            aggregate.GetIndexes().ShouldContain(
-                static index => index.Properties.Any(static property => property.Name == TenantInterceptor.TenantIdProperty),
-                $"{name} has no index on TenantId");
-            aggregate.FindDeclaredQueryFilter("Tenant").ShouldNotBeNull($"{name} has no \"Tenant\" query filter");
+            ShouldBeTenantScoped(aggregate);
+        }
+    }
+
+    /// <summary>
+    /// The control for the unique-index half of the fitness test, since the real model may hold no unique
+    /// index on an aggregate: a probe aggregate declares three the way a configuration would, a plain one,
+    /// one sorted descending on every column and one with a pinned name and per-column settings, and the real
+    /// <see cref="AppDbContext"/> builds the model. The convention puts TenantId first in each and keeps the
+    /// rest, the database name above all: it is what <c>UniqueConstraintErrors</c> and
+    /// <c>UniqueConstraintTests.FaultOnPurpose</c> key on.
+    /// </summary>
+    [Fact]
+    public void A_unique_index_on_an_aggregate_is_unique_per_tenant_under_the_name_it_was_given()
+    {
+        using var context = new AppDbContext(
+            new DbContextOptionsBuilder<AppDbContext>()
+                .UseNpgsql("Host=probe.invalid")
+                .ReplaceService<IModelCustomizer, ProbeModelCustomizer>()
+                .Options,
+            new FixedTenantContext(TenantA));
+        // The design-time model, the one migrations are generated from: the runtime model drops the
+        // per-column sort order.
+        IEntityType probe = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ProbeAccount)).ShouldNotBeNull();
+
+        ShouldBeTenantScoped(probe);
+        IIndex[] unique = [.. probe.GetIndexes()
+            .Where(static index => index.IsUnique)
+            .OrderBy(static index => index.GetDatabaseName(), StringComparer.Ordinal)];
+        unique.Select(static index => index.GetDatabaseName())
+            .ShouldBe([ProbeModelCustomizer.CodeIndex, ProbeModelCustomizer.EmailCodeIndex, ProbeModelCustomizer.EmailIndex]);
+        unique.Select(static index => string.Join(',', index.Properties.Select(static property => property.Name))).ShouldBe(
+        [
+            $"{TenantInterceptor.TenantIdProperty},Code",
+            $"{TenantInterceptor.TenantIdProperty},Email,Code",
+            $"{TenantInterceptor.TenantIdProperty},Email",
+        ]);
+
+        unique[0].IsDescending.ShouldBeNull();
+        unique[1].IsDescending.ShouldBe([false, true, true], "every column the configuration sorted descending still is; the tenant column ascends");
+        IIndex email = unique[2];
+        email.GetFilter().ShouldBe(ProbeModelCustomizer.EmailFilter);
+        email.IsDescending.ShouldBe([false, true]);
+        email.GetCollation().ShouldBe([null, ProbeModelCustomizer.EmailCollation], ignoreOrder: false);
+        email.GetOperators().ShouldBe([null, ProbeModelCustomizer.EmailOperators], ignoreOrder: false);
+        email.GetNullSortOrder().ShouldBe([NullSortOrder.Unspecified, NullSortOrder.NullsLast]);
+    }
+
+    private static void ShouldBeTenantScoped(IEntityType aggregate)
+    {
+        string name = aggregate.ClrType.Name;
+        aggregate.FindProperty(TenantInterceptor.TenantIdProperty).ShouldNotBeNull($"{name} has no TenantId shadow column");
+        aggregate.GetIndexes().ShouldContain(
+            static index => index.Properties.Any(static property => property.Name == TenantInterceptor.TenantIdProperty),
+            $"{name} has no index on TenantId");
+        aggregate.FindDeclaredQueryFilter("Tenant").ShouldNotBeNull($"{name} has no \"Tenant\" query filter");
+        foreach (IIndex unique in aggregate.GetIndexes().Where(static index => index.IsUnique))
+        {
+            unique.Properties[0].Name.ShouldBe(
+                TenantInterceptor.TenantIdProperty,
+                $"{name}'s unique index {unique.GetDatabaseName()} is unique across every tenant: TenantId must lead it");
         }
     }
 
@@ -178,6 +235,9 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         foreach (IEntityType other in others)
         {
             other.FindDeclaredQueryFilter("Tenant").ShouldBeNull($"{other.ClrType.Name} must not be tenant-filtered");
+            other.GetIndexes().Where(static index => index.IsUnique).ShouldAllBe(
+                static index => index.Properties[0].Name != TenantInterceptor.TenantIdProperty,
+                $"{other.ClrType.Name}'s unique indexes stay global: one e-mail is one user in one tenant (ADR-0022)");
         }
     }
 
@@ -358,6 +418,56 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     private sealed class FixedTenantContext(string tenantId) : ITenantContext
     {
         public string? TenantId => AmbientTenant.CurrentTenantId ?? tenantId;
+    }
+
+    /// <summary>An aggregate root only the probe model maps; every column is a shadow property.</summary>
+    private sealed class ProbeAccount : IHasDomainEvents
+    {
+        public IReadOnlyList<IDomainEvent> DomainEvents => [];
+
+        public void ClearDomainEvents()
+        {
+            // The probe raises no events.
+        }
+    }
+
+    /// <summary>
+    /// Maps <see cref="ProbeAccount"/> before <see cref="AppDbContext"/>'s own <c>OnModelCreating</c> runs, as
+    /// an entity configuration would, so the tenant convention meets it like any aggregate. The replaced
+    /// service gives this context a model cache of its own, and nothing connects.
+    /// </summary>
+    private sealed class ProbeModelCustomizer(ModelCustomizerDependencies dependencies) : RelationalModelCustomizer(dependencies)
+    {
+        public const string CodeIndex = "IX_ProbeAccounts_Code";
+        public const string EmailCodeIndex = "IX_ProbeAccounts_Email_Code";
+        public const string EmailIndex = "UX_ProbeAccounts_Email";
+        public const string EmailFilter = "\"Email\" <> ''";
+        public const string EmailCollation = "probe_ci";
+        public const string EmailOperators = "text_pattern_ops";
+
+        public override void Customize(ModelBuilder modelBuilder, DbContext context)
+        {
+            modelBuilder.Entity<ProbeAccount>(static account =>
+            {
+                account.ToTable("ProbeAccounts");
+                account.Ignore(static probe => probe.DomainEvents);
+                account.Property<Guid>("Id");
+                account.HasKey("Id");
+                account.Property<string>("Code");
+                account.Property<string>("Email");
+                account.HasIndex("Code").IsUnique();
+                account.HasIndex("Email", "Code").IsDescending().IsUnique();
+                account.HasIndex("Email")
+                    .HasDatabaseName(EmailIndex)
+                    .HasFilter(EmailFilter)
+                    .IsDescending(true)
+                    .UseCollation(EmailCollation)
+                    .HasOperators(EmailOperators)
+                    .HasNullSortOrder(NullSortOrder.NullsLast)
+                    .IsUnique();
+            });
+            base.Customize(modelBuilder, context);
+        }
     }
 }
 #endif

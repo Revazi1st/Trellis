@@ -5,7 +5,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 #if (UseMultitenancy)
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 #endif
 using Trellis.Domain.Invoices;
 using Trellis.Persistence.Identity;
@@ -79,10 +82,11 @@ public sealed class AppDbContext(
         });
 
         // Convention, not configuration: EVERY aggregate root gets the TenantId shadow column, its
-        // index and the named "Tenant" filter. A new aggregate is isolated without anyone remembering
-        // to wire it; a deliberately shared aggregate is a design decision that must be made here, on
-        // purpose. IHasDomainEvents is what AggregateRoot<> implements (and what OutboxWriteInterceptor
-        // already uses to recognise aggregates). Named so callers can opt out explicitly:
+        // index and the named "Tenant" filter, and every unique index it declares is unique per tenant.
+        // A new aggregate is isolated without anyone remembering to wire it; a deliberately shared
+        // aggregate is a design decision that must be made here, on purpose. IHasDomainEvents is what
+        // AggregateRoot<> implements (and what OutboxWriteInterceptor already uses to recognise
+        // aggregates). Named so callers can opt out explicitly:
         // IgnoreQueryFilters(["Tenant"]) — never the bare IgnoreQueryFilters(), which drops it silently.
         foreach (Type aggregateType in builder.Model.GetEntityTypes()
                      .Select(static entityType => entityType.ClrType)
@@ -92,6 +96,17 @@ public sealed class AppDbContext(
             EntityTypeBuilder aggregate = builder.Entity(aggregateType);
             aggregate.Property<string>(Interceptors.TenantInterceptor.TenantIdProperty).HasMaxLength(64);
             aggregate.HasIndex(Interceptors.TenantInterceptor.TenantIdProperty);
+
+            // A business key (an e-mail, a code) is unique within the tenant, not across tenants: the
+            // tenant-filtered lookup and the index then agree on "taken", and a 409 never reveals another
+            // tenant's row. The configuration names no tenant (ADR-0022).
+            foreach (IMutableIndex unique in aggregate.Metadata.GetDeclaredIndexes()
+                         .Where(static index => index.IsUnique
+                             && index.Properties[0].Name != Interceptors.TenantInterceptor.TenantIdProperty)
+                         .ToList())
+            {
+                LeadWithTenant(aggregate.Metadata, unique);
+            }
 
             // e => EF.Property<string>(e, "TenantId") == this.CurrentTenantId
             // The constant is this DbContext: EF swaps it for the live context at query time, so the
@@ -106,6 +121,58 @@ public sealed class AppDbContext(
         }
 #endif
     }
+
+#if (UseMultitenancy)
+    /// <summary>
+    /// Replaces <paramref name="unique"/> with the same index led by the TenantId column, since EF cannot
+    /// change an index's columns in place. The rest carries over: the EF name, the database name (the
+    /// default one too, so the constraint is named as it would be without multi-tenancy and
+    /// <c>UniqueConstraintErrors</c> maps it either way) and every annotation (a filter, a method); a
+    /// setting held per column moves one place along, the tenant column taking the default.
+    /// </summary>
+    private static void LeadWithTenant(IMutableEntityType aggregate, IMutableIndex unique)
+    {
+        string? name = unique.Name;
+        string? databaseName = unique.GetDatabaseName();
+        IMutableProperty[] columns =
+            [aggregate.FindProperty(Interceptors.TenantInterceptor.TenantIdProperty)!, .. unique.Properties];
+        IReadOnlyList<bool>? descending = unique.IsDescending;
+        IReadOnlyList<string>? collation = unique.GetCollation();
+        IReadOnlyList<string>? operators = unique.GetOperators();
+        IReadOnlyList<NullSortOrder>? nullSortOrder = unique.GetNullSortOrder();
+        IAnnotation[] annotations = [.. unique.GetAnnotations()];
+
+        aggregate.RemoveIndex(unique);
+        IMutableIndex scoped = name is null ? aggregate.AddIndex(columns) : aggregate.AddIndex(columns, name);
+        foreach (IAnnotation annotation in annotations)
+        {
+            scoped.SetAnnotation(annotation.Name, annotation.Value);
+        }
+
+        scoped.IsUnique = true;
+        scoped.SetDatabaseName(databaseName);
+        scoped.IsDescending = descending switch
+        {
+            null => null,                                                   // every column ascending
+            [] => [false, .. Enumerable.Repeat(true, columns.Length - 1)],  // EF's "every column descending"
+            _ => [false, .. descending],
+        };
+        if (collation is not null)
+        {
+            scoped.SetCollation([null!, .. collation]);
+        }
+
+        if (operators is not null)
+        {
+            scoped.SetOperators([null!, .. operators]);
+        }
+
+        if (nullSortOrder is not null)
+        {
+            scoped.SetNullSortOrder([NullSortOrder.Unspecified, .. nullSortOrder]);
+        }
+    }
+#endif
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
