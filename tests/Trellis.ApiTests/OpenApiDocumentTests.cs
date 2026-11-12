@@ -20,6 +20,13 @@ public sealed class OpenApiDocumentTests
     private const string ProblemSchemaRef = "#/components/schemas/ProblemResponse";
     private static readonly string[] HttpMethods = ["get", "post", "put", "patch", "delete"];
 
+    /// <summary>
+    /// The writes under a resource whose GET answers an <c>ETag</c> that take no <c>If-Match</c>, each
+    /// ("POST /api/v1/…") with the reason it cannot: a write that creates the record it names, say, has no
+    /// version to name yet. Empty while every such write is conditional.
+    /// </summary>
+    private static readonly Dictionary<string, string> WritesWithoutIfMatch = new(StringComparer.Ordinal);
+
     [Fact]
     public void Every_operation_carries_a_summary_and_a_description()
     {
@@ -209,6 +216,60 @@ public sealed class OpenApiDocumentTests
             .GetProperty("schema").GetProperty("$ref").GetString().ShouldBe(ProblemSchemaRef);
     }
 
+    /// <summary>
+    /// A resource that hands out its version takes it back on every write: under a path whose GET answers an
+    /// <c>ETag</c>, each other operation on that path or below it declares <c>If-Match</c>
+    /// (<c>.SupportsConditionalWrite()</c>), so two callers changing one record cannot overwrite each other
+    /// unseen. A write that cannot take one is in <see cref="WritesWithoutIfMatch"/> with its reason.
+    /// </summary>
+    [Fact]
+    public void Every_write_to_a_resource_that_answers_an_ETag_takes_If_Match()
+    {
+        PreconditionAudit audit = AuditPreconditions(Operations(), WritesWithoutIfMatch);
+
+        audit.Unguarded.ShouldBeEmpty(
+            "a write to a resource whose GET answers an ETag takes If-Match: .SupportsConditionalWrite(), the command's ExpectedVersion and a 412 on a stale one, as the invoice writes do; or a row in WritesWithoutIfMatch with the reason it cannot");
+        audit.Stale.ShouldBeEmpty("a row in WritesWithoutIfMatch that names no unconditional write under a versioned resource");
+    }
+
+    [Fact]
+    public void The_If_Match_check_flags_an_unconditional_write_under_a_versioned_resource()
+    {
+        // A versioned resource (its GET answers an ETag) with a conditional write, two unconditional ones (on the
+        // path itself and below it) and an exempt one; a create on the collection above it, and a resource that
+        // hands out no version, neither of which can name one.
+        using JsonDocument planted = JsonDocument.Parse(
+            """
+            {
+              "paths": {
+                "/api/v1/things": { "post": { "parameters": [] } },
+                "/api/v1/things/{id}": {
+                  "get": { "responses": { "200": { "headers": { "ETag": { "schema": { "type": "string" } } } } } },
+                  "delete": { "parameters": [ { "name": "id", "in": "path" } ] }
+                },
+                "/api/v1/things/{id}/rename": { "post": { "parameters": [ { "name": "If-Match", "in": "header" } ] } },
+                "/api/v1/things/{id}/archive": { "post": { "parameters": [ { "name": "id", "in": "path" } ] } },
+                "/api/v1/things/{id}/notes": { "post": {} },
+                "/api/v1/notes/{id}": { "get": { "responses": { "200": {} } } },
+                "/api/v1/notes/{id}/pin": { "post": {} }
+              }
+            }
+            """);
+
+        PreconditionAudit audit = AuditPreconditions(
+            PathsOf(planted),
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["POST /api/v1/things/{id}/notes"] = "a note is a record of its own",
+                ["POST /api/v1/things/{id}/gone"] = "a write that no longer exists",
+            });
+
+        string[] unguarded = ["DELETE /api/v1/things/{id}", "POST /api/v1/things/{id}/archive"];
+        string[] stale = ["POST /api/v1/things/{id}/gone"];
+        audit.Unguarded.ShouldBe(unguarded);
+        audit.Stale.ShouldBe(stale);
+    }
+
     [Theory]
     [InlineData("/api/v1/invoices/overdue", new[] { "page", "pageSize" })]
     [InlineData("/api/v1/invoices", new[] { "status", "page", "pageSize" })]
@@ -276,6 +337,63 @@ public sealed class OpenApiDocumentTests
         return false;
     }
 
+    /// <summary>
+    /// Every write ("POST /api/v1/…") on a path whose GET answers an <c>ETag</c>, or below one, that declares no
+    /// <c>If-Match</c> header and is not exempt, and every exempt name that is no such write, each sorted.
+    /// </summary>
+    private static PreconditionAudit AuditPreconditions(
+        IReadOnlyList<(string Path, JsonElement Item)> paths, IReadOnlyDictionary<string, string> exempt)
+    {
+        string[] versioned = [.. paths
+            .Where(static entry => entry.Item.TryGetProperty("get", out JsonElement get) && AnswersETag(get))
+            .Select(static entry => entry.Path)];
+
+        SortedSet<string> unguarded = new(StringComparer.Ordinal);
+        HashSet<string> excused = new(StringComparer.Ordinal);
+        foreach ((string path, JsonElement item) in paths)
+        {
+            if (!versioned.Any(resource => path == resource || path.StartsWith(resource + "/", StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            foreach (JsonProperty write in item.EnumerateObject()
+                         .Where(static o => o.Name != "get" && HttpMethods.Contains(o.Name, StringComparer.Ordinal)))
+            {
+                string name = $"{write.Name.ToUpperInvariant()} {path}";
+                if (Parameters(write.Value).Any(static p => IsHeader(p, "If-Match")))
+                {
+                    continue;
+                }
+
+                if (exempt.ContainsKey(name))
+                {
+                    excused.Add(name);
+                }
+                else
+                {
+                    unguarded.Add(name);
+                }
+            }
+        }
+
+        return new PreconditionAudit(
+            [.. unguarded],
+            [.. exempt.Keys.Where(name => !excused.Contains(name)).Order(StringComparer.Ordinal)]);
+    }
+
+    private static bool AnswersETag(JsonElement get)
+        => get.TryGetProperty("responses", out JsonElement responses)
+            && responses.EnumerateObject().Any(static response =>
+                response.Value.TryGetProperty("headers", out JsonElement headers)
+                && headers.EnumerateObject().Any(static header => string.Equals(header.Name, "ETag", StringComparison.OrdinalIgnoreCase)));
+
+    private static bool IsHeader(JsonElement parameter, string name)
+        => parameter.TryGetProperty("in", out JsonElement location) && location.GetString() == "header"
+            && string.Equals(parameter.GetProperty("name").GetString(), name, StringComparison.OrdinalIgnoreCase);
+
+    private sealed record PreconditionAudit(IReadOnlyList<string> Unguarded, IReadOnlyList<string> Stale);
+
     private static bool Has(JsonElement operation, string property) =>
         operation.TryGetProperty(property, out JsonElement value)
         && !string.IsNullOrWhiteSpace(value.GetString());
@@ -317,9 +435,12 @@ public sealed class OpenApiDocumentTests
     {
         using JsonDocument document = ReadDocument();
 
-        return [.. document.RootElement.GetProperty("paths").EnumerateObject()
-            .Select(static path => (path.Name, path.Value.Clone()))];
+        return PathsOf(document);
     }
+
+    private static List<(string Path, JsonElement Item)> PathsOf(JsonDocument document)
+        => [.. document.RootElement.GetProperty("paths").EnumerateObject()
+            .Select(static path => (path.Name, path.Value.Clone()))];
 
     private static JsonDocument ReadDocument() => JsonDocument.Parse(File.ReadAllText(CommittedDocumentPath()));
 

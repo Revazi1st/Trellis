@@ -124,6 +124,16 @@ after each layer.
       Api.Common, never a per-feature copy or a `new PagedResponse<T>(...)`
       [`ConventionTests.The_paged_envelope_is_built_only_by_the_shared_mapping`]. A GET that honours
       `If-None-Match` declares `.SupportsConditionalGet()` and uses `HttpRequest.IsNotModified(etag)`.
+- [ ] An aggregate that changes after its create carries `Version` on its DTO, answers it as a strong
+      ETag on `GET /{id}` (`.SupportsConditionalGet()`, `HttpRequest.IsNotModified`; `GetInvoice` is
+      the model) and takes `If-Match` on every write to it (`.SupportsConditionalWrite()`, the
+      command's `ExpectedVersion`, a `{Feature}Preconditions` like `InvoicePreconditions`, its
+      `{Aggregate}.VersionMismatch` a 412) [`OpenApiDocumentTests` fails on a write under a GET that
+      answers an ETag without `If-Match`, unless `WritesWithoutIfMatch` names it with a reason;
+      `ProblemDetailsContractTests` for the new code]. Without it two callers who change one record
+      overwrite each other unseen, so leaving it out is one sentence in the feature doc's
+      *Concurrency* paragraph saying why. Caching that GET in `HybridCache` stays a choice the doc
+      records.
 - [ ] Multi-tenancy: the tenant comes from the signed `tenant` claim only (ADR-0022). Never put a
       tenant on a contract, a route, a query string or a header.
 - [ ] **Regenerate the OpenAPI document**: `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`
