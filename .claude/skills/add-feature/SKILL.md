@@ -140,8 +140,12 @@ after each layer.
       (`./scripts/dotnet.sh` forwards the variable) and commit `docs/api/openapi.v1.json`
       [`OpenApiSnapshotTests` fails until you do].
 
-## UI (if included)
+<!--#if (IncludeUI) -->
+## UI
 
+- [ ] A feature a person uses gets its pages, as Invoices has them: a list, a detail page and a form
+      per write, the typed client, the nav link and the render tests below. An API-only feature says
+      so, and why, in its doc's *UI* section, and `ui-reviewer` reads that sentence.
 - [ ] A typed client method over the contracts, through `ApiCall`; POSTs through the idempotent helper.
 - [ ] A page in `Pages/` that inherits `ProtectedPage` (overriding `RequiredPermission` when a permission
       gates the whole page), with a `<PageTitle>`, one `h1`, and a `class="back"` link to its list above
@@ -160,9 +164,10 @@ after each layer.
 - [ ] A render test over `PageHost` in `tests/Trellis.ApiTests/Ui/` for what the page shows in each load
       state [`InvoicePagesTests` is the model], and the page's sentence in the feature doc's *UI* section
       [`check-docs-drift.sh`].
-- [ ] Run the `ui-reviewer` subagent on the change before finishing; its findings are claims to check
-      (AGENTS.md).
+- [ ] Run the `ui-reviewer` subagent on the change before finishing, an API-only feature's *UI*
+      sentence included; its findings are claims to check (AGENTS.md).
 
+<!--#endif -->
 ## Tests and docs
 
 - [ ] Domain.UnitTests for the invariants, with the two lifecycle theories `InvoiceTests` gives every

@@ -319,6 +319,13 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `OpenApiDocumentTests` fails on a write under a path whose GET answers an `ETag` that declares no
   `If-Match`, unless `WritesWithoutIfMatch` names it with its reason; a planted document is its
   control.
+- **A feature a person uses gets its pages, or a reason it has none.** The `add-feature` skill's
+  section was headed "UI (if included)", which reads as "if the request asks for one" as easily as
+  "if the project has a UI", so a feature could ship API-only in a project with the UI on and say
+  nothing about why. The section is now `## UI` and ships only with the UI; its first box asks for the
+  pages Invoices has (a list, a detail page, a form per write, the typed client, the nav link, the
+  render tests), or a sentence in the feature doc's *UI* section saying the feature is API-only and
+  why, which `ui-reviewer` reads.
 
 ## [0.1.1] - 2026-10-26
 
