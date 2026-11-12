@@ -332,6 +332,14 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `AGENTS.md` and `add-feature`'s review box now send a fix that changes `src/` back to the reviewer
   that raised the finding, scoped to the fix's diff, and to `code-reviewer` as well when it touches a
   type outside the feature's folders; the box is done when that pass finds nothing new.
+- **Where the "is this key taken?" lookup lives, and an e-mail key ignores case.** The `add-feature`
+  skill's unique-key bullet named the index and its registration but not the lookup a create usually
+  makes first, and `.claude/rules/application.md`'s "no business rules in handlers" read as forbidding
+  it. Both now say that the handler may ask the repository port (`{Key}ExistsAsync`) once the
+  aggregate is built and answer the same `Error` the index maps to: the lookup is orchestration, the
+  index is the rule and decides the race, and a `MustAsync` validator never does the lookup. The bullet
+  also says an e-mail key is case-insensitive like Auth's (a nondeterministic ICU collation, or a
+  normalized column as Identity's `NormalizedUserName`), with a test row in another case.
 
 ## [0.1.1] - 2026-10-26
 

@@ -228,7 +228,15 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   is a row in `UniqueConstraintTests.FaultOnPurpose` with its reason instead
   (`.claude/rules/persistence.md`); the idempotency filter answers a same-key loser from the store.
   With multi-tenancy it is unique per tenant by convention (`.claude/rules/persistence.md`): the
-  configuration names no tenant [`TenancyTests`, all-options leg].
+  configuration names no tenant [`TenancyTests`, all-options leg]. After the value objects and the
+  aggregate are built, the handler may ask the repository port (`{Key}ExistsAsync`) and answer the
+  same `Error` the index maps to: the lookup is orchestration and the index is the rule, so the
+  lookup is never a `MustAsync` validator (Auth's registration, which asks before it writes, and
+  `UserNameIndex` are the model). An e-mail key is case-insensitive like Auth's: a nondeterministic
+  ICU collation (`HasCollation(…, deterministic: false)` in `AppDbContext.OnModelCreating`,
+  `UseCollation` on the column) or a normalized column (Identity's `NormalizedUserName`, the e-mail
+  upper-cased, under `UserNameIndex`), and a test row that adds the same address in another case gets
+  the index's `Error`.
 - **Work on a timer**: `docs/architecture.md`, *Scheduled use cases*.
 - **Telling another system**: an integration event from a translate-and-send handler,
   `docs/architecture.md`; being told by one (a webhook): the `add-integration` skill, step 7.
