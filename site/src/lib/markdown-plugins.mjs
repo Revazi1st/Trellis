@@ -26,8 +26,9 @@
 // For site pages under src/content/docs (.mdx):
 //   root-relative links and JSX href props get the base (/Trellis), so pages are written base-free, and
 //   a {/* trellis:option-sections */} comment becomes one section per template option (options.mjs).
-// And two hast plugins, for files under docs/: tables, and the lines under headings. A table whose rows
-// read better as blocks (tableLayout) gets a class, each cell its column's name and the table ARIA roles;
+// And two hast plugins, for files under docs/: tables, and the lines under headings; site pages get the
+// first. A table whose rows read better as blocks (tableLayout) gets a class, each cell its column's name
+// and the table ARIA roles;
 // code in table cells and in a where-it-lives line gets break opportunities after / and . (a narrow
 // column wraps a path at its seams); lattice.css lays it out.
 
@@ -87,11 +88,15 @@ export function trellisMdastPlugins({ siteContentDir }) {
 }
 
 /** Plugin entries for satteri's `hastPlugins`. */
-export function trellisHastPlugins() {
+export function trellisHastPlugins({ siteContentDir }) {
   return [
     (ctx) => {
       if (!ctx.fileURL) return null;
-      return isInside(fileURLToPath(ctx.fileURL), docsDir) ? [tablesPlugin(), whereLinesPlugin()] : null;
+      const file = fileURLToPath(ctx.fileURL);
+      if (isInside(file, docsDir)) return [tablesPlugin(), whereLinesPlugin()];
+      // A site page's Markdown table takes the same layouts (the comparison is six columns wide).
+      if (isInside(file, siteContentDir)) return [tablesPlugin()];
+      return null;
     },
   ];
 }

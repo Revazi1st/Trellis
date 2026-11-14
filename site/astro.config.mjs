@@ -46,8 +46,9 @@ const trellisMarkdown = {
     'astro:config:setup': ({ config }) => {
       const processor = config.markdown.processor;
       if (processor?.name !== 'satteri') throw new Error('trellis-markdown expects Astro 7’s default Sätteri processor');
-      processor.options.mdastPlugins.unshift(...trellisMdastPlugins({ siteContentDir: path.join(siteDir, 'src/content/docs') }));
-      processor.options.hastPlugins.push(...trellisHastPlugins());
+      const siteContentDir = path.join(siteDir, 'src/content/docs');
+      processor.options.mdastPlugins.unshift(...trellisMdastPlugins({ siteContentDir }));
+      processor.options.hastPlugins.push(...trellisHastPlugins({ siteContentDir }));
       // GitHub parity: docs/ is written and reviewed on GitHub, which keeps -- and straight quotes as typed
       // (Astro's default turns `--help` in text into an en dash).
       processor.options.features.smartPunctuation = false;
@@ -103,14 +104,23 @@ export default defineConfig({
           label: 'Start',
           items: [
             { label: 'Overview', link: '/' },
+            { label: 'Why Trellis', slug: 'why' },
             { label: 'Install and create', slug: 'start/install' },
             { label: 'First run', link: '/develop/development/#running-the-app' },
             { label: 'Try it', link: '/features/invoices/#try-it' },
             { label: 'Options', slug: 'start/options' },
-            { label: 'Make it yours', link: '/develop/upgrading/' },
+            { label: 'What you get', slug: 'start/what-you-get' },
+            { label: 'Make it yours', link: '/start/what-you-get/#make-it-yours' },
+            { label: 'FAQ', slug: 'start/faq' },
           ],
         },
-        { label: 'Understand', items: [{ label: 'Architecture', slug: 'understand/architecture' }] },
+        {
+          label: 'Understand',
+          items: [
+            { label: 'Architecture', slug: 'understand/architecture' },
+            { label: 'Compared with other templates', slug: 'compare' },
+          ],
+        },
         {
           label: 'Features',
           items: [
@@ -126,7 +136,8 @@ export default defineConfig({
             { label: 'Testing', slug: 'develop/testing' },
             { label: 'Design system', slug: 'develop/design-system' },
             { label: 'Upgrading', slug: 'develop/upgrading' },
-            { label: 'Releasing', slug: 'develop/releasing' },
+            { label: 'Versions and support', link: '/develop/upgrading/#versions-and-support' },
+            { label: 'Agent toolkit', link: '/reference/docs-index/' },
           ],
         },
         {
@@ -136,6 +147,16 @@ export default defineConfig({
             { label: 'Threat model', slug: 'operate/threat-model' },
           ],
         },
+        {
+          // The files outside docs/ that a reader of the site asks for, on GitHub.
+          label: 'Project',
+          items: [
+            { label: 'Changelog', link: `${github.url}/blob/main/CHANGELOG.md` },
+            { label: 'Credits', link: `${github.url}#credits` },
+            { label: 'Contributing', link: `${github.url}/blob/main/CONTRIBUTING.md` },
+          ],
+        },
+        { label: 'Maintainers', collapsed: true, items: [{ label: 'Releasing', slug: 'develop/releasing' }] },
         { label: 'Decisions', collapsed: true, items: decisions },
       ],
       plugins: [

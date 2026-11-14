@@ -61,7 +61,9 @@ export const routes = {
   'features/invoices.md': 'features/invoices',
   'features/auth.md': 'features/auth',
   'features/exchange-rates.md': 'features/exchange-rates',
-  // The agent entry point: reachable, searchable off, not in the sidebar.
+  'overview.md': 'start/what-you-get',
+  'faq.md': 'start/faq',
+  // The agent entry point: in the sidebar (Agent toolkit), searchable off.
   'INDEX.md': 'reference/docs-index',
 };
 

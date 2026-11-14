@@ -1,0 +1,30 @@
+---
+title: Why Trellis
+description: What the template generates, the rules its tests hold, the files written for an agent, the licenses it keeps out, and when another template fits better.
+---
+
+import { pitch } from '../../data/repo.mjs';
+
+{pitch} What `dotnet new` writes is a snapshot: nothing updates the solution afterwards, and adopting a later template version is a regenerate-and-diff you choose to make ([Upgrading](/develop/upgrading/)).
+
+## The rules are tests
+
+The dependency rules between the rings and the conventions inside them are architecture tests, so a reference that crosses the wrong way, or a new file that breaks a convention, fails the test run instead of waiting for a review. A new convention gets a rule and a positive control: the rule also runs against a planted violation it must refuse, because a check that passes a clean codebase and a broken one alike proves nothing. [Testing](/develop/testing/) maps what each test project proves, and [ADR-0009](/decisions/0009-test-stack/) records the decision.
+
+## The repository is written for an agent too
+
+`AGENTS.md` holds the commands and the boundaries. The conventions of each layer load from `.claude/rules/` when an agent touches that layer, skills hold procedures such as adding a feature, and reviewer agents read a change before it is finished. People and agents read one doc set, and `docs/INDEX.md` is the agent's entry point: the [Agent toolkit](/reference/docs-index/) page renders it, and [ADR-0014](/decisions/0014-ai-documentation-architecture/) records the decision.
+
+## Nothing in it stops you shipping a product
+
+The template is MIT-licensed. The build refuses the packages that moved to a commercial license or never were free for a product to ship, such as MediatR, AutoMapper and FluentAssertions, wherever they appear in a project's package graph, transitive dependencies included, and Dependabot never proposes them. A test holds every container image the solution uses to an allowlist that names its license. [ADR-0011](/decisions/0011-license-ceiling-policy/) lists each ceiling with its reason.
+
+## When another template fits better
+
+- **Another database.** The solution uses PostgreSQL and has no option for another engine: [Can I use SQL Server, MongoDB or another database?](/start/faq/#can-i-use-sql-server-mongodb-or-another-database)
+- **Another front end.** The UI is Blazor, or there is none (`--include-ui false`): [Options](/start/options/#--include-ui).
+- **A message broker.** None ships: a transport means a new package and a decision record ([Architecture](/understand/architecture/#domain-events-and-integration-events)).
+- **Multi-factor authentication.** There is none; the threat model lists it as an open gap ([Threat model](/operate/threat-model/#known-gaps--decide-deliberately-before-production)).
+- **A deployment target other than Docker Compose.** `aspire publish` writes Compose files, and the deployment guide starts from them ([Deploy to one host](/operate/deployment/#deploy-to-one-host)).
+
+[Compared with other templates](/compare/) sets these facts beside four other .NET solution templates.

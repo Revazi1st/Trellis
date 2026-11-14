@@ -1,0 +1,30 @@
+---
+title: Compared with other templates
+description: Trellis beside four other .NET solution templates, fact by fact, each read from the project's own repository on 2026-11-15.
+---
+
+import { build, options } from '../../data/repo.mjs';
+import { github } from '../../../trellis.config.mjs';
+
+export const trellisVersion = build.version ?? build.latestRelease?.replace(/^v/, '') ?? 'not released yet';
+
+Trellis beside four other .NET solution templates: [jasontaylordev/CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture), [ardalis/CleanArchitecture](https://github.com/ardalis/CleanArchitecture), [amantinband/clean-architecture](https://github.com/amantinband/clean-architecture) and [fullstackhero/dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit). Every cell about another project was read on 2026-11-15 from that project's own repository: its settings and latest release on GitHub, and files such as its `template.json`, its package list and its workflows. A dash means the fact was not recorded, not that it is absent; "none found" means the repository was searched and holds none. The Trellis column describes this repository, and its version and its option count are read from it when this site is built.
+
+| | Trellis | jasontaylordev/CleanArchitecture | ardalis/CleanArchitecture | amantinband/clean-architecture | fullstackhero/dotnet-starter-kit |
+|---|---|---|---|---|---|
+| License | MIT | MIT | MIT | MIT | MIT |
+| Targets | .NET 10 | .NET 10 | .NET 11 | .NET 8 | .NET 10 |
+| Latest release | {trellisVersion} | v10.8.0, 2026-03-23 | v12.0.1, 2026-11-13 | no GitHub release; last push 2024-07-14 | 10.0.0, 2026-06-19 |
+| Request handling | handlers injected directly, behind a decorator pipeline | MediatR | FastEndpoints with Mediator | MediatR | Mediator |
+| Failures | `Result`, RFC 9457 problems, an analyzer for a dropped `Result` | exceptions, which an exception handler turns into problem details | Ardalis.Result | ErrorOr | — |
+| Database | PostgreSQL; migrations shipped | `--database postgresql`, `sqlite` (the default) or `sqlserver`; no migrations, the schema is created by `EnsureCreated` | SQLite and SQL Server packages; migrations shipped; no option to choose | EF Core on SQLite; migrations shipped | EF Core on PostgreSQL; migrations shipped |
+| Front end | Blazor, optional | `--client-framework angular` (the default), `react` or `none` | none found | none found | two React apps, admin and dashboard, optional |
+| Orchestration or containers | Aspire | Aspire | Aspire | a Dockerfile and a Compose file | Aspire, optional |
+| Options at creation | {options.length} boolean options | `--database`, `--client-framework` | none found: neither `template.json` declares a parameter | none found: its `template.json` declares no parameter | `--aspire`, `--frontend`, `--agents`, `--skipRestore`, and text values for contact and mail details |
+| CI over the template's options | `template-ci.yml`: a leg per option, and all options on | `test-templates.yml`: every client framework with every database | no options to cover; `cross-platform-build-test.yml` builds and tests on Windows, Linux and macOS | no options to cover; `build.yml` builds and tests on Windows | `template-smoke.yml`: everything on, and Aspire and React off |
+| Agent files | `AGENTS.md`, rules, skills, reviewers, hooks, MCP servers | none found | `.github/copilot-instructions.md` | none found | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and rules, skills and workflows in `.agents/`, optional |
+| Item template | none; the `add-feature` skill | `ca-usecase` | none found | none found | none found |
+| Deployment | Docker Compose from `aspire publish` | Azure Container Apps through Aspire | — | a Compose file that builds and runs the API | Docker Compose; Terraform for AWS (ECS) |
+| Documentation website | this site | [cleanarchitecture.jasontaylor.dev](https://cleanarchitecture.jasontaylor.dev) | [cleanarchitecture.ardalis.com](https://cleanarchitecture.ardalis.com/) | none found | [fullstackhero.net](https://fullstackhero.net/) |
+
+The README's <a href={`${github.url}#credits`}>Credits</a> name the ideas Trellis took from some of these projects; a project this page only compares with gets no line there. [xavierjohn/Trellis](https://github.com/xavierjohn/Trellis) is a different project: there is no affiliation, the shared name is a coincidence, and the ideas taken from it are in the same Credits.
