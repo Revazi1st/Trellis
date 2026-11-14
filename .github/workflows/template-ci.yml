@@ -135,9 +135,10 @@ jobs:
           fi
 
           # The template does not ship its maintainer-only scripts (check-template-toggles.sh,
-          # test-template.sh); a workflow step that runs one belongs in a block conditioned on the
-          # TemplateSource symbol (see ci.yml); a hook or an agent file that names one, likewise.
-          if grep -rInE 'check-template-toggles|test-template\.sh' .github .claude; then
+          # test-template.sh, check-readme-sync.sh); a workflow step that runs one belongs in a block
+          # conditioned on the TemplateSource symbol (see ci.yml); a hook or an agent file that names
+          # one, likewise.
+          if grep -rInE 'check-template-toggles|test-template\.sh|check-readme-sync' .github .claude; then
             echo "::error::Generated workflows or agent files reference a maintainer-only script the template does not ship (listed above)."
             fail=1
           fi
@@ -243,7 +244,7 @@ jobs:
           # A test sits under the generated name (tests/Acme.Shop.ArchitectureTests/), hence the unquoted
           # glob: a shipped copy expands it, and with none it stays literal, so -e is false.
           for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md .claude/rules/site.md eng/readme \
-                   scripts/check-template-toggles.sh scripts/test-template.sh site .github/workflows/site.yml \
+                   scripts/check-template-toggles.sh scripts/test-template.sh scripts/check-readme-sync.sh site .github/workflows/site.yml \
                    docs/adr/0031-documentation-site.md tests/*.ArchitectureTests/MigrationSnapshotTests.cs; do
             if [ -e "$f" ]; then
               echo "::error::$f is the template repository's own material and must not ship."
