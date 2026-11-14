@@ -157,19 +157,27 @@ public sealed class AppDbContext(
             [] => [false, .. Enumerable.Repeat(true, columns.Length - 1)],  // EF's "every column descending"
             _ => [false, .. descending],
         };
+
+        // Annotations, stored as the value given, so each is a real array: a collection expression passed
+        // as an IReadOnlyList<T> becomes a list type the compiler makes up, which the C# migration generator
+        // cannot write ('migrations add' throws) and Npgsql's DDL skips without a word (the index loses
+        // its COLLATE, operator class and NULLS order).
         if (collation is not null)
         {
-            scoped.SetCollation([null!, .. collation]);
+            string[] shifted = [null!, .. collation];
+            scoped.SetCollation(shifted);
         }
 
         if (operators is not null)
         {
-            scoped.SetOperators([null!, .. operators]);
+            string[] shifted = [null!, .. operators];
+            scoped.SetOperators(shifted);
         }
 
         if (nullSortOrder is not null)
         {
-            scoped.SetNullSortOrder([NullSortOrder.Unspecified, .. nullSortOrder]);
+            NullSortOrder[] shifted = [NullSortOrder.Unspecified, .. nullSortOrder];
+            scoped.SetNullSortOrder(shifted);
         }
     }
 #endif

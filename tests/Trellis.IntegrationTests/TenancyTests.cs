@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -170,12 +172,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     [Fact]
     public void A_unique_index_on_an_aggregate_is_unique_per_tenant_under_the_name_it_was_given()
     {
-        using var context = new AppDbContext(
-            new DbContextOptionsBuilder<AppDbContext>()
-                .UseNpgsql("Host=probe.invalid")
-                .ReplaceService<IModelCustomizer, ProbeModelCustomizer>()
-                .Options,
-            new FixedTenantContext(TenantA));
+        using AppDbContext context = NewProbeContext();
         // The design-time model, the one migrations are generated from: the runtime model drops the
         // per-column sort order.
         IEntityType probe = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ProbeAccount)).ShouldNotBeNull();
@@ -202,6 +199,60 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         email.GetOperators().ShouldBe([null, ProbeModelCustomizer.EmailOperators], ignoreOrder: false);
         email.GetNullSortOrder().ShouldBe([NullSortOrder.Unspecified, NullSortOrder.NullsLast]);
     }
+
+    /// <summary>
+    /// The settings the rewrite keeps must reach what reads them, not only the model, where any list
+    /// compares equal to the one asserted above. The C# migration generator writes an annotation only
+    /// when it can spell its value (an array; a list type the compiler made up throws on
+    /// <c>migrations add</c>), and Npgsql's DDL reads the arrays and drops anything else without a word,
+    /// so a case-insensitive key would turn case-sensitive. Read from the probe's own model, nothing connects.
+    /// </summary>
+    [Fact]
+    public void A_tenant_led_unique_index_keeps_its_per_column_settings_in_the_migration_and_the_DDL()
+    {
+        using AppDbContext context = NewProbeContext();
+        IModel model = context.GetService<IDesignTimeModel>().Model;
+
+        // What 'migrations add' hands the C# generator: each per-column setting an array, the tenant first.
+        CreateIndexOperation email = context.GetService<IMigrationsModelDiffer>()
+            .GetDifferences(null, model.GetRelationalModel())
+            .OfType<CreateIndexOperation>()
+            .Single(static operation => operation.Name == ProbeModelCustomizer.EmailIndex);
+        email.Columns.ShouldBe([TenantInterceptor.TenantIdProperty, "Email"]);
+        IAnnotation[] perColumn = [.. email.GetAnnotations()
+            .Where(static annotation => annotation.Value is System.Collections.IEnumerable and not string)
+            .OrderBy(static annotation => annotation.Name, StringComparer.Ordinal)];
+        perColumn.Select(static annotation => annotation.Name)
+            .ShouldBe(["Npgsql:IndexNullSortOrder", "Npgsql:IndexOperators", RelationalAnnotationNames.Collation]);
+        foreach (IAnnotation setting in perColumn)
+        {
+            setting.Value.ShouldBeAssignableTo<Array>(
+                $"{setting.Name} holds a {setting.Value!.GetType().Name}: the C# migration generator writes only an array");
+        }
+
+        // What 'dbcontext script', EnsureCreated and a migration's SQL emit: TenantId leads, ascending
+        // with no setting of its own, and every column the configuration set keeps its settings (Npgsql
+        // quotes a collation only when its name needs it, and probe_ci does not).
+        string[] script = context.Database.GenerateCreateScript().ReplaceLineEndings("\n").Split('\n');
+        Statement(ProbeModelCustomizer.EmailIndex).ShouldBe(
+            $"CREATE UNIQUE INDEX \"{ProbeModelCustomizer.EmailIndex}\" ON \"ProbeAccounts\" " +
+            $"(\"{TenantInterceptor.TenantIdProperty}\", \"Email\" COLLATE {ProbeModelCustomizer.EmailCollation} " +
+            $"{ProbeModelCustomizer.EmailOperators} DESC NULLS LAST) WHERE {ProbeModelCustomizer.EmailFilter};");
+        Statement(ProbeModelCustomizer.EmailCodeIndex).ShouldBe(
+            $"CREATE UNIQUE INDEX \"{ProbeModelCustomizer.EmailCodeIndex}\" ON \"ProbeAccounts\" " +
+            $"(\"{TenantInterceptor.TenantIdProperty}\", \"Email\" DESC, \"Code\" DESC);");
+
+        string Statement(string index) => script.Single(
+            line => line.StartsWith($"CREATE UNIQUE INDEX \"{index}\"", StringComparison.Ordinal)).Trim();
+    }
+
+    /// <summary>A context over the probe model (<see cref="ProbeModelCustomizer"/>); nothing connects.</summary>
+    private static AppDbContext NewProbeContext() => new(
+        new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql("Host=probe.invalid")
+            .ReplaceService<IModelCustomizer, ProbeModelCustomizer>()
+            .Options,
+        new FixedTenantContext(TenantA));
 
     private static void ShouldBeTenantScoped(IEntityType aggregate)
     {
