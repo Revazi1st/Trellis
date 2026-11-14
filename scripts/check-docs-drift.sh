@@ -20,8 +20,8 @@
 # A feature doc this change touches or owes, for a feature with an aggregate (a src/Core/*.Domain/<Feature>/
 # folder), carries the H2s the add-feature skill names, so every decision has the same place in every
 # doc: The domain in plain words, Try it, Where the code lives, Domain, Application, Persistence, API,
-# UI (with the UI), Tests, Endpoints. An integration's doc (exchange-rates.md) or a cross-cutting one
-# (auth.md) has no aggregate folder and keeps its own shape.
+# Tests, Endpoints, and UI too in a project that has the UI. An integration's doc (exchange-rates.md)
+# or a cross-cutting one (auth.md) has no aggregate folder and keeps its own shape.
 # The design system is one doc for the files that are the system, not a feature's:
 #   src/Presentation/UI/*.UI.Common/{wwwroot,Layout}/**  -> docs/design-system.md
 #
@@ -178,7 +178,7 @@ for doc in $scoped_docs; do
     grep -qE "^## ${heading}( |\$)" "$doc" || printf '  ## %s\n' "$heading"
   done)"
   if [ -n "$missing" ]; then
-    report "$doc lacks headings a feature with an aggregate carries (the add-feature skill names them, in invoices.md's order):"
+    report "$doc lacks headings a feature with an aggregate carries (the add-feature skill names them):"
     printf '%s\n' "$missing"
     fail=1
   fi

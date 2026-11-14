@@ -132,8 +132,9 @@ after each layer.
       answers an ETag without `If-Match`, unless `WritesWithoutIfMatch` names it with a reason;
       `ProblemDetailsContractTests` for the new code]. Without it two callers who change one record
       overwrite each other unseen, so leaving it out is one sentence in the feature doc's
-      *Concurrency* paragraph saying why. Caching that GET in `HybridCache` stays a choice the doc
-      records.
+      *Optimistic concurrency* paragraph saying why; with it, the doc's *Conditional GET* and
+      *Conditional writes* paragraphs describe it, as `invoices.md`'s do. Caching that GET in
+      `HybridCache` stays a choice the doc records.
 - [ ] Multi-tenancy: the tenant comes from the signed `tenant` claim only (ADR-0022). Never put a
       tenant on a contract, a route, a query string or a header.
 - [ ] **Regenerate the OpenAPI document**: `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`
@@ -196,12 +197,16 @@ after each layer.
       arrange step ends in `ShouldBeSuccess()` [RSLT001 fails the Release build on a dropped `Result`,
       an awaited one included, in tests too; a deliberate drop is `_ = …` with a reason].
 - [ ] **`docs/features/{feature}.md`** (kebab-case: `ExchangeRates` → `exchange-rates.md`), shaped
-      like `invoices.md`, with its H2s in that order: `The domain in plain words`, `Try it`,
-      `Where the code lives`, `Domain`, `Application`, `Persistence`, `API` (with *Errors*,
-      *Idempotency*, *Caching*, *Concurrency* and *Paging* paragraphs as they apply), `UI` (with the
-      UI), `Tests` and `Endpoints` (the table); plus a line in `docs/INDEX.md`
+      like `invoices.md`, with its H2s: `The domain in plain words`, `Try it`, `Where the code lives`,
+      `Domain`, `Application`, `Persistence`, `API` (with *Error contract*, *Caching*, *Pagination*,
+      *Optimistic concurrency*, *Idempotency*, *Conditional GET* and *Conditional writes* paragraphs
+      as they apply), `Tests` and `Endpoints` (the table); plus a line in `docs/INDEX.md`
       [`check-docs-drift.sh`: a change under the feature's folders without its doc fails CI, and so
       does the doc of a feature with a `Domain/{Feature}/` folder that lacks one of those headings].
+      <!--#if (IncludeUI) -->
+      A `UI` H2 goes between `API` and `Tests`, and every feature's doc carries it: its pages, or the
+      sentence saying why it has none [`check-docs-drift.sh` requires that heading too].
+      <!--#endif -->
       A load-bearing decision gets an ADR (the `new-adr` skill).
 - [ ] The new endpoints' requests in `src/Presentation/Api/Trellis.Api/Trellis.Api.http`, and the
       feature doc opening like `invoices.md`: the domain in plain words, a state diagram when the
@@ -235,8 +240,10 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   configuration names no tenant [`TenancyTests`, all-options leg]. After the value objects and the
   aggregate are built, the handler may ask the repository port (`{Key}ExistsAsync`) and answer the
   same `Error` the index maps to: the lookup is orchestration and the index is the rule, so the
-  lookup is never a `MustAsync` validator (Auth's registration, which asks before it writes, and
-  `UserNameIndex` are the model). An e-mail key is case-insensitive like Auth's: a nondeterministic
+  lookup is never a `MustAsync` validator. The model for the lookup is `IdentityService.RegisterAsync`
+  (Persistence), which asks `userManager.FindByEmailAsync` before it writes and answers
+  `AuthErrors.EmailAlreadyInUse`; for the index, `UserNameIndex` and the same `Error` its row in
+  `UniqueConstraintErrors` maps to. An e-mail key is case-insensitive like Auth's: a nondeterministic
   ICU collation (`HasCollation(…, deterministic: false)` in `AppDbContext.OnModelCreating`,
   `UseCollation` on the column) or a normalized column (Identity's `NormalizedUserName`, the e-mail
   upper-cased, under `UserNameIndex`), and a test row that adds the same address in another case gets
@@ -256,8 +263,9 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
 
 - [ ] Each shape the feature could have had gets one sentence in its doc's matching section, how it
       is handled or "none, because …": owner-scoped or business-wide (*API*, as `invoices.md`'s
-      *Ownership* paragraph); cached or not (*Caching*); ETag and `If-Match` or not (*Concurrency*);
-      offset or keyset paging (*Paging*); reactions and integration events or none (*Application*).
+      *Ownership* paragraph); cached or not (*Caching*); ETag and `If-Match` or not (*Conditional GET*
+      and *Conditional writes*, or the reason for none in *Optimistic concurrency*); offset or keyset
+      paging (*Pagination*); reactions and integration events or none (*Application*).
       <!--#if (IncludeUI) -->
       A page or none goes in its *UI* section, as the UI section's first box says.
       <!--#endif -->
