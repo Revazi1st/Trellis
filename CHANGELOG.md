@@ -308,9 +308,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   indexes stay global (ADR-0022, amendment of 2026-11-12). `TenancyTests` fails on a unique index or an
   alternate key of an aggregate that `TenantId` does not lead, with a probe aggregate holding each shape
   as its control. Declare a business key as a unique index and reference another aggregate by its id: an
-  alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`, is not rewritten. The
-  shipped `InitialCreate` is unchanged; a multi-tenant project regenerates it as before, and one that
-  already has a unique index on an aggregate gets `(TenantId, key)` from its next migration.
+  alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`, is not rewritten. A unique
+  constraint the convention does not reach (a child table's, a primary key a request chooses) is still
+  unique across every tenant, its 409 telling the caller another tenant holds the value, and the threat
+  model's multi-tenancy gap now says so. The shipped `InitialCreate` is unchanged; a multi-tenant
+  project regenerates it as before, and one that already has a unique index on an aggregate gets
+  `(TenantId, key)` from its next migration.
 - **A record whose GET hands out a version takes it back on every write.** The `add-feature` skill
   named the ETag and `If-Match` only as what an endpoint that honours them declares, with no default,
   so a new aggregate could ship with no `Version` on its DTO, no ETag and no `If-Match`, and two
