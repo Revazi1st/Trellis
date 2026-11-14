@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Shouldly;
 using Xunit;
 
@@ -14,7 +15,7 @@ namespace Trellis.ApiTests;
 /// ships without prose, or a transformer that stops doing its job, fails here with the operation named.
 /// </para>
 /// </summary>
-public sealed class OpenApiDocumentTests
+public sealed partial class OpenApiDocumentTests
 {
     private const string ProblemMediaType = "application/problem+json";
     private const string ProblemSchemaRef = "#/components/schemas/ProblemResponse";
@@ -235,20 +236,24 @@ public sealed class OpenApiDocumentTests
     [Fact]
     public void The_If_Match_check_flags_an_unconditional_write_under_a_versioned_resource()
     {
-        // A versioned resource (its GET answers an ETag) with a conditional write, two unconditional ones (on the
-        // path itself and below it) and an exempt one; a create on the collection above it, and a resource that
-        // hands out no version, neither of which can name one.
+        // A versioned resource (its GET answers an ETag) with a conditional write, unconditional ones (on the
+        // path itself and below it, two of them naming its parameter differently: each endpoint declares its own
+        // route) and an exempt one; a create on the collection above it, an action on a literal segment beside
+        // the resource, and a resource that hands out no version, none of which can name one.
         using JsonDocument planted = JsonDocument.Parse(
             """
             {
               "paths": {
                 "/api/v1/things": { "post": { "parameters": [] } },
+                "/api/v1/things/export": { "post": {} },
                 "/api/v1/things/{id}": {
                   "get": { "responses": { "200": { "headers": { "ETag": { "schema": { "type": "string" } } } } } },
                   "delete": { "parameters": [ { "name": "id", "in": "path" } ] }
                 },
                 "/api/v1/things/{id}/rename": { "post": { "parameters": [ { "name": "If-Match", "in": "header" } ] } },
                 "/api/v1/things/{id}/archive": { "post": { "parameters": [ { "name": "id", "in": "path" } ] } },
+                "/api/v1/things/{thingId}/retire": { "post": { "parameters": [ { "name": "thingId", "in": "path" } ] } },
+                "/api/v1/things/{thingId}/lines/{lineId}": { "delete": {} },
                 "/api/v1/things/{id}/notes": { "post": {} },
                 "/api/v1/notes/{id}": { "get": { "responses": { "200": {} } } },
                 "/api/v1/notes/{id}/pin": { "post": {} }
@@ -264,7 +269,13 @@ public sealed class OpenApiDocumentTests
                 ["POST /api/v1/things/{id}/gone"] = "a write that no longer exists",
             });
 
-        string[] unguarded = ["DELETE /api/v1/things/{id}", "POST /api/v1/things/{id}/archive"];
+        string[] unguarded =
+        [
+            "DELETE /api/v1/things/{id}",
+            "DELETE /api/v1/things/{thingId}/lines/{lineId}",
+            "POST /api/v1/things/{id}/archive",
+            "POST /api/v1/things/{thingId}/retire",
+        ];
         string[] stale = ["POST /api/v1/things/{id}/gone"];
         audit.Unguarded.ShouldBe(unguarded);
         audit.Stale.ShouldBe(stale);
@@ -339,20 +350,23 @@ public sealed class OpenApiDocumentTests
 
     /// <summary>
     /// Every write ("POST /api/v1/…") on a path whose GET answers an <c>ETag</c>, or below one, that declares no
-    /// <c>If-Match</c> header and is not exempt, and every exempt name that is no such write, each sorted.
+    /// <c>If-Match</c> header and is not exempt, and every exempt name that is no such write, each sorted. Paths
+    /// are compared with each route parameter blanked (<see cref="RouteShape"/>), since every endpoint declares
+    /// its own template and a write may name the id differently from its GET; a name keeps the path as written.
     /// </summary>
     private static PreconditionAudit AuditPreconditions(
         IReadOnlyList<(string Path, JsonElement Item)> paths, IReadOnlyDictionary<string, string> exempt)
     {
         string[] versioned = [.. paths
             .Where(static entry => entry.Item.TryGetProperty("get", out JsonElement get) && AnswersETag(get))
-            .Select(static entry => entry.Path)];
+            .Select(static entry => RouteShape(entry.Path))];
 
         SortedSet<string> unguarded = new(StringComparer.Ordinal);
         HashSet<string> excused = new(StringComparer.Ordinal);
         foreach ((string path, JsonElement item) in paths)
         {
-            if (!versioned.Any(resource => path == resource || path.StartsWith(resource + "/", StringComparison.Ordinal)))
+            string shape = RouteShape(path);
+            if (!versioned.Any(resource => shape == resource || shape.StartsWith(resource + "/", StringComparison.Ordinal)))
             {
                 continue;
             }
@@ -381,6 +395,12 @@ public sealed class OpenApiDocumentTests
             [.. unguarded],
             [.. exempt.Keys.Where(name => !excused.Contains(name)).Order(StringComparer.Ordinal)]);
     }
+
+    /// <summary>The path with every route parameter (<c>{id}</c>, <c>{invoiceId}</c>) written as <c>{}</c>.</summary>
+    private static string RouteShape(string path) => RouteParameter().Replace(path, "{}");
+
+    [GeneratedRegex(@"\{[^{}/]*\}", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex RouteParameter();
 
     private static bool AnswersETag(JsonElement get)
         => get.TryGetProperty("responses", out JsonElement responses)

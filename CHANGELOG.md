@@ -316,9 +316,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   people renaming one record overwrote each other unseen. Its API section now makes them the default
   for an aggregate that changes after its create (`GetInvoice` and the invoice writes are the model)
   and asks for one sentence in the feature doc's *Concurrency* paragraph to leave them out.
-  `OpenApiDocumentTests` fails on a write under a path whose GET answers an `ETag` that declares no
-  `If-Match`, unless `WritesWithoutIfMatch` names it with its reason; a planted document is its
-  control.
+  `OpenApiDocumentTests` fails on a write under a path whose GET answers an `ETag` (whatever each route
+  names its parameters) that declares no `If-Match`, unless `WritesWithoutIfMatch` names it with its
+  reason; a planted document is its control.
 - **A feature a person uses gets its pages, or a reason it has none.** The `add-feature` skill's
   section was headed "UI (if included)", which reads as "if the request asks for one" as easily as
   "if the project has a UI", so a feature could ship API-only in a project with the UI on and say
