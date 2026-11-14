@@ -15,8 +15,9 @@ eng/readme/README.md describes (its tokens are the palette below), and each is d
 read at render time:
 
   title         The banner: a dark stage with the lattice, .template.config/icon.svg, the wordmark,
-                the tagline, and a terminal chip with the install commands, built from the package
-                id and the template's short name and checked against README.md.
+                the tagline (the *...* span of eng/readme/pitch.md), and a terminal chip with the
+                install commands, built from the package id and the template's short name and
+                checked against README.md.
   rings         The rings as a mark that still reads at 160 px.
   architecture  A bento of ring cards holding the projects under src/ and tools/ with their
                 files, as a default `dotnet new trellis` generates them: template.json's exclude
@@ -2124,8 +2125,20 @@ def rings(theme: Theme, facts: Facts) -> Svg:
 # 5. title: the banner on its stage
 # ==================================================================================================
 
-TAGLINE = "A best-practices .NET 10 solution template"
+PITCH_FILE = "eng/readme/pitch.md"
 BANNER_H = 320
+
+
+def tagline() -> str:
+    """The banner's line: the one *...* span of eng/readme/pitch.md, the pitch's short form."""
+    lines = [line for line in read_text(PITCH_FILE).splitlines() if line.strip()]
+    if len(lines) != 1:
+        raise RenderError(f"{PITCH_FILE} must hold exactly one non-empty line; "
+                          f"it has {len(lines)}")
+    spans = re.findall(r"\*([^*]+)\*", lines[0])
+    if len(spans) != 1 or lines[0].count("*") != 2:
+        raise RenderError(f"{PITCH_FILE} must hold exactly one *...* span, the banner's tagline")
+    return spans[0]
 
 
 def icon_markup(scale: float, x: float, y: float) -> List[str]:
@@ -2154,9 +2167,10 @@ def title(theme: Theme, facts: Facts) -> Svg:
     glow_x, glow_y, glow_r = mx + mark / 2, my + mark / 2, 520
     chip = Box(744, 96, 384, 128)
     commands = facts.install
+    short_form = tagline()
     svg = Svg(f"title-{theme.name}", w, h, "Trellis",
               "The Trellis mark, a garden lattice with one leaf, beside the wordmark Trellis and "
-              f"the line: {TAGLINE}; on the right a terminal with the two install commands, "
+              f"the line: {short_form}; on the right a terminal with the two install commands, "
               f"{commands[0]} and {commands[1]}.", pad=PAD)
 
     def stage_base(x: float, y: float) -> str:
@@ -2222,8 +2236,8 @@ def title(theme: Theme, facts: Facts) -> Svg:
         svg.raw(element)
     tx = mx + mark + 40
     words = svg.text(tx, 172, [Span("Trellis", STAGE.ink, 88, 700, tracking=-1.76)], on=stage_at)
-    tagline = svg.text(tx + 4, 216, [Span(TAGLINE, STAGE.muted, 22)], on=stage_at)
-    if max(words.right, tagline.right) + 40 > chip.x:
+    line = svg.text(tx + 4, 216, [Span(short_form, STAGE.muted, 22)], on=stage_at)
+    if max(words.right, line.right) + 40 > chip.x:
         raise RenderError("title: the wordmark and the tagline run into the terminal")
 
     on_grid(svg, "the mark", mx, my, mark)
