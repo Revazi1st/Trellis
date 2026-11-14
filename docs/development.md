@@ -265,6 +265,18 @@ which is the build output (`artifacts/bin/Trellis.UiTests/debug/TestResults/scre
 commands above). CI's `ui-tests` job keeps them for 14 days as the run's `ui-screenshots` artifact, passed
 or failed. Nothing compares them with earlier ones: a reviewer opens them.
 
+`FirstRunPicturesTests` keeps four more in the same folder, for a README or a release note: the invoice list
+at 1280 px and the seeded draft at 400 px, each in light and dark, named `first-run-invoices-1280-<scheme>.png`
+and `first-run-invoice-400-<scheme>.png`. They show a first run, so the run has to say the database is one:
+the test skips without `UI_TESTS_FIRST_RUN=1`, and with it fails unless the list holds exactly the invoices
+the migration job seeds. CI's `ui-tests` job runs it alone, in a step of its own, before the other browser
+tests create their invoices; on your machine, run it against a freshly migrated database:
+
+```bash
+RUN_UI_TESTS=1 UI_TESTS_FIRST_RUN=1 UI_TESTS_BASE_URL=http://localhost:5170 \
+  dotnet test tests/Trellis.UiTests --filter-class '*FirstRunPicturesTests'
+```
+
 A test signs in through `Session.SignInAsAdminAsync`, on its own page: the circuit holds the tokens, so a
 full page load starts signed out and a signed-in test moves on through the app's links. The API allows ten
 sign-ins a minute from one address and every browser test signs in from the web host's, so a test that

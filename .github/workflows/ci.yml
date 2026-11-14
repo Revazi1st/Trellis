@@ -473,6 +473,17 @@ jobs:
       - name: Install Playwright browsers
         run: pwsh artifacts/bin/Trellis.UiTests/release/playwright.ps1 install chromium --with-deps
 
+      # The app as a first run shows it (FirstRunPicturesTests): the invoice list and one seeded invoice,
+      # light and dark, saved as first-run-*.png among the screenshots below. Alone and first, while the
+      # database holds only what the migration job seeded: the tests of the next step create invoices.
+      - name: Keep pictures of the first run
+        env:
+          RUN_UI_TESTS: "1"
+          UI_TESTS_FIRST_RUN: "1"
+          UI_TESTS_BASE_URL: http://localhost:5170
+          UI_TESTS_SCREENSHOTS: ${{ github.workspace }}/tests/Trellis.UiTests/TestResults/screenshots
+        run: dotnet test tests/Trellis.UiTests -c Release --no-build --filter-class '*FirstRunPicturesTests'
+
       - name: Run browser tests
         env:
           RUN_UI_TESTS: "1"
