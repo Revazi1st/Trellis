@@ -321,11 +321,37 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         foreach (IEntityType other in others)
         {
             other.FindDeclaredQueryFilter("Tenant").ShouldBeNull($"{other.ClrType.Name} must not be tenant-filtered");
-            other.GetIndexes().Where(static index => index.IsUnique).ShouldAllBe(
-                static index => index.Properties[0].Name != TenantInterceptor.TenantIdProperty,
-                $"{other.ClrType.Name}'s unique indexes stay global: one e-mail is one user in one tenant (ADR-0022)");
+            ShouldKeepUniqueIndexesGlobal(other);
         }
     }
+
+    /// <summary>
+    /// The control for the unique-index half of <see cref="Non_aggregate_tables_carry_no_tenant_filter"/>: a probe
+    /// model gives the users a unique index on the e-mail per tenant, <c>TenantId</c> second as one would write it
+    /// by hand, and the check names it.
+    /// </summary>
+    [Fact]
+    public void The_global_index_check_flags_a_unique_index_outside_the_aggregates_that_holds_the_tenant()
+    {
+        using AppDbContext context = NewProbeContext<GlobalKeyProbeCustomizer>();
+        IEntityType user = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ApplicationUser)).ShouldNotBeNull();
+
+        Should.Throw<ShouldAssertException>(() => ShouldKeepUniqueIndexesGlobal(user)).Message
+            .ShouldContain(GlobalKeyProbeCustomizer.PerTenantUserIndex);
+    }
+
+    private static void ShouldKeepUniqueIndexesGlobal(IEntityType other)
+        => UniqueIndexesHoldingTheTenant(other).ShouldBeEmpty(
+            $"{other.ClrType.Name}'s unique indexes hold TenantId: a table outside the aggregates keeps its unique keys global (ADR-0022), so take TenantId out of each");
+
+    /// <summary>Every unique index of <paramref name="other"/> with <c>TenantId</c> in it, in whatever place.</summary>
+    private static string?[] UniqueIndexesHoldingTheTenant(IEntityType other) =>
+    [
+        .. other.GetIndexes()
+            .Where(static index => index.IsUnique
+                && index.Properties.Any(static property => property.Name == TenantInterceptor.TenantIdProperty))
+            .Select(static index => index.GetDatabaseName()),
+    ];
 
     [Fact]
     public async Task Registering_provisions_a_fresh_tenant_and_credentials_carry_it()
@@ -561,13 +587,15 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     /// alternate key declared on it, the one EF adds for a reference to an account by its code
     /// (<c>HasPrincipalKey</c>; a parent account here), and a unique index declared after
     /// <see cref="AppDbContext"/>'s <c>OnModelCreating</c>, which nothing in the template does, so the convention
-    /// never meets it and <c>TenantId</c> stays second.
+    /// never meets it and <c>TenantId</c> stays second. Outside the aggregates, the users get a unique index on
+    /// the e-mail per tenant, which decision 1 of ADR-0022 forbids.
     /// </summary>
     private sealed class GlobalKeyProbeCustomizer(ModelCustomizerDependencies dependencies) : RelationalModelCustomizer(dependencies)
     {
         public const string HandleKey = "AK_ProbeAccounts_Handle";
         public const string CodeKey = "AK_ProbeAccounts_Code";
         public const string LateIndex = "IX_ProbeAccounts_Late";
+        public const string PerTenantUserIndex = "IX_ProbeUsers_UserName_Tenant";
 
         public override void Customize(ModelBuilder modelBuilder, DbContext context)
         {
@@ -589,6 +617,10 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
             modelBuilder.Entity<ProbeAccount>()
                 .HasIndex("Reference", TenantInterceptor.TenantIdProperty)
                 .HasDatabaseName(LateIndex)
+                .IsUnique();
+            modelBuilder.Entity<ApplicationUser>()
+                .HasIndex(static user => new { user.NormalizedUserName, user.TenantId })
+                .HasDatabaseName(PerTenantUserIndex)
                 .IsUnique();
         }
     }

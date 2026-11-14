@@ -122,7 +122,8 @@ caller that another tenant holds the value.
   with `TenantId`, in the real model and in a probe aggregate's (a plain index, one sorted descending on
   every column and one with a pinned name and per-column settings, built by the real `AppDbContext`),
   with a second probe holding a key in each shape the convention leaves global as the check's control;
-  and no unique index outside the aggregates does.
+  and no unique index outside the aggregates includes `TenantId` in any place, a per-tenant index on
+  the users being that check's control.
 
 ### Consequences
 
