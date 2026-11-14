@@ -143,6 +143,12 @@ caller that another tenant holds the value.
   tenant, and its 409, or the 500 of a fault on purpose, tells the caller that another tenant holds
   the value: ids are minted on the server and a business key is a unique index on the root, or the
   threat model's multi-tenancy gap records why a key stays global.
+- A row written with no tenant is outside every tenant-led unique index. The `TenantId` column is
+  nullable and `TenantInterceptor` stamps nothing when there is no tenant (a job that did not set
+  `AmbientTenant`, an anonymous endpoint, a webhook), and PostgreSQL treats NULLs as distinct, so two
+  tenant-less rows may hold the same key, which the index refused while it was global. A flow that
+  writes an aggregate is given its tenant before it writes; the threat model's multi-tenancy gap
+  records it.
 - A unique index on exactly a foreign key's columns is the one EF keeps for a one-to-one reference:
   replaced, EF adds its own again, global, under the name with a `1` appended, and `TenancyTests`
   fails naming it. The template's aggregates hold no such reference to each other; adding one means

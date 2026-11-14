@@ -315,7 +315,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   root, not as an owned type.
   A unique constraint the convention does not reach (a child table's that its root's id does not lead,
   a primary key a request chooses) is still unique across every tenant, its 409 telling the caller
-  another tenant holds the value, and the threat model's multi-tenancy gap now says so. The shipped
+  another tenant holds the value, and the threat model's multi-tenancy gap now says so. A row written
+  with no tenant (a job that did not set `AmbientTenant`, an anonymous endpoint) has a NULL `TenantId`
+  and is outside these indexes, since PostgreSQL treats NULLs as distinct: two such rows may hold the
+  same key, which the gap records too, so give such a flow its tenant before it writes. The shipped
   `InitialCreate` is unchanged; a multi-tenant project regenerates it as before, and one that already
   has a unique index on an aggregate gets `(TenantId, key)` from its next migration.
 - **A record that is edited hands out its version and takes it back on every write.** The `add-feature`

@@ -91,7 +91,10 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   or alternate key that its root's id does not lead, a primary key a request chooses) is unique
   across every tenant, so its 409, or the 500 of a fault on purpose, tells the caller that another
   tenant holds the value. Mint ids on the server and declare a business key as a unique index on the
-  root, or record here why a key stays global.
+  root, or record here why a key stays global. A row written with no tenant (`TenantId` NULL: a job
+  that did not set `AmbientTenant`, an anonymous endpoint, a webhook) is outside every tenant-led
+  unique index, since PostgreSQL treats NULLs as distinct, so two tenant-less rows may hold the same
+  key: give such a flow its tenant before it writes.
 - **A Blazor Server web host is one rate-limit source** — *open*. All of its users share 10 logins
   per minute (refreshes are unaffected). Widening it means trusting the web host as a proxy, per
   environment, or a BFF (ADR-0021, ADR-0007).
