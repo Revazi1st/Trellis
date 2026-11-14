@@ -25,6 +25,10 @@ dotnet new trellis -n Your.Project
 
 Documentation: https://revazi1st.github.io/Trellis/
 
+This README follows `main`. The package on nuget.org is the latest release (the badge above shows its
+version), and [`CHANGELOG.md`](CHANGELOG.md) lists what each release holds and, under *Unreleased*, what
+`main` has added since.
+
 **Trellis** is a `dotnet new` template for .NET 10 that generates a rich-DDD, Clean Architecture
 solution: vertical-slice features, CQRS without a mediator, `Result`s instead of exceptions,
 PostgreSQL, Identity with JWT, Aspire orchestration and an optional Blazor UI, in a repository written

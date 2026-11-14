@@ -8,164 +8,22 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
-- **E-mail goes out through MailKit, and `aspire run` catches it in Mailpit.** The SMTP adapter
-  (`Email:Provider=Smtp`) submits with MailKit (MIT) in place of `System.Net.Mail.SmtpClient`, which
-  Microsoft no longer recommends for new code; the `Email:Smtp` settings, their boot checks and the
-  logging contract are unchanged, STARTTLS still fails a send rather than falling back to plaintext,
-  and a failure is still thrown for the outbox with the relay's reply left out, now as MailKit's
-  `SmtpCommandException` (status and error code kept) where it was `SmtpException`. In run mode only,
-  the AppHost starts Mailpit (`CommunityToolkit.Aspire.Hosting.MailPit`, image `axllent/mailpit`,
-  both MIT) and points the API at it, so the receipt of a paid invoice lands behind the `mailpit`
-  resource's **Inbox** link instead of in the log; `aspire publish` declares no catcher, so a
-  deployment still configures its own relay. Under `aspire run` the AppHost's settings outrank a relay
-  you put in user secrets: run the API from its launch profile to try a real one.
-- **The `--use-redis` cache is Valkey** (BSD-3-Clause) in place of the Redis server, whose 8.x
-  releases are RSALv2, SSPLv1 or AGPLv3. The AppHost declares `AddValkey("cache")` with the image's
-  major pinned (`valkey/valkey:9`), the `redis` service of `docker-compose.yml` and the generated CI
-  start the same image, and the API keeps its Redis client, which speaks to Valkey unchanged; the
-  option, the `UseRedis` symbol and the `cache` resource keep their names. RedisInsight (SSPL) is
-  gone, so the cache has no browser tile. `ContainerImageTests` holds every image the AppHost
-  declares, the workflows run and the root compose file starts to an allowlist that names each one's
-  license, so an image that is not free to ship fails the tests (ADR-0011, amendment of 2026-11-08).
-  To move a 0.1.x solution: `Aspire.Hosting.Valkey` in place of `Aspire.Hosting.Redis` in the
-  AppHost, `AddValkey(...).WithImageTag("9")` in place of `AddRedis(...).WithRedisInsight()`, and
-  `valkey/valkey:9` with a `valkey-cli ping` health check in the compose file.
-- **More packages the build refuses** (ADR-0011, amendment of 2026-11-08). `LicenseCeilingPackageIds`
-  gains `Hangfire.Core` and `Hangfire.Pro` (LGPL-3.0 or commercial), `TickerQ` and `TickerQ.Utilities`
-  (a source-available agreement from 10.5.0), `NBomber` (not free for organizational use),
-  `Duende.IdentityServer` (commercial), `NServiceBus` (RPL-1.5 or commercial), and
-  `MySql.EntityFrameworkCore` with `MySql.Data` (GPL-2.0): a direct reference, or one that arrives
-  under another package, fails the build, Dependabot never proposes them, and the LICENSE CEILINGS
-  comment in `Directory.Packages.props` gives each its reason. A family is refused through the package
-  all its members depend on (`Hangfire.AspNetCore` through `Hangfire.Core`). The comment also names a
-  ceiling the build cannot enforce: `Verify` from 33.0.0 ships a maintenance-fee agreement in its
-  package, so pin it below 33 if you add snapshot tests. `LicenseCeilingTests` keeps the list, the
-  comment and Dependabot's ignores naming the same ids.
-- **A new project passes its own format check, whatever its name.** A project generated as `Acme.Shop`
-  failed the Format check of its own `ci.yml` on the first push, with an IMPORTS error in nearly every file:
-  `.editorconfig` set `dotnet_sort_system_directives_first`, which turns on `dotnet format`'s
-  using-order check, and that order sorts by the full name, so the shipped files were in order only for
-  a name that sorts where Trellis does (after Shouldly, before Xunit). The key stays in the template's
-  own source behind the `TemplateSource` conditional, so a generated project starts without it: the
-  IDEs still sort `System` usings first by default, and nothing checks the order until you opt in by
-  adding `dotnet_sort_system_directives_first = true` to `.editorconfig`, restoring and running
-  `dotnet format` once (the comment there says how). Template CI runs the generated `ci.yml`'s Format
-  check on every leg, one of them named `Zeta.Journal` so a name that sorts after Xunit is covered, and
-  `scripts/test-template.sh` does the same. The `finish-change` skill formats only the files the change
-  touches and reports a formatter change anywhere else instead of committing it.
-- **`/finish-change` loads in a headless session, and never commits on `main`.** A `claude -p` run had
-  `/finish-change commit` refused outright while `add-feature` loaded: `finish-change` and
-  `add-migration` were the two skills that pre-approved commands in an `allowed-tools` frontmatter, and
-  neither does now (`.claude/settings.json` already allows the scripts and git commands they listed,
-  apart from the OpenAPI snapshot run). The Commit box now stops when the branch cannot be created
-  instead of committing on `main`.
-- **`./scripts/ef.sh` works on a project nothing has built yet.** The first
-  `./scripts/ef.sh migrations add …` in a fresh clone failed with NETSDK1004 (`project.assets.json` not
-  found): dotnet-ef reads the project's metadata before it builds, and that needs a restore. The script
-  now restores the solution first, quietly (a failed restore still prints its errors).
-- **`/finish-change` tests the Release build, as CI does.** Its test boxes ran a plain `dotnet test`
-  right after the Release build, which built the solution again in Debug and, with the UI, could stop on
-  `Unable to find a project reference for project configuration item '…UI.Common.csproj'`. Every test
-  box, the OpenAPI snapshot run included, now passes `-c Release --no-build` as `ci.yml` does, and so
-  does `add-feature`'s last box; `docs/development.md` (*When the build fails*) explains the message.
-- **Every unique index is decided on, and the persistence rule no longer goes stale.**
-  `.claude/rules/persistence.md` named the registered unique constraints "today", so it was wrong after
-  the first feature with a unique key, and an agent is not always allowed to edit `.claude/`. The map in
-  `UniqueConstraintErrors` is now the list, and `UniqueConstraintTests` walks the model: a unique index
-  or key that is neither registered there nor named a fault on purpose, with the reason no two requests
-  can race to it, fails it, and so does a name the model no longer holds. A single-column uuid or
-  database-numbered primary key needs no row; the walk cannot tell a uuid a request chooses from one
-  minted for the row, so register or list the key of an aggregate whose id a client supplies yourself.
-- **A change to the role grants owes the threat model.** `scripts/check-docs-drift.sh` asked for a
-  `docs/threat-model.md` update when authentication, hardening or identity code changed, but not for
-  `Application/Authorization/`, where `Roles.Permissions` decides who may call each endpoint, so granting
-  a role a new permission went through unasked. That folder counts now, in CI and in the edit hook's
-  reminder, and `AGENTS.md` says so.
-- **The reviewer agents read right under your project's name.** `code-reviewer`, `test-reviewer` and
-  `security-reviewer` described their work as reviewing "a Trellis change", which a project generated as
-  `Acme.Shop` got as "a Acme.Shop change"; they review "a change to Acme.Shop" now, and Template CI
-  fails a generated project with a sentence that reads "a <name>" after the rename.
-- **`.claude/hooks/common.sh` is generated executable.** It was the one hook script without the
-  executable bit, so the `chmod +x scripts/*.sh .claude/hooks/*.sh` that the template's instructions and
-  `ci.yml` give left a mode change in a project generated a minute before. It ships executable, the
-  chmod post-action lists it, and `scripts/check-hooks.sh` checks its mode like the hooks'.
-- **A NUL character in a request is a 400, not a 500.** PostgreSQL's `text` stores no U+0000, so a body
-  string holding one (`"Acme\u0000Ltd"`) reached the first query or save that carried it and came back
-  500 `Server.Failure`: creating an invoice or adding a line, and signing in. `AddApiCommon` now
-  registers `NulFreeStringJsonConverter` beside the strongly-typed-id converter, which refuses such a
-  string while the body binds, on every endpoint, yours included, as 400 `Request.Malformed` whose
-  `errors[]` names the member (`Request.InvalidValue`); responses are written as before, and so are the
-  OpenAPI document's string schemas (`StringSchemaTransformer` gives `string` back the type the generator
-  leaves out for a type with a converter of its own), while its `ProblemResponse` and `FieldError`
-  descriptions now name a string holding U+0000 beside a value of the wrong type. `EmailAddress` also
-  refuses a control character (`EmailAddress.Invalid`). A body string of a feature of yours needs no NUL
-  check of its own, and a route value cannot carry one (Kestrel refuses `%00` in a path before routing,
-  which `RequestLimitTests` pins); a string bound from the query reaches the handler as sent, so a
-  `?search=` filter of yours refuses U+0000 in its query's validator, and
-  `EndpointContractTests.Every_query_value_of_a_GET_refuses_a_NUL` fails on any GET that answers a NUL in
-  its query with anything but a 400 (`.claude/rules/api.md`).
-- **A create that loses a same-key race on a unique business key hears the idempotency answer.** Two
-  concurrent requests under one `Idempotency-Key` were decided by the key's primary key only when both
-  reached their commit; a feature of yours with a unique business key (an e-mail, a code) let the second
-  fail on the first one's row before that, so it answered your feature's 409 (an e-mail already in use)
-  for a create that succeeded. `IdempotencyFilter` now asks the store again when a keyed request fails
-  with a 4xx and answers from the first request's reservation: 409 `Idempotency.InFlight`, the replayed
-  201 or 409 `Idempotency.Duplicate` (ADR-0018, amendment of 2026-11-09). It costs one lookup, on failed
-  keyed requests only.
-- **A list of yours reuses the paged envelope instead of copying it.** `ToPagedResponse(map)` lived in
-  the Invoices slice's `ContractMappings`, so a second list wrote its own copy, passing the envelope's four
-  counts and two flags by position (a swapped `TotalCount` and `TotalPages` compiles), and removing the
-  Invoices slice took the original with it. It is now `PagedResponseMappings` in Api.Common
-  (`using Trellis.Api.Common.Http;`), written with named arguments; a slice maps only its item.
-  `ConventionTests` fails on a `new PagedResponse<…>(…)` or a method declared to return one anywhere
-  else under `src/`. If you copied the old mapping into a feature, delete the copy and call the shared one.
-- **Your first migration shows your model change, not the template's EF version.** The shipped
-  `InitialCreate` and model snapshot were written by EF Core 10.0.12 while the project pins 10.0.13, so
-  the first `migrations add` in a new project rewrote the version line too. `InitialCreate` is
-  regenerated on the pinned EF Core (its id is now `20261111173434_InitialCreate`, its `Up` and `Down`
-  unchanged); upgrading a project whose database already applied the old one, keep yours
-  (`docs/upgrading.md`, step 5). A migration id that contains one of the template's port literals (`17171`
-  and the AppHost's other launch-profile ports, which the engine replaces wherever they appear) shipped with
-  its `[Migration]` attribute rewritten under a file still named after the real id; a maintainer-only fact
-  now refuses such an id and Template CI's content gate compares every generated migration's attribute with
-  its file name. The `add-migration` skill now says why a project whose name sorts before
-  `Microsoft` sees the snapshot's entity blocks move on its first migration (EF orders them by CLR name),
-  and that moved blocks are not model changes. `migrations remove` is written with `--force` in
-  `docs/development.md`, `docs/upgrading.md`, the `add-migration` and `upgrade-template` skills and the
-  edit hook's hint: without it the command stops when no database answers its check, as in the SDK
-  container. With it, a database the design-time connection reaches that applied the migration has it
-  reverted first (`InitialCreate`'s `Down` drops every table), so the regenerate steps run it as
-  `env -u TRELLIS_DESIGNTIME_DB ./scripts/ef.sh migrations remove --force …`, where none answers.
-- **`docs/features/invoices.md` names the codes a client actually gets.** It listed
-  `Invoice.EmptyCustomerName`, `Invoice.CustomerNameTooLong` and the line-description pair as the API's
-  400s, but the command's validator checks the same Domain constants first, so through the API a blank or
-  over-long name or description is `Validation.General` naming the field; the domain codes guard the
-  callers without a validator (the seeder). The doc says so, `ProblemDetailsContractTests` pins the
-  over-long name on the wire, and the `add-feature` skill asks a feature doc to list such a rule as
-  `Validation.General` with the domain code in brackets.
-- **Two ADRs stop listing what your first feature changes.** ADR-0006 said `EmailAddress` and `Currency`
-  stay complex types, and ADR-0007 that Member holds `invoices:read`; a feature that converts a value
-  object for its unique index, or grants Member its own read permission, made either false, and an
-  accepted record only takes amendments. Each gains an amendment of 2026-11-09 pointing at the code:
-  `AppDbContext.ConfigureConventions` lists the converted value objects, `Roles.Permissions` the role map.
-  `.claude/rules/persistence.md` says converting a type is a migration and a line in the feature doc, with
-  no ADR edit.
-- **The test helpers a second feature needs are shared.** `ShouldAnswerAsync`, the status check that
-  names the request, the problem `code` and the body when an arrange step is refused, was private to
-  `InvoiceHttpDriver`; it is now `HttpResponseAssertions.ShouldAnswerAsync` in ApiTests, for every
-  `{Feature}HttpDriver`. `StronglyTypedIdParsingTests` moved out of `Domain.UnitTests/Invoices/` and became
-  one theory over every `IStronglyTypedId<>` the Domain declares (a version-7 `New()`, the parse round
-  trip, text that is not a `Guid` turned down), so your IDs are covered with no test of their own and the
-  check survives `remove-feature`.
-- **Every list's paging bounds are checked at the wire, yours included.** A query's validator repeats
-  `PagingLimits`' bounds as literals (Application cannot see the contracts), so each list re-tested them
-  by hand. `EndpointContractTests.Every_paged_list_holds_its_documented_bounds_at_the_wire` reads every
-  GET the served OpenAPI document gives a `page` and a `pageSize` and sends each bound and one past it,
-  expecting a 200 inside (a 404 too for a nested list, whose route gets a fresh id) and a 400 naming the
-  field outside: a validator whose literal drifts fails it, and a new list needs no bounds test of its own
-  (`.claude/rules/api.md`, List endpoints). The GETs it reads are held to the GETs whose 200 is a
-  `PagedResponse<T>`, so a list with a filter of its own beside the paging pair (`?status=`, `?search=`)
-  is never left out unseen, and a list that answers the envelope without both parameters fails.
+## [0.2.0] - 2026-11-14
+
+A minor release. The Blazor UI gets a design system with a light and a dark theme and a switch between
+them. The repository an agent works in gains three reviewers, hooks that ask before the edits your
+conventions reserve, and skills for finishing a change and for upgrading. The `--use-redis` cache is
+Valkey, and e-mail goes out through MailKit. Before this release a cold agent was given a freshly
+generated project and one feature to build; every place the template misled it or let a defect through
+is fixed here.
+
+Installing this version changes no project you generated earlier: `docs/upgrading.md` in your project
+says how to take what you want from it. Read *Security* first: one entry changes the unique indexes of
+a project with `--use-multitenancy`, one how a NUL character in a request is answered, and one moves
+Aspire past an advisory that fails every build.
+
+### Added
+
 - **The UI has a design system** (`docs/design-system.md`, ADR-0032; with `--include-ui`). The values
   live in `wwwroot/tokens.css`, every colour once as a `light-dark()` pair in two themes, with the type
   scale, the spacing, the radii and the focus ring as tokens; `app.css` holds the components and writes
@@ -230,30 +88,6 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `scripts/check-adr-links.sh` fails when a reviewer, a hook or a feature doc is missing from it, or
   when `.claude/settings.json` runs a hook that does not exist. `architecture-guard`'s dependency
   flow now matches `AGENTS.md`, and ADR-0014 records all of this in an amendment.
-- **An accepted ADR only gains amendments, and CI says so.** A new `adr-history` job in `ci.yml` runs
-  `scripts/check-adr-history.sh` on every pull request: deleting or renaming a record under `docs/adr/`
-  fails, and so does any edit to an existing one other than its header's *Status*, *Superseded*,
-  *Amended* and *Refines* lines, a *Prior art* line it gains, and a dated `## Amendment (YYYY-MM-DD)`
-  section (an ordinal such as `## Second amendment (…)` counts) appended at its end (ADR-0001's
-  amendment of 2026-10-26).
-  A template upgrade that appends amendments to the template's records passes. For a rewrite that is
-  truly needed, create an `adr-rewrite` label in your repository and put it on the pull request, as
-  with `docs-not-needed`.
-- **More of the rules are tests now** (`tests/Trellis.ArchitectureTests`). The Domain, the use cases
-  (event handlers aside) and the endpoints never `throw`; time comes from the registered `TimeProvider`
-  and ids from their type's `New()`, never `DateTime.UtcNow` or `Guid.NewGuid()`; nothing silences RSLT001
-  (no pragma, bare or naming it, `[SuppressMessage]`, `NoWarn`, analyzer or warnings-as-errors switched
-  off, or lowered severity, a bulk one included; `.editorconfig` now names RSLT001's severity itself, so
-  no bulk severity line reaches it); tests advance a clock instead of sleeping; every aggregate is
-  created through a `static Create` returning `Result`, with no public static method that hands it back
-  bare; every project under `src/` is anchored in `ArchitectureRules.cs`, ServiceDefaults included; and,
-  with `--include-ui`, no page uses an endpoint `[Authorize]`, an `HttpClient` of its own, a POST of its
-  own or an inline script. Each scan has a positive control and an allowlist that names its reason, and
-  `.claude/rules/` names the test behind each rule.
-  A `Console` write in a library project is now a build warning (S106), so a Release build fails on
-  one; `async void` already was (S3168). One fix came with
-  them: a `Retry-After` the API writes as a date now reads as the wait from the registered clock (the
-  UI's `TimeProvider`), not the machine's.
 - **Claude Code asks before the edits your conventions reserve, and commits in style.** Three new hooks
   in `.claude/hooks/`: `guard-edits.sh` asks you before an agent hand-edits a migration or
   `docs/api/openapi.v1.json` (the prompt names the command that regenerates it), creates a project or
@@ -289,14 +123,230 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   server (`aspire agent mcp`): while `aspire run` is up, an agent reads the AppHost's resources, logs
   and traces through it and can restart a resource. It needs the Aspire CLI 13.5 or later on `PATH`,
   and an interactive Claude Code session asks before using it (`docs/INDEX.md`, the `run-app` skill).
-- **Aspire 13.6.5** (`Aspire.Hosting`, `Aspire.Hosting.AppHost` through the `Aspire.AppHost.Sdk` pin in the AppHost
-  project, and every `Aspire.*` package with them): GHSA-f7vh-h5g3-7jrh (CVE-2026-120006, an elevation of
-  privilege in Aspire, high) is published against every version below 13.6.5, and `NuGetAudit` turns it into
-  NU1903, an error in every Release build, until the graph moves. The floors the new packages set move with
-  them: `Microsoft.Extensions.Hosting` and `Microsoft.Extensions.Diagnostics.HealthChecks` to 10.0.14, and
-  through the EF health check EF Core itself (`Microsoft.EntityFrameworkCore`, `.Design`,
-  `Microsoft.AspNetCore.Identity.EntityFrameworkCore`) to 10.0.14, the version `dotnet-ef` already had. The
-  shipped `InitialCreate` still reads `ProductVersion` 10.0.13; the next regeneration rewrites it.
+- **An accepted ADR only gains amendments, and CI says so.** A new `adr-history` job in `ci.yml` runs
+  `scripts/check-adr-history.sh` on every pull request: deleting or renaming a record under `docs/adr/`
+  fails, and so does any edit to an existing one other than its header's *Status*, *Superseded*,
+  *Amended* and *Refines* lines, a *Prior art* line it gains, and a dated `## Amendment (YYYY-MM-DD)`
+  section (an ordinal such as `## Second amendment (…)` counts) appended at its end (ADR-0001's
+  amendment of 2026-10-26).
+  A template upgrade that appends amendments to the template's records passes. For a rewrite that is
+  truly needed, create an `adr-rewrite` label in your repository and put it on the pull request, as
+  with `docs-not-needed`.
+- **More of the rules are tests now** (`tests/Trellis.ArchitectureTests`). The Domain, the use cases
+  (event handlers aside) and the endpoints never `throw`; time comes from the registered `TimeProvider`
+  and ids from their type's `New()`, never `DateTime.UtcNow` or `Guid.NewGuid()`; nothing silences RSLT001
+  (no pragma, bare or naming it, `[SuppressMessage]`, `NoWarn`, analyzer or warnings-as-errors switched
+  off, or lowered severity, a bulk one included; `.editorconfig` now names RSLT001's severity itself, so
+  no bulk severity line reaches it); tests advance a clock instead of sleeping; every aggregate is
+  created through a `static Create` returning `Result`, with no public static method that hands it back
+  bare; every project under `src/` is anchored in `ArchitectureRules.cs`, ServiceDefaults included; and,
+  with `--include-ui`, no page uses an endpoint `[Authorize]`, an `HttpClient` of its own, a POST of its
+  own or an inline script. Each scan has a positive control and an allowlist that names its reason, and
+  `.claude/rules/` names the test behind each rule.
+  A `Console` write in a library project is now a build warning (S106), so a Release build fails on
+  one; `async void` already was (S3168). One fix came with
+  them: a `Retry-After` the API writes as a date now reads as the wait from the registered clock (the
+  UI's `TimeProvider`), not the machine's.
+- **Every list's paging bounds are checked at the wire, yours included.** A query's validator repeats
+  `PagingLimits`' bounds as literals (Application cannot see the contracts), so each list re-tested them
+  by hand. `EndpointContractTests.Every_paged_list_holds_its_documented_bounds_at_the_wire` reads every
+  GET the served OpenAPI document gives a `page` and a `pageSize` and sends each bound and one past it,
+  expecting a 200 inside (a 404 too for a nested list, whose route gets a fresh id) and a 400 naming the
+  field outside: a validator whose literal drifts fails it, and a new list needs no bounds test of its own
+  (`.claude/rules/api.md`, List endpoints). The GETs it reads are held to the GETs whose 200 is a
+  `PagedResponse<T>`, so a list with a filter of its own beside the paging pair (`?status=`, `?search=`)
+  is never left out unseen, and a list that answers the envelope without both parameters fails.
+
+### Changed
+
+- **The `--use-redis` cache is Valkey** (BSD-3-Clause) in place of the Redis server, whose 8.x
+  releases are RSALv2, SSPLv1 or AGPLv3. The AppHost declares `AddValkey("cache")` with the image's
+  major pinned (`valkey/valkey:9`), the `redis` service of `docker-compose.yml` and the generated CI
+  start the same image, and the API keeps its Redis client, which speaks to Valkey unchanged; the
+  option, the `UseRedis` symbol and the `cache` resource keep their names. RedisInsight (SSPL) is
+  gone, so the cache has no browser tile. `ContainerImageTests` holds every image the AppHost
+  declares, the workflows run and the root compose file starts to an allowlist that names each one's
+  license, so an image that is not free to ship fails the tests (ADR-0011, amendment of 2026-11-08).
+  To move a 0.1.x solution: `Aspire.Hosting.Valkey` in place of `Aspire.Hosting.Redis` in the
+  AppHost, `AddValkey(...).WithImageTag("9")` in place of `AddRedis(...).WithRedisInsight()`, and
+  `valkey/valkey:9` with a `valkey-cli ping` health check in the compose file.
+- **E-mail goes out through MailKit, and `aspire run` catches it in Mailpit.** The SMTP adapter
+  (`Email:Provider=Smtp`) submits with MailKit (MIT) in place of `System.Net.Mail.SmtpClient`, which
+  Microsoft no longer recommends for new code; the `Email:Smtp` settings, their boot checks and the
+  logging contract are unchanged, STARTTLS still fails a send rather than falling back to plaintext,
+  and a failure is still thrown for the outbox with the relay's reply left out, now as MailKit's
+  `SmtpCommandException` (status and error code kept) where it was `SmtpException`. In run mode only,
+  the AppHost starts Mailpit (`CommunityToolkit.Aspire.Hosting.MailPit`, image `axllent/mailpit`,
+  both MIT) and points the API at it, so the receipt of a paid invoice lands behind the `mailpit`
+  resource's **Inbox** link instead of in the log; `aspire publish` declares no catcher, so a
+  deployment still configures its own relay. Under `aspire run` the AppHost's settings outrank a relay
+  you put in user secrets: run the API from its launch profile to try a real one.
+- **More packages the build refuses** (ADR-0011, amendment of 2026-11-08). `LicenseCeilingPackageIds`
+  gains `Hangfire.Core` and `Hangfire.Pro` (LGPL-3.0 or commercial), `TickerQ` and `TickerQ.Utilities`
+  (a source-available agreement from 10.5.0), `NBomber` (not free for organizational use),
+  `Duende.IdentityServer` (commercial), `NServiceBus` (RPL-1.5 or commercial), and
+  `MySql.EntityFrameworkCore` with `MySql.Data` (GPL-2.0): a direct reference, or one that arrives
+  under another package, fails the build, Dependabot never proposes them, and the LICENSE CEILINGS
+  comment in `Directory.Packages.props` gives each its reason. A family is refused through the package
+  all its members depend on (`Hangfire.AspNetCore` through `Hangfire.Core`). The comment also names a
+  ceiling the build cannot enforce: `Verify` from 33.0.0 ships a maintenance-fee agreement in its
+  package, so pin it below 33 if you add snapshot tests. `LicenseCeilingTests` keeps the list, the
+  comment and Dependabot's ignores naming the same ids.
+- **A record that is edited hands out its version and takes it back on every write.** The `add-feature`
+  skill named the ETag and `If-Match` only as what an endpoint that honours them declares, with no
+  default, so a new aggregate could ship with no `Version` on its DTO, no ETag and no `If-Match`, and
+  two people renaming one record overwrote each other unseen. Its API section now makes them the
+  default for an aggregate that changes after its create (`GetInvoice` and the invoice writes are the
+  model) and asks for one sentence in the feature doc's *Optimistic concurrency* paragraph to leave
+  them out. `OpenApiDocumentTests` holds both halves, each with a planted document as its control: each
+  write under a `GET /{id}` that answers no `ETag` fails unless `WritesToRecordsWithoutVersion` names
+  that write with its reason, so a write added to the record later fails again, and a write under a
+  path whose GET answers an `ETag` (whatever each route names its parameters) that declares no
+  `If-Match` fails unless `WritesWithoutIfMatch` names it with its reason. A feature of yours with an
+  unversioned record that is edited fails the first until you add the version or a row for each write.
+- **Every unique index is decided on, and the persistence rule no longer goes stale.**
+  `.claude/rules/persistence.md` named the registered unique constraints "today", so it was wrong after
+  the first feature with a unique key, and an agent is not always allowed to edit `.claude/`. The map in
+  `UniqueConstraintErrors` is now the list, and `UniqueConstraintTests` walks the model: a unique index
+  or key that is neither registered there nor named a fault on purpose, with the reason no two requests
+  can race to it, fails it, and so does a name the model no longer holds. A single-column uuid or
+  database-numbered primary key needs no row; the walk cannot tell a uuid a request chooses from one
+  minted for the row, so register or list the key of an aggregate whose id a client supplies yourself.
+- **A list of yours reuses the paged envelope instead of copying it.** `ToPagedResponse(map)` lived in
+  the Invoices slice's `ContractMappings`, so a second list wrote its own copy, passing the envelope's four
+  counts and two flags by position (a swapped `TotalCount` and `TotalPages` compiles), and removing the
+  Invoices slice took the original with it. It is now `PagedResponseMappings` in Api.Common
+  (`using Trellis.Api.Common.Http;`), written with named arguments; a slice maps only its item.
+  `ConventionTests` fails on a `new PagedResponse<…>(…)` or a method declared to return one anywhere
+  else under `src/`. If you copied the old mapping into a feature, delete the copy and call the shared one.
+- **The test helpers a second feature needs are shared.** `ShouldAnswerAsync`, the status check that
+  names the request, the problem `code` and the body when an arrange step is refused, was private to
+  `InvoiceHttpDriver`; it is now `HttpResponseAssertions.ShouldAnswerAsync` in ApiTests, for every
+  `{Feature}HttpDriver`. `StronglyTypedIdParsingTests` moved out of `Domain.UnitTests/Invoices/` and became
+  one theory over every `IStronglyTypedId<>` the Domain declares (a version-7 `New()`, the parse round
+  trip, text that is not a `Guid` turned down), so your IDs are covered with no test of their own and the
+  check survives `remove-feature`.
+- **Every feature doc has the same headings, and each decision a place in it.** The `add-feature`
+  skill asked for a doc "shaped like `invoices.md`" without naming the parts, and for the shapes the
+  reference slice does not show it said "decide deliberately" without saying where the decision is
+  written, so a new feature's doc put its endpoints table inside *API* and recorded ownership only in
+  the threat model. The skill now names the H2s (`The domain in plain words`, `Try it`,
+  `Where the code lives`, `Domain`, `Application`, `Persistence`, `API`, `UI` with the UI, `Tests`,
+  `Endpoints`), and a closing box asks for one sentence per shape the feature could have had (owner
+  or business-wide, cached or not, `If-Match` or not, offset or keyset, reactions or none, a page or
+  none); `invoices.md` gains the *Ownership* paragraph to copy. `scripts/check-docs-drift.sh`, in CI
+  and in the edit hook's reminder, fails a feature doc the change touches or owes that lacks one of
+  those headings, for a feature with an aggregate (a `Domain/<Feature>/` folder); an integration's doc
+  keeps its own shape. `scripts/check-hooks.sh` has the case.
+- **A feature a person uses gets its pages, or a reason it has none.** The `add-feature` skill's
+  section was headed "UI (if included)", which reads as "if the request asks for one" as easily as
+  "if the project has a UI", so a feature could ship API-only in a project with the UI on and say
+  nothing about why. The section is now `## UI` and ships only with the UI; its first box asks for the
+  pages Invoices has (a list, a detail page, a form per write, the typed client, the nav link, the
+  render tests), or a sentence in the feature doc's *UI* section saying the feature is API-only and
+  why, which `ui-reviewer` reads.
+- **Where the "is this key taken?" lookup lives, and an e-mail key ignores case.** The `add-feature`
+  skill's unique-key bullet named the index and its registration but not the lookup a create usually
+  makes first, and `.claude/rules/application.md`'s "no business rules in handlers" read as forbidding
+  it. Both now say that the handler may ask the repository port (`{Key}ExistsAsync`) once the
+  aggregate is built and answer the same `Error` the index maps to: the lookup is orchestration, the
+  index is the rule and decides the race, and a `MustAsync` validator never does the lookup. The bullet
+  also says an e-mail key is case-insensitive like Auth's (a nondeterministic ICU collation, or a
+  normalized column as Identity's `NormalizedUserName`), with a test row in another case.
+- **A fix for a reviewer's finding goes back to the reviewer.** `/finish-change` asked only for the
+  gates to run again after a fix, so a blocking finding fixed by changing a shared value object (which
+  changes what every feature using it accepts) was committed with no second look. Its reviewer box,
+  `AGENTS.md` and `add-feature`'s review box now send a fix that changes `src/` back to the reviewer
+  that raised the finding, scoped to the fix's diff, and to `code-reviewer` as well when it touches a
+  type outside the feature's folders; the box is done when that pass leaves no blocking or should-fix
+  finding open.
+- **A change to the role grants owes the threat model.** `scripts/check-docs-drift.sh` asked for a
+  `docs/threat-model.md` update when authentication, hardening or identity code changed, but not for
+  `Application/Authorization/`, where `Roles.Permissions` decides who may call each endpoint, so granting
+  a role a new permission went through unasked. That folder counts now, in CI and in the edit hook's
+  reminder, and `AGENTS.md` says so.
+- **Two ADRs stop listing what your first feature changes.** ADR-0006 said `EmailAddress` and `Currency`
+  stay complex types, and ADR-0007 that Member holds `invoices:read`; a feature that converts a value
+  object for its unique index, or grants Member its own read permission, made either false, and an
+  accepted record only takes amendments. Each gains an amendment of 2026-11-09 pointing at the code:
+  `AppDbContext.ConfigureConventions` lists the converted value objects, `Roles.Permissions` the role map.
+  `.claude/rules/persistence.md` says converting a type is a migration and a line in the feature doc, with
+  no ADR edit.
+- **The pinned versions moved** with the dependency updates merged since 0.1.1: the .NET SDK is
+  10.0.403 (`global.json` and the SDK image), ASP.NET Core, EF Core (with the `dotnet-ef` tool) and the
+  `Microsoft.Extensions` packages are 10.0.14, OpenTelemetry 1.20.1, Scalar 2.18.7, Playwright 1.64.1,
+  `Microsoft.Testing.Extensions.TrxReport` 2.5.2 and Meziantou.Analyzer 3.0.320. Aspire's move is
+  under *Security*.
+
+### Fixed
+
+- **A new project passes its own format check, whatever its name.** A project generated as `Acme.Shop`
+  failed the Format check of its own `ci.yml` on the first push, with an IMPORTS error in nearly every file:
+  `.editorconfig` set `dotnet_sort_system_directives_first`, which turns on `dotnet format`'s
+  using-order check, and that order sorts by the full name, so the shipped files were in order only for
+  a name that sorts where Trellis does (after Shouldly, before Xunit). The key stays in the template's
+  own source behind the `TemplateSource` conditional, so a generated project starts without it: the
+  IDEs still sort `System` usings first by default, and nothing checks the order until you opt in by
+  adding `dotnet_sort_system_directives_first = true` to `.editorconfig`, restoring and running
+  `dotnet format` once (the comment there says how). Template CI runs the generated `ci.yml`'s Format
+  check on every leg, one of them named `Zeta.Journal` so a name that sorts after Xunit is covered, and
+  `scripts/test-template.sh` does the same. The `finish-change` skill formats only the files the change
+  touches and reports a formatter change anywhere else instead of committing it.
+- **`./scripts/ef.sh` works on a project nothing has built yet.** The first
+  `./scripts/ef.sh migrations add …` in a fresh clone failed with NETSDK1004 (`project.assets.json` not
+  found): dotnet-ef reads the project's metadata before it builds, and that needs a restore. The script
+  now restores the solution first, quietly (a failed restore still prints its errors).
+- **Your first migration shows your model change, not the template's EF version.** The shipped
+  `InitialCreate` and model snapshot were written by EF Core 10.0.12 while the project pins 10.0.13, so
+  the first `migrations add` in a new project rewrote the version line too. `InitialCreate` is
+  regenerated on the pinned EF Core (its id is now `20261111173434_InitialCreate`, its `Up` and `Down`
+  unchanged); upgrading a project whose database already applied the old one, keep yours
+  (`docs/upgrading.md`, step 5). Template CI now compares every generated migration's `[Migration]`
+  attribute with its file name. The `add-migration` skill now says why a project whose name sorts before
+  `Microsoft` sees the snapshot's entity blocks move on its first migration (EF orders them by CLR name),
+  and that moved blocks are not model changes. `migrations remove` is written with `--force` in
+  `docs/development.md`, `docs/upgrading.md`, the `add-migration` and `upgrade-template` skills and the
+  edit hook's hint: without it the command stops when no database answers its check, as in the SDK
+  container. With it, a database the design-time connection reaches that applied the migration has it
+  reverted first (`InitialCreate`'s `Down` drops every table), so the regenerate steps run it as
+  `env -u TRELLIS_DESIGNTIME_DB ./scripts/ef.sh migrations remove --force …`, where none answers.
+- **A create that loses a same-key race on a unique business key hears the idempotency answer.** Two
+  concurrent requests under one `Idempotency-Key` were decided by the key's primary key only when both
+  reached their commit; a feature of yours with a unique business key (an e-mail, a code) let the second
+  fail on the first one's row before that, so it answered your feature's 409 (an e-mail already in use)
+  for a create that succeeded. `IdempotencyFilter` now asks the store again when a keyed request fails
+  with a 4xx and answers from the first request's reservation: 409 `Idempotency.InFlight`, the replayed
+  201 or 409 `Idempotency.Duplicate` (ADR-0018, amendment of 2026-11-09). It costs one lookup, on failed
+  keyed requests only.
+- **`/finish-change` loads in a headless session, and never commits on `main`.** A `claude -p` run had
+  `/finish-change commit` refused outright while `add-feature` loaded: `finish-change` and
+  `add-migration` were the two skills that pre-approved commands in an `allowed-tools` frontmatter, and
+  neither does now (`.claude/settings.json` already allows the scripts and git commands they listed,
+  apart from the OpenAPI snapshot run). The Commit box now stops when the branch cannot be created
+  instead of committing on `main`.
+- **`/finish-change` tests the Release build, as CI does.** Its test boxes ran a plain `dotnet test`
+  right after the Release build, which built the solution again in Debug and, with the UI, could stop on
+  `Unable to find a project reference for project configuration item '…UI.Common.csproj'`. Every test
+  box, the OpenAPI snapshot run included, now passes `-c Release --no-build` as `ci.yml` does, and so
+  does `add-feature`'s last box; `docs/development.md` (*When the build fails*) explains the message.
+- **`.claude/hooks/common.sh` is generated executable.** It was the one hook script without the
+  executable bit, so the `chmod +x scripts/*.sh .claude/hooks/*.sh` that the template's instructions and
+  `ci.yml` give left a mode change in a project generated a minute before. It ships executable, the
+  chmod post-action lists it, and `scripts/check-hooks.sh` checks its mode like the hooks'.
+- **The reviewer agents read right under your project's name.** `code-reviewer`, `test-reviewer` and
+  `security-reviewer` described their work as reviewing "a Trellis change", which a project generated as
+  `Acme.Shop` got as "a Acme.Shop change"; they review "a change to Acme.Shop" now, and Template CI
+  fails a generated project with a sentence that reads "a <name>" after the rename.
+- **`docs/features/invoices.md` names the codes a client actually gets.** It listed
+  `Invoice.EmptyCustomerName`, `Invoice.CustomerNameTooLong` and the line-description pair as the API's
+  400s, but the command's validator checks the same Domain constants first, so through the API a blank or
+  over-long name or description is `Validation.General` naming the field; the domain codes guard the
+  callers without a validator (the seeder). The doc says so, `ProblemDetailsContractTests` pins the
+  over-long name on the wire, and the `add-feature` skill asks a feature doc to list such a rule as
+  `Validation.General` with the domain code in brackets.
+
+### Security
+
 - **With multi-tenancy, a unique business key is unique per tenant.** The tenant convention gave every
   aggregate root its `TenantId` column, index and filter but left the root's own unique indexes global,
   so a key a feature of yours declares unique (a customer's e-mail, a code) disagreed with its own
@@ -321,52 +371,29 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   same key, which the gap records too, so give such a flow its tenant before it writes. The shipped
   `InitialCreate` is unchanged; a multi-tenant project regenerates it as before, and one that already
   has a unique index on an aggregate gets `(TenantId, key)` from its next migration.
-- **A record that is edited hands out its version and takes it back on every write.** The `add-feature`
-  skill named the ETag and `If-Match` only as what an endpoint that honours them declares, with no
-  default, so a new aggregate could ship with no `Version` on its DTO, no ETag and no `If-Match`, and
-  two people renaming one record overwrote each other unseen. Its API section now makes them the
-  default for an aggregate that changes after its create (`GetInvoice` and the invoice writes are the
-  model) and asks for one sentence in the feature doc's *Optimistic concurrency* paragraph to leave
-  them out. `OpenApiDocumentTests` holds both halves, each with a planted document as its control: each
-  write under a `GET /{id}` that answers no `ETag` fails unless `WritesToRecordsWithoutVersion` names
-  that write with its reason, so a write added to the record later fails again, and a write under a
-  path whose GET answers an `ETag` (whatever each route names its parameters) that declares no
-  `If-Match` fails unless `WritesWithoutIfMatch` names it with its reason. A feature of yours with an
-  unversioned record that is edited fails the first until you add the version or a row for each write.
-- **A feature a person uses gets its pages, or a reason it has none.** The `add-feature` skill's
-  section was headed "UI (if included)", which reads as "if the request asks for one" as easily as
-  "if the project has a UI", so a feature could ship API-only in a project with the UI on and say
-  nothing about why. The section is now `## UI` and ships only with the UI; its first box asks for the
-  pages Invoices has (a list, a detail page, a form per write, the typed client, the nav link, the
-  render tests), or a sentence in the feature doc's *UI* section saying the feature is API-only and
-  why, which `ui-reviewer` reads.
-- **A fix for a reviewer's finding goes back to the reviewer.** `/finish-change` asked only for the
-  gates to run again after a fix, so a blocking finding fixed by changing a shared value object (which
-  changes what every feature using it accepts) was committed with no second look. Its reviewer box,
-  `AGENTS.md` and `add-feature`'s review box now send a fix that changes `src/` back to the reviewer
-  that raised the finding, scoped to the fix's diff, and to `code-reviewer` as well when it touches a
-  type outside the feature's folders; the box is done when that pass leaves no blocking or should-fix
-  finding open.
-- **Where the "is this key taken?" lookup lives, and an e-mail key ignores case.** The `add-feature`
-  skill's unique-key bullet named the index and its registration but not the lookup a create usually
-  makes first, and `.claude/rules/application.md`'s "no business rules in handlers" read as forbidding
-  it. Both now say that the handler may ask the repository port (`{Key}ExistsAsync`) once the
-  aggregate is built and answer the same `Error` the index maps to: the lookup is orchestration, the
-  index is the rule and decides the race, and a `MustAsync` validator never does the lookup. The bullet
-  also says an e-mail key is case-insensitive like Auth's (a nondeterministic ICU collation, or a
-  normalized column as Identity's `NormalizedUserName`), with a test row in another case.
-- **Every feature doc has the same headings, and each decision a place in it.** The `add-feature`
-  skill asked for a doc "shaped like `invoices.md`" without naming the parts, and for the shapes the
-  reference slice does not show it said "decide deliberately" without saying where the decision is
-  written, so a new feature's doc put its endpoints table inside *API* and recorded ownership only in
-  the threat model. The skill now names the H2s (`The domain in plain words`, `Try it`,
-  `Where the code lives`, `Domain`, `Application`, `Persistence`, `API`, `UI` with the UI, `Tests`,
-  `Endpoints`), and a closing box asks for one sentence per shape the feature could have had (owner
-  or business-wide, cached or not, `If-Match` or not, offset or keyset, reactions or none, a page or
-  none); `invoices.md` gains the *Ownership* paragraph to copy. `scripts/check-docs-drift.sh`, in CI
-  and in the edit hook's reminder, fails a feature doc the change touches or owes that lacks one of
-  those headings, for a feature with an aggregate (a `Domain/<Feature>/` folder); an integration's doc
-  keeps its own shape. `scripts/check-hooks.sh` has the case.
+- **A NUL character in a request is a 400, not a 500.** PostgreSQL's `text` stores no U+0000, so a body
+  string holding one (`"Acme\u0000Ltd"`) reached the first query or save that carried it and came back
+  500 `Server.Failure`: creating an invoice or adding a line, and signing in. `AddApiCommon` now
+  registers `NulFreeStringJsonConverter` beside the strongly-typed-id converter, which refuses such a
+  string while the body binds, on every endpoint, yours included, as 400 `Request.Malformed` whose
+  `errors[]` names the member (`Request.InvalidValue`); responses are written as before, and so are the
+  OpenAPI document's string schemas (`StringSchemaTransformer` gives `string` back the type the generator
+  leaves out for a type with a converter of its own), while its `ProblemResponse` and `FieldError`
+  descriptions now name a string holding U+0000 beside a value of the wrong type. `EmailAddress` also
+  refuses a control character (`EmailAddress.Invalid`). A body string of a feature of yours needs no NUL
+  check of its own, and a route value cannot carry one (Kestrel refuses `%00` in a path before routing,
+  which `RequestLimitTests` pins); a string bound from the query reaches the handler as sent, so a
+  `?search=` filter of yours refuses U+0000 in its query's validator, and
+  `EndpointContractTests.Every_query_value_of_a_GET_refuses_a_NUL` fails on any GET that answers a NUL in
+  its query with anything but a 400 (`.claude/rules/api.md`).
+- **Aspire 13.6.5** (`Aspire.Hosting`, `Aspire.Hosting.AppHost` through the `Aspire.AppHost.Sdk` pin in the AppHost
+  project, and every `Aspire.*` package with them): GHSA-f7vh-h5g3-7jrh (CVE-2026-120006, an elevation of
+  privilege in Aspire, high) is published against every version below 13.6.5, and `NuGetAudit` turns it into
+  NU1903, an error in every Release build, until the graph moves. The floors the new packages set move with
+  them: `Microsoft.Extensions.Hosting` and `Microsoft.Extensions.Diagnostics.HealthChecks` to 10.0.14, and
+  through the EF health check EF Core itself (`Microsoft.EntityFrameworkCore`, `.Design`,
+  `Microsoft.AspNetCore.Identity.EntityFrameworkCore`) to 10.0.14, the version `dotnet-ef` already had. The
+  shipped `InitialCreate` is regenerated on it (under *Fixed*).
 
 ## [0.1.1] - 2026-10-26
 
