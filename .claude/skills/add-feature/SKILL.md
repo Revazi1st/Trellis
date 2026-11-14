@@ -240,13 +240,19 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   pinned and registered in `UniqueConstraintErrors`, raced in a test; one no two requests can race to
   is a row in `UniqueConstraintTests.FaultOnPurpose` with its reason instead
   (`.claude/rules/persistence.md`); the idempotency filter answers a same-key loser from the store.
-  With multi-tenancy it is unique per tenant by convention (`.claude/rules/persistence.md`): the
-  configuration names no tenant and declares no alternate key (`HasAlternateKey`, or `HasPrincipalKey`
-  on a reference: point at another aggregate by its id), which the convention does not rewrite
-  [`TenancyTests`, all-options leg]. After the value objects and the
-  aggregate are built, the handler may ask the repository port (`{Key}ExistsAsync`) and answer the
-  same `Error` the index maps to: the lookup is orchestration and the index is the rule, so the
-  lookup is never a `MustAsync` validator. The model for the lookup is `IdentityService.RegisterAsync`
+  With multi-tenancy a unique index on the aggregate root is unique per tenant by convention
+  (`.claude/rules/persistence.md`): the configuration names no tenant, declares no alternate key
+  (`HasAlternateKey`, or `HasPrincipalKey` on a reference: point at another aggregate by its id) and
+  puts no unique index on an owned type (`OwnsOne`: a value that needs one is a converted column on
+  the root), none of which the convention rewrites [`TenancyTests`, all-options leg]. The convention
+  stops at the root: a unique index or alternate key on a child table stays unique across every
+  tenant unless its root's id leads it, and so does a primary key a request chooses, its 409 telling
+  the caller that another tenant holds the value, and no test catches either. Put the key on the
+  root, lead it with the root's id or mint the id on the server; a key that stays global gets its
+  line, with the reason, in the multi-tenancy gap of `docs/threat-model.md`. After the value objects
+  and the aggregate are built, the handler may ask the repository port (`{Key}ExistsAsync`) and
+  answer the same `Error` the index maps to: the lookup is orchestration and the index is the rule,
+  so the lookup is never a `MustAsync` validator. The model for the lookup is `IdentityService.RegisterAsync`
   (Persistence), which asks `userManager.FindByEmailAsync` before it writes and answers
   `AuthErrors.EmailAlreadyInUse`; for the index, `UserNameIndex` and the same `Error` its row in
   `UniqueConstraintErrors` maps to. An e-mail key is case-insensitive like Auth's: a nondeterministic
