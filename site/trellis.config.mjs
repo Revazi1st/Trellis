@@ -87,6 +87,18 @@ export const sectionPages = [
   },
 ];
 
+// The README's wide pictures (eng/readme/<name>-light.svg and -dark.svg, drawn by render-diagrams.py),
+// shown on the page that explains each (markdown-plugins.mjs) and served at full size by
+// src/pages/pictures/[name].svg.ts. A picture sits after a heading of its doc (`heading`, the GitHub slug)
+// or after the first paragraph of a section page (`sectionPage`, the section's anchor); the build fails
+// when that place is missing, or when a heading would follow the picture directly. None is the first node
+// of its page: a picture only one build has can then be hidden without moving what follows it.
+export const docPictures = [
+  { name: 'architecture', doc: 'architecture.md', heading: 'the-rings' },
+  { name: 'pipeline', doc: 'architecture.md', heading: 'a-request-stage-by-stage' },
+  { name: 'testing', doc: 'development.md', sectionPage: 'tests' },
+];
+
 // Template options, read from the template's own configuration at build time.
 export function readTemplateOptions() {
   const tpl = JSON.parse(readFileSync(path.join(repoRoot, '.template.config/template.json'), 'utf8'));

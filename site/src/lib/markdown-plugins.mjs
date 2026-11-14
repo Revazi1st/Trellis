@@ -19,6 +19,10 @@
 //   8. a heading that names its folder in parentheses, "## Port (`src/Core/…/Abstractions/`)"
 //      (whereItLives): the heading keeps the name and the id GitHub gives the whole text, which is what
 //      every link to it targets; the path moves to a small line under it, a link to the folder on GitHub
+//   9. the README's wide pictures (docPictures in trellis.config.mjs): the architecture and the request
+//      pipeline after their headings on Architecture, the test suites after the first paragraph of
+//      Testing, each scaled to the column and linked to the full-size file that src/pages/pictures/
+//      serves; the build fails when the heading or the paragraph is missing
 // For site pages under src/content/docs (.mdx):
 //   root-relative links and JSX href props get the base (/Trellis), so pages are written base-free, and
 //   a {/* trellis:option-sections */} comment becomes one section per template option (options.mjs).
@@ -34,6 +38,7 @@ import {
   base,
   conditionalsMode,
   constantSymbols,
+  docPictures,
   docsDir,
   githubBlob,
   githubTree,
@@ -159,6 +164,23 @@ function docsPlugin(rel) {
       if (lead) {
         const first = kids.findIndex((n) => n.type === 'paragraph');
         kids.splice(first === -1 ? 0 : first, 0, { type: 'html', value: lead() });
+        changed = true;
+      }
+
+      // 9. The wide pictures: after a heading of the page, or after the first paragraph of a section page.
+      const pictures = docPictures.filter((p) => p.doc === rel && (sectionMode ? p.sectionPage === sectionMode.anchor : Boolean(p.heading)));
+      for (const picture of pictures) {
+        const where = picture.heading ? `the heading #${picture.heading}` : `a first paragraph on the section page #${picture.sectionPage}`;
+        const ids = headingIds(kids, ctx);
+        const at = picture.heading
+          ? kids.findIndex((n) => n.type === 'heading' && ids.get(n) === picture.heading)
+          : kids.findIndex((n) => n.type === 'paragraph');
+        if (at === -1) throw new Error(`docPictures: docs/${rel} has no ${where} for the ${picture.name} picture`);
+        const next = kids[at + 1];
+        if (!next || next.type === 'heading') {
+          throw new Error(`docPictures: the ${picture.name} picture after ${where} of docs/${rel} would end the page or stand directly before a heading`);
+        }
+        kids.splice(at + 1, 0, { type: 'html', value: pictureFigure(picture.name) });
         changed = true;
       }
 
@@ -454,6 +476,43 @@ function ringsFigure() {
     img('light', light),
     img('dark', dark),
     '<figcaption>Dependencies point inward. Infrastructure and Persistence are peers that never reference each other.</figcaption>',
+    '</figure>',
+  ].join('\n');
+}
+
+// ---- wide pictures --------------------------------------------------------------------------------
+
+// Every docPictures entry names a doc and, for a section page, a section that exists, or no page shows it.
+for (const p of docPictures) {
+  if (!safeExists(path.join(docsDir, p.doc))) throw new Error(`docPictures: ${p.name} names docs/${p.doc}, which does not exist`);
+  if (Boolean(p.heading) === Boolean(p.sectionPage)) throw new Error(`docPictures: ${p.name} needs a heading or a sectionPage, not both`);
+  if (p.sectionPage && !sectionPages.some((sp) => sp.from === p.doc && sp.anchor === p.sectionPage)) {
+    throw new Error(`docPictures: ${p.name} names the section page #${p.sectionPage} of docs/${p.doc}, which sectionPages does not list`);
+  }
+}
+
+/**
+ * One of the README's wide pictures, both themes (the global rings-light/rings-dark swap shows one), each
+ * scaled to the column and linked to its full-size file under /pictures/ (src/pages/pictures/[name].svg.ts).
+ * The size and the alt text come from the SVG itself: its width and height, and its <desc>.
+ */
+function pictureFigure(name) {
+  const link = (theme) => {
+    const file = `eng/readme/${name}-${theme}.svg`;
+    const svg = readFileSync(path.join(repoRoot, file), 'utf8');
+    const size = svg.match(/<svg\b[^>]*?\swidth="(\d+)"[^>]*?\sheight="(\d+)"/);
+    const desc = svg.match(/<desc[^>]*>([^<]*)<\/desc>/)?.[1];
+    if (!size || !desc) throw new Error(`docPictures: ${file} has no width and height on its <svg>, or no <desc>`);
+    // The <desc> is XML text, already escaped for & and <; in an attribute only the quote needs it too.
+    const alt = desc.trim().replace(/"/g, '&quot;');
+    const href = `${base}/pictures/${name}-${theme}.svg`;
+    return `<a class="rings-${theme}" href="${href}"><img src="${href}" width="${size[1]}" height="${size[2]}" alt="${alt}"></a>`;
+  };
+  return [
+    `<figure class="trellis-excerpt" data-picture="${name}">`,
+    link('light'),
+    link('dark'),
+    `<figcaption>Drawn from the code by <a href="${githubBlob('eng/readme/render-diagrams.py')}">eng/readme/render-diagrams.py</a>. Select the picture to open it at full size.</figcaption>`,
     '</figure>',
   ].join('\n');
 }
