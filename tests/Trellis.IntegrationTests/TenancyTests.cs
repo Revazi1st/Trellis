@@ -266,6 +266,33 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
             () => message.ShouldContain(GlobalKeyProbeCustomizer.LateIndex));
     }
 
+    /// <summary>
+    /// The control for the shared-table half of <see cref="ShouldBeTenantScoped"/>: a probe aggregate owns a value
+    /// mapped into its own table (<c>OwnsOne</c>), which is an entity type of its own with no <c>TenantId</c>, so
+    /// the convention never visits it, and the value declares a unique index and holds an alternate key. The
+    /// check names both and nothing else: not the root's own unique index, which the convention led with
+    /// <c>TenantId</c>, the value's primary key, which is the row's id, its plain index, or a unique index on
+    /// another table (Identity's are in the same model).
+    /// </summary>
+    [Fact]
+    public void The_tenant_scope_check_flags_a_unique_key_an_owned_type_declares_in_the_roots_table()
+    {
+        using AppDbContext context = NewProbeContext<OwnedKeyProbeCustomizer>();
+        IEntityType probe = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ProbeOwner)).ShouldNotBeNull();
+
+        string[] flagged =
+        [
+            $"unique index {OwnedKeyProbeCustomizer.EmailIndex} on {nameof(ProbeContact)}",
+            $"alternate key {OwnedKeyProbeCustomizer.HandleKey} on {nameof(ProbeContact)}",
+        ];
+        UniqueBesideTheRoot(probe).ShouldBe(flagged);
+
+        string message = Should.Throw<ShouldAssertException>(() => ShouldBeTenantScoped(probe)).Message;
+        message.ShouldSatisfyAllConditions(
+            () => message.ShouldContain(OwnedKeyProbeCustomizer.EmailIndex),
+            () => message.ShouldContain(OwnedKeyProbeCustomizer.HandleKey));
+    }
+
     /// <summary>A context over a probe model (<see cref="ProbeModelCustomizer"/>, say); nothing connects.</summary>
     private static AppDbContext NewProbeContext<TCustomizer>()
         where TCustomizer : IModelCustomizer => new(
@@ -285,6 +312,8 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         aggregate.FindDeclaredQueryFilter("Tenant").ShouldNotBeNull($"{name} has no \"Tenant\" query filter");
         UniqueAcrossTenants(aggregate).ShouldBeEmpty(
             $"{name}'s unique keys must be unique per tenant, TenantId leading each: declare a business key as a unique index, which the convention leads with TenantId, and reference another aggregate by its id, never by HasPrincipalKey (ADR-0022)");
+        UniqueBesideTheRoot(aggregate).ShouldBeEmpty(
+            $"{name}'s table holds a unique key declared on another entity type (a value mapped with OwnsOne, say), which the tenant convention never visits, so the key is unique across every tenant: map a value that needs a unique key as a converted column on {name} (IScalarValueObject, .claude/rules/persistence.md) and declare the unique index on {name}, where the convention leads it with TenantId (ADR-0022)");
     }
 
     /// <summary>
@@ -304,6 +333,31 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
 
     private static bool LedByTenant(IReadOnlyList<IProperty> columns)
         => columns[0].Name == TenantInterceptor.TenantIdProperty;
+
+    /// <summary>
+    /// Every unique index and alternate key declared on another entity type mapped to <paramref name="aggregate"/>'s
+    /// table: a value the root owns (<c>OwnsOne</c>), say. Such a type is no aggregate, so the convention never
+    /// visits it and it has no <c>TenantId</c> to lead a key with: each of its keys but the row's own id is unique
+    /// across every tenant.
+    /// </summary>
+    private static string[] UniqueBesideTheRoot(IEntityType aggregate)
+    {
+        StoreObjectIdentifier table = StoreObjectIdentifier.Create(aggregate, StoreObjectType.Table)
+            .ShouldNotBeNull($"{aggregate.ClrType.Name} is mapped to no table");
+
+        return
+        [
+            .. aggregate.Model.GetEntityTypes()
+                .Where(other => !typeof(IHasDomainEvents).IsAssignableFrom(other.ClrType)
+                    && StoreObjectIdentifier.Create(other, StoreObjectType.Table) == table)
+                .SelectMany(static other => other.GetIndexes()
+                    .Where(static index => index.IsUnique)
+                    .Select(index => $"unique index {index.GetDatabaseName()} on {other.ClrType.Name}")
+                    .Concat(other.GetKeys()
+                        .Where(static key => !key.IsPrimaryKey())
+                        .Select(key => $"alternate key {key.GetName()} on {other.ClrType.Name}"))),
+        ];
+    }
 
     /// <summary>Identity must stay reachable before a tenant is known; children ride their root's filter.</summary>
     [Fact]
@@ -622,6 +676,59 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
                 .HasIndex(static user => new { user.NormalizedUserName, user.TenantId })
                 .HasDatabaseName(PerTenantUserIndex)
                 .IsUnique();
+        }
+    }
+
+    /// <summary>An aggregate root that owns a value; only <see cref="OwnedKeyProbeCustomizer"/> maps it.</summary>
+    private sealed class ProbeOwner : IHasDomainEvents
+    {
+        public IReadOnlyList<IDomainEvent> DomainEvents => [];
+
+        public ProbeContact Contact { get; } = new();
+
+        public void ClearDomainEvents()
+        {
+            // The probe raises no events.
+        }
+    }
+
+    /// <summary>The value <see cref="ProbeOwner"/> owns; every other column is a shadow property.</summary>
+    private sealed class ProbeContact
+    {
+        public string Email { get; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Maps <see cref="ProbeOwner"/> with a unique index of its own, which the convention leads with
+    /// <c>TenantId</c>, and with the value it owns in the same table (<c>OwnsOne</c>). The value declares a unique
+    /// index, holds an alternate key (added to its entity type directly: the walk reads keys as well as indexes)
+    /// and has a plain index, which is no key.
+    /// </summary>
+    private sealed class OwnedKeyProbeCustomizer(ModelCustomizerDependencies dependencies) : RelationalModelCustomizer(dependencies)
+    {
+        public const string EmailIndex = "UX_ProbeOwners_Contact_Email";
+        public const string HandleKey = "AK_ProbeOwners_Contact_Handle";
+
+        public override void Customize(ModelBuilder modelBuilder, DbContext context)
+        {
+            modelBuilder.Entity<ProbeOwner>(static owner =>
+            {
+                owner.ToTable("ProbeOwners");
+                owner.Ignore(static probe => probe.DomainEvents);
+                owner.Property<Guid>("Id");
+                owner.HasKey("Id");
+                owner.Property<string>("Code");
+                owner.HasIndex("Code").IsUnique();
+                owner.OwnsOne(static probe => probe.Contact, static contact =>
+                {
+                    contact.Property(static value => value.Email);
+                    contact.Property<string>("City");
+                    contact.HasIndex(static value => value.Email).HasDatabaseName(EmailIndex).IsUnique();
+                    contact.HasIndex("City");
+                    contact.OwnedEntityType.AddKey(contact.Property<string>("Handle").IsRequired().Metadata).SetName(HandleKey);
+                });
+            });
+            base.Customize(modelBuilder, context);
         }
     }
 }

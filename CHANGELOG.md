@@ -307,8 +307,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   tenant and `UniqueConstraintErrors` maps the constraint whichever way the option is set; Identity's
   indexes stay global (ADR-0022, amendment of 2026-11-12). `TenancyTests` fails on a unique index or an
   alternate key of an aggregate that `TenantId` does not lead, with a probe aggregate holding each
-  shape as its control. Declare a business key as a unique index and reference another aggregate by its
-  id: an alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`, is not rewritten.
+  shape as its control, and on a unique index or key that another entity type declares in an
+  aggregate's table (a value mapped with `OwnsOne`, which the convention never visits), with a probe
+  root that owns such a value as its control. Declare a business key as a unique index and reference
+  another aggregate by its id: an alternate key, declared with `HasAlternateKey` or made by
+  `HasPrincipalKey`, is not rewritten; map a value that needs a unique key as a converted column on the
+  root, not as an owned type.
   A unique constraint the convention does not reach (a child table's that its root's id does not lead,
   a primary key a request chooses) is still unique across every tenant, its 409 telling the caller
   another tenant holds the value, and the threat model's multi-tenancy gap now says so. The shipped

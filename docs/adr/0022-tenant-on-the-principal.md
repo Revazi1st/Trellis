@@ -118,12 +118,14 @@ caller that another tenant holds the value.
   and `UniqueConstraintTests.FaultOnPurpose` key on the same name whichever way the toggle is set.
 - **Identity's tables are not aggregates and keep their global unique indexes**: one e-mail is one
   user in one tenant (decision 1).
-- `TenancyTests` holds both: every unique index and every alternate key on an aggregate root starts
-  with `TenantId`, in the real model and in a probe aggregate's (a plain index, one sorted descending on
-  every column and one with a pinned name and per-column settings, built by the real `AppDbContext`),
-  with a second probe holding a key in each shape the convention leaves global as the check's control;
-  and no unique index outside the aggregates includes `TenantId` in any place, a per-tenant index on
-  the users being that check's control.
+- `TenancyTests` holds each of these: every unique index and every alternate key on an aggregate root
+  starts with `TenantId`, in the real model and in a probe aggregate's (a plain index, one sorted
+  descending on every column and one with a pinned name and per-column settings, built by the real
+  `AppDbContext`), with a second probe holding a key in each shape the convention leaves global as the
+  check's control; no other entity type mapped to a root's table (a value mapped with `OwnsOne`)
+  declares a unique index or holds an alternate key, a probe root that owns such a value being that
+  check's control; and no unique index outside the aggregates includes `TenantId` in any place, a
+  per-tenant index on the users being that check's control.
 
 ### Consequences
 
@@ -131,7 +133,11 @@ caller that another tenant holds the value.
   handle) is a deliberate change to the convention loop, like a shared aggregate.
 - A business key is declared as a unique index (`.claude/rules/persistence.md`), and another aggregate
   is referenced by its id: an alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`,
-  is not rewritten, and `TenancyTests` fails naming it.
+  is not rewritten, and `TenancyTests` fails naming it. A value that needs a unique key is a converted
+  column on the root (ADR-0006), not an owned type: `OwnsOne` maps the value into the root's table as
+  an entity type of its own, which the loop does not visit, so a unique index or key declared on it
+  would be unique across every tenant on the root's own table, and `TenancyTests` fails naming that
+  as well.
 - A unique constraint the convention does not reach (a child table's unique index or alternate key
   that its root's id does not lead, a primary key a request chooses) stays unique across every
   tenant, and its 409, or the 500 of a fault on purpose, tells the caller that another tenant holds
