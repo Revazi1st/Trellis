@@ -247,7 +247,7 @@ under *What it looks like*, and the site's landing page shows them in a block of
 `.github/workflows/ci.yml`) takes them: its step "Keep pictures of the first run" runs one browser
 test on the freshly seeded database before any other browser test runs, and the job uploads the four
 files with the rest of its screenshots as the `ui-screenshots` artifact. The current set comes from
-run 43624238334, CI on `main` at `c9e5350`.
+run 43654229380, CI on `main` at `f5152f3`.
 
 Nothing regenerates them, and nothing compares them: a screenshot is looked at, never diffed
 (`tests/Trellis.UiTests/DesignSystemProofTests.cs` says why). Refresh them by hand from the newest
