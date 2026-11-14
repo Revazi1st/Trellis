@@ -162,12 +162,13 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     }
 
     /// <summary>
-    /// The control for the unique-index half of the fitness test, since the real model may hold no unique
-    /// index on an aggregate: a probe aggregate declares three the way a configuration would, a plain one,
-    /// one sorted descending on every column and one with a pinned name and per-column settings, and the real
-    /// <see cref="AppDbContext"/> builds the model. The convention puts TenantId first in each and keeps the
-    /// rest, the database name above all: it is what <c>UniqueConstraintErrors</c> and
-    /// <c>UniqueConstraintTests.FaultOnPurpose</c> key on.
+    /// The convention's unique-index rewrite, proved on a probe since the real model may hold no unique index on
+    /// an aggregate (the check's own control is
+    /// <see cref="The_tenant_scope_check_flags_each_unique_key_the_tenant_does_not_lead"/>): a probe aggregate
+    /// declares three the way a configuration would, a plain one, one sorted descending on every column and one
+    /// with a pinned name and per-column settings, and the real <see cref="AppDbContext"/> builds the model. The
+    /// convention puts TenantId first in each and keeps the rest, the database name above all: it is what
+    /// <c>UniqueConstraintErrors</c> and <c>UniqueConstraintTests.FaultOnPurpose</c> key on.
     /// </summary>
     [Fact]
     public void A_unique_index_on_an_aggregate_is_unique_per_tenant_under_the_name_it_was_given()
@@ -248,8 +249,9 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
 
     /// <summary>
     /// The control for the unique-key half of <see cref="ShouldBeTenantScoped"/>, which neither the real model nor
-    /// the probe above trips: a probe aggregate holds a unique index added after the convention ran, so
-    /// <c>TenantId</c> comes second in it and it is unique across every tenant, and the check names it.
+    /// the probe above trips: a probe aggregate holds a unique key in each shape the convention leaves global (an
+    /// alternate key, the one <c>HasPrincipalKey</c> makes for a reference by code, and a unique index added after
+    /// the convention ran, <c>TenantId</c> second in it), and the check names each.
     /// </summary>
     [Fact]
     public void The_tenant_scope_check_flags_each_unique_key_the_tenant_does_not_lead()
@@ -257,8 +259,11 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         using AppDbContext context = NewProbeContext<GlobalKeyProbeCustomizer>();
         IEntityType probe = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ProbeAccount)).ShouldNotBeNull();
 
-        Should.Throw<ShouldAssertException>(() => ShouldBeTenantScoped(probe)).Message
-            .ShouldContain(GlobalKeyProbeCustomizer.LateIndex);
+        string message = Should.Throw<ShouldAssertException>(() => ShouldBeTenantScoped(probe)).Message;
+        message.ShouldSatisfyAllConditions(
+            () => message.ShouldContain(GlobalKeyProbeCustomizer.HandleKey),
+            () => message.ShouldContain(GlobalKeyProbeCustomizer.CodeKey),
+            () => message.ShouldContain(GlobalKeyProbeCustomizer.LateIndex));
     }
 
     /// <summary>A context over a probe model (<see cref="ProbeModelCustomizer"/>, say); nothing connects.</summary>
@@ -278,13 +283,27 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
             static index => index.Properties.Any(static property => property.Name == TenantInterceptor.TenantIdProperty),
             $"{name} has no index on TenantId");
         aggregate.FindDeclaredQueryFilter("Tenant").ShouldNotBeNull($"{name} has no \"Tenant\" query filter");
-        foreach (IIndex unique in aggregate.GetIndexes().Where(static index => index.IsUnique))
-        {
-            unique.Properties[0].Name.ShouldBe(
-                TenantInterceptor.TenantIdProperty,
-                $"{name}'s unique index {unique.GetDatabaseName()} is unique across every tenant: TenantId must lead it");
-        }
+        UniqueAcrossTenants(aggregate).ShouldBeEmpty(
+            $"{name}'s unique keys must be unique per tenant, TenantId leading each: declare a business key as a unique index, which the convention leads with TenantId, and reference another aggregate by its id, never by HasPrincipalKey (ADR-0022)");
     }
+
+    /// <summary>
+    /// Every unique key of <paramref name="aggregate"/> but the row's own id that <c>TenantId</c> does not lead: a
+    /// unique index the convention did not rewrite, and an alternate key, declared or the one <c>HasPrincipalKey</c>
+    /// makes, which it never rewrites.
+    /// </summary>
+    private static string[] UniqueAcrossTenants(IEntityType aggregate) =>
+    [
+        .. aggregate.GetIndexes()
+            .Where(static index => index.IsUnique && !LedByTenant(index.Properties))
+            .Select(static index => $"unique index {index.GetDatabaseName()}"),
+        .. aggregate.GetKeys()
+            .Where(static key => !key.IsPrimaryKey() && !LedByTenant(key.Properties))
+            .Select(static key => $"alternate key {key.GetName()}"),
+    ];
+
+    private static bool LedByTenant(IReadOnlyList<IProperty> columns)
+        => columns[0].Name == TenantInterceptor.TenantIdProperty;
 
     /// <summary>Identity must stay reachable before a tenant is known; children ride their root's filter.</summary>
     [Fact]
@@ -538,12 +557,16 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     }
 
     /// <summary>
-    /// Maps <see cref="ProbeAccount"/> with a unique key the tenant convention leaves global: a unique index declared
-    /// after <see cref="AppDbContext"/>'s <c>OnModelCreating</c>, which nothing in the template does, so the
-    /// convention never meets it and <c>TenantId</c> stays second.
+    /// Maps <see cref="ProbeAccount"/> with a unique key in each shape the tenant convention leaves global: an
+    /// alternate key declared on it, the one EF adds for a reference to an account by its code
+    /// (<c>HasPrincipalKey</c>; a parent account here), and a unique index declared after
+    /// <see cref="AppDbContext"/>'s <c>OnModelCreating</c>, which nothing in the template does, so the convention
+    /// never meets it and <c>TenantId</c> stays second.
     /// </summary>
     private sealed class GlobalKeyProbeCustomizer(ModelCustomizerDependencies dependencies) : RelationalModelCustomizer(dependencies)
     {
+        public const string HandleKey = "AK_ProbeAccounts_Handle";
+        public const string CodeKey = "AK_ProbeAccounts_Code";
         public const string LateIndex = "IX_ProbeAccounts_Late";
 
         public override void Customize(ModelBuilder modelBuilder, DbContext context)
@@ -554,7 +577,12 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
                 account.Ignore(static probe => probe.DomainEvents);
                 account.Property<Guid>("Id");
                 account.HasKey("Id");
+                account.Property<string>("Handle");
+                account.Property<string>("Code");
+                account.Property<string>("ParentCode");
                 account.Property<string>("Reference");
+                account.HasAlternateKey("Handle");
+                account.HasOne<ProbeAccount>().WithMany().HasForeignKey("ParentCode").HasPrincipalKey("Code");
             });
             base.Customize(modelBuilder, context);
 

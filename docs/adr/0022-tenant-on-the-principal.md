@@ -118,17 +118,19 @@ caller that another tenant holds the value.
   and `UniqueConstraintTests.FaultOnPurpose` key on the same name whichever way the toggle is set.
 - **Identity's tables are not aggregates and keep their global unique indexes**: one e-mail is one
   user in one tenant (decision 1).
-- `TenancyTests` holds both: every unique index on an aggregate root starts with `TenantId`, in the
-  real model and in a probe aggregate's (a plain index, one sorted descending on every column and one
-  with a pinned name and per-column settings, built by the real `AppDbContext`), and no unique index
-  outside the aggregates does.
+- `TenancyTests` holds both: every unique index and every alternate key on an aggregate root starts
+  with `TenantId`, in the real model and in a probe aggregate's (a plain index, one sorted descending on
+  every column and one with a pinned name and per-column settings, built by the real `AppDbContext`),
+  with a second probe holding a key in each shape the convention leaves global as the check's control;
+  and no unique index outside the aggregates does.
 
 ### Consequences
 
 - Two tenants may hold the same business key. A key that must be unique across every tenant (a public
   handle) is a deliberate change to the convention loop, like a shared aggregate.
-- A business key is declared as a unique index (`.claude/rules/persistence.md`); an alternate key
-  (`HasAlternateKey`) is not rewritten.
+- A business key is declared as a unique index (`.claude/rules/persistence.md`), and another aggregate
+  is referenced by its id: an alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`,
+  is not rewritten, and `TenancyTests` fails naming it.
 - A unique index on exactly a foreign key's columns is the one EF keeps for a one-to-one reference:
   replaced, EF adds its own again, global, under the name with a `1` appended, and `TenancyTests`
   fails naming it. The template's aggregates hold no such reference to each other; adding one means

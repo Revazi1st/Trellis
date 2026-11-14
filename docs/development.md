@@ -302,9 +302,10 @@ projects that need it by a linked `<Compile Include>` in their csproj.
 <!--#endif -->
 <!--#if (UseMultitenancy) -->
 - **`TenancyTests`** (IntegrationTests) and **`TenantIsolationTests`** (ApiTests), with multi-tenancy
-  (optional): stamping, filtering and the aggregate-root convention (unique indexes led by `TenantId`
-  included) against PostgreSQL, and cross-tenant reads and writes answering 404 over HTTP. Write one
-  when an aggregate is deliberately shared or a query opts out of the `"Tenant"` filter.
+  (optional): stamping, filtering and the aggregate-root convention (unique indexes led by `TenantId`,
+  an alternate key refused) against PostgreSQL, and cross-tenant reads and writes answering 404 over
+  HTTP. Write one when an aggregate is deliberately shared or a query opts out of the `"Tenant"`
+  filter.
 <!--#endif -->
 
 Where to invest: most of a feature's tests belong in `Domain.UnitTests` and `IntegrationTests`, because a

@@ -237,7 +237,9 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   is a row in `UniqueConstraintTests.FaultOnPurpose` with its reason instead
   (`.claude/rules/persistence.md`); the idempotency filter answers a same-key loser from the store.
   With multi-tenancy it is unique per tenant by convention (`.claude/rules/persistence.md`): the
-  configuration names no tenant [`TenancyTests`, all-options leg]. After the value objects and the
+  configuration names no tenant and declares no alternate key (`HasAlternateKey`, or `HasPrincipalKey`
+  on a reference: point at another aggregate by its id), which the convention does not rewrite
+  [`TenancyTests`, all-options leg]. After the value objects and the
   aggregate are built, the handler may ask the repository port (`{Key}ExistsAsync`) and answer the
   same `Error` the index maps to: the lookup is orchestration and the index is the rule, so the
   lookup is never a `MustAsync` validator. The model for the lookup is `IdentityService.RegisterAsync`
