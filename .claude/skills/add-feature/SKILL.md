@@ -206,6 +206,8 @@ after each layer.
       as they apply), `Tests` and `Endpoints` (the table); plus a line in `docs/INDEX.md`
       [`check-docs-drift.sh`: a change under the feature's folders without its doc fails CI, and so
       does the doc of a feature with a `Domain/{Feature}/` folder that lacks one of those headings].
+      The feature gets its line in `docs/INDEX.md` and no row in `docs/overview.md`, which lists what
+      the solution can do, not its features.
       <!--#if (IncludeUI) -->
       A `UI` H2 goes between `API` and `Tests`, and every feature's doc carries it: its pages, or the
       sentence saying why it has none [`check-docs-drift.sh` requires that heading too].

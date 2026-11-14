@@ -2,12 +2,12 @@
 
 ## Prerequisites
 
-| Tool | Needed for |
-|---|---|
-| **Docker** (Docker Desktop, OrbStack, Colima, Linux Docker Engine; Podman with caveats, see [below](#docker-engines-other-than-docker-desktop)) | everything: PostgreSQL, Testcontainers, the SDK container |
-| **.NET 10 SDK** on the host | `aspire run` and the Aspire E2E test (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container |
-| **Aspire CLI 13.5 or later**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK; the AppHost is on Aspire 13.6, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app |
-| **PowerShell** (`pwsh`) | installing the Playwright browsers for the optional UI tests |
+| Tool | Needed for | Minimum |
+|---|---|---|
+| **Docker** (Docker Desktop, OrbStack, Colima, Linux Docker Engine; Podman with caveats, see [below](#docker-engines-other-than-docker-desktop)) | everything: PostgreSQL, Testcontainers, the SDK container | a running engine |
+| **.NET 10 SDK** on the host | `aspire run` and the Aspire E2E test (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container | the version `global.json` pins, or a later feature band of its line (`rollForward: latestFeature`) |
+| **Aspire CLI**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app | 13.5 |
+| **PowerShell** (`pwsh`) | installing the Playwright browsers for the optional UI tests | none stated |
 
 `./scripts/doctor.sh` checks this machine against the table, PowerShell aside, and changes nothing:
 the SDK on `PATH` against `global.json` (its version and `rollForward` band), Docker and the SDK image
@@ -370,6 +370,40 @@ look at, never a pass.
 
 With multi-tenancy, `ApiFactory.CreateAdminClientAsync(tenantId, …)` signs in an administrator of another
 tenant (created on first use); `TenantIsolationTests` is the worked example.
+<!--#endif -->
+
+### Gates beyond the tests
+
+CI holds more than the tests to the code:
+
+- **The OpenAPI snapshot.** The served document must equal the committed
+  [api/openapi.v1.json](api/openapi.v1.json) (`OpenApiSnapshotTests`), and CI's *API contract* job
+  diffs it against the running app too. After an endpoint or contract change, regenerate it with
+  `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`.
+- **Docs drift, links and ADR history.** A pull request that changes a feature's code without its
+  `docs/features/<feature>.md`, or authentication and hardening code without
+  [threat-model.md](threat-model.md), fails `scripts/check-docs-drift.sh`, and so does one whose doc of
+  a feature with an aggregate lacks a heading the `add-feature` skill names; the `docs-not-needed`
+  label skips that job for a change that alters no behaviour. `scripts/check-adr-links.sh` resolves
+  every ADR reference, rule glob and relative link. `scripts/check-adr-history.sh` fails a change to an
+  accepted ADR anywhere but in a dated amendment appended at its end; the `adr-rewrite` label skips
+  that job for a rewrite that is truly needed.
+- **Coverage floors.** Line coverage has a floor per ring: Core 90 %, Infrastructure 85 %,
+  Presentation 75 %, Shared 80 %. The *Coverage summary and ring floors* step of
+  `.github/workflows/ci.yml` fails a run below one.
+<!--#if (TemplateSource) -->
+- **Template CI** (`.github/workflows/template-ci.yml`, template repository only) tests what the
+  template generates on every pull request. It creates a solution per option leg (default, no UI, UI
+  tests without the UI, all options, and Redis, Serilog and multi-tenancy each on alone with the UI
+  off), checks each for leftovers (a file or a line still named after the template, an unprocessed
+  directive) and runs the generated project's own link, hook and doctor checks. Every leg but
+  UI-tests-without-the-UI is built in Release and tested, and on Linux the Aspire end-to-end test
+  boots each one's generated AppHost. On Windows the default leg is built and the three test projects
+  that need no Docker run. A project is also built from the packed `.nupkg`.
+- **The README and the site** (template repository only): `scripts/check-readme-sync.sh`, a step of
+  `.github/workflows/ci.yml`, fails when a copy of a fact in the README, the package README or the site
+  no longer agrees with its home: the pitch, the options, the commands, the use cases, the seeded
+  login, the ports and the agent toolkit among them.
 <!--#endif -->
 
 ## When the build fails

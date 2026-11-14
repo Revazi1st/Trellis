@@ -112,3 +112,31 @@ Two classes were renamed when the pages moved onto the system's components: `.no
 `.callout success` and `.error-panel` became `.callout danger`. A page or a rule of yours that uses
 either takes the new classes; `DesignSystemTests` names a class that has lost its rule.
 <!--#endif -->
+
+## Versions and support
+
+What the solution is pinned to is in its own files: the SDK in `global.json`, with its `rollForward`
+policy, the target framework in `Directory.Build.props`, and every package version in
+`Directory.Packages.props`. The solution targets .NET 10, which Microsoft supports as a
+long-term-support release; Microsoft's
+[.NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core) has the dates.
+After generation these pins are the project's own. Dependabot proposes updates to them, and holds back
+the majors of the packages numbered after .NET, because a new .NET major is a migration made by hand
+([development.md](development.md#bumping-the-sdk)).
+
+Template versions follow Semantic Versioning: a breaking change to generated output or to an option's
+meaning raises the major number, or the minor number while the version is below 1.0; a new option or
+feature raises the minor number, and a fix the patch number.
+
+The template is released from one branch, `main`, so a fix arrives in the next version and no older
+version is patched. A generated project gets the fix by adopting that version, as the steps above
+describe.
+
+The template's changelog (step 2) lists a change that fixes or hardens security in generated output
+under a *Security* heading in its version's section. Read those entries first.
+<!--#if (TemplateSource) -->
+
+In the template's repository, the README follows `main`, while the package and the website document
+the latest release; [CHANGELOG.md](../CHANGELOG.md) says what each release holds. How often a version
+is cut is in the release runbook ([releasing.md](releasing.md#cadence)).
+<!--#endif -->

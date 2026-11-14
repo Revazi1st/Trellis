@@ -126,16 +126,28 @@ govern:
   committing the work in progress on `main` and starting over: the new session loses the reviewers'
   findings, and the judge can no longer tell the operator's commit from the agent's.
 
+## Cadence
+
+A minor version is cut every four to six weeks, and a patch when a fix cannot wait for the next minor.
+Fixes go into the latest minor only: no older version is patched, so a consumer takes a fix by adopting
+the version that carries it (`docs/upgrading.md`, *Versions and support*, which links here rather than
+repeating these numbers).
+
 ## Cutting a release
 
 1. **Pick the version.** First read the dependency bumps that merged on their own since the last
    tag (`git log vPREV..main --oneline --author=dependabot`); they are part of what ships. SemVer: a breaking change to generated output or to a toggle's meaning
    is a major bump (a minor bump while below 1.0), a new toggle or feature a minor bump, a fix a
-   patch. A pre-release (`X.Y.Z-rc.1`) is published as a GitHub pre-release.
+   patch. A pre-release (`X.Y.Z-rc.1`) is published as a GitHub pre-release. Before a minor version,
+   and whenever a UI page or `tokens.css` changed since the last release, refresh the README's
+   screenshots from the newest green CI run on `main` (`eng/readme/README.md`, *Screenshots*).
 2. **Write the release notes.** In a pull request to `main`, move the entries under
    `## [Unreleased]` in `CHANGELOG.md` into a new `## [X.Y.Z] - YYYY-MM-DD` section
    ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)), written for template consumers.
-   The section becomes the GitHub release notes verbatim. Merge once CI is green.
+   A change to generated output that fixes or hardens security goes under `### Security` in that
+   section, Keep a Changelog's heading for it, so a consumer finds those entries first
+   (`docs/upgrading.md`, *Versions and support*). The section becomes the GitHub release notes
+   verbatim. Merge once CI is green.
 3. **Dry run.** *Actions → Release → Run workflow* on `main`, `dry_run` ticked, `version` X.Y.Z —
    or `gh workflow run release.yml --ref main -f dry_run=true -f version=X.Y.Z`. Approve the
    `nuget.org` environment when it asks. Then check the run is green, the draft release's notes
@@ -168,11 +180,16 @@ holds one copy of it, and three things replace that copy:
 - **A fix to the site itself after a release** (a page that renders wrong, a broken style): merge it
   to `main`, then `gh workflow run site.yml -f ref=vX.Y.Z -f site_ref=main`. The docs still come
   from the tag and `site/` from `main`, so the release's documentation stays the release's. A fix to
-  `docs/` is documentation of the next version and ships with it.
+  `docs/` is documentation of the next version and ships with it. `site_ref` works only for a tag that
+  holds every file the `site/` of `site_ref` reads. The `site/` on `main` reads `docs/overview.md`,
+  `docs/faq.md`, `eng/readme/pitch.md`, `eng/readme/shots/` and the `Minimum` column of the
+  prerequisites table in `docs/development.md` (the build throws without it), and the first tag that
+  holds them is the first release after v0.2.0; a site fix for v0.2.0 or an older tag is built from a
+  branch cut from `main` before those files arrived.
 
-Pull requests that touch `docs/`, `site/`, `README.md`, `.template.config/`, `global.json`,
-`eng/readme/` or a source file a site page quotes run the same build without deploying it: a link or
-an `#anchor` that points nowhere fails it.
+A pull request that touches what the site build reads runs the same build without deploying it: a
+link or an `#anchor` that points nowhere fails it. The list of what the build reads has one home, the
+comment above the *Compare with the base branch* step in `.github/workflows/site.yml`.
 
 ## When something fails
 
