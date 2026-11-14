@@ -320,12 +320,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   two people renaming one record overwrote each other unseen. Its API section now makes them the
   default for an aggregate that changes after its create (`GetInvoice` and the invoice writes are the
   model) and asks for one sentence in the feature doc's *Optimistic concurrency* paragraph to leave
-  them out. `OpenApiDocumentTests` holds both halves, each with a planted document as its control: a
-  `GET /{id}` with a write under it that answers no `ETag` fails unless `RecordsWithoutVersion` names
-  it with its reason, and a write under a path whose GET answers an `ETag` (whatever each route names
-  its parameters) that declares no `If-Match` fails unless `WritesWithoutIfMatch` names it with its
-  reason. A feature of yours with an unversioned record that is edited fails the first until you add
-  the version or the row.
+  them out. `OpenApiDocumentTests` holds both halves, each with a planted document as its control: each
+  write under a `GET /{id}` that answers no `ETag` fails unless `WritesToRecordsWithoutVersion` names
+  that write with its reason, so a write added to the record later fails again, and a write under a
+  path whose GET answers an `ETag` (whatever each route names its parameters) that declares no
+  `If-Match` fails unless `WritesWithoutIfMatch` names it with its reason. A feature of yours with an
+  unversioned record that is edited fails the first until you add the version or a row for each write.
 - **A feature a person uses gets its pages, or a reason it has none.** The `add-feature` skill's
   section was headed "UI (if included)", which reads as "if the request asks for one" as easily as
   "if the project has a UI", so a feature could ship API-only in a project with the UI on and say

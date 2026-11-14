@@ -129,14 +129,15 @@ after each layer.
       `GetInvoice` is the model) and takes `If-Match` on every write to it
       (`.SupportsConditionalWrite()`, the command's `ExpectedVersion`, a `{Feature}Preconditions`
       like `InvoicePreconditions`, its `{Aggregate}.VersionMismatch` a 412) [`OpenApiDocumentTests`
-      fails on a `GET /{id}` with a write under it that answers no ETag, unless
-      `RecordsWithoutVersion` names it with the reason, and on a write under a GET that answers an
-      ETag without `If-Match`, unless `WritesWithoutIfMatch` names it with a reason;
+      fails on each write under a `GET /{id}` that answers no ETag, unless
+      `WritesToRecordsWithoutVersion` names that write with the reason, and on a write under a GET
+      that answers an ETag without `If-Match`, unless `WritesWithoutIfMatch` names it with a reason;
       `ProblemDetailsContractTests` for the new code]. Without it two callers who change one record
-      overwrite each other unseen, so leaving it out is that row and one sentence in the feature
-      doc's *Optimistic concurrency* paragraph saying why; with it, the doc's *Conditional GET* and
-      *Conditional writes* paragraphs describe it, as `invoices.md`'s do. Caching that GET in
-      `HybridCache` stays a choice the doc records.
+      overwrite each other unseen, so leaving it out is a row for each write, keyed as the failure
+      lists it, and one sentence in the feature doc's *Optimistic concurrency* paragraph saying why;
+      a write added to the record later fails again, and is versioned or given its own row. With
+      it, the doc's *Conditional GET* and *Conditional writes* paragraphs describe it, as
+      `invoices.md`'s do. Caching that GET in `HybridCache` stays a choice the doc records.
 - [ ] Multi-tenancy: the tenant comes from the signed `tenant` claim only (ADR-0022). Never put a
       tenant on a contract, a route, a query string or a header.
 - [ ] **Regenerate the OpenAPI document**: `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`
