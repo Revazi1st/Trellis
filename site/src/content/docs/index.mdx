@@ -25,9 +25,14 @@ stage:
 import { Card, CardGrid, Code, LinkCard, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 import Excerpt from '../../components/Excerpt.astro';
 import OptionsTable from '../../components/OptionsTable.astro';
-import { facts, quickstart, sdkVersion, seededAdmin, toggles } from '../../data/repo.mjs';
+import { agentToolkit, facts, quickstart, sdkVersion, seededAdmin, toggles } from '../../data/repo.mjs';
+import { githubBlob } from '../../../trellis.config.mjs';
 import ringsDark from '@repo/eng/readme/rings-dark.svg?url';
 import ringsLight from '@repo/eng/readme/rings-light.svg?url';
+import listDark from '@repo/eng/readme/shots/first-run-invoices-1280-dark.png';
+import listLight from '@repo/eng/readme/shots/first-run-invoices-1280-light.png';
+import phoneDark from '@repo/eng/readme/shots/first-run-invoice-400-dark.png';
+import phoneLight from '@repo/eng/readme/shots/first-run-invoice-400-light.png';
 
 
 <div class="facts not-content">
@@ -89,7 +94,31 @@ Architecture tests pin the layer rules, integration tests run on a real PostgreS
 
 `AGENTS.md`, path-scoped rules, skills for adding a feature or an integration, and a docs-drift gate in CI, so a person and an AI assistant read the same instructions.
 
-[Read the agent instructions →](https://github.com/Revazi1st/Trellis/blob/main/AGENTS.md)
+<p><a href={githubBlob('AGENTS.md')}>Read the agent instructions →</a></p>
+
+</Card>
+
+<Card title="Secure by default" icon="padlock">
+
+Every endpoint of the versioned API needs a signed-in caller unless it is on the anonymous allowlist, and one that needs more names exactly one permission. One test holds the allowlist and pins each endpoint's permission, and register and login sit under a strict rate limit.
+
+[The Auth feature →](/features/auth/)
+
+</Card>
+
+<Card title="Operations built in" icon="server">
+
+A quick start for one host from the Compose files `aspire publish` writes, a one-shot migration job, health probes, and telemetry whose reference a test holds to the code. The outbox and the idempotency keys have runbooks.
+
+[The deployment guide →](/operate/deployment/)
+
+</Card>
+
+<Card title="Dependencies you can ship" icon="setting">
+
+The build refuses every package on the license ceilings, transitive ones included, and a test holds each container image to an allowlist that names its license. NuGetAudit checks the whole graph, every version lives in one file, and Dependabot's updates wait out a cooldown.
+
+[The license ceiling decision →](/decisions/0011-license-ceiling-policy/)
 
 </Card>
 
@@ -138,6 +167,32 @@ Architecture tests pin the layer rules, integration tests run on a real PostgreS
 
 </section>
 
+<section class="block" id="looks">
+
+<p class="label">What it looks like</p>
+
+## The web UI on a first run
+
+<p class="sub">CI's browser tests save these pictures of a first run: the invoice list on a laptop and one invoice on a phone, showing the invoices the migration worker seeds in Development.</p>
+
+<Tabs>
+  <TabItem label="Laptop, 1280 px">
+    <div class="trellis-table">
+      <img class="rings-light" src={listLight.src} width={listLight.width} height={listLight.height} alt="The Invoices page of the web UI: a filter per state above a table of the seeded invoices, each with its customer, status, total, due date, creation date and a View link." />
+      {/* The light picture, hidden in dark, still counts as a sibling: without the margin, Starlight's gap between blocks would open above this one. */}
+      <img class="rings-dark" style="margin:0" src={listDark.src} width={listDark.width} height={listDark.height} alt="The Invoices page of the web UI: a filter per state above a table of the seeded invoices, each with its customer, status, total, due date, creation date and a View link." />
+    </div>
+  </TabItem>
+  <TabItem label="Phone, 400 px">
+    <div class="trellis-table" style="max-width:400px">
+      <img class="rings-light" src={phoneLight.src} width={phoneLight.width} height={phoneLight.height} alt="A draft invoice on a phone-width screen: its status, e-mail, total and due date, its line, then the forms that add a line, issue it or void it." />
+      <img class="rings-dark" style="margin:0" src={phoneDark.src} width={phoneDark.width} height={phoneDark.height} alt="A draft invoice on a phone-width screen: its status, e-mail, total and due date, its line, then the forms that add a line, issue it or void it." />
+    </div>
+  </TabItem>
+</Tabs>
+
+</section>
+
 <section class="block">
 
 <p class="label">Options</p>
@@ -168,6 +223,36 @@ Architecture tests pin the layer rules, integration tests run on a real PostgreS
     <p class="rule">Dependencies point inward. The Domain knows nothing about EF, HTTP or DI; Application defines the ports; Infrastructure and Persistence are peers that implement them and never reference each other.</p>
     <p class="sub">Grouped by ring on disk: <code>src/Core</code>, <code>src/Infrastructure</code>, <code>src/Presentation</code>, <code>src/Shared</code>. Features are vertical slices inside the layers. The architecture tests fail the build when a reference crosses the wrong way. <a href="/understand/architecture/">Architecture →</a></p>
   </div>
+</section>
+
+<section class="block" id="agents">
+
+<p class="label">Agents</p>
+
+## Written for an agent as for a person
+
+<p class="sub">An agent reads the same instructions a person does, and every piece is a text file in the repository, under <code>.claude/</code> or in <code>.mcp.json</code>. A solution created with no options has these:</p>
+
+<div class="trellis-table not-content">
+  {/* Three short columns fit a phone: no floor width, so the names wrap instead of scrolling out of sight. */}
+  <table style="min-width:0">
+    <thead>
+      <tr><th scope="col">Kind</th><th scope="col">Count</th><th scope="col">Names</th></tr>
+    </thead>
+    <tbody>
+      {agentToolkit.map((k) => (
+        <tr>
+          <td>{k.kind}</td>
+          <td>{k.names.length}</td>
+          <td>{k.names.map((name, i) => <>{i > 0 && ' '}<code>{name}</code></>)}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+[The agents' entry point, every piece with its file →](/reference/docs-index/)
+
 </section>
 
 <section class="block">
