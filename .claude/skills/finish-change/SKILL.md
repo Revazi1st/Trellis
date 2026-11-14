@@ -54,7 +54,12 @@ proposed commit message, `commit` also commits, and `pr` commits and opens the p
       In the template's source, also `./scripts/check-template-toggles.sh`: every directive alone on its
       line and every symbol declared [CI *Build & Test*, *Template toggle check*]; and
       `python3 eng/readme/render-diagrams.py --check`: the README's pictures match the tree, re-rendered
-      without `--check` [CI *Build & Test*, *README pictures are current*].
+      without `--check` [CI *Build & Test*, *README pictures are current*]; and
+      `./scripts/check-readme-sync.sh`: every copy of a fact in the README, the package README and the
+      site agrees with its home (the pitch, the options, the commands, the use cases and their
+      permissions, the seeded login, the ports, the agent toolkit, the links and the pictures), and
+      each message names the copy to update [CI *Build & Test*, *README sync self-test* and *README
+      and site agree with their sources*].
       <!--#endif -->
 - [ ] **The CHANGELOG line**, when someone using the project would notice the change (behaviour, a
       contract, configuration, a fixed bug): one entry under `## [Unreleased]` in `CHANGELOG.md`, in

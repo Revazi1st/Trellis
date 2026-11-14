@@ -39,6 +39,10 @@ With a local SDK you can also `aspire run` the full app. See
   runs the CI check locally) and, if you made a load-bearing decision, add an ADR numbered below
   0100 (`docs/adr/`, see the `new-adr` skill). An accepted ADR is never edited, only amended at its
   end (`scripts/check-adr-history.sh main` runs CI's check locally; the `adr-rewrite` label skips it).
+- A change to the pitch (`eng/readme/pitch.md`), an option's description, an endpoint or its
+  permission, a port, a skill or a reviewer, or an install command runs
+  `./scripts/check-readme-sync.sh`, which names each copy in the README, the package README or the
+  site to update.
 - A user-visible change gets a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), written
   for the people who generate projects from the template.
 - A change that copies or adapts someone else's work (an idea, a pattern, a layout, text or code)

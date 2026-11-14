@@ -8,6 +8,22 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/overview.md`, *What you get*.** Every capability of the generated solution in a few words,
+  with the doc that explains it and the decision behind it, the capabilities each option adds, and
+  how to make the solution yours (add a feature, remove the sample, call a third-party API, record a
+  decision, adopt a later template version).
+- **`docs/faq.md`.** Short answers with their sources: whether another database can replace
+  PostgreSQL (and the places that are specific to it), why MediatR, AutoMapper and FluentAssertions are
+  refused, how to remove the sample or add a feature, whether an option can change later, and whether a
+  newer template version changes a solution.
+- **"Versions and support" in `docs/upgrading.md`.** What the solution is pinned to, that template
+  versions follow Semantic Versioning, that only the latest version gets fixes, and that the
+  changelog lists a security fix to generated output under its version's *Security* heading.
+- **"Gates beyond the tests" in `docs/development.md`**, the checks CI runs beside the tests (the
+  OpenAPI snapshot, docs drift, the link check, ADR history, the coverage floors), and a `Minimum`
+  column in its prerequisites table.
 - **Pictures of a first run, kept by CI** (with `--include-ui-tests`). `FirstRunPicturesTests` saves the
   invoice list at 1280 px and the seeded draft invoice at 400 px, each in light and dark, as
   `first-run-*.png` in the run's `ui-screenshots` artifact, for a README or a release note. The `ui-tests`
@@ -15,6 +31,16 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   migration job seeded: with the variable the test fails unless the list shows exactly the seeded invoices,
   and without it the test skips, so the other browser tests' invoices never reach these pictures
   (`docs/development.md`, *UI tests*). The `remove-feature` skill names the class and the step.
+
+### Changed
+
+- **The template's description is one sentence**, the one `dotnet new trellis --help` and the
+  Visual Studio and Rider dialogs show: "Trellis is a dotnet new template for .NET 10 that generates
+  a rich-DDD solution with Clean Architecture the tests enforce." The package description on nuget.org
+  is the same sentence.
+- **The `remove-feature` and `add-feature` skills name the two new docs**: removing the sample
+  repoints the rows of `docs/overview.md` that link it and the example in `docs/faq.md`; a new feature
+  gets its line in `docs/INDEX.md` and no row in `docs/overview.md`.
 
 ## [0.2.0] - 2026-11-14
 
