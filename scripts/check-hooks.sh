@@ -522,6 +522,20 @@ JSON
   if [ -e "$repo/.git/claude-hooks/docs-drift.last" ]; then
     fail "docs-drift.sh: a feature doc with every heading still drifts (its record is left in .git/claude-hooks/docs-drift.last)"
   fi
+  # The headings are asked only of a feature with an aggregate: an integration's doc (no Domain/<Feature>/
+  # folder behind it) keeps its own shape, so an edit to one with none of them is not asked about. A new
+  # session, so a report would be heard.
+  repo="$work/drift-integration-doc"
+  mkdir -p "$repo/scripts" "$repo/src/Infrastructure/Acme.Infrastructure/ExternalApis/ExchangeRates" "$repo/docs/features"
+  git init -q --template= "$repo"
+  cp "$root/scripts/check-docs-drift.sh" "$repo/scripts/"
+  printf 'namespace Acme;\n' > "$repo/src/Infrastructure/Acme.Infrastructure/ExternalApis/ExchangeRates/Client.cs"
+  printf '# Exchange rates\n\n## How it works\n' > "$repo/docs/features/exchange-rates.md"
+  project="$repo"
+  payload <<JSON
+{"session_id":"session-integration-doc","transcript_path":"$work/none.jsonl","cwd":"$repo","permission_mode":"default","hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"$repo/docs/features/exchange-rates.md","old_string":"a","new_string":"b","replace_all":false},"tool_response":{"success":true},"tool_use_id":"toolu_drift_integration_doc"}
+JSON
+  expect "an integration's doc with its own headings" docs-drift.sh silent
   project="$root"
 else
   echo "check-hooks: git is not on PATH; the docs-drift cases were skipped."
