@@ -310,8 +310,10 @@ public sealed partial class OpenApiDocumentTests
     {
         // Flagged: a record whose GET answers no ETag with a write below it (naming its parameter differently)
         // and one with a write on its own path. Not flagged: a versioned record; a record below it, which the
-        // root's version guards; a record nothing writes to; a list and a literal segment, which are no record;
-        // a record with no GET, which has nothing to answer an ETag on; and an exempt one.
+        // root's version guards; a record nothing writes to after the create on the collection above it, its
+        // path-level parameters being no operation; a list and a literal segment, which are no record; a
+        // record with a write on it and below it and no GET, which has nothing to answer an ETag on; and an
+        // exempt one.
         using JsonDocument planted = JsonDocument.Parse(
             """
             {
@@ -326,7 +328,12 @@ public sealed partial class OpenApiDocumentTests
                 "/api/v1/notes/{id}": { "get": { "responses": { "200": {} } } },
                 "/api/v1/notes/{noteId}/pin": { "post": {} },
                 "/api/v1/tags/{id}": { "get": { "responses": { "200": {} } }, "delete": {} },
-                "/api/v1/reports/{id}": { "get": { "responses": { "200": {} } } },
+                "/api/v1/reports": { "post": {} },
+                "/api/v1/reports/{id}": {
+                  "parameters": [ { "name": "id", "in": "path" } ],
+                  "get": { "responses": { "200": {} } }
+                },
+                "/api/v1/jobs/{id}": { "delete": {} },
                 "/api/v1/jobs/{id}/cancel": { "post": {} },
                 "/api/v1/labels/{id}": { "get": { "responses": { "200": {} } }, "put": {} }
               }
