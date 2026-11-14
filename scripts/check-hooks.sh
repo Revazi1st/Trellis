@@ -516,6 +516,12 @@ JSON
   expect "a feature doc without one of the headings" docs-drift.sh remind "## Endpoints"
   cp "$work/invoices-whole.md" "$repo/docs/features/invoices.md"
   expect "a feature doc with every heading" docs-drift.sh silent
+  # Silent alone proves nothing here: the same session hearing the same report again is silent too. The
+  # whole doc passes only when the check's clean run deletes the record, as for the threat model above.
+  cases=$((cases + 1))
+  if [ -e "$repo/.git/claude-hooks/docs-drift.last" ]; then
+    fail "docs-drift.sh: a feature doc with every heading still drifts (its record is left in .git/claude-hooks/docs-drift.last)"
+  fi
   project="$root"
 else
   echo "check-hooks: git is not on PATH; the docs-drift cases were skipped."
