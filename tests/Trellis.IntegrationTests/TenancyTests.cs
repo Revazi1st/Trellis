@@ -172,7 +172,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     [Fact]
     public void A_unique_index_on_an_aggregate_is_unique_per_tenant_under_the_name_it_was_given()
     {
-        using AppDbContext context = NewProbeContext();
+        using AppDbContext context = NewProbeContext<ProbeModelCustomizer>();
         // The design-time model, the one migrations are generated from: the runtime model drops the
         // per-column sort order.
         IEntityType probe = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ProbeAccount)).ShouldNotBeNull();
@@ -210,7 +210,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     [Fact]
     public void A_tenant_led_unique_index_keeps_its_per_column_settings_in_the_migration_and_the_DDL()
     {
-        using AppDbContext context = NewProbeContext();
+        using AppDbContext context = NewProbeContext<ProbeModelCustomizer>();
         IModel model = context.GetService<IDesignTimeModel>().Model;
 
         // What 'migrations add' hands the C# generator: each per-column setting an array, the tenant first.
@@ -246,11 +246,27 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
             line => line.StartsWith($"CREATE UNIQUE INDEX \"{index}\"", StringComparison.Ordinal)).Trim();
     }
 
-    /// <summary>A context over the probe model (<see cref="ProbeModelCustomizer"/>); nothing connects.</summary>
-    private static AppDbContext NewProbeContext() => new(
+    /// <summary>
+    /// The control for the unique-key half of <see cref="ShouldBeTenantScoped"/>, which neither the real model nor
+    /// the probe above trips: a probe aggregate holds a unique index added after the convention ran, so
+    /// <c>TenantId</c> comes second in it and it is unique across every tenant, and the check names it.
+    /// </summary>
+    [Fact]
+    public void The_tenant_scope_check_flags_each_unique_key_the_tenant_does_not_lead()
+    {
+        using AppDbContext context = NewProbeContext<GlobalKeyProbeCustomizer>();
+        IEntityType probe = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ProbeAccount)).ShouldNotBeNull();
+
+        Should.Throw<ShouldAssertException>(() => ShouldBeTenantScoped(probe)).Message
+            .ShouldContain(GlobalKeyProbeCustomizer.LateIndex);
+    }
+
+    /// <summary>A context over a probe model (<see cref="ProbeModelCustomizer"/>, say); nothing connects.</summary>
+    private static AppDbContext NewProbeContext<TCustomizer>()
+        where TCustomizer : IModelCustomizer => new(
         new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql("Host=probe.invalid")
-            .ReplaceService<IModelCustomizer, ProbeModelCustomizer>()
+            .ReplaceService<IModelCustomizer, TCustomizer>()
             .Options,
         new FixedTenantContext(TenantA));
 
@@ -518,6 +534,34 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
                     .IsUnique();
             });
             base.Customize(modelBuilder, context);
+        }
+    }
+
+    /// <summary>
+    /// Maps <see cref="ProbeAccount"/> with a unique key the tenant convention leaves global: a unique index declared
+    /// after <see cref="AppDbContext"/>'s <c>OnModelCreating</c>, which nothing in the template does, so the
+    /// convention never meets it and <c>TenantId</c> stays second.
+    /// </summary>
+    private sealed class GlobalKeyProbeCustomizer(ModelCustomizerDependencies dependencies) : RelationalModelCustomizer(dependencies)
+    {
+        public const string LateIndex = "IX_ProbeAccounts_Late";
+
+        public override void Customize(ModelBuilder modelBuilder, DbContext context)
+        {
+            modelBuilder.Entity<ProbeAccount>(static account =>
+            {
+                account.ToTable("ProbeAccounts");
+                account.Ignore(static probe => probe.DomainEvents);
+                account.Property<Guid>("Id");
+                account.HasKey("Id");
+                account.Property<string>("Reference");
+            });
+            base.Customize(modelBuilder, context);
+
+            modelBuilder.Entity<ProbeAccount>()
+                .HasIndex("Reference", TenantInterceptor.TenantIdProperty)
+                .HasDatabaseName(LateIndex)
+                .IsUnique();
         }
     }
 }
