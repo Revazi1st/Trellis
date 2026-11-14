@@ -2,10 +2,8 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="eng/readme/title-dark.svg">
-  <img alt="Trellis, a best-practices .NET 10 solution template, beside a terminal with its two install commands" src="eng/readme/title-light.svg" width="100%">
+  <img alt="Trellis: Clean Architecture the tests enforce, beside a terminal with its two install commands" src="eng/readme/title-light.svg" width="100%">
 </picture>
-
-Rich DDD · Clean Architecture · vertical slices · CQRS without a mediator · Aspire · Blazor
 
 [![NuGet](https://img.shields.io/nuget/v/Trellis.Templates?logo=nuget)](https://www.nuget.org/packages/Trellis.Templates)
 [![NuGet downloads](https://img.shields.io/nuget/dt/Trellis.Templates?logo=nuget)](https://www.nuget.org/packages/Trellis.Templates)
@@ -27,60 +25,51 @@ Documentation: https://revazi1st.github.io/Trellis/
 
 This README follows `main`. The package on nuget.org is the latest release (the badge above shows its
 version), and [`CHANGELOG.md`](CHANGELOG.md) lists what each release holds and, under *Unreleased*, what
-`main` has added since.
+`main` has added since. The documentation site describes the latest release, so a page or an option
+this README links there can arrive with the next release.
+[docs/upgrading.md](docs/upgrading.md#versions-and-support) says which versions get fixes.
 
-**Trellis** is a `dotnet new` template for .NET 10 that generates a rich-DDD, Clean Architecture
-solution: vertical-slice features, CQRS without a mediator, `Result`s instead of exceptions,
+**Trellis** is a `dotnet new` template for .NET 10 that generates a rich-DDD solution with
+*Clean Architecture the tests enforce*. The solution has vertical-slice features, CQRS without a mediator, `Result`s instead of exceptions,
 PostgreSQL, Identity with JWT, Aspire orchestration and an optional Blazor UI, in a repository written
 for AI agents as carefully as for people. Like the lattice a gardener puts up for a climbing plant, it
 carries the weight and sets the direction while your features grow, then disappears under them.
 
-Name the project with dot-separated parts made of letters and digits, each starting with a letter
-(`Acme.Shop`): hyphens, spaces and underscores turn into underscores in namespaces, which analyzer rule
-CA1707 rejects. To try `main` instead, install from a clone of this repository:
+Options are flags of `dotnet new`, and options in the Visual Studio and Rider new-solution dialogs.
 
-```bash
-git clone https://github.com/Revazi1st/Trellis.git
-dotnet new install ./Trellis                   # a folder install; `dotnet new uninstall ./Trellis` removes it
-dotnet new trellis -n Your.Project -o Your.Project
-```
-
-Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
-
-| Flag | Default | What it adds |
+| Option | Default | What it does |
 |---|---|---|
-| `--include-ui` | on | Blazor web UI (UI.Common + UI.Web), orchestrated by Aspire, with its design system (light and dark themes and a switch the user keeps, its tokens exportable as JSON for a design tool) and the `ui-reviewer` agent |
-| `--use-redis` | off | A Redis-protocol distributed cache (Valkey by default) as a HybridCache L2 |
-| `--use-serilog` | off | Serilog structured logging (console) alongside OpenTelemetry |
-| `--use-multitenancy` | off | Tenant seam: `tenant` claim on the principal, `TenantId` column + `"Tenant"` query filter on every aggregate root ¹ |
-| `--include-ui-tests` | off | Playwright browser tests for the Blazor UI (opt-in at run time) |
-| `--skip-restore` | off | Skip the automatic `dotnet restore` |
-
-¹ The shipped initial migration is generated without the tenant columns, so a project created with
-`--use-multitenancy` regenerates it once before the first run
-([docs/development.md](docs/development.md#multi-tenancy-optional); `dotnet new` prints the reminder).
+| [`--include-ui`](https://revazi1st.github.io/Trellis/start/options/#--include-ui) | on | Include the Blazor web UI (UI.Common + UI.Web) and wire it into the Aspire AppHost. |
+| [`--use-redis`](https://revazi1st.github.io/Trellis/start/options/#--use-redis) | off | Add a Redis-protocol distributed cache (HybridCache L2), Valkey by default, and wire it into the Aspire AppHost. |
+| [`--use-serilog`](https://revazi1st.github.io/Trellis/start/options/#--use-serilog) | off | Use Serilog for structured logging (console sink) in the API and web hosts, alongside OpenTelemetry. |
+| [`--use-multitenancy`](https://revazi1st.github.io/Trellis/start/options/#--use-multitenancy) | off | Add a tenant seam: a tenant claim on the principal (ITenantContext), a TenantId shadow column and a "Tenant" EF query filter on every aggregate root. Regenerate the initial migration after enabling. |
+| [`--include-ui-tests`](https://revazi1st.github.io/Trellis/start/options/#--include-ui-tests) | off | Include a browser-driven UI test project (Playwright). Tests are opt-in at run time via RUN_UI_TESTS=1. |
+| [`--skip-restore`](https://revazi1st.github.io/Trellis/start/options/#--skip-restore) | off | Skip the automatic 'dotnet restore' after the project is created. |
 
 ## Table of contents 🧭
 
 - [Give it a star ⭐](#give-it-a-star-)
+- [Getting started 🚀](#getting-started-)
+  - [Before you start](#before-you-start)
+  - [Install, update, uninstall](#install-update-uninstall)
+  - [Create your solution](#create-your-solution)
+  - [Run it](#run-it)
+  - [Sign in](#sign-in)
+  - [What it looks like](#what-it-looks-like)
+  - [Walk an invoice through its life](#walk-an-invoice-through-its-life)
+  - [Look at the data](#look-at-the-data)
+  - [Deploy it](#deploy-it)
 - [Domain overview 🧾](#domain-overview-)
 - [Use cases 📋](#use-cases-)
   - [Invoices](#invoices)
   - [Accounts](#accounts)
-- [Getting started 🚀](#getting-started-)
-  - [Before you start](#before-you-start)
-  - [Create your solution](#create-your-solution)
-  - [Run it](#run-it)
-  - [Sign in](#sign-in)
-  - [Walk an invoice through its life](#walk-an-invoice-through-its-life)
-  - [Look at the data](#look-at-the-data)
 - [Folder structure 📂](#folder-structure-)
 - [How a request flows 🚦](#how-a-request-flows-)
 - [Authorization 🔑](#authorization-)
 - [Testing 🧪](#testing-)
 - [Fun features 🎉](#fun-features-)
-- [Toggles 🧩](#toggles-)
 - [Built for AI agents 🤖](#built-for-ai-agents-)
+- [FAQ ❓](#faq-)
 - [Comparisons 🔭](#comparisons-)
 - [Contribution 🤝](#contribution-)
 - [Credits 💐](#credits-)
@@ -90,6 +79,179 @@ Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
 
 If Trellis saves you a week of wiring, or shows you a pattern done the way you hoped to see it, star
 the repository: stars are how other .NET developers find it. Thank you!
+
+## Getting started 🚀
+
+### Before you start
+
+- **Docker**: PostgreSQL, the integration tests (Testcontainers) and the SDK container need it. Docker
+  Desktop and Linux Docker Engine are the tested engines; OrbStack, Colima and Podman are covered in
+  [docs/development.md](docs/development.md#docker-engines-other-than-docker-desktop).
+- **.NET 10 SDK** on the host, to run the orchestrated app. Building and testing work without it too,
+  through `./scripts/dotnet.sh` (build its image once with
+  `docker build -t trellis-sdk:10.0 scripts/sdk-image`) or the dev container.
+- **Aspire CLI** for `aspire run`: `dotnet tool install -g Aspire.Cli`. Optional, since
+  `dotnet run --project tools/Trellis.AppHost` starts the same app.
+- **PowerShell** (`pwsh`), only to install the browsers for the optional Playwright tests.
+
+[docs/development.md](docs/development.md#prerequisites) says what needs each tool and the minimum
+version of each. Once the solution exists, run `./scripts/doctor.sh`: it checks each of these but
+PowerShell on your machine, the development certificate and the AppHost's ports too, changes nothing,
+and names the fix for anything missing.
+
+### Install, update, uninstall
+
+From nuget.org:
+
+```bash
+dotnet new install Trellis.Templates     # the latest release
+dotnet new update --check-only           # is a newer version out?
+dotnet new update                        # take it
+dotnet new uninstall Trellis.Templates   # remove the template
+```
+
+To try `main` instead, install from a clone of this repository:
+
+```bash
+git clone https://github.com/Revazi1st/Trellis.git
+dotnet new install ./Trellis
+```
+
+A newer template changes nothing in a solution you already created:
+[docs/upgrading.md](docs/upgrading.md) adopts a later version by regenerating and diffing.
+`dotnet new uninstall ./Trellis` removes a folder install. A folder install records `0.0.0-source` as
+the template version; packing first (`dotnet pack eng/Trellis.TemplatePack -o nupkg`) and installing
+the `.nupkg` records the package version instead.
+
+### Create your solution
+
+```bash
+dotnet new trellis -n Acme.Shop -o Acme.Shop
+cd Acme.Shop
+```
+
+Name the project with dot-separated parts made of letters and digits, each starting with a letter
+(`Acme.Shop`): hyphens, spaces and underscores turn into underscores in namespaces, which analyzer rule
+CA1707 rejects.
+
+Paths in this README are the template's own; in your solution, `Trellis` reads as your project's
+name (`tools/Trellis.AppHost` becomes `tools/Acme.Shop.AppHost`). The solution arrives with its tests,
+its CI (`.github/workflows/ci.yml`, `codeql.yml` and `dependabot-auto-merge.yml`), the docs, the ADRs
+and the AI assets, plus a README of its own, an empty CHANGELOG and `.trellis-template.json`, which
+records the template version and your options ([docs/upgrading.md](docs/upgrading.md) reads it to
+adopt a later version). On a private repository, the generated CodeQL job runs once code scanning is
+enabled there and the `CODEQL_ENABLED` repository variable is `true`, and skips until then.
+
+### Run it
+
+```bash
+aspire run                                   # PostgreSQL, migrations, the API and the web UI, under the Aspire dashboard
+dotnet run --project tools/Trellis.AppHost   # the same app, without the Aspire CLI
+```
+
+From Rider or Visual Studio, run the **Trellis.AppHost** project: its `https` launch profile opens the
+dashboard at <https://localhost:17171> (trust the development certificate once with
+`dotnet dev-certs https --trust`), its `http` profile at <http://localhost:15171>, and a generated
+solution picks free ports of its own when you create it. The dashboard lists `postgres`, the
+`migrations` worker (it migrates, seeds and exits while the API waits), the `api` with a **Scalar**
+link to its API reference, the `web` UI, and `mailpit`, which catches the e-mail the API sends (run
+mode only: `aspire publish` leaves e-mail to your relay).
+
+No .NET SDK on your machine? Choose **Reopen in Dev Container**, start PostgreSQL with
+`docker compose up -d` (host port 5433), then run **Trellis.MigrationService** once, **Trellis.Api**
+(<http://localhost:5171>) and **Trellis.UI.Web** (<http://localhost:5170>) from their
+`(dev container)` launch profiles. `aspire run` cannot orchestrate from inside a container
+([ADR-0008](docs/adr/0008-containerized-sdk-and-aspire-orchestration.md));
+[docs/development.md](docs/development.md) has the details.
+
+### Sign in
+
+In Development, the migration worker seeds one administrator: `admin@example.com` /
+`Admin123!`. Open the `web` resource and sign in, or get a token from the API with the first request
+below.
+
+### What it looks like
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="eng/readme/shots/first-run-invoices-1280-dark.png">
+  <img alt="The Invoices page of the web UI: a filter per state above a table of the seeded invoices, each with its customer, status, total, due date, creation date and a View link." src="eng/readme/shots/first-run-invoices-1280-light.png" width="100%">
+</picture>
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="eng/readme/shots/first-run-invoice-400-dark.png">
+  <img alt="A draft invoice on a phone-width screen: its status, e-mail, total and due date, its line, then the forms that add a line, issue it or void it." src="eng/readme/shots/first-run-invoice-400-light.png" width="300">
+</picture>
+</p>
+
+CI's browser tests save these pictures of a first run: the invoice list on a laptop and one invoice
+on a phone, showing the invoices the migration worker seeds in Development.
+
+The UI is built from a design system of its own, with a light and a dark theme, a switch the user
+keeps and tokens that export as JSON for a design tool
+([docs/design-system.md](docs/design-system.md), [ADR-0032](docs/adr/0032-ui-design-system.md)).
+
+### Walk an invoice through its life
+
+Open [`src/Presentation/Api/Trellis.Api/Trellis.Api.http`](src/Presentation/Api/Trellis.Api/Trellis.Api.http)
+in Rider, Visual Studio, or VS Code with the REST Client extension. Set `@host` to the `api` resource's
+URL from the dashboard (the launch profiles and the dev container serve `http://localhost:5171`) and
+choose the `dev` environment, which `src/Presentation/Api/http-client.env.json` fills with the seeded
+admin and a demo member. Then send the requests in order, starting with a sign-in:
+
+```http
+POST {{host}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+```
+
+The answer is a 200 with an `accessToken`: paste it into `@token`. Next, create a draft. The create
+requires an `Idempotency-Key`, because a repeated create would otherwise be a second draft:
+
+```http
+POST {{host}}/api/v1/invoices
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: {{createKey}}
+
+{
+  "customerName": "Ada Lovelace",
+  "customerEmail": "ada@example.com",
+  "currency": "EUR"
+}
+```
+
+A 201 comes back with a `Location` header and the new `id`, which goes into `@invoiceId`. The next
+requests list the invoices (your draft comes first), add a line, issue it, read it back with its
+`ETag` and again with `If-None-Match` for a 304, and pay it. Seconds later the receipt, handed to
+`SendReceiptOnInvoicePaid` by the outbox after the commit, is in the `mailpit` resource's **Inbox**
+(run without the AppHost, the api logs it instead, until you configure SMTP). The last requests show the guard rails: issuing again with the
+`ETag` from before the payment is a 412, the create replayed with the same key returns the first 201
+with `Idempotency-Replayed: true`, and a member who registers and signs in gets a 403 for a create.
+[docs/features/invoices.md](docs/features/invoices.md#try-it) tables every step with its
+answer.
+
+Rather click? The `api` resource's **Scalar** link opens the API reference at `/scalar/v1`, which
+takes the same bearer token, and the `web` UI walks the same lifecycle: sign in as the admin, create an
+invoice, then add a line, issue and pay it from its page.
+
+### Look at the data
+
+Beside `postgres`, the dashboard has a **pgAdmin** tile, which opens without a login, and the
+`mailpit` resource's **Inbox** link shows every e-mail the API sent. The `cache`
+resource of a solution generated with `--use-redis true` has no browser tile: RedisInsight is SSPL,
+which the license policy keeps out ([ADR-0011](docs/adr/0011-license-ceiling-policy.md)).
+
+### Deploy it
+
+`aspire publish` writes a Docker Compose file and an `.env` from the same model `aspire run` uses, and
+the images come from `dotnet publish /t:PublishContainer`, with no Dockerfiles.
+[docs/deployment.md](docs/deployment.md#deploy-to-one-host) is the ordered quick start for one host,
+and [docs/threat-model.md](docs/threat-model.md) lists what to decide before production.
 
 ## Domain overview 🧾
 
@@ -153,131 +315,16 @@ filter per state, an invoice's own page adds lines, issues, pays or voids it, an
 | Use case | Request | Who may call it |
 |---|---|---|
 | **Register**: a Member account, while `Registration:Mode` is `Open` (Development opens it) | `POST /api/v1/auth/register` | anyone |
-| **Login**: a short-lived access token (15 minutes by default) and a single-use refresh token | `POST /api/v1/auth/login` | anyone |
+| **Login**: a short-lived access token and a single-use refresh token | `POST /api/v1/auth/login` | anyone |
 | **RefreshToken**: a new pair for a refresh token; presenting a spent one revokes all of the user's tokens | `POST /api/v1/auth/refresh` | whoever holds the token |
 | **Logout**: revoke the refresh token presented | `POST /api/v1/auth/logout` | whoever holds the token |
 | **RevokeSessions**: sign out everywhere | `POST /api/v1/auth/revoke-all` | a signed-in user |
 
-Five wrong passwords lock an account for 15 minutes, and the `auth` rate limit gives one source ten
-attempts a minute ([docs/features/auth.md](docs/features/auth.md)). One more piece is reference
-material rather than a use case: `IExchangeRateProvider`, a port with a typed HTTP client behind it,
-shows how to depend on an API you do not own
+Repeated wrong passwords lock an account, and the `auth` rate limit caps attempts from one source
+([docs/features/auth.md](docs/features/auth.md)). One more piece is reference material rather than a
+use case: `IExchangeRateProvider`, a port with a typed HTTP client behind it, shows how to depend on an
+API you do not own
 ([docs/features/exchange-rates.md](docs/features/exchange-rates.md)).
-
-## Getting started 🚀
-
-### Before you start
-
-- **Docker**: PostgreSQL, the integration tests (Testcontainers) and the SDK container need it. Docker
-  Desktop and Linux Docker Engine are the tested engines; OrbStack, Colima and Podman are covered in
-  [docs/development.md](docs/development.md#docker-engines-other-than-docker-desktop).
-- **.NET 10 SDK** on the host, to run the orchestrated app. Building and testing work without it too,
-  through `./scripts/dotnet.sh` (build its image once with
-  `docker build -t trellis-sdk:10.0 scripts/sdk-image`) or the dev container.
-- **Aspire CLI 13.5 or later** for `aspire run`: `dotnet tool install -g Aspire.Cli`. Optional, since
-  `dotnet run --project tools/Trellis.AppHost` starts the same app.
-- **PowerShell** (`pwsh`), only to install the browsers for the optional Playwright tests.
-
-Once the solution exists, run `./scripts/doctor.sh`: it checks each of these but PowerShell on your
-machine, the development certificate and the AppHost's ports too, changes nothing, and names the fix
-for anything missing.
-
-### Create your solution
-
-```bash
-dotnet new trellis -n Acme.Shop
-cd Acme.Shop
-```
-
-Paths in this README are the template's own; in your solution, `Trellis` reads as your project's
-name (`tools/Trellis.AppHost` becomes `tools/Acme.Shop.AppHost`). The solution arrives with its tests,
-its CI (`.github/workflows/ci.yml` and `codeql.yml`), the docs, the ADRs and the AI assets, plus a
-README of its own, an empty CHANGELOG and `.trellis-template.json`, which records the template version
-and your options. On a private repository, the generated CodeQL job runs once code scanning is enabled
-there and the `CODEQL_ENABLED` repository variable is `true`, and skips until then.
-
-### Run it
-
-```bash
-aspire run                                   # PostgreSQL, migrations, the API and the web UI, under the Aspire dashboard
-dotnet run --project tools/Trellis.AppHost   # the same app, without the Aspire CLI
-```
-
-From Rider or Visual Studio, run the **Trellis.AppHost** project: its `https` launch profile opens the
-dashboard at <https://localhost:17171> (trust the development certificate once with
-`dotnet dev-certs https --trust`), its `http` profile at <http://localhost:15171>, and a generated
-solution picks free ports of its own when you create it. The dashboard lists `postgres`, the
-`migrations` worker (it migrates, seeds and exits while the API waits), the `api` with a **Scalar**
-link to its API reference, the `web` UI, and `mailpit`, which catches the e-mail the API sends (run
-mode only: `aspire publish` leaves e-mail to your relay).
-
-No .NET SDK on your machine? Choose **Reopen in Dev Container**, start PostgreSQL with
-`docker compose up -d` (host port 5433), then run **Trellis.MigrationService** once, **Trellis.Api**
-(<http://localhost:5171>) and **Trellis.UI.Web** (<http://localhost:5170>) from their
-`(dev container)` launch profiles. `aspire run` cannot orchestrate from inside a container
-([ADR-0008](docs/adr/0008-containerized-sdk-and-aspire-orchestration.md));
-[docs/development.md](docs/development.md) has the details.
-
-### Sign in
-
-However you run it, the migration worker seeds one administrator: `admin@example.com` /
-`Admin123!`. Open the `web` resource and sign in, or get a token from the API with the first request
-below.
-
-### Walk an invoice through its life
-
-Open [`src/Presentation/Api/Trellis.Api/Trellis.Api.http`](src/Presentation/Api/Trellis.Api/Trellis.Api.http)
-in Rider, Visual Studio, or VS Code with the REST Client extension. Set `@host` to the `api` resource's
-URL from the dashboard (the launch profiles and the dev container serve `http://localhost:5171`) and
-choose the `dev` environment, which `src/Presentation/Api/http-client.env.json` fills with the seeded
-admin and a demo member. Then send the requests in order, starting with a sign-in:
-
-```http
-POST {{host}}/api/v1/auth/login
-Content-Type: application/json
-
-{
-  "email": "{{adminEmail}}",
-  "password": "{{adminPassword}}"
-}
-```
-
-The answer is a 200 with an `accessToken`: paste it into `@token`. Next, create a draft. The create
-requires an `Idempotency-Key`, because a repeated create would otherwise be a second draft:
-
-```http
-POST {{host}}/api/v1/invoices
-Authorization: Bearer {{token}}
-Content-Type: application/json
-Idempotency-Key: {{createKey}}
-
-{
-  "customerName": "Ada Lovelace",
-  "customerEmail": "ada@example.com",
-  "currency": "EUR"
-}
-```
-
-A 201 comes back with a `Location` header and the new `id`, which goes into `@invoiceId`. The next
-requests list the invoices (your draft comes first), add a line, issue it, read it back with its
-`ETag` and again with `If-None-Match` for a 304, and pay it. Seconds later the receipt, handed to
-`SendReceiptOnInvoicePaid` by the outbox after the commit, is in the `mailpit` resource's **Inbox**
-(run without the AppHost, the api logs it instead, until you configure SMTP). The last five requests show the guard rails: issuing again with the
-`ETag` from before the payment is a 412, the create replayed with the same key returns the first 201
-with `Idempotency-Replayed: true`, and a member who registers and signs in gets a 403 for a create.
-[docs/features/invoices.md](docs/features/invoices.md#try-it) tables all thirteen steps with their
-answers.
-
-Rather click? The `api` resource's **Scalar** link opens the API reference at `/scalar/v1`, which
-takes the same bearer token, and the `web` UI walks the same lifecycle: sign in as the admin, create an
-invoice, then add a line, issue and pay it from its page.
-
-### Look at the data
-
-Beside `postgres`, the dashboard has a **pgAdmin** tile, which opens without a login, and the
-`mailpit` resource's **Inbox** link shows every e-mail the API sent. The `cache`
-resource of a solution generated with `--use-redis true` has no browser tile: RedisInsight is SSPL,
-which the license policy keeps out ([ADR-0011](docs/adr/0011-license-ceiling-policy.md)).
 
 ## Folder structure 📂
 
@@ -374,8 +421,8 @@ transaction as the invoice, and after the commit `OutboxProcessor` hands it to
 retry never runs a handler that already succeeded
 ([ADR-0018](docs/adr/0018-transactional-outbox-and-idempotency.md),
 [ADR-0023](docs/adr/0023-outbox-lease-and-checkpoints.md)).
-[docs/architecture.md](docs/architecture.md#a-request-stage-by-stage) takes a request through all
-eight stages, and [docs/features/invoices.md](docs/features/invoices.md#from-a-payment-to-its-receipt)
+[docs/architecture.md](docs/architecture.md#a-request-stage-by-stage) takes a request through every
+stage, and [docs/features/invoices.md](docs/features/invoices.md#from-a-payment-to-its-receipt)
 draws the path from a payment to its receipt.
 
 ## Authorization 🔑
@@ -419,22 +466,12 @@ is a constant in `Permissions`, listed in `Permissions.All` and granted to a rol
   <img alt="The test suites as cards under a rail of the layers, each as wide as the layers it runs through: the opt-in UiTests from the browser and the opt-in Aspire end-to-end test from the AppHost, both to PostgreSQL; ApiTests from Shared and IntegrationTests from Persistence, both to a real PostgreSQL; Application.UnitTests and Domain.UnitTests in memory; and ArchitectureTests as a bracket over every project." src="eng/readme/testing-light.svg" width="100%">
 </picture>
 
-Each test project proves one thing about one part of the solution:
-
-| Project | Proves | Needs |
-|---|---|---|
-| `Domain.UnitTests` | every invariant and transition of an aggregate, the events it raises, value objects, specifications, the `Result` kernel | nothing |
-| `Application.UnitTests` | each handler over faked ports, the validators and event handlers, and the decorator pipeline itself | nothing |
-| `ArchitectureTests` | the rules files hold: layer boundaries, conventions, the error-code vocabulary, options validated at boot, telemetry names | nothing |
-| `IntegrationTests` | Persistence against a real PostgreSQL: mappings, specifications as SQL, interceptors, concurrency, the outbox, the idempotency store, the migration matching the model | Docker |
-| `ApiTests` | the HTTP contract through the real pipeline: each endpoint's permission, problem details, idempotency, caching and conditional requests, the served OpenAPI document; plus an opt-in Aspire end-to-end test | Docker; the end-to-end test also `RUN_ASPIRE_E2E=1` and a local SDK or CI |
-| `UiTests` (`--include-ui-tests`) | the pages in a real browser against a running app | `RUN_UI_TESTS=1`, installed browsers, a running app |
-
 Most of a feature's tests belong in `Domain.UnitTests` and `IntegrationTests`: a rule is cheapest to
 pin where it lives, and a query or a transaction only proves itself against PostgreSQL. The fitness
 suites already cover every endpoint's permission, problem shape, idempotency and OpenAPI entry, so an
-`ApiTests` test is for what they cannot see. [docs/development.md](docs/development.md#tests) maps where
-a new test belongs and which helper serves which goal.
+`ApiTests` test is for what they cannot see. [docs/development.md](docs/development.md#tests) tables
+each test project (what it proves, what it needs and when a test of yours belongs in it), maps where a
+new test belongs and says which helper serves which goal.
 
 ```bash
 dotnet test Trellis.slnx                                  # everything; the Aspire E2E skips unless RUN_ASPIRE_E2E=1
@@ -450,45 +487,30 @@ settings, `TelemetryNamingTests` holds the telemetry reference in `docs/deployme
 pins each endpoint's permission. Every rule has a positive control: a planted
 violation it must catch (`PlantedViolations`).
 
-**Gates beyond the tests:**
+**Gates beyond the tests** ([docs/development.md](docs/development.md#gates-beyond-the-tests)):
 
-- The served OpenAPI document must equal the committed
-  [docs/api/openapi.v1.json](docs/api/openapi.v1.json) (`OpenApiSnapshotTests`, and CI diffs it against
-  the running app too). After an endpoint or contract change, regenerate it with
-  `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`.
-- A pull request that changes a feature's code without its `docs/features/<feature>.md`, or
-  authentication and hardening code without [docs/threat-model.md](docs/threat-model.md), fails
-  `scripts/check-docs-drift.sh`, and so does one whose doc of a feature with an aggregate lacks a
-  heading the `add-feature` skill names; `scripts/check-adr-links.sh` resolves every ADR reference, rule glob
-  and relative link; `scripts/check-adr-history.sh` fails one that changes an accepted ADR anywhere but
-  in a dated amendment appended at its end.
-- Line coverage has a floor per ring: Core 90 %, Infrastructure 85 %, Presentation 75 %, Shared 80 %.
-- Every pull request also tests what the template generates. Template CI creates a solution per toggle
-  leg (default, no UI, UI tests without the UI, all options, and Redis, Serilog and multi-tenancy each
-  on alone with the UI off), checks it for leftovers of the template's name, builds it in Release and
-  runs its tests on every leg but UI-tests-without-the-UI, the Aspire end-to-end test included, so each
-  of them boots its generated AppHost. It repeats the default on Windows and builds a project from the
-  packed `.nupkg`.
+- the OpenAPI snapshot: the served document must equal the committed one;
+- docs drift, ADR links and ADR history;
+- a coverage floor per ring;
+- Template CI, which tests what the template generates.
 
 ## Fun features 🎉
 
-**Idempotency keys that replay.** `POST /invoices` requires an `Idempotency-Key`. The reservation
-commits with the command, so a failed command leaves none; a retry with the same key and body gets the
-stored response byte for byte, with `Idempotency-Replayed: true`; the same key with another body is a
-422, and a retry while the first request is still running a 409 with `Retry-After`
+**Idempotency keys that replay.** `POST /api/v1/invoices` requires an `Idempotency-Key`, and the
+reservation commits with the command, so a failed command leaves none. A retry with the same key and
+body gets the stored response byte for byte, with `Idempotency-Replayed: true`
 ([ADR-0018](docs/adr/0018-transactional-outbox-and-idempotency.md),
 [runbook](docs/deployment.md#idempotency-keys)).
 
-**ETags and `If-Match`.** `GET /invoices/{id}` sends a strong `ETag` from the row's version, and
-`If-None-Match` turns an unchanged read into a 304 with no body. The four invoice writes take
-`If-Match`: a stale tag is a 412 `Invoice.VersionMismatch` that changes nothing, so a colleague's new
-line can no longer be issued unseen ([docs/features/invoices.md](docs/features/invoices.md)).
+**ETags and `If-Match`.** `GET /api/v1/invoices/{id}` sends a strong `ETag` from the row's version, and
+`If-None-Match` turns an unchanged read into a 304 with no body. The invoice writes take `If-Match`: a
+stale tag is a 412 `Invoice.VersionMismatch` that changes nothing
+([docs/features/invoices.md](docs/features/invoices.md)).
 
 **An outbox that leases and checkpoints.** The processor claims due rows with `FOR UPDATE SKIP LOCKED`
-and leases them, so two replicas never dispatch the same row at once, and a processor that outlived
-its lease cannot overwrite the next one's bookkeeping. Each handler is credited at its own checkpoint, only the failed
-ones are retried, with back-off from 30 s to 15 min, and the eighth failure dead-letters the row for a
-SQL re-drive ([ADR-0023](docs/adr/0023-outbox-lease-and-checkpoints.md),
+and leases them, so two replicas never dispatch the same row at once. Each handler is credited at its
+own checkpoint, only the failed ones are retried with back-off, and a row that keeps failing is
+dead-lettered for a SQL re-drive ([ADR-0023](docs/adr/0023-outbox-lease-and-checkpoints.md),
 [runbook](docs/deployment.md#outbox-operations)).
 
 **Multi-tenancy on the principal** (`--use-multitenancy`). The tenant comes from the `tenant` claim
@@ -496,59 +518,36 @@ minted at sign-in and from nowhere else: there is no tenant header, and a token 
 refused. Every aggregate root gets a `TenantId` column and a `"Tenant"` query filter by convention, so
 another tenant's invoice is a 404 ([ADR-0022](docs/adr/0022-tenant-on-the-principal.md)).
 
-**HybridCache, with Valkey behind it.** `GET /invoices/{id}` is cache-aside: an in-memory copy for 30
-seconds always, and with `--use-redis` a copy in Valkey, over the Redis protocol, for five minutes that
-every replica shares. Keys
-come from one `CacheKeys` service (tenant-scoped under multi-tenancy), every write evicts after its
+**HybridCache, with Valkey behind it.** `GET /api/v1/invoices/{id}` is cache-aside: an in-memory copy
+always, and with `--use-redis` a copy in Valkey, over the Redis protocol, that every replica shares.
+Keys come from one `CacheKeys` service (tenant-scoped under multi-tenancy), every write evicts after its
 commit, and a 404 is never cached ([ADR-0026](docs/adr/0026-read-caching.md)).
 
 **SMTP by configuration.** E-mail goes out through MailKit once `Email:Provider=Smtp` and an
 `Email:Smtp` section point at a relay, validated at boot only while selected; until then it is logged,
 not sent. Under `aspire run` the AppHost points it at Mailpit, a mail catcher with an **Inbox** tile in
-the dashboard. A failed send throws, so the outbox tries again;
-[docs/development.md](docs/development.md#secrets) has the user-secrets lines for a real relay.
+the dashboard ([docs/development.md](docs/development.md#secrets)).
 
 **A dropped `Result` fails the build.** RSLT001, from `tools/Trellis.Analyzers`, is loaded into every
-project, the tests included: a discarded `Result`, `Error`, `IdentityResult` or UI `ApiResult<T>` is a
+project, the tests included. A discarded `Result`, `Error`, `IdentityResult` or UI `ApiResult<T>` is a
 warning in Debug and an error in Release, and so is a `Task<Result>` handed on as a plain `Task`
 ([ADR-0030](docs/adr/0030-discarded-result-analyzer.md)).
 
 **Each endpoint's permission, pinned.** `EndpointMetadataTests.ExpectedPermissions` lists every
-endpoint with its one permission and fails on a missing, extra or stale row, and a wire-level test
-calls each endpoint with only that permission and with every other one, expecting its own answer and
-then a 403 ([Authorization](#authorization-)).
+endpoint with its one permission and fails on a missing, extra or stale row. A wire-level test calls
+each endpoint with only that permission and with every other one, expecting its own answer and then a
+403 ([Authorization](#authorization-)).
 
-**Dependency bumps that merge themselves.** Dependabot holds a new version back for a week (a security
-update arrives at once), and
+**Dependency bumps that merge themselves.** Dependabot holds a new version back for a cooldown (a
+security update arrives at once), and
 [`dependabot-auto-merge.yml`](.github/workflows/dependabot-auto-merge.yml) merges its patch and minor
 pull requests once the required checks pass, where the repository allows auto-merge and `main` requires
 status checks. A major, a .NET SDK bump and the GitHub Actions group wait for a person, and
 `NuGetAudit` fails a Release build on a vulnerable package, transitive ones included
 ([ADR-0029](docs/adr/0029-central-package-management.md)).
 
-## Toggles 🧩
-
-The table at the top lists the options; this is what each one changes in the generated solution.
-
-- **`--include-ui false`** leaves out `src/Presentation/UI/`, the UI client tests in
-  `tests/Trellis.ApiTests/Ui/`, the design system (its doc, ADR-0032 and `DesignSystemTests`), the UI
-  rule and the `ui-reviewer` agent, and the AppHost starts no `web` resource: an API-only solution.
-- **`--use-redis true`** adds the `cache` resource, Valkey (`valkey/valkey:9`, BSD-3-Clause), and
-  makes it the HybridCache L2 through the Redis client, which speaks to it unchanged. In the
-  dev-container flow, `docker compose --profile redis up -d` starts it.
-- **`--use-serilog true`** sends the API's and the web host's logs through Serilog's console sink,
-  while OpenTelemetry keeps exporting them (`SerilogExportTests`).
-- **`--use-multitenancy true`** adds `ITenantContext`, `TenantInterceptor` and the tenancy suites
-  (`TenancyTests`, `TenantIsolationTests`); regenerate the initial migration once, as the footnote above
-  says.
-- **`--include-ui-tests true`** adds `tests/Trellis.UiTests` (Playwright), which skips unless
-  `RUN_UI_TESTS=1`. It needs the UI, so `--include-ui false` drops it again.
-
-Your choices are recorded in `.trellis-template.json`, from which
-[docs/upgrading.md](docs/upgrading.md) regenerates when you adopt a later template version. A folder
-install records `0.0.0-source` there as the template version; packing first
-(`dotnet pack eng/Trellis.TemplatePack -o nupkg`) and installing the `.nupkg` records the package
-version instead.
+[docs/overview.md](docs/overview.md) lists every capability of the solution with the doc that explains
+it and the decision behind it.
 
 ## Built for AI agents 🤖
 
@@ -573,7 +572,7 @@ plain text you can read too.
   pull request filled from its template) and
   [`upgrade-template`](.claude/skills/upgrade-template/SKILL.md) (a later template version adopted by
   regenerating and diffing; it runs only when you type it). An agent follows them, and so can you.
-- **Reviewers** in `.claude/agents/`, five read-only subagents, each opening with what it owns, what it
+- **Reviewers** in `.claude/agents/`, read-only subagents, each opening with what it owns, what it
   leaves to another and how they overlap, so a change read by several hears each point once:
   [`code-reviewer`](.claude/agents/code-reviewer.md) (correctness and the layer's conventions),
   [`architecture-guard`](.claude/agents/architecture-guard.md) (projects, references, packages),
@@ -586,8 +585,8 @@ plain text you can read too.
   `AGENTS.md` says which one a change needs; their findings are claims to check against the code before
   acting on them.
 - **One index**: [docs/INDEX.md](docs/INDEX.md) lists the guides, the rules, the skills, the reviewers,
-  the hooks, the MCP servers and the decisions, each with when it applies, and the link check fails when
-  one is missing from it.
+  the hooks, the MCP servers and the decisions, each with when it applies, and the link check fails
+  when a rule, a skill, a reviewer, a hook, a decision or a feature doc is missing from it.
 - **Decisions** in [docs/adr/](docs/adr/), indexed in [docs/INDEX.md](docs/INDEX.md): each with its
   context and consequences and, where it takes an idea from another project, a *Prior art* line naming
   it. Your own start at 0100.
@@ -608,6 +607,13 @@ The release runbook adds an agent dry run before each minor version: an agent bu
 in a freshly generated project with nothing but that repository to go on, and the existing gates judge
 the result ([docs/releasing.md](docs/releasing.md)).
 
+## FAQ ❓
+
+[docs/faq.md](docs/faq.md) answers the first questions: whether another database can replace
+PostgreSQL, why MediatR, AutoMapper and FluentAssertions are absent, how to remove the sample feature
+or add your own, whether an option can change after creation, and whether a newer template version
+changes a solution you created.
+
 ## Comparisons 🔭
 
 Trellis is measured against
@@ -617,6 +623,8 @@ coincidence) and [jasontaylordev/CleanArchitecture](https://github.com/jasontayl
 Every idea taken from them is credited by name below, and a project we only compared against gets no
 line. The largest structural difference from the mainstream templates, Infrastructure and Persistence
 as two peer projects, is recorded in [ADR-0002](docs/adr/0002-infrastructure-persistence-split.md).
+The site holds [a dated table of facts](https://revazi1st.github.io/Trellis/compare/) about Trellis and
+other templates.
 
 ## Contribution 🤝
 
@@ -648,7 +656,7 @@ against are not listed (ADR-0002 names them).
   - the Testing section mapping each test type onto the layers it exercises, and where to invest;
   - the authorization how-to format, one snippet then who passes, and the self-or-admin idea behind our ownership recipe;
   - the show-the-code README sections;
-  - the visual walkthrough-style README: an icon on each heading, a request for a star, the domain before the architecture, a request walkthrough and pictures of the folders and the tests (the pictures and the words are our own).
+  - the visual walkthrough-style README: an icon on each heading, a request for a star, the domain before the architecture, a request walkthrough and pictures of the folders and the tests, which also prompted the screenshots of the running app (the pictures and the words are our own).
 - [Trellis](https://github.com/xavierjohn/Trellis) by Xavier John (MIT; no affiliation, the shared name is a coincidence):
   - lease-fenced outbox bookkeeping writes, and sibling event handlers run on every attempt with only the failed ones retried;
   - failing fast when a `Result` reaches JSON, a failed `Result` that names its code, and compiler-guarded `Error` access;
@@ -670,12 +678,14 @@ against are not listed (ADR-0002 names them).
   - logging each use case under its own request type's category (`ILogger<TRequest>`), the acting user's id on every request's log line, and a slow use case surfaced at Warning past a threshold (`LoggingBehaviour`, `PerformanceBehaviour`);
   - stamping audit columns with the user's id rather than a display name (`AuditableEntityInterceptor`);
   - opening the API's root on its Scalar reference;
-  - a short, ordered deployment page in Getting started;
+  - a short, ordered deployment quick start, which Getting started points at (`docs/deployment.md`, *Deploy to one host*);
+  - a section of the README that lists the versions of the template (the *Versions* section of his README; ours is *Versions and support* in `docs/upgrading.md`);
   - a documentation website as the template's home: a landing page with the install command, feature cards and a three-step quick start; a Getting started / Architecture / Features sidebar with a linear path; an installation page with update and uninstall; one page per option that says what each choice adds and what to do after creation; an architecture page led by one ring diagram and the dependency rule; the documented version in the footer; a Testing page with one table of test projects and one run command; Astro + Starlight on GitHub Pages (ideas from cleanarchitecture.jasontaylor.dev; no code or CSS copied).
 - [dotnet-starter-kit](https://github.com/fullstackhero/dotnet-starter-kit) by Mukesh Murugan (MIT): Valkey in place of Redis in the starter, as an idea; the `fsh doctor` idea, a check of the SDK, Docker, Aspire and the ports before a first run (`scripts/doctor.sh`).
 - [Ardalis.Specification](https://github.com/ardalis/Specification) by Steve Smith (MIT): the usage shape of `Specification<T>` (ADR-0017).
 - [SSW.CleanArchitecture](https://github.com/SSWConsulting/SSW.CleanArchitecture) (MIT): the migration worker that migrates, seeds and stops while the API waits (`MigrationWorker.cs`).
 - [Aspire ServiceDefaults](https://github.com/dotnet/aspire) project template by Microsoft (MIT): the shape and method names of `Trellis.ServiceDefaults/Extensions.cs`.
+- [Phoenix](https://github.com/phoenixframework/phoenix) by Chris McCord (MIT): flagging security-relevant changes in the changelog of code a generator writes once and never updates, the practice of its `phx.gen.auth` (*Versions and support* in `docs/upgrading.md`).
 
 **Agent setups we learned from**
 - [Aspire](https://github.com/microsoft/aspire) by Microsoft (MIT): the *Owns* / *Out of scope* / *Overlap* lines that open each reviewer in `.claude/agents/`, and their "zero duplicate feedback" rule, from its `reviewing-aspire-architecture` agent; and a finishing skill that runs the repository's gates and fills its pull-request template, from its `create-pr` skill (`finish-change`).

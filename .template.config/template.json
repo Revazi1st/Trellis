@@ -10,7 +10,7 @@
   "identity": "Trellis.Solution.CSharp",
   "name": "Trellis Clean Architecture Solution",
   "shortName": "trellis",
-  "description": "A rich-DDD, Clean Architecture .NET 10 solution with vertical-slice minimal APIs, separate Infrastructure and Persistence projects, Aspire orchestration and an optional Blazor UI.",
+  "description": "Trellis is a dotnet new template for .NET 10 that generates a rich-DDD solution with Clean Architecture the tests enforce.",
   "sourceName": "Trellis",
   "preferNameDirectory": true,
   "constraints": {
