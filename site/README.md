@@ -61,9 +61,15 @@ derive what frontmatter would have held and adapt the rest:
   as one block per row at every width, the first cell the title and every other cell under its column's
   name, the short ones side by side; any other table of three columns or more with long rows does so on a
   phone only, where its last columns would sit off-screen. In a table, code breaks at its slashes and dots
-  when its column is narrow.
+  when its column is narrow. A Markdown table on one of the site's own pages takes the same layouts.
 - **Architecture** opens with the rings picture, both themes, read from `eng/readme/rings-*.svg` at build
   time (`docs/architecture.md` cannot embed it: `eng/readme/` never ships).
+- **The README's wide pictures** (the architecture, the request pipeline and the test suites,
+  `eng/readme/<name>-light.svg` and `-dark.svg`) stand on the pages that explain them: the first two after
+  their headings on Architecture, the third after the first paragraph of Testing. `docPictures` in
+  `trellis.config.mjs` says where each goes, and the build fails when that heading or paragraph is
+  missing. Each is scaled to the column, with its `<desc>` as the alt text, and links to the full-size
+  file, which `src/pages/pictures/[name].svg.ts` serves at `/Trellis/pictures/<name>-<theme>.svg`.
 - **Headings that name their folder**: a heading of the shape `` ## Port (`src/Core/…/Abstractions/`) ``
   (a name, then in parentheses one code span with a slash in it, nothing else) shows the name alone, with
   the path on a small line under it that links to the folder on GitHub at the ref the site is built from;
@@ -89,12 +95,31 @@ are all served from the site itself (the fonts' licence is at `/Trellis/fonts-li
 
 ## The site's own pages
 
-`src/content/docs/` holds the pages that are not in `docs/`: the landing page, Install and create, and
-Options. The Options page is generated from `.template.config/`: one section per boolean option with its
-default, its description, the files only it adds and the reminder `dotnet new` prints, plus what to do
-after creating a solution with it and the docs that explain it, from `optionNotes` in
-`trellis.config.mjs`. A new toggle fails the build until it has an entry there. The sidebar is
-`astro.config.mjs`'s; `docs/INDEX.md` is reachable but in neither the sidebar nor the search.
+`src/content/docs/` holds the pages that are not in `docs/`: the landing page, Why Trellis, Install and
+create, Options, and Compared with other templates. The Options page is generated from
+`.template.config/`: one section per boolean option with its default, its description, the files only it
+adds and the reminder `dotnet new` prints, plus what to do after creating a solution with it and the docs
+that explain it, from `optionNotes` in `trellis.config.mjs`. A new toggle fails the build until it has an
+entry there. Compared with other templates states facts about other projects, each read from that
+project's own repository on the date the page names; a cell that was not read again is a dash.
+
+The landing page's numbers and lists come from the repository at build time (`src/data/repo.mjs`): the
+facts strip counts a solution created with no options (template.json's conditional excludes evaluated
+with the default values), the quick start names the administrator the migration worker seeds
+(`SeedOptions.cs`), *What it looks like* shows the screenshots in `eng/readme/shots/`, and *Agents*
+tables the rules, skills, reviewers and hooks under `.claude/` and the servers of `.mcp.json` that a
+default solution has. The Install page prints the two SDK numbers (the template's own constraint in
+`template.json`, and `global.json`) and the Aspire CLI minimum from the prerequisites table of
+`docs/development.md`.
+
+The pitch is the one line of `eng/readme/pitch.md`, which `trellis.config.mjs` reads: it is the site's
+description and the first sentence of Why Trellis, and its emphasised span is the short form.
+`scripts/check-readme-sync.sh` holds the README's copies to the same file and to what the site derives.
+
+The sidebar is `astro.config.mjs`'s: Start, Understand, Features, Develop and Operate hold the pages, Project
+links the changelog, the credits and the contributing guide on GitHub, Maintainers (collapsed) holds
+Releasing, and Decisions lists every ADR. `docs/INDEX.md` is in the sidebar as *Agent toolkit* and kept out
+of the search.
 
 ## Settings
 
@@ -115,14 +140,16 @@ the asides.
 `.github/workflows/site.yml` builds and publishes the site on GitHub Pages, at
 <https://revazi1st.github.io/Trellis/>:
 
-- **Pull requests** that touch `docs/`, `site/`, `README.md`, `.template.config/`, `global.json`,
-  `eng/readme/` or a source file a site page quotes get a build-and-validate job, never a deploy.
+- **Pull requests** that touch a file the build reads get a build-and-validate job, never a deploy. The
+  comment above the *Compare with the base branch* step in `site.yml` is the one list of those files.
 - **A release** deploys the site from its tag: `release.yml` calls `site.yml` once the package is
   published (never on a dry run), with `TRELLIS_SITE_REF` set to the tag.
 - **A preview** deploys any ref on demand: `gh workflow run site.yml -f ref=main`. It replaces the
   released site until the next deploy and says so in a banner on every page;
   `gh workflow run site.yml -f ref=vX.Y.Z` puts the release back, and `-f site_ref=main` beside it
-  deploys a fix to this folder for that release.
+  deploys a fix to this folder for that release. That works only for a tag that holds every file this
+  folder at `site_ref` reads (`docs/releasing.md`, *The documentation site*); a fix for an older tag is
+  built from a branch of this folder cut before it read the newer files.
 
 `docs/releasing.md` has the one-time Pages settings (the source, and the tag rule the `github-pages`
 environment needs) and what to do when a deploy fails.
