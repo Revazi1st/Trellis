@@ -15,7 +15,7 @@ after each layer.
 
 - [ ] Before any code, draft `docs/features/{feature}.md` from the business description; it becomes
       the feature doc CI requires anyway [`check-docs-drift.sh`]. Record only the business content,
-      shaped like `invoices.md`:
+      shaped like `invoices.md` (its headings are named under *Tests and docs* below):
       - the domain in plain words, its terms turned into the types you will write (aggregate, child
         entities, value objects);
       - the lifecycle: states, transitions, the rule each one checks and the error code each refusal
@@ -124,14 +124,31 @@ after each layer.
       Api.Common, never a per-feature copy or a `new PagedResponse<T>(...)`
       [`ConventionTests.The_paged_envelope_is_built_only_by_the_shared_mapping`]. A GET that honours
       `If-None-Match` declares `.SupportsConditionalGet()` and uses `HttpRequest.IsNotModified(etag)`.
+- [ ] An aggregate that changes after its create carries `Version` on its DTO, answers it as a
+      strong ETag on `GET /{id}` (`.SupportsConditionalGet()`, `HttpRequest.IsNotModified`;
+      `GetInvoice` is the model) and takes `If-Match` on every write to it
+      (`.SupportsConditionalWrite()`, the command's `ExpectedVersion`, a `{Feature}Preconditions`
+      like `InvoicePreconditions`, its `{Aggregate}.VersionMismatch` a 412) [`OpenApiDocumentTests`
+      fails on a `GET /{id}` with a write under it that answers no ETag, unless
+      `RecordsWithoutVersion` names it with the reason, and on a write under a GET that answers an
+      ETag without `If-Match`, unless `WritesWithoutIfMatch` names it with a reason;
+      `ProblemDetailsContractTests` for the new code]. Without it two callers who change one record
+      overwrite each other unseen, so leaving it out is that row and one sentence in the feature
+      doc's *Optimistic concurrency* paragraph saying why; with it, the doc's *Conditional GET* and
+      *Conditional writes* paragraphs describe it, as `invoices.md`'s do. Caching that GET in
+      `HybridCache` stays a choice the doc records.
 - [ ] Multi-tenancy: the tenant comes from the signed `tenant` claim only (ADR-0022). Never put a
       tenant on a contract, a route, a query string or a header.
 - [ ] **Regenerate the OpenAPI document**: `UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests`
       (`./scripts/dotnet.sh` forwards the variable) and commit `docs/api/openapi.v1.json`
       [`OpenApiSnapshotTests` fails until you do].
 
-## UI (if included)
+<!--#if (IncludeUI) -->
+## UI
 
+- [ ] A feature a person uses gets its pages, as Invoices has them: a list, a detail page and a form
+      per write, the typed client, the nav link and the render tests below. An API-only feature says
+      so, and why, in its doc's *UI* section, and `ui-reviewer` reads that sentence.
 - [ ] A typed client method over the contracts, through `ApiCall`; POSTs through the idempotent helper.
 - [ ] A page in `Pages/` that inherits `ProtectedPage` (overriding `RequiredPermission` when a permission
       gates the whole page), with a `<PageTitle>`, one `h1`, and a `class="back"` link to its list above
@@ -150,9 +167,10 @@ after each layer.
 - [ ] A render test over `PageHost` in `tests/Trellis.ApiTests/Ui/` for what the page shows in each load
       state [`InvoicePagesTests` is the model], and the page's sentence in the feature doc's *UI* section
       [`check-docs-drift.sh`].
-- [ ] Run the `ui-reviewer` subagent on the change before finishing; its findings are claims to check
-      (AGENTS.md).
+- [ ] Run the `ui-reviewer` subagent on the change before finishing, an API-only feature's *UI*
+      sentence included; its findings are claims to check (AGENTS.md).
 
+<!--#endif -->
 ## Tests and docs
 
 - [ ] Domain.UnitTests for the invariants, with the two lifecycle theories `InvoiceTests` gives every
@@ -181,9 +199,17 @@ after each layer.
       arrange step ends in `ShouldBeSuccess()` [RSLT001 fails the Release build on a dropped `Result`,
       an awaited one included, in tests too; a deliberate drop is `_ = …` with a reason].
 - [ ] **`docs/features/{feature}.md`** (kebab-case: `ExchangeRates` → `exchange-rates.md`), shaped
-      like `invoices.md`, plus a line in `docs/INDEX.md` [`check-docs-drift.sh`: a change under the
-      feature's folders without its doc fails CI]. A load-bearing decision gets an ADR (the `new-adr`
-      skill).
+      like `invoices.md`, with its H2s: `The domain in plain words`, `Try it`, `Where the code lives`,
+      `Domain`, `Application`, `Persistence`, `API` (with *Error contract*, *Caching*, *Pagination*,
+      *Optimistic concurrency*, *Idempotency*, *Conditional GET* and *Conditional writes* paragraphs
+      as they apply), `Tests` and `Endpoints` (the table); plus a line in `docs/INDEX.md`
+      [`check-docs-drift.sh`: a change under the feature's folders without its doc fails CI, and so
+      does the doc of a feature with a `Domain/{Feature}/` folder that lacks one of those headings].
+      <!--#if (IncludeUI) -->
+      A `UI` H2 goes between `API` and `Tests`, and every feature's doc carries it: its pages, or the
+      sentence saying why it has none [`check-docs-drift.sh` requires that heading too].
+      <!--#endif -->
+      A load-bearing decision gets an ADR (the `new-adr` skill).
 - [ ] The new endpoints' requests in `src/Presentation/Api/Trellis.Api/Trellis.Api.http`, and the
       feature doc opening like `invoices.md`: the domain in plain words, a state diagram when the
       aggregate has a lifecycle, and a *Try it* table matching those requests.
@@ -193,7 +219,12 @@ after each layer.
 - [ ] Run the reviewers the change needs before finishing (AGENTS.md, *Boundaries*): `code-reviewer`;
       `architecture-guard` when a project or a package was added; `test-reviewer` for the new tests;
       `security-reviewer` when a permission, an allowlist or who may call an endpoint changed. Their
-      findings are claims to check against the code; then `/finish-change`.
+      findings are claims to check against the code. A fix for a blocking or should-fix finding that
+      changes `src/` goes back to the reviewer that raised it, scoped to the fix's diff, and to
+      `code-reviewer` too when it touches a type outside the feature's folders (a shared value object
+      changes what every feature using it accepts); done when that pass leaves no blocking or
+      should-fix finding open. Then
+      `/finish-change`.
 
 ## Not shown by the Invoices slice: decide deliberately
 
@@ -208,6 +239,20 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   pinned and registered in `UniqueConstraintErrors`, raced in a test; one no two requests can race to
   is a row in `UniqueConstraintTests.FaultOnPurpose` with its reason instead
   (`.claude/rules/persistence.md`); the idempotency filter answers a same-key loser from the store.
+  With multi-tenancy it is unique per tenant by convention (`.claude/rules/persistence.md`): the
+  configuration names no tenant and declares no alternate key (`HasAlternateKey`, or `HasPrincipalKey`
+  on a reference: point at another aggregate by its id), which the convention does not rewrite
+  [`TenancyTests`, all-options leg]. After the value objects and the
+  aggregate are built, the handler may ask the repository port (`{Key}ExistsAsync`) and answer the
+  same `Error` the index maps to: the lookup is orchestration and the index is the rule, so the
+  lookup is never a `MustAsync` validator. The model for the lookup is `IdentityService.RegisterAsync`
+  (Persistence), which asks `userManager.FindByEmailAsync` before it writes and answers
+  `AuthErrors.EmailAlreadyInUse`; for the index, `UserNameIndex` and the same `Error` its row in
+  `UniqueConstraintErrors` maps to. An e-mail key is case-insensitive like Auth's: a nondeterministic
+  ICU collation (`HasCollation(…, deterministic: false)` in `AppDbContext.OnModelCreating`,
+  `UseCollation` on the column) or a normalized column (Identity's `NormalizedUserName`, the e-mail
+  upper-cased, under `UserNameIndex`), and a test row that adds the same address in another case gets
+  the index's `Error`.
 - **Work on a timer**: `docs/architecture.md`, *Scheduled use cases*.
 - **Telling another system**: an integration event from a translate-and-send handler,
   `docs/architecture.md`; being told by one (a webhook): the `add-integration` skill, step 7.
@@ -220,3 +265,12 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   pair as an opaque cursor the client sends back. There is no total count and no jumping to page 40,
   and the response is not the `PagedResponse<T>` envelope, so a cursor envelope is a contract
   decision for an ADR.
+
+- [ ] Each shape the feature could have had gets one sentence in its doc's matching section, how it
+      is handled or "none, because …": owner-scoped or business-wide (*API*, as `invoices.md`'s
+      *Ownership* paragraph); cached or not (*Caching*); ETag and `If-Match` or not (*Conditional GET*
+      and *Conditional writes*, or the reason for none in *Optimistic concurrency*); offset or keyset
+      paging (*Pagination*); reactions and integration events or none (*Application*).
+      <!--#if (IncludeUI) -->
+      A page or none goes in its *UI* section, as the UI section's first box says.
+      <!--#endif -->

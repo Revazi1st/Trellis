@@ -217,7 +217,8 @@ Generate with `--use-multitenancy` to add the tenant seam: `ITenantContext`, res
 **`tenant` claim only** — minted at login from the user's persisted membership
 (`AspNetUsers.TenantId`); there is no tenant header, and a token without the claim is rejected.
 Every aggregate root automatically gets a `TenantId` shadow column stamped by `TenantInterceptor`
-and a named `"Tenant"` EF query filter (opt out with `IgnoreQueryFilters(["Tenant"])`). The seeded
+and a named `"Tenant"` EF query filter (opt out with `IgnoreQueryFilters(["Tenant"])`), and each
+unique index it declares is unique per tenant: `TenantId` leads it, under the name it had. The seeded
 admin and the demo data are in tenant `default` (`Seed__TenantId`); a self-registered user gets a
 fresh tenant. See ADR-0019 and ADR-0022.
 
@@ -301,9 +302,10 @@ projects that need it by a linked `<Compile Include>` in their csproj.
 <!--#endif -->
 <!--#if (UseMultitenancy) -->
 - **`TenancyTests`** (IntegrationTests) and **`TenantIsolationTests`** (ApiTests), with multi-tenancy
-  (optional): stamping, filtering and the aggregate-root convention against PostgreSQL, and cross-tenant
-  reads and writes answering 404 over HTTP. Write one when an aggregate is deliberately shared or a
-  query opts out of the `"Tenant"` filter.
+  (optional): stamping, filtering and the aggregate-root convention (unique indexes led by `TenantId`,
+  an alternate key refused) against PostgreSQL, and cross-tenant reads and writes answering 404 over
+  HTTP. Write one when an aggregate is deliberately shared or a query opts out of the `"Tenant"`
+  filter.
 <!--#endif -->
 
 Where to invest: most of a feature's tests belong in `Domain.UnitTests` and `IntegrationTests`, because a

@@ -4,6 +4,7 @@
 - **Date**: 2026-10-07
 - **Supersedes**: the tenant-resolution and per-aggregate wiring bullets of ADR-0019 (the toggle,
   the interceptor and the named-filter pattern stand)
+- **Amended**: 2026-11-12 — a unique index on an aggregate root is unique per tenant, by the same convention (see *Amendment (2026-11-12)* below)
 
 ## Context
 
@@ -97,3 +98,48 @@ tenants, outbox rows carrying the tenant and handlers running under it).
 - The outbox processor restores the originating tenant around each message's handlers (as before);
   a handler that *writes* under the tenant still depends on the per-message commit fix tracked with
   the outbox work.
+
+## Amendment (2026-11-12): a unique key is unique per tenant
+
+### Why
+
+Decision 5 gave every aggregate root the `TenantId` column, its index and the filter, and left the
+root's own unique indexes global. A feature's unique business key (a customer's e-mail, a code) then
+disagreed with its own lookup: the tenant-filtered "is it taken?" query answered free, the global
+index answered taken, and the create failed on a row the caller could not see, its 409 telling the
+caller that another tenant holds the value.
+
+### Decision
+
+- **The convention loop also rewrites every unique index an aggregate root declares so that
+  `TenantId` leads it**, under the database name the index had (the default one included), with its
+  annotations kept and any per-column setting (sort order, collation, operator class, null order)
+  moved along with its column. A configuration still names no tenant, and `UniqueConstraintErrors`
+  and `UniqueConstraintTests.FaultOnPurpose` key on the same name whichever way the toggle is set.
+- **Identity's tables are not aggregates and keep their global unique indexes**: one e-mail is one
+  user in one tenant (decision 1).
+- `TenancyTests` holds both: every unique index and every alternate key on an aggregate root starts
+  with `TenantId`, in the real model and in a probe aggregate's (a plain index, one sorted descending on
+  every column and one with a pinned name and per-column settings, built by the real `AppDbContext`),
+  with a second probe holding a key in each shape the convention leaves global as the check's control;
+  and no unique index outside the aggregates includes `TenantId` in any place, a per-tenant index on
+  the users being that check's control.
+
+### Consequences
+
+- Two tenants may hold the same business key. A key that must be unique across every tenant (a public
+  handle) is a deliberate change to the convention loop, like a shared aggregate.
+- A business key is declared as a unique index (`.claude/rules/persistence.md`), and another aggregate
+  is referenced by its id: an alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`,
+  is not rewritten, and `TenancyTests` fails naming it.
+- A unique constraint the convention does not reach (a child table's unique index or alternate key
+  that its root's id does not lead, a primary key a request chooses) stays unique across every
+  tenant, and its 409, or the 500 of a fault on purpose, tells the caller that another tenant holds
+  the value: ids are minted on the server and a business key is a unique index on the root, or the
+  threat model's multi-tenancy gap records why a key stays global.
+- A unique index on exactly a foreign key's columns is the one EF keeps for a one-to-one reference:
+  replaced, EF adds its own again, global, under the name with a `1` appended, and `TenancyTests`
+  fails naming it. The template's aggregates hold no such reference to each other; adding one means
+  teaching the convention loop to leave that index as EF made it.
+- The toggle-off model, and so the shipped `InitialCreate`, is unchanged; the regenerated
+  multi-tenant `InitialCreate` carries `(TenantId, key)` for each such index.

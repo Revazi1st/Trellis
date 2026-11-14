@@ -1,11 +1,15 @@
 #if (UseMultitenancy)
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NSubstitute;
 using Shouldly;
 using Trellis.Application;
@@ -139,7 +143,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
 
     /// <summary>
     /// The fitness test behind the convention: a second aggregate must ship isolated without anyone
-    /// remembering to wire it. Runs against the real provider's model.
+    /// remembering to wire it, its unique keys unique per tenant. Runs against the real provider's model.
     /// </summary>
     [Fact]
     public void Every_aggregate_root_is_tenant_scoped_by_convention()
@@ -153,14 +157,153 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
 
         foreach (IEntityType aggregate in aggregates)
         {
-            string name = aggregate.ClrType.Name;
-            aggregate.FindProperty(TenantInterceptor.TenantIdProperty).ShouldNotBeNull($"{name} has no TenantId shadow column");
-            aggregate.GetIndexes().ShouldContain(
-                static index => index.Properties.Any(static property => property.Name == TenantInterceptor.TenantIdProperty),
-                $"{name} has no index on TenantId");
-            aggregate.FindDeclaredQueryFilter("Tenant").ShouldNotBeNull($"{name} has no \"Tenant\" query filter");
+            ShouldBeTenantScoped(aggregate);
         }
     }
+
+    /// <summary>
+    /// The convention's unique-index rewrite, proved on a probe since the real model may hold no unique index on
+    /// an aggregate (the check's own control is
+    /// <see cref="The_tenant_scope_check_flags_each_unique_key_the_tenant_does_not_lead"/>): a probe aggregate
+    /// declares three the way a configuration would, a plain one, one sorted descending on every column and one
+    /// with a pinned name and per-column settings, and the real <see cref="AppDbContext"/> builds the model. The
+    /// convention puts TenantId first in each and keeps the rest, the database name above all: it is what
+    /// <c>UniqueConstraintErrors</c> and <c>UniqueConstraintTests.FaultOnPurpose</c> key on.
+    /// </summary>
+    [Fact]
+    public void A_unique_index_on_an_aggregate_is_unique_per_tenant_under_the_name_it_was_given()
+    {
+        using AppDbContext context = NewProbeContext<ProbeModelCustomizer>();
+        // The design-time model, the one migrations are generated from: the runtime model drops the
+        // per-column sort order.
+        IEntityType probe = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ProbeAccount)).ShouldNotBeNull();
+
+        ShouldBeTenantScoped(probe);
+        IIndex[] unique = [.. probe.GetIndexes()
+            .Where(static index => index.IsUnique)
+            .OrderBy(static index => index.GetDatabaseName(), StringComparer.Ordinal)];
+        unique.Select(static index => index.GetDatabaseName())
+            .ShouldBe([ProbeModelCustomizer.CodeIndex, ProbeModelCustomizer.EmailCodeIndex, ProbeModelCustomizer.EmailIndex]);
+        unique.Select(static index => string.Join(',', index.Properties.Select(static property => property.Name))).ShouldBe(
+        [
+            $"{TenantInterceptor.TenantIdProperty},Code",
+            $"{TenantInterceptor.TenantIdProperty},Email,Code",
+            $"{TenantInterceptor.TenantIdProperty},Email",
+        ]);
+
+        unique[0].IsDescending.ShouldBeNull();
+        unique[1].IsDescending.ShouldBe([false, true, true], "every column the configuration sorted descending still is; the tenant column ascends");
+        IIndex email = unique[2];
+        email.GetFilter().ShouldBe(ProbeModelCustomizer.EmailFilter);
+        email.IsDescending.ShouldBe([false, true]);
+        email.GetCollation().ShouldBe([null, ProbeModelCustomizer.EmailCollation], ignoreOrder: false);
+        email.GetOperators().ShouldBe([null, ProbeModelCustomizer.EmailOperators], ignoreOrder: false);
+        email.GetNullSortOrder().ShouldBe([NullSortOrder.Unspecified, NullSortOrder.NullsLast]);
+    }
+
+    /// <summary>
+    /// The settings the rewrite keeps must reach what reads them, not only the model, where any list
+    /// compares equal to the one asserted above. The C# migration generator writes an annotation only
+    /// when it can spell its value (an array; a list type the compiler made up throws on
+    /// <c>migrations add</c>), and Npgsql's DDL reads the arrays and drops anything else without a word,
+    /// so a case-insensitive key would turn case-sensitive. Read from the probe's own model, nothing connects.
+    /// </summary>
+    [Fact]
+    public void A_tenant_led_unique_index_keeps_its_per_column_settings_in_the_migration_and_the_DDL()
+    {
+        using AppDbContext context = NewProbeContext<ProbeModelCustomizer>();
+        IModel model = context.GetService<IDesignTimeModel>().Model;
+
+        // What 'migrations add' hands the C# generator: each per-column setting an array, the tenant first.
+        CreateIndexOperation email = context.GetService<IMigrationsModelDiffer>()
+            .GetDifferences(null, model.GetRelationalModel())
+            .OfType<CreateIndexOperation>()
+            .Single(static operation => operation.Name == ProbeModelCustomizer.EmailIndex);
+        email.Columns.ShouldBe([TenantInterceptor.TenantIdProperty, "Email"]);
+        IAnnotation[] perColumn = [.. email.GetAnnotations()
+            .Where(static annotation => annotation.Value is System.Collections.IEnumerable and not string)
+            .OrderBy(static annotation => annotation.Name, StringComparer.Ordinal)];
+        perColumn.Select(static annotation => annotation.Name)
+            .ShouldBe(["Npgsql:IndexNullSortOrder", "Npgsql:IndexOperators", RelationalAnnotationNames.Collation]);
+        foreach (IAnnotation setting in perColumn)
+        {
+            setting.Value.ShouldBeAssignableTo<Array>(
+                $"{setting.Name} holds a {setting.Value!.GetType().Name}: the C# migration generator writes only an array");
+        }
+
+        // What 'dbcontext script', EnsureCreated and a migration's SQL emit: TenantId leads, ascending
+        // with no setting of its own, and every column the configuration set keeps its settings (Npgsql
+        // quotes a collation only when its name needs it, and probe_ci does not).
+        string[] script = context.Database.GenerateCreateScript().ReplaceLineEndings("\n").Split('\n');
+        Statement(ProbeModelCustomizer.EmailIndex).ShouldBe(
+            $"CREATE UNIQUE INDEX \"{ProbeModelCustomizer.EmailIndex}\" ON \"ProbeAccounts\" " +
+            $"(\"{TenantInterceptor.TenantIdProperty}\", \"Email\" COLLATE {ProbeModelCustomizer.EmailCollation} " +
+            $"{ProbeModelCustomizer.EmailOperators} DESC NULLS LAST) WHERE {ProbeModelCustomizer.EmailFilter};");
+        Statement(ProbeModelCustomizer.EmailCodeIndex).ShouldBe(
+            $"CREATE UNIQUE INDEX \"{ProbeModelCustomizer.EmailCodeIndex}\" ON \"ProbeAccounts\" " +
+            $"(\"{TenantInterceptor.TenantIdProperty}\", \"Email\" DESC, \"Code\" DESC);");
+
+        string Statement(string index) => script.Single(
+            line => line.StartsWith($"CREATE UNIQUE INDEX \"{index}\"", StringComparison.Ordinal)).Trim();
+    }
+
+    /// <summary>
+    /// The control for the unique-key half of <see cref="ShouldBeTenantScoped"/>, which neither the real model nor
+    /// the probe above trips: a probe aggregate holds a unique key in each shape the convention leaves global (an
+    /// alternate key, the one <c>HasPrincipalKey</c> makes for a reference by code, and a unique index added after
+    /// the convention ran, <c>TenantId</c> second in it), and the check names each.
+    /// </summary>
+    [Fact]
+    public void The_tenant_scope_check_flags_each_unique_key_the_tenant_does_not_lead()
+    {
+        using AppDbContext context = NewProbeContext<GlobalKeyProbeCustomizer>();
+        IEntityType probe = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ProbeAccount)).ShouldNotBeNull();
+
+        string message = Should.Throw<ShouldAssertException>(() => ShouldBeTenantScoped(probe)).Message;
+        message.ShouldSatisfyAllConditions(
+            () => message.ShouldContain(GlobalKeyProbeCustomizer.HandleKey),
+            () => message.ShouldContain(GlobalKeyProbeCustomizer.CodeKey),
+            () => message.ShouldContain(GlobalKeyProbeCustomizer.LateIndex));
+    }
+
+    /// <summary>A context over a probe model (<see cref="ProbeModelCustomizer"/>, say); nothing connects.</summary>
+    private static AppDbContext NewProbeContext<TCustomizer>()
+        where TCustomizer : IModelCustomizer => new(
+        new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql("Host=probe.invalid")
+            .ReplaceService<IModelCustomizer, TCustomizer>()
+            .Options,
+        new FixedTenantContext(TenantA));
+
+    private static void ShouldBeTenantScoped(IEntityType aggregate)
+    {
+        string name = aggregate.ClrType.Name;
+        aggregate.FindProperty(TenantInterceptor.TenantIdProperty).ShouldNotBeNull($"{name} has no TenantId shadow column");
+        aggregate.GetIndexes().ShouldContain(
+            static index => index.Properties.Any(static property => property.Name == TenantInterceptor.TenantIdProperty),
+            $"{name} has no index on TenantId");
+        aggregate.FindDeclaredQueryFilter("Tenant").ShouldNotBeNull($"{name} has no \"Tenant\" query filter");
+        UniqueAcrossTenants(aggregate).ShouldBeEmpty(
+            $"{name}'s unique keys must be unique per tenant, TenantId leading each: declare a business key as a unique index, which the convention leads with TenantId, and reference another aggregate by its id, never by HasPrincipalKey (ADR-0022)");
+    }
+
+    /// <summary>
+    /// Every unique key of <paramref name="aggregate"/> but the row's own id that <c>TenantId</c> does not lead: a
+    /// unique index the convention did not rewrite, and an alternate key, declared or the one <c>HasPrincipalKey</c>
+    /// makes, which it never rewrites.
+    /// </summary>
+    private static string[] UniqueAcrossTenants(IEntityType aggregate) =>
+    [
+        .. aggregate.GetIndexes()
+            .Where(static index => index.IsUnique && !LedByTenant(index.Properties))
+            .Select(static index => $"unique index {index.GetDatabaseName()}"),
+        .. aggregate.GetKeys()
+            .Where(static key => !key.IsPrimaryKey() && !LedByTenant(key.Properties))
+            .Select(static key => $"alternate key {key.GetName()}"),
+    ];
+
+    private static bool LedByTenant(IReadOnlyList<IProperty> columns)
+        => columns[0].Name == TenantInterceptor.TenantIdProperty;
 
     /// <summary>Identity must stay reachable before a tenant is known; children ride their root's filter.</summary>
     [Fact]
@@ -178,8 +321,37 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
         foreach (IEntityType other in others)
         {
             other.FindDeclaredQueryFilter("Tenant").ShouldBeNull($"{other.ClrType.Name} must not be tenant-filtered");
+            ShouldKeepUniqueIndexesGlobal(other);
         }
     }
+
+    /// <summary>
+    /// The control for the unique-index half of <see cref="Non_aggregate_tables_carry_no_tenant_filter"/>: a probe
+    /// model gives the users a unique index on the e-mail per tenant, <c>TenantId</c> second as one would write it
+    /// by hand, and the check names it.
+    /// </summary>
+    [Fact]
+    public void The_global_index_check_flags_a_unique_index_outside_the_aggregates_that_holds_the_tenant()
+    {
+        using AppDbContext context = NewProbeContext<GlobalKeyProbeCustomizer>();
+        IEntityType user = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ApplicationUser)).ShouldNotBeNull();
+
+        Should.Throw<ShouldAssertException>(() => ShouldKeepUniqueIndexesGlobal(user)).Message
+            .ShouldContain(GlobalKeyProbeCustomizer.PerTenantUserIndex);
+    }
+
+    private static void ShouldKeepUniqueIndexesGlobal(IEntityType other)
+        => UniqueIndexesHoldingTheTenant(other).ShouldBeEmpty(
+            $"{other.ClrType.Name}'s unique indexes hold TenantId: a table outside the aggregates keeps its unique keys global (ADR-0022), so take TenantId out of each");
+
+    /// <summary>Every unique index of <paramref name="other"/> with <c>TenantId</c> in it, in whatever place.</summary>
+    private static string?[] UniqueIndexesHoldingTheTenant(IEntityType other) =>
+    [
+        .. other.GetIndexes()
+            .Where(static index => index.IsUnique
+                && index.Properties.Any(static property => property.Name == TenantInterceptor.TenantIdProperty))
+            .Select(static index => index.GetDatabaseName()),
+    ];
 
     [Fact]
     public async Task Registering_provisions_a_fresh_tenant_and_credentials_carry_it()
@@ -358,6 +530,99 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     private sealed class FixedTenantContext(string tenantId) : ITenantContext
     {
         public string? TenantId => AmbientTenant.CurrentTenantId ?? tenantId;
+    }
+
+    /// <summary>An aggregate root only the probe model maps; every column is a shadow property.</summary>
+    private sealed class ProbeAccount : IHasDomainEvents
+    {
+        public IReadOnlyList<IDomainEvent> DomainEvents => [];
+
+        public void ClearDomainEvents()
+        {
+            // The probe raises no events.
+        }
+    }
+
+    /// <summary>
+    /// Maps <see cref="ProbeAccount"/> before <see cref="AppDbContext"/>'s own <c>OnModelCreating</c> runs, as
+    /// an entity configuration would, so the tenant convention meets it like any aggregate. The replaced
+    /// service gives this context a model cache of its own, and nothing connects.
+    /// </summary>
+    private sealed class ProbeModelCustomizer(ModelCustomizerDependencies dependencies) : RelationalModelCustomizer(dependencies)
+    {
+        public const string CodeIndex = "IX_ProbeAccounts_Code";
+        public const string EmailCodeIndex = "IX_ProbeAccounts_Email_Code";
+        public const string EmailIndex = "UX_ProbeAccounts_Email";
+        public const string EmailFilter = "\"Email\" <> ''";
+        public const string EmailCollation = "probe_ci";
+        public const string EmailOperators = "text_pattern_ops";
+
+        public override void Customize(ModelBuilder modelBuilder, DbContext context)
+        {
+            modelBuilder.Entity<ProbeAccount>(static account =>
+            {
+                account.ToTable("ProbeAccounts");
+                account.Ignore(static probe => probe.DomainEvents);
+                account.Property<Guid>("Id");
+                account.HasKey("Id");
+                account.Property<string>("Code");
+                account.Property<string>("Email");
+                account.HasIndex("Code").IsUnique();
+                account.HasIndex("Email", "Code").IsDescending().IsUnique();
+                account.HasIndex("Email")
+                    .HasDatabaseName(EmailIndex)
+                    .HasFilter(EmailFilter)
+                    .IsDescending(true)
+                    .UseCollation(EmailCollation)
+                    .HasOperators(EmailOperators)
+                    .HasNullSortOrder(NullSortOrder.NullsLast)
+                    .IsUnique();
+            });
+            base.Customize(modelBuilder, context);
+        }
+    }
+
+    /// <summary>
+    /// Maps <see cref="ProbeAccount"/> with a unique key in each shape the tenant convention leaves global: an
+    /// alternate key declared on it, the one EF adds for a reference to an account by its code
+    /// (<c>HasPrincipalKey</c>; a parent account here), and a unique index declared after
+    /// <see cref="AppDbContext"/>'s <c>OnModelCreating</c>, which nothing in the template does, so the convention
+    /// never meets it and <c>TenantId</c> stays second. Outside the aggregates, the users get a unique index on
+    /// the e-mail per tenant, which decision 1 of ADR-0022 forbids.
+    /// </summary>
+    private sealed class GlobalKeyProbeCustomizer(ModelCustomizerDependencies dependencies) : RelationalModelCustomizer(dependencies)
+    {
+        public const string HandleKey = "AK_ProbeAccounts_Handle";
+        public const string CodeKey = "AK_ProbeAccounts_Code";
+        public const string LateIndex = "IX_ProbeAccounts_Late";
+        public const string PerTenantUserIndex = "IX_ProbeUsers_UserName_Tenant";
+
+        public override void Customize(ModelBuilder modelBuilder, DbContext context)
+        {
+            modelBuilder.Entity<ProbeAccount>(static account =>
+            {
+                account.ToTable("ProbeAccounts");
+                account.Ignore(static probe => probe.DomainEvents);
+                account.Property<Guid>("Id");
+                account.HasKey("Id");
+                account.Property<string>("Handle");
+                account.Property<string>("Code");
+                account.Property<string>("ParentCode");
+                account.Property<string>("Reference");
+                account.HasAlternateKey("Handle");
+                account.HasOne<ProbeAccount>().WithMany().HasForeignKey("ParentCode").HasPrincipalKey("Code");
+            });
+            base.Customize(modelBuilder, context);
+
+            modelBuilder.Entity<ProbeAccount>()
+                .HasIndex("Reference", TenantInterceptor.TenantIdProperty)
+                .HasDatabaseName(LateIndex)
+                .IsUnique();
+            modelBuilder.Entity<ApplicationUser>()
+                .HasIndex(static user => new { user.NormalizedUserName, user.TenantId })
+                .HasDatabaseName(PerTenantUserIndex)
+                .IsUnique();
+        }
     }
 }
 #endif

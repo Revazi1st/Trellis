@@ -297,6 +297,69 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   through the EF health check EF Core itself (`Microsoft.EntityFrameworkCore`, `.Design`,
   `Microsoft.AspNetCore.Identity.EntityFrameworkCore`) to 10.0.14, the version `dotnet-ef` already had. The
   shipped `InitialCreate` still reads `ProductVersion` 10.0.13; the next regeneration rewrites it.
+- **With multi-tenancy, a unique business key is unique per tenant.** The tenant convention gave every
+  aggregate root its `TenantId` column, index and filter but left the root's own unique indexes global,
+  so a key a feature of yours declares unique (a customer's e-mail, a code) disagreed with its own
+  lookup: the tenant-filtered "is it taken?" query answered free, the index answered taken, and the
+  create failed with a 409 that told the caller another tenant holds the value. The convention in
+  `AppDbContext` now puts `TenantId` first in every unique index an aggregate root declares, under the
+  name the index had, with its filter and per-column settings kept, so a configuration still names no
+  tenant and `UniqueConstraintErrors` maps the constraint whichever way the option is set; Identity's
+  indexes stay global (ADR-0022, amendment of 2026-11-12). `TenancyTests` fails on a unique index or an
+  alternate key of an aggregate that `TenantId` does not lead, with a probe aggregate holding each
+  shape as its control. Declare a business key as a unique index and reference another aggregate by its
+  id: an alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`, is not rewritten.
+  A unique constraint the convention does not reach (a child table's that its root's id does not lead,
+  a primary key a request chooses) is still unique across every tenant, its 409 telling the caller
+  another tenant holds the value, and the threat model's multi-tenancy gap now says so. The shipped
+  `InitialCreate` is unchanged; a multi-tenant project regenerates it as before, and one that already
+  has a unique index on an aggregate gets `(TenantId, key)` from its next migration.
+- **A record that is edited hands out its version and takes it back on every write.** The `add-feature`
+  skill named the ETag and `If-Match` only as what an endpoint that honours them declares, with no
+  default, so a new aggregate could ship with no `Version` on its DTO, no ETag and no `If-Match`, and
+  two people renaming one record overwrote each other unseen. Its API section now makes them the
+  default for an aggregate that changes after its create (`GetInvoice` and the invoice writes are the
+  model) and asks for one sentence in the feature doc's *Optimistic concurrency* paragraph to leave
+  them out. `OpenApiDocumentTests` holds both halves, each with a planted document as its control: a
+  `GET /{id}` with a write under it that answers no `ETag` fails unless `RecordsWithoutVersion` names
+  it with its reason, and a write under a path whose GET answers an `ETag` (whatever each route names
+  its parameters) that declares no `If-Match` fails unless `WritesWithoutIfMatch` names it with its
+  reason. A feature of yours with an unversioned record that is edited fails the first until you add
+  the version or the row.
+- **A feature a person uses gets its pages, or a reason it has none.** The `add-feature` skill's
+  section was headed "UI (if included)", which reads as "if the request asks for one" as easily as
+  "if the project has a UI", so a feature could ship API-only in a project with the UI on and say
+  nothing about why. The section is now `## UI` and ships only with the UI; its first box asks for the
+  pages Invoices has (a list, a detail page, a form per write, the typed client, the nav link, the
+  render tests), or a sentence in the feature doc's *UI* section saying the feature is API-only and
+  why, which `ui-reviewer` reads.
+- **A fix for a reviewer's finding goes back to the reviewer.** `/finish-change` asked only for the
+  gates to run again after a fix, so a blocking finding fixed by changing a shared value object (which
+  changes what every feature using it accepts) was committed with no second look. Its reviewer box,
+  `AGENTS.md` and `add-feature`'s review box now send a fix that changes `src/` back to the reviewer
+  that raised the finding, scoped to the fix's diff, and to `code-reviewer` as well when it touches a
+  type outside the feature's folders; the box is done when that pass leaves no blocking or should-fix
+  finding open.
+- **Where the "is this key taken?" lookup lives, and an e-mail key ignores case.** The `add-feature`
+  skill's unique-key bullet named the index and its registration but not the lookup a create usually
+  makes first, and `.claude/rules/application.md`'s "no business rules in handlers" read as forbidding
+  it. Both now say that the handler may ask the repository port (`{Key}ExistsAsync`) once the
+  aggregate is built and answer the same `Error` the index maps to: the lookup is orchestration, the
+  index is the rule and decides the race, and a `MustAsync` validator never does the lookup. The bullet
+  also says an e-mail key is case-insensitive like Auth's (a nondeterministic ICU collation, or a
+  normalized column as Identity's `NormalizedUserName`), with a test row in another case.
+- **Every feature doc has the same headings, and each decision a place in it.** The `add-feature`
+  skill asked for a doc "shaped like `invoices.md`" without naming the parts, and for the shapes the
+  reference slice does not show it said "decide deliberately" without saying where the decision is
+  written, so a new feature's doc put its endpoints table inside *API* and recorded ownership only in
+  the threat model. The skill now names the H2s (`The domain in plain words`, `Try it`,
+  `Where the code lives`, `Domain`, `Application`, `Persistence`, `API`, `UI` with the UI, `Tests`,
+  `Endpoints`), and a closing box asks for one sentence per shape the feature could have had (owner
+  or business-wide, cached or not, `If-Match` or not, offset or keyset, reactions or none, a page or
+  none); `invoices.md` gains the *Ownership* paragraph to copy. `scripts/check-docs-drift.sh`, in CI
+  and in the edit hook's reminder, fails a feature doc the change touches or owes that lacks one of
+  those headings, for a feature with an aggregate (a `Domain/<Feature>/` folder); an integration's doc
+  keeps its own shape. `scripts/check-hooks.sh` has the case.
 
 ## [0.1.1] - 2026-10-26
 

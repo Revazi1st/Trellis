@@ -204,6 +204,8 @@ failed are retried; a credited handler never runs again for that row (ADR-0023).
 
 One `IEndpoint` class per use case on `/api/v1/invoices…`, each `.RequirePermission(Permissions.Invoices.Read|Write)`, mapping `Result` → `TypedResults`/`CustomResults.Problem`. Wire contracts in `Api.Contracts/Invoices/`.
 
+**Ownership**: invoices are business-wide on purpose. A caller with `invoices:read` sees every invoice and one with `invoices:write` may change any of them; no invoice records an owner, so nothing narrows a list or a lookup to the caller. A feature whose records only their owner may see gives the aggregate a domain `OwnerId`, scopes its specifications by it so another caller's record is the same 404 as a missing one, and keys its read cache by owner or skips it (`docs/features/auth.md`, *Protecting an endpoint*).
+
 **Error contract** (ADR-0024): every failure is an RFC 9457 problem with a stable `code` (what clients branch on), `type` = `urn:problem-type:{code}`, a human `title`, `detail`, `instance`, `traceId` and `correlationId`. A 400 carries `errors[]` — one `{field, code, description}` per failure, `field` being the request's JSON path (validator failures: `customerName` / `Validation.NotEmpty`; value-object and aggregate-rule errors the handler attributes with `AtField`: `customerEmail` / `EmailAddress.Invalid` for `"a@b"`, `dueDate` / `Invoice.DueDateInPast`) or `null` for a whole-request error (`Invoice.NoLines`). `POST /invoices {"customerName":"","customerEmail":"x","currency":"USD"}` answers:
 
 ```json
@@ -268,14 +270,14 @@ the wrong type or a string holding U+0000, each entry a `FieldError`); the 201 d
 in-process host on every test run (`UPDATE_OPENAPI_SNAPSHOT=1 dotnet test tests/Trellis.ApiTests` or
 `scripts/export-openapi.sh` regenerates it) and CI diffs it against the running app.
 
+<!--#if (IncludeUI) -->
 ## UI (`src/Presentation/UI/Trellis.UI.Common/Pages/`)
 
 `Invoices` (every invoice, newest first, with a Created column and pager controls; a filter row of links — All, Draft, Issued, Paid, Voided, Overdue — keeps the filter in the address, `invoices?status=Draft`, so Back returns to the previous one and a filtered list can be bookmarked: All and the four statuses call `ListAsync`, Overdue calls `GetOverdueAsync`, the current link is `aria-current`, a new filter starts at page 1, and the empty state and the pager name it, "No overdue invoices.", "Page 1 of 3 (42 invoices)"), `InvoiceDetail` (the full lifecycle: add lines and issue while Draft, pay/void after; action errors are kept separate from load errors so they survive the post-action reload), `CreateInvoice` — via `IInvoiceApiClient` over the contracts. The detail and create pages open with a "Back to invoices" link above the heading (there while the invoice loads, and after a failed load); a successful create still lands on the new invoice's detail page. The create, add-line and issue forms validate before sending with DataAnnotations that mirror the command validators (`Forms/InvoiceForms.cs`: required, lengths, amount ≥ 0); the issue form's date picker starts at tomorrow (UTC), the first due date the API accepts (`Invoice.DueDateInPast`). What the API still rejects comes back as `errors[]`: each field error under its input, a whole-request error (`field: null`) in the form's alert (`ServerValidation`). Created, issued, paid and voided are announced as notifications. Every write on the detail page sends the version the page loaded as `If-Match`; a 412 reads "Someone else changed this in the meantime" over the reloaded invoice. The session outlives the 15-minute access token: `TokenAuthenticationStateProvider` checks `exp` and rotates through `POST /auth/refresh` (single-flight, since refresh tokens are single-use); `BearerTokenHandler` always attaches a currently-valid token via `IAccessTokenSource`.
 
-<!--#if (IncludeUI) -->
 The three pages are built from the design system's documented components ([design-system.md](../design-system.md)): the filter row, the table, the status pill, the summary list, the forms, the actions, the pager's secondary buttons and the back link are its classes, and no page writes a colour or a style of its own. The list's status is a pill, and so is the status in the detail page's summary, through one mapping (`Invoices.StatusPill`): Paid is a success, Voided a danger, Draft and Issued neutral, and the word always shows. On a phone both tables read as blocks, each cell led by its header (`data-th`); the list's link cell, under a header only screen readers read, has no label.
-<!--#endif -->
 
+<!--#endif -->
 ## Tests
 
 - `Domain.UnitTests/Invoices`: invariants, events, the list and overdue specifications, ID parsing.
