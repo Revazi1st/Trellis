@@ -20,7 +20,11 @@ public sealed class FirstRunPicturesTests
 {
     private const int Laptop = 1280;
     private const int Phone = 400;
-    private const int ViewportHeight = 900;
+
+    // A full-page screenshot is as tall as the window at least. The seeded list is short, so its window is
+    // too: a picture of three rows above half a screen of nothing is no picture for a README.
+    private const int LaptopHeight = 480;
+    private const int PhoneHeight = 900;
 
     /// <summary>The customers of the invoices <c>MigrationWorker.SeedSampleDataAsync</c> writes, in any order.</summary>
     private static readonly string[] SeededCustomers = ["Draft & Co", "Overdue Industries", "Prompt Payers Ltd"];
@@ -40,7 +44,7 @@ public sealed class FirstRunPicturesTests
         await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
-        await page.SetViewportSizeAsync(Laptop, ViewportHeight);
+        await page.SetViewportSizeAsync(Laptop, LaptopHeight);
         await Session.SignInAsAdminAsync(page);
         // The list has finished loading (no "Loading…" status) before its rows are read.
         await Assertions.Expect(page.Locator("a.filter[aria-current='page']")).ToHaveTextAsync("All", new() { Timeout = 15_000 });
@@ -59,7 +63,7 @@ public sealed class FirstRunPicturesTests
             new() { Timeout = 15_000 });
         await page.Locator("h1", new() { HasText = InvoiceOnThePhone }).WaitForAsync(new() { Timeout = 15_000 });
 
-        await page.SetViewportSizeAsync(Phone, ViewportHeight);
+        await page.SetViewportSizeAsync(Phone, PhoneHeight);
         await KeepInBothSchemesAsync(page, "first-run-invoice-400");
     }
 
