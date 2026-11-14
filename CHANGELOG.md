@@ -8,6 +8,14 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ## [Unreleased]
 
+- **Pictures of a first run, kept by CI** (with `--include-ui-tests`). `FirstRunPicturesTests` saves the
+  invoice list at 1280 px and the seeded draft invoice at 400 px, each in light and dark, as
+  `first-run-*.png` in the run's `ui-screenshots` artifact, for a README or a release note. The `ui-tests`
+  job runs it alone and first, with `UI_TESTS_FIRST_RUN=1`, while the database holds only what the
+  migration job seeded: with the variable the test fails unless the list shows exactly the seeded invoices,
+  and without it the test skips, so the other browser tests' invoices never reach these pictures
+  (`docs/development.md`, *UI tests*). The `remove-feature` skill names the class and the step.
+
 ## [0.2.0] - 2026-11-14
 
 A minor release. The Blazor UI gets a design system with a light and a dark theme and a switch between

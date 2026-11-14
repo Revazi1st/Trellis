@@ -7,12 +7,20 @@ internal static class UiTestEnvironment
     public static bool Enabled =>
         string.Equals(Environment.GetEnvironmentVariable("RUN_UI_TESTS"), "1", StringComparison.Ordinal);
 
+    /// <summary>
+    /// The run says the database holds only what the migration worker seeds: UI_TESTS_FIRST_RUN=1, which
+    /// <see cref="FirstRunPicturesTests"/> needs and CI sets on the step that runs it alone and first.
+    /// </summary>
+    public static bool FirstRun =>
+        string.Equals(Environment.GetEnvironmentVariable("UI_TESTS_FIRST_RUN"), "1", StringComparison.Ordinal);
+
     /// <summary>Base address of the running Blazor web app.</summary>
     public static string WebBaseUrl =>
         Environment.GetEnvironmentVariable("UI_TESTS_BASE_URL") ?? "https://localhost:7170";
 
     /// <summary>
-    /// Where <see cref="DesignSystemProofTests"/> saves its screenshots: UI_TESTS_SCREENSHOTS, else
+    /// Where <see cref="DesignSystemProofTests"/> and <see cref="FirstRunPicturesTests"/> save their
+    /// screenshots: UI_TESTS_SCREENSHOTS, else
     /// TestResults/screenshots under the working directory, which under <c>dotnet test</c> is the build output
     /// (artifacts/bin/Trellis.UiTests/debug or release). CI names a folder in the checkout and uploads it.
     /// </summary>
