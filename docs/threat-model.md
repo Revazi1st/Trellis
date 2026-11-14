@@ -88,10 +88,11 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   schema or database; a cross-tenant admin view must opt out with `IgnoreQueryFilters(["Tenant"])`
   and a bare `IgnoreQueryFilters()` drops the filter silently; a leaked signing key forges any
   tenant; and a unique constraint outside the aggregate-root convention (a child table's unique index
-  or alternate key that its root's id does not lead, a primary key a request chooses) is unique
-  across every tenant, so its 409, or the 500 of a fault on purpose, tells the caller that another
-  tenant holds the value. Mint ids on the server and declare a business key as a unique index on the
-  root, or record here why a key stays global. A row written with no tenant (`TenantId` NULL: a job
+  or alternate key that its root's id does not lead, a primary key a request chooses, a constraint
+  written into a migration by hand, which no test reads) is unique across every tenant, so its 409,
+  or the 500 of a fault on purpose, tells the caller that another tenant holds the value. Mint ids on
+  the server and declare a business key as a unique index on the root, or record here why a key stays
+  global. A row written with no tenant (`TenantId` NULL: a job
   that did not set `AmbientTenant`, an anonymous endpoint, a webhook) is outside every tenant-led
   unique index, since PostgreSQL treats NULLs as distinct, so two tenant-less rows may hold the same
   key: give such a flow its tenant before it writes.

@@ -396,7 +396,7 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
 
     private static void ShouldKeepUniqueIndexesGlobal(IEntityType other)
         => UniqueIndexesHoldingTheTenant(other).ShouldBeEmpty(
-            $"{other.ClrType.Name}'s unique indexes hold TenantId: a table outside the aggregates keeps its unique keys global (ADR-0022), so take TenantId out of each");
+            $"{other.ClrType.Name}'s unique indexes hold TenantId: a table outside the aggregates carries no tenant of its own (ADR-0022). Identity's indexes stay global on purpose; a child's business key belongs on its root, where the convention leads it with TenantId, or behind its root's id; a key left unique across every tenant is a line in the threat model's multi-tenancy gap");
 
     /// <summary>Every unique index of <paramref name="other"/> with <c>TenantId</c> in it, in whatever place.</summary>
     private static string?[] UniqueIndexesHoldingTheTenant(IEntityType other) =>
