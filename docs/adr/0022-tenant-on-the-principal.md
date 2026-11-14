@@ -132,11 +132,11 @@ caller that another tenant holds the value.
 - A business key is declared as a unique index (`.claude/rules/persistence.md`), and another aggregate
   is referenced by its id: an alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`,
   is not rewritten, and `TenancyTests` fails naming it.
-- A unique constraint the convention does not reach (a child table's unique index or alternate key, a
-  primary key a request chooses) stays unique across every tenant, and its 409, or the 500 of a fault
-  on purpose, tells the caller that another tenant holds the value: ids are minted on the server and a
-  business key is a unique index on the root, or the threat model's multi-tenancy gap records why a key
-  stays global.
+- A unique constraint the convention does not reach (a child table's unique index or alternate key
+  that its root's id does not lead, a primary key a request chooses) stays unique across every
+  tenant, and its 409, or the 500 of a fault on purpose, tells the caller that another tenant holds
+  the value: ids are minted on the server and a business key is a unique index on the root, or the
+  threat model's multi-tenancy gap records why a key stays global.
 - A unique index on exactly a foreign key's columns is the one EF keeps for a one-to-one reference:
   replaced, EF adds its own again, global, under the name with a `1` appended, and `TenancyTests`
   fails naming it. The template's aggregates hold no such reference to each other; adding one means

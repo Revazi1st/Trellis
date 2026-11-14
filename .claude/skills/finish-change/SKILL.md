@@ -74,7 +74,7 @@ proposed commit message, `commit` also commits, and `pr` commits and opens the p
       `src/` goes back to the reviewer that raised it, scoped to the fix's diff
       (`git diff <before-fix>..HEAD`), and to `code-reviewer` as well when the fix touches a type outside
       this feature's folders (a shared value object, the SharedKernel, another feature); the box is done
-      when that pass reports nothing new.
+      when that pass leaves no blocking or should-fix finding open.
 
 Without `commit` or `pr`, stop here: list each box with the command that ran and its result (or why it
 did not apply) and propose the commit message. Nothing is committed or pushed unasked.

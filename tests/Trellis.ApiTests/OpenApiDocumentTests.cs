@@ -28,6 +28,13 @@ public sealed partial class OpenApiDocumentTests
     /// </summary>
     private static readonly Dictionary<string, string> WritesWithoutIfMatch = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The records with a write under them whose GET answers no <c>ETag</c>, each ("GET /api/v1/…/{id}") with
+    /// the reason it hands out no version, the sentence its feature doc gives: its only write deletes it, say.
+    /// Empty while every such record is versioned.
+    /// </summary>
+    private static readonly Dictionary<string, string> RecordsWithoutVersion = new(StringComparer.Ordinal);
+
     [Fact]
     public void Every_operation_carries_a_summary_and_a_description()
     {
@@ -281,6 +288,65 @@ public sealed partial class OpenApiDocumentTests
         audit.Stale.ShouldBe(stale);
     }
 
+    /// <summary>
+    /// A record that is written to after its create hands out its version: the GET of a path ending in a route
+    /// parameter, with a write on that path or below it, answers an <c>ETag</c>
+    /// (<c>.SupportsConditionalGet()</c>), and the fact above then asks each of those writes to take it back.
+    /// Without one, two callers who change the record overwrite each other unseen. A record that needs none is
+    /// in <see cref="RecordsWithoutVersion"/> with its reason.
+    /// </summary>
+    [Fact]
+    public void Every_record_with_a_write_under_it_answers_an_ETag()
+    {
+        VersionAudit audit = AuditVersions(Operations(), RecordsWithoutVersion);
+
+        audit.Unversioned.ShouldBeEmpty(
+            "a record with a write under it hands out its version: Version on the DTO and a strong ETag on its GET (.SupportsConditionalGet(), as GetInvoice does), then If-Match on each write; or a row in RecordsWithoutVersion with the reason it needs none, the sentence its feature doc gives");
+        audit.Stale.ShouldBeEmpty("a row in RecordsWithoutVersion that names no unversioned record with a write under it");
+    }
+
+    [Fact]
+    public void The_version_check_flags_a_record_with_a_write_under_it_and_no_ETag()
+    {
+        // Flagged: a record whose GET answers no ETag with a write below it (naming its parameter differently)
+        // and one with a write on its own path. Not flagged: a versioned record; a record below it, which the
+        // root's version guards; a record nothing writes to; a list and a literal segment, which are no record;
+        // a record with no GET, which has nothing to answer an ETag on; and an exempt one.
+        using JsonDocument planted = JsonDocument.Parse(
+            """
+            {
+              "paths": {
+                "/api/v1/things": { "get": { "responses": { "200": {} } }, "post": {} },
+                "/api/v1/things/export": { "get": { "responses": { "200": {} } }, "post": {} },
+                "/api/v1/things/{id}": {
+                  "get": { "responses": { "200": { "headers": { "ETag": { "schema": { "type": "string" } } } } } },
+                  "delete": {}
+                },
+                "/api/v1/things/{thingId}/lines/{lineId}": { "get": { "responses": { "200": {} } }, "delete": {} },
+                "/api/v1/notes/{id}": { "get": { "responses": { "200": {} } } },
+                "/api/v1/notes/{noteId}/pin": { "post": {} },
+                "/api/v1/tags/{id}": { "get": { "responses": { "200": {} } }, "delete": {} },
+                "/api/v1/reports/{id}": { "get": { "responses": { "200": {} } } },
+                "/api/v1/jobs/{id}/cancel": { "post": {} },
+                "/api/v1/labels/{id}": { "get": { "responses": { "200": {} } }, "put": {} }
+              }
+            }
+            """);
+
+        VersionAudit audit = AuditVersions(
+            PathsOf(planted),
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["GET /api/v1/labels/{id}"] = "a label is replaced whole, last write wins",
+                ["GET /api/v1/reports/{id}"] = "a record nothing writes to",
+            });
+
+        string[] unversioned = ["GET /api/v1/notes/{id}", "GET /api/v1/tags/{id}"];
+        string[] stale = ["GET /api/v1/reports/{id}"];
+        audit.Unversioned.ShouldBe(unversioned);
+        audit.Stale.ShouldBe(stale);
+    }
+
     [Theory]
     [InlineData("/api/v1/invoices/overdue", new[] { "page", "pageSize" })]
     [InlineData("/api/v1/invoices", new[] { "status", "page", "pageSize" })]
@@ -366,7 +432,7 @@ public sealed partial class OpenApiDocumentTests
         foreach ((string path, JsonElement item) in paths)
         {
             string shape = RouteShape(path);
-            if (!versioned.Any(resource => shape == resource || shape.StartsWith(resource + "/", StringComparison.Ordinal)))
+            if (!versioned.Any(resource => IsAtOrBelow(shape, resource)))
             {
                 continue;
             }
@@ -396,6 +462,55 @@ public sealed partial class OpenApiDocumentTests
             [.. exempt.Keys.Where(name => !excused.Contains(name)).Order(StringComparer.Ordinal)]);
     }
 
+    /// <summary>
+    /// Every record's GET ("GET /api/v1/…/{id}": the path ends in a route parameter) that answers no
+    /// <c>ETag</c>, has a write on its path or below it, sits under no record that does answer one and is not
+    /// exempt, and every exempt name that is no such GET, each sorted. Paths are compared as
+    /// <see cref="AuditPreconditions"/> compares them.
+    /// </summary>
+    private static VersionAudit AuditVersions(
+        IReadOnlyList<(string Path, JsonElement Item)> paths, IReadOnlyDictionary<string, string> exempt)
+    {
+        string[] versioned = [.. paths
+            .Where(static entry => entry.Item.TryGetProperty("get", out JsonElement get) && AnswersETag(get))
+            .Select(static entry => RouteShape(entry.Path))];
+        string[] written = [.. paths
+            .Where(static entry => entry.Item.EnumerateObject()
+                .Any(static o => o.Name != "get" && HttpMethods.Contains(o.Name, StringComparer.Ordinal)))
+            .Select(static entry => RouteShape(entry.Path))];
+
+        SortedSet<string> unversioned = new(StringComparer.Ordinal);
+        HashSet<string> excused = new(StringComparer.Ordinal);
+        foreach ((string path, JsonElement item) in paths)
+        {
+            string shape = RouteShape(path);
+            if (!shape.EndsWith("/{}", StringComparison.Ordinal)
+                || !item.TryGetProperty("get", out _)
+                || versioned.Any(resource => IsAtOrBelow(shape, resource))
+                || !written.Any(write => IsAtOrBelow(write, shape)))
+            {
+                continue;
+            }
+
+            string name = $"GET {path}";
+            if (exempt.ContainsKey(name))
+            {
+                excused.Add(name);
+            }
+            else
+            {
+                unversioned.Add(name);
+            }
+        }
+
+        return new VersionAudit(
+            [.. unversioned],
+            [.. exempt.Keys.Where(name => !excused.Contains(name)).Order(StringComparer.Ordinal)]);
+    }
+
+    private static bool IsAtOrBelow(string shape, string resource)
+        => shape == resource || shape.StartsWith(resource + "/", StringComparison.Ordinal);
+
     /// <summary>The path with every route parameter (<c>{id}</c>, <c>{invoiceId}</c>) written as <c>{}</c>.</summary>
     private static string RouteShape(string path) => RouteParameter().Replace(path, "{}");
 
@@ -413,6 +528,8 @@ public sealed partial class OpenApiDocumentTests
             && string.Equals(parameter.GetProperty("name").GetString(), name, StringComparison.OrdinalIgnoreCase);
 
     private sealed record PreconditionAudit(IReadOnlyList<string> Unguarded, IReadOnlyList<string> Stale);
+
+    private sealed record VersionAudit(IReadOnlyList<string> Unversioned, IReadOnlyList<string> Stale);
 
     private static bool Has(JsonElement operation, string property) =>
         operation.TryGetProperty(property, out JsonElement value)

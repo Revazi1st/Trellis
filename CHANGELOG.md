@@ -306,23 +306,26 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   name the index had, with its filter and per-column settings kept, so a configuration still names no
   tenant and `UniqueConstraintErrors` maps the constraint whichever way the option is set; Identity's
   indexes stay global (ADR-0022, amendment of 2026-11-12). `TenancyTests` fails on a unique index or an
-  alternate key of an aggregate that `TenantId` does not lead, with a probe aggregate holding each shape
-  as its control. Declare a business key as a unique index and reference another aggregate by its id: an
-  alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`, is not rewritten. A unique
-  constraint the convention does not reach (a child table's, a primary key a request chooses) is still
-  unique across every tenant, its 409 telling the caller another tenant holds the value, and the threat
-  model's multi-tenancy gap now says so. The shipped `InitialCreate` is unchanged; a multi-tenant
-  project regenerates it as before, and one that already has a unique index on an aggregate gets
-  `(TenantId, key)` from its next migration.
-- **A record whose GET hands out a version takes it back on every write.** The `add-feature` skill
-  named the ETag and `If-Match` only as what an endpoint that honours them declares, with no default,
-  so a new aggregate could ship with no `Version` on its DTO, no ETag and no `If-Match`, and two
-  people renaming one record overwrote each other unseen. Its API section now makes them the default
-  for an aggregate that changes after its create (`GetInvoice` and the invoice writes are the model)
-  and asks for one sentence in the feature doc's *Concurrency* paragraph to leave them out.
-  `OpenApiDocumentTests` fails on a write under a path whose GET answers an `ETag` (whatever each route
-  names its parameters) that declares no `If-Match`, unless `WritesWithoutIfMatch` names it with its
-  reason; a planted document is its control.
+  alternate key of an aggregate that `TenantId` does not lead, with a probe aggregate holding each
+  shape as its control. Declare a business key as a unique index and reference another aggregate by its
+  id: an alternate key, declared with `HasAlternateKey` or made by `HasPrincipalKey`, is not rewritten.
+  A unique constraint the convention does not reach (a child table's that its root's id does not lead,
+  a primary key a request chooses) is still unique across every tenant, its 409 telling the caller
+  another tenant holds the value, and the threat model's multi-tenancy gap now says so. The shipped
+  `InitialCreate` is unchanged; a multi-tenant project regenerates it as before, and one that already
+  has a unique index on an aggregate gets `(TenantId, key)` from its next migration.
+- **A record that is edited hands out its version and takes it back on every write.** The `add-feature`
+  skill named the ETag and `If-Match` only as what an endpoint that honours them declares, with no
+  default, so a new aggregate could ship with no `Version` on its DTO, no ETag and no `If-Match`, and
+  two people renaming one record overwrote each other unseen. Its API section now makes them the
+  default for an aggregate that changes after its create (`GetInvoice` and the invoice writes are the
+  model) and asks for one sentence in the feature doc's *Optimistic concurrency* paragraph to leave
+  them out. `OpenApiDocumentTests` holds both halves, each with a planted document as its control: a
+  `GET /{id}` with a write under it that answers no `ETag` fails unless `RecordsWithoutVersion` names
+  it with its reason, and a write under a path whose GET answers an `ETag` (whatever each route names
+  its parameters) that declares no `If-Match` fails unless `WritesWithoutIfMatch` names it with its
+  reason. A feature of yours with an unversioned record that is edited fails the first until you add
+  the version or the row.
 - **A feature a person uses gets its pages, or a reason it has none.** The `add-feature` skill's
   section was headed "UI (if included)", which reads as "if the request asks for one" as easily as
   "if the project has a UI", so a feature could ship API-only in a project with the UI on and say
@@ -335,7 +338,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   changes what every feature using it accepts) was committed with no second look. Its reviewer box,
   `AGENTS.md` and `add-feature`'s review box now send a fix that changes `src/` back to the reviewer
   that raised the finding, scoped to the fix's diff, and to `code-reviewer` as well when it touches a
-  type outside the feature's folders; the box is done when that pass finds nothing new.
+  type outside the feature's folders; the box is done when that pass leaves no blocking or should-fix
+  finding open.
 - **Where the "is this key taken?" lookup lives, and an e-mail key ignores case.** The `add-feature`
   skill's unique-key bullet named the index and its registration but not the lookup a create usually
   makes first, and `.claude/rules/application.md`'s "no business rules in handlers" read as forbidding

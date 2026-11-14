@@ -124,15 +124,17 @@ after each layer.
       Api.Common, never a per-feature copy or a `new PagedResponse<T>(...)`
       [`ConventionTests.The_paged_envelope_is_built_only_by_the_shared_mapping`]. A GET that honours
       `If-None-Match` declares `.SupportsConditionalGet()` and uses `HttpRequest.IsNotModified(etag)`.
-- [ ] An aggregate that changes after its create carries `Version` on its DTO, answers it as a strong
-      ETag on `GET /{id}` (`.SupportsConditionalGet()`, `HttpRequest.IsNotModified`; `GetInvoice` is
-      the model) and takes `If-Match` on every write to it (`.SupportsConditionalWrite()`, the
-      command's `ExpectedVersion`, a `{Feature}Preconditions` like `InvoicePreconditions`, its
-      `{Aggregate}.VersionMismatch` a 412) [`OpenApiDocumentTests` fails on a write under a GET that
-      answers an ETag without `If-Match`, unless `WritesWithoutIfMatch` names it with a reason;
+- [ ] An aggregate that changes after its create carries `Version` on its DTO, answers it as a
+      strong ETag on `GET /{id}` (`.SupportsConditionalGet()`, `HttpRequest.IsNotModified`;
+      `GetInvoice` is the model) and takes `If-Match` on every write to it
+      (`.SupportsConditionalWrite()`, the command's `ExpectedVersion`, a `{Feature}Preconditions`
+      like `InvoicePreconditions`, its `{Aggregate}.VersionMismatch` a 412) [`OpenApiDocumentTests`
+      fails on a `GET /{id}` with a write under it that answers no ETag, unless
+      `RecordsWithoutVersion` names it with the reason, and on a write under a GET that answers an
+      ETag without `If-Match`, unless `WritesWithoutIfMatch` names it with a reason;
       `ProblemDetailsContractTests` for the new code]. Without it two callers who change one record
-      overwrite each other unseen, so leaving it out is one sentence in the feature doc's
-      *Optimistic concurrency* paragraph saying why; with it, the doc's *Conditional GET* and
+      overwrite each other unseen, so leaving it out is that row and one sentence in the feature
+      doc's *Optimistic concurrency* paragraph saying why; with it, the doc's *Conditional GET* and
       *Conditional writes* paragraphs describe it, as `invoices.md`'s do. Caching that GET in
       `HybridCache` stays a choice the doc records.
 - [ ] Multi-tenancy: the tenant comes from the signed `tenant` claim only (ADR-0022). Never put a
@@ -220,7 +222,8 @@ after each layer.
       findings are claims to check against the code. A fix for a blocking or should-fix finding that
       changes `src/` goes back to the reviewer that raised it, scoped to the fix's diff, and to
       `code-reviewer` too when it touches a type outside the feature's folders (a shared value object
-      changes what every feature using it accepts); done when that pass finds nothing new. Then
+      changes what every feature using it accepts); done when that pass leaves no blocking or
+      should-fix finding open. Then
       `/finish-change`.
 
 ## Not shown by the Invoices slice: decide deliberately
