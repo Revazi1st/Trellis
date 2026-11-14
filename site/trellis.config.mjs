@@ -34,6 +34,20 @@ export const githubTree = (repoPath) => `${github.url}/tree/${github.ref}/${repo
 // Edits always land on main: that is where the gated file lives.
 export const githubEdit = (repoPath) => `${github.url}/edit/main/${repoPath}`;
 
+// The pitch: one sentence in eng/readme/pitch.md, its one *emphasised* span the short form. It is the
+// site's description (astro.config.mjs) and the Why page's first line; the README, the pack and
+// template.json copy it, and scripts/check-readme-sync.sh holds every copy to this file.
+function readPitch() {
+  const file = 'eng/readme/pitch.md';
+  const lines = readFileSync(path.join(repoRoot, file), 'utf8').split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length !== 1) throw new Error(`${file}: expected one line, found ${lines.length}`);
+  const [line] = lines;
+  const spans = [...line.matchAll(/\*([^*]+)\*/g)];
+  if (spans.length !== 1 || (line.match(/\*/g) ?? []).length !== 2) throw new Error(`${file}: expected exactly one *emphasised* span in "${line}"`);
+  return { pitch: line.replace(/\*/g, '').trim(), pitchShort: spans[0][1].trim() };
+}
+export const { pitch, pitchShort } = readPitch();
+
 // docs/<file> -> site route (without base or slashes): the sidebar groups, as URLs.
 // A file not listed here keeps its own path (docs/foo/bar.md -> foo/bar) and the build warns.
 export const routes = {

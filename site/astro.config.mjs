@@ -8,7 +8,7 @@ import starlightLinksValidator from 'starlight-links-validator';
 import { title as docTitle } from './src/lib/doc-text.mjs';
 import { sidebarLabel } from './src/lib/docs-loader.mjs';
 import { trellisHastPlugins, trellisMdastPlugins } from './src/lib/markdown-plugins.mjs';
-import { base, docsDir, github, repoRoot, routeForDoc, site } from './trellis.config.mjs';
+import { base, docsDir, github, pitch, repoRoot, routeForDoc, site } from './trellis.config.mjs';
 
 const siteDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,8 +67,7 @@ export default defineConfig({
     trellisMarkdown,
     starlight({
       title: 'Trellis',
-      description:
-        'A dotnet new template for .NET 10 that generates a rich-DDD, Clean Architecture solution whose rules the tests enforce.',
+      description: pitch,
       logo: { src: '@repo/.template.config/icon.svg', alt: '' },
       social: [{ icon: 'github', label: 'GitHub', href: github.url }],
       editLink: { baseUrl: `${github.url}/edit/main/site/` },
