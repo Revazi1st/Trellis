@@ -25,7 +25,7 @@ stage:
 import { Card, CardGrid, Code, LinkCard, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 import Excerpt from '../../components/Excerpt.astro';
 import OptionsTable from '../../components/OptionsTable.astro';
-import { facts, quickstart, sdkVersion, toggles } from '../../data/repo.mjs';
+import { facts, quickstart, sdkVersion, seededAdmin, toggles } from '../../data/repo.mjs';
 import ringsDark from '@repo/eng/readme/rings-dark.svg?url';
 import ringsLight from '@repo/eng/readme/rings-light.svg?url';
 
@@ -132,7 +132,7 @@ Architecture tests pin the layer rules, integration tests run on a real PostgreS
 
    <Code code={quickstart.run.join('\n')} lang="bash" frame="terminal" />
 
-   Sign in with the seeded administrator named in the generated README, or walk the thirteen requests of `Trellis.Api.http` from the [Try it](/features/invoices/#try-it) section.
+   Sign in as <code>{seededAdmin.email}</code> / <code>{seededAdmin.password}</code>, the administrator the migration worker seeds in Development, or walk the requests of `Trellis.Api.http` from the [Try it](/features/invoices/#try-it) section.
 
 </Steps>
 
