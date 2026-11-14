@@ -2,7 +2,7 @@
 // their headings join the page's table of contents and their links go through the links validator.
 // Everything but `after` and `docs` (trellis.config.mjs, optionNotes) is read from .template.config/:
 //   - the default, the description and the flag (template.json, dotnetcli.host.json)
-//   - the checkbox Visual Studio and Rider show (ide.host.json)
+//   - the option's label in the Visual Studio and Rider dialogs (ide.host.json, the Visual Studio host file)
 //   - the files only the option brings (template.json's conditional excludes)
 //   - the reminder `dotnet new` prints after creating a solution with it (template.json's post-actions)
 
@@ -85,8 +85,8 @@ export function optionSections() {
   for (const o of options) {
     const notes = optionNotes[o.symbol];
     if (!notes) throw new Error(`trellis.config.mjs: optionNotes has no entry for the template option ${o.symbol} (${o.flag})`);
-    const checkbox = ide.symbolInfo?.find((s) => s.id === o.symbol);
-    const where = checkbox?.isVisible === false ? 'Command line only.' : `In Visual Studio and Rider: “${checkbox?.name?.text ?? o.displayName}”.`;
+    const dialog = ide.symbolInfo?.find((s) => s.id === o.symbol);
+    const where = dialog?.isVisible === false ? 'Hidden in the Visual Studio dialog.' : `In the Visual Studio and Rider dialogs: “${dialog?.name?.text ?? o.displayName}”.`;
 
     nodes.push({ type: 'heading', depth: 2, children: [code(o.flag)] });
     nodes.push(paragraph([strong(o.defaultValue ? 'On by default.' : 'Off by default.'), text(` ${where}`)]));

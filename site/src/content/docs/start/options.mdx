@@ -7,7 +7,7 @@ import { Aside } from '@astrojs/starlight/components';
 import OptionsTable from '../../../components/OptionsTable.astro';
 import { templateShortName } from '../../../data/repo.mjs';
 
-Options are flags of `dotnet new` and checkboxes in Visual Studio and Rider. A flag takes `true` or `false`, and a bare flag means `true`: <code>dotnet new {templateShortName} -n Acme.Shop --use-multitenancy</code>. The choices are recorded in the generated `.trellis-template.json`, which [Upgrading](/develop/upgrading/) regenerates from.
+Options are flags of `dotnet new`, and options in the Visual Studio and Rider new-solution dialogs. A flag takes `true` or `false`, and a bare flag means `true`: <code>dotnet new {templateShortName} -n Acme.Shop --use-multitenancy</code>. The choices are recorded in the generated `.trellis-template.json`, which [Upgrading](/develop/upgrading/) regenerates from.
 
 <OptionsTable />
 

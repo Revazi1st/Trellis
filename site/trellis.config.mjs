@@ -123,7 +123,7 @@ export const optionNotes = {
     docs: ['adr/0015-blazor-everywhere-shared-ui.md', 'adr/0012-presentation-structure-common-libraries.md'],
   },
   UseRedis: {
-    after: 'Nothing for `aspire run`: the AppHost starts the `cache` resource, with a RedisInsight tile, and the API reads its connection string. In the dev-container flow, `docker compose --profile redis up -d` starts Redis.',
+    after: 'Nothing for `aspire run`: the AppHost starts the `cache` resource, Valkey, and the API reads its connection string. In the dev-container flow, `docker compose --profile redis up -d` starts it.',
     docs: ['adr/0026-read-caching.md', 'deployment.md#deploy-to-one-host'],
   },
   UseSerilog: {
