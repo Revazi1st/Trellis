@@ -401,9 +401,9 @@ CI holds more than the tests to the code:
   test booting its generated AppHost. On Windows the default leg is built and the three test projects
   that need no Docker run. A project is also built from the packed `.nupkg`.
 - **The README and the site** (template repository only): `scripts/check-readme-sync.sh`, a step of
-  `.github/workflows/ci.yml`, fails when a copy of a fact in the README, the package README or the site
-  no longer agrees with its home: the pitch, the options, the commands, the use cases, the seeded
-  login, the ports and the agent toolkit among them.
+  `.github/workflows/ci.yml`, fails when a copy its header lists, in the README, the package README or
+  the site, no longer agrees with its home: the pitch, the options, the commands, the use cases, the
+  seeded login, the ports and the agent toolkit among them.
 <!--#endif -->
 
 ## When the build fails
