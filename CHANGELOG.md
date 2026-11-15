@@ -39,8 +39,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   a rich-DDD solution with Clean Architecture the tests enforce." The package description on nuget.org
   is the same sentence.
 - **The `remove-feature` and `add-feature` skills name the two new docs**: removing the sample
-  repoints the rows of `docs/overview.md` that link it and the example in `docs/faq.md`; a new feature
-  gets its line in `docs/INDEX.md` and no row in `docs/overview.md`.
+  repoints the entries of `docs/overview.md` that link it and the example in `docs/faq.md`; a new
+  feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
 
 ## [0.2.0] - 2026-11-14
 
