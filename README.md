@@ -618,7 +618,8 @@ the result ([docs/releasing.md](docs/releasing.md)).
 [docs/faq.md](docs/faq.md) answers the first questions: whether another database can replace
 PostgreSQL, why MediatR, AutoMapper and FluentAssertions are absent, how to remove the sample feature
 or add your own, whether an option can change after creation, and whether a newer template version
-changes a solution you created.
+changes a solution you created. A move to another relational engine is a checklist,
+[docs/switching-database.md](docs/switching-database.md).
 
 ## Comparisons 🔭
 

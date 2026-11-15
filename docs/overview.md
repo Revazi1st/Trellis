@@ -42,9 +42,11 @@ The capabilities this solution has, each with the doc that explains it and the d
 ## Persistence and events
 
 - EF Core on PostgreSQL, in a Persistence project that is a peer of Infrastructure: the two never
-  reference each other ([architecture.md](architecture.md#the-rings);
+  reference each other ([architecture.md](architecture.md#the-rings),
+  [switching-database.md](switching-database.md);
   [ADR-0002](adr/0002-infrastructure-persistence-split.md),
-  [ADR-0006](adr/0006-ef-complex-types-and-interceptors.md)).
+  [ADR-0006](adr/0006-ef-complex-types-and-interceptors.md),
+  [ADR-0033](adr/0033-postgresql-system-of-record.md)).
 - A one-shot migration job that applies the migrations, seeds and exits, which the API waits for
   ([deployment.md](deployment.md#migrations-a-one-shot-pre-deploy-job)).
 - The transactional outbox: a domain event is written in the same transaction as the aggregate, then
