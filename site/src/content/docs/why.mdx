@@ -15,9 +15,9 @@ The dependency rules between the rings and the conventions inside them are archi
 
 `AGENTS.md` holds the commands and the boundaries. The conventions of each layer load from `.claude/rules/` when an agent touches that layer, skills hold procedures such as adding a feature, and reviewer agents read a change before it is finished. People and agents read one doc set, and `docs/INDEX.md` is the agent's entry point: the [Agent toolkit](/reference/docs-index/) page renders it, and [ADR-0014](/decisions/0014-ai-documentation-architecture/) records the decision.
 
-## Nothing in it stops you shipping a product
+## No license in it stops you shipping a product
 
-The template is MIT-licensed. The build refuses the packages that moved to a commercial license or never were free for a product to ship, such as MediatR, AutoMapper and FluentAssertions, wherever they appear in a project's package graph, transitive dependencies included, and Dependabot never proposes them. A test holds every container image the solution uses to an allowlist that names its license. [ADR-0011](/decisions/0011-license-ceiling-policy/) lists each ceiling with its reason.
+The template is MIT-licensed. The build refuses the packages on its license ceilings, the ones that moved to a commercial license or never were free for a product to ship, such as MediatR, AutoMapper and FluentAssertions, wherever they appear in a project's package graph, transitive dependencies included, and Dependabot never proposes them. A test holds every container image the solution uses to an allowlist that names its license. [ADR-0011](/decisions/0011-license-ceiling-policy/) lists each ceiling with its reason.
 
 ## When another template fits better
 
