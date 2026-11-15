@@ -3,8 +3,8 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { evaluate, parseExpression } from '../lib/conditionals.mjs';
-import { github, pitch, pitchShort, readTemplateOptions, repoRoot } from '../../trellis.config.mjs';
+import { evaluate, identifiers, parseExpression } from '../lib/conditionals.mjs';
+import { constantSymbols, github, pitch, pitchShort, readTemplateOptions, repoRoot } from '../../trellis.config.mjs';
 
 const read = (p) => readFileSync(path.join(repoRoot, p), 'utf8');
 const json = (p) => JSON.parse(read(p));
@@ -40,10 +40,20 @@ const ships = (repoPath) => !excluded.some((re) => re.test(repoPath));
 
 // Whether a file is in a solution created with no options: what ships, less the conditional excludes
 // (template.json's modifiers) whose condition holds for the default values, such as the browser tests,
-// which only --include-ui-tests brings.
+// which only --include-ui-tests brings. A modifier without a condition applies always, as the engine has
+// it. A condition may name the boolean parameters and the constant symbols, which are false once the
+// engine runs (TemplateSource); any other symbol (a computed one) would evaluate as false without a word
+// and miscount, so it stops the build until this code learns its value.
 const defaults = Object.fromEntries(options.map((o) => [o.symbol, o.defaultValue]));
-const excludedByDefault = (template.sources?.[0]?.modifiers ?? []).flatMap((m) => {
+const knownSymbols = new Set([...Object.keys(defaults), ...Object.keys(constantSymbols)]);
+const excludedByDefault = (template.sources?.[0]?.modifiers ?? []).flatMap((m, i) => {
+  if (m.condition === undefined) return (m.exclude ?? []).map(globRegex);
+  if (typeof m.condition !== 'string') throw new Error(`.template.config/template.json: modifier ${i} has a condition that is not a string`);
   const condition = parseExpression(m.condition);
+  const unknown = [...identifiers(condition)].filter((name) => !knownSymbols.has(name));
+  if (unknown.length) {
+    throw new Error(`.template.config/template.json: modifier ${i} (${m.condition}) names ${unknown.join(', ')}, which is no boolean parameter; teach shipsByDefault in site/src/data/repo.mjs its value in a default solution`);
+  }
   return evaluate(condition, defaults) ? (m.exclude ?? []).map(globRegex) : [];
 });
 const shipsByDefault = (repoPath) => ships(repoPath) && !excludedByDefault.some((re) => re.test(repoPath));
@@ -79,6 +89,11 @@ export const seededAdmin = (() => {
     if (!m) throw new Error(`${file}: no ${what} (format changed?)`);
     return m[1];
   };
+  // The password is AdminPassword's default, which is the DefaultAdminPassword constant: both are read, so
+  // a default that stops being the constant fails here instead of printing the constant.
+  if (!/AdminPassword \{ get; init; \} = DefaultAdminPassword;/.test(source)) {
+    throw new Error(`${file}: AdminPassword's default is not DefaultAdminPassword (format changed?); read the seeded password from where it now comes`);
+  }
   return {
     email: value(/AdminEmail \{ get; init; \} = "([^"]+)"/, 'AdminEmail default'),
     password: value(/DefaultAdminPassword = "([^"]+)"/, 'DefaultAdminPassword'),
