@@ -30,10 +30,11 @@ this README links there can arrive with the next release.
 [docs/upgrading.md](docs/upgrading.md#versions-and-support) says which versions get fixes.
 
 **Trellis** is a `dotnet new` template for .NET 10 that generates a rich-DDD solution with
-*Clean Architecture the tests enforce*. The solution has vertical-slice features, CQRS without a mediator, `Result`s instead of exceptions,
-PostgreSQL, Identity with JWT, Aspire orchestration and an optional Blazor UI, in a repository written
-for AI agents as carefully as for people. Like the lattice a gardener puts up for a climbing plant, it
-carries the weight and sets the direction while your features grow, then disappears under them.
+*Clean Architecture the tests enforce*. The solution has vertical-slice features, CQRS without a
+mediator, `Result`s instead of exceptions, PostgreSQL, Identity with JWT, Aspire orchestration and an
+optional Blazor UI, in a repository written for AI agents as carefully as for people. Like the lattice
+a gardener puts up for a climbing plant, it carries the weight and sets the direction while your
+features grow, then disappears under them.
 
 Options are flags of `dotnet new`, and options in the Visual Studio and Rider new-solution dialogs.
 
@@ -229,11 +230,11 @@ A 201 comes back with a `Location` header and the new `id`, which goes into `@in
 requests list the invoices (your draft comes first), add a line, issue it, read it back with its
 `ETag` and again with `If-None-Match` for a 304, and pay it. Seconds later the receipt, handed to
 `SendReceiptOnInvoicePaid` by the outbox after the commit, is in the `mailpit` resource's **Inbox**
-(run without the AppHost, the api logs it instead, until you configure SMTP). The last requests show the guard rails: issuing again with the
-`ETag` from before the payment is a 412, the create replayed with the same key returns the first 201
-with `Idempotency-Replayed: true`, and a member who registers and signs in gets a 403 for a create.
-[docs/features/invoices.md](docs/features/invoices.md#try-it) tables every step with its
-answer.
+(run without the AppHost, the api logs it instead, until you configure SMTP). The last requests show
+the guard rails: issuing again with the `ETag` from before the payment is a 412, the create replayed
+with the same key returns the first 201 with `Idempotency-Replayed: true`, and a member who registers
+and signs in gets a 403 for a create.
+[docs/features/invoices.md](docs/features/invoices.md#try-it) tables every step with its answer.
 
 Rather click? The `api` resource's **Scalar** link opens the API reference at `/scalar/v1`, which
 takes the same bearer token, and the `web` UI walks the same lifecycle: sign in as the admin, create an
