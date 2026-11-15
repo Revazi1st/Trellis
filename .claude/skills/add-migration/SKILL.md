@@ -13,6 +13,8 @@ Migrations are generated, **never hand-edited** (see `.claude/rules/persistence.
 
 This runs `dotnet-ef` inside the SDK container (the tool is pinned in `.config/dotnet-tools.json`). The design-time factory (`AppDbContextFactory`) supplies a throwaway connection, so no database is needed to scaffold.
 
+A store type, a collation, an index filter, default or computed-column SQL the model needs is written as a member of `PostgresDialect` and called from the configuration (`.claude/rules/persistence.md`); the files under `Migrations/` are generated and outside that rule.
+
 After scaffolding:
 1. **Review** the generated `Up`/`Down` in `src/Infrastructure/Trellis.Persistence/Migrations/` — confirm the columns/constraints match your model change (e.g. value-object complex-type columns, strongly-typed-ID `uuid` columns, required FKs). Review, never edit: when something is wrong, remove the migration (below), correct the model or its configuration, and generate it again. The edit hook asks before any edit under `Migrations/`; a data migration (SQL the model cannot express) is the one reason to allow it.
    In a project whose name sorts before `Microsoft` (`Acme.Shop`, say), the first migration also reorders `AppDbContextModelSnapshot.cs`: EF writes entity types in the order of their CLR names, and the shipped snapshot was generated under a name that sorts after `Microsoft`, so the Identity entities and yours swap places. Moved blocks are not model changes: review `Up`/`Down` and the contents of the moved entities, not their order.
