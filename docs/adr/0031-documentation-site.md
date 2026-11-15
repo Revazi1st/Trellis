@@ -102,10 +102,11 @@ toolchain in the repository, kept maintainer-only so a generated project never n
 
 The README, the package README and the site had come to state the same facts in their own words, and
 the copies drifted: the template was described in several wordings, and the README's list of toggled
-files missed four that `template.json` names. From this amendment every fact has one home. The README
-quotes it or links to it, the site renders it or derives it at build time, and
-`scripts/check-readme-sync.sh` (maintainer-only, run by `ci.yml` in its template-source block)
-compares every copy with its home and names the copy to update.
+files missed four that `template.json` names. From this amendment a fact that the README, the package
+README or the site states is given one home. The README quotes it or links to it, the site renders it
+or derives it at build time, and `scripts/check-readme-sync.sh` (maintainer-only, run by `ci.yml` in
+its template-source block) compares each copy that its header lists with that copy's home and names
+the copy to update. A copy the list does not name has no check behind it.
 
 - **The pitch** is one sentence in `eng/readme/pitch.md`, whose one emphasised span is the short form.
   The README, the package README, the package description, `template.json`'s description and the
