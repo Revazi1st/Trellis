@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 using Trellis.Persistence.Outbox;
 
@@ -20,6 +21,15 @@ namespace Trellis.Persistence;
 /// </summary>
 internal static class PostgresDialect
 {
+    /// <summary>
+    /// Reads <c>xmin</c> as a <see cref="long"/>. The column is a 32-bit <c>xid</c>, so every value the
+    /// database hands out fits; a value from anywhere else that does not is a defect, and the conversion
+    /// throws instead of wrapping to another row's version.
+    /// </summary>
+    private static readonly ValueConverter<long, uint> XidConverter = new(
+        static version => checked((uint)version),
+        static xid => xid);
+
     /// <summary>
     /// The provider over the server at <paramref name="connectionString"/>, with the retrying execution
     /// strategy every host runs under: the outbox claim and the identity transactions run inside
@@ -42,10 +52,11 @@ internal static class PostgresDialect
     /// Maps an aggregate root's version onto the row's <c>xmin</c> system column as its concurrency token:
     /// the table gains no column, and PostgreSQL changes the value on every write of the row.
     /// </summary>
-    public static PropertyBuilder<uint> MapRowVersion(PropertyBuilder<uint> version)
+    public static PropertyBuilder<long> MapRowVersion(PropertyBuilder<long> version)
         => version
             .HasColumnName("xmin")
             .HasColumnType("xid")
+            .HasConversion(XidConverter)
             .ValueGeneratedOnAddOrUpdate()
             .IsConcurrencyToken();
 

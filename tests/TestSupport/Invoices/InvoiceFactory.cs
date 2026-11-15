@@ -37,11 +37,11 @@ internal static class InvoiceFactory
         => new(customerName, customerEmail, currency);
 
     public static AddInvoiceLineCommand AddLineCommand(
-        InvoiceId invoiceId, string description = LineDescription, decimal amount = LineAmount, uint? expectedVersion = null)
+        InvoiceId invoiceId, string description = LineDescription, decimal amount = LineAmount, long? expectedVersion = null)
         => new(invoiceId, description, amount, expectedVersion);
 
     /// <summary>The due date has no default: whether it is in the future depends on the clock the handler reads.</summary>
-    public static IssueInvoiceCommand IssueCommand(InvoiceId invoiceId, DateTimeOffset dueDate, uint? expectedVersion = null)
+    public static IssueInvoiceCommand IssueCommand(InvoiceId invoiceId, DateTimeOffset dueDate, long? expectedVersion = null)
         => new(invoiceId, dueDate, expectedVersion);
 
     public static Invoice Draft(string customerName = Customer, string customerEmail = Email, string currency = CurrencyCode)

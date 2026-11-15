@@ -140,6 +140,7 @@ public sealed class InvoiceContractTests(ApiFactory factory) : IClassFixture<Api
     [InlineData("\"7\"", HttpStatusCode.NotFound)]             // well-formed: the handler looks the invoice up first
     [InlineData("\"07\"", HttpStatusCode.PreconditionFailed)]  // a leading zero: never issued, refused before the lookup
     [InlineData("W/\"7\"", HttpStatusCode.PreconditionFailed)] // weak: can never match, refused before the lookup
+    [InlineData("\"4294967296\"", HttpStatusCode.PreconditionFailed)] // one past the widest version the database issues: never issued, refused before the lookup
     public async Task A_missing_invoice_is_a_404_for_a_well_formed_If_Match_and_a_malformed_one_is_a_412_before_the_lookup(
         string ifMatch, HttpStatusCode expected)
     {

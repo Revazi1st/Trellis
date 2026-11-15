@@ -24,7 +24,7 @@ public static class InvoicePreconditions
     /// the invoice otherwise. No expected version means no precondition. A missing invoice wins over a
     /// stale version: without the condition the answer would have been a 404 (RFC 9110 §13.2.1).
     /// </summary>
-    public static Result<Invoice> ToWrite(this Invoice? invoice, InvoiceId id, uint? expectedVersion) => invoice switch
+    public static Result<Invoice> ToWrite(this Invoice? invoice, InvoiceId id, long? expectedVersion) => invoice switch
     {
         null => Result.Failure<Invoice>(InvoiceErrors.NotFound(id)),
         _ when expectedVersion is { } expected && invoice.Version != expected => Result.Failure<Invoice>(VersionMismatch),

@@ -33,10 +33,27 @@ public sealed class AggregateConcurrencyTests(DatabaseFixture database) : Integr
         foreach (IEntityType root in aggregateRoots)
         {
             root.GetProperties().Any(static property => property.IsConcurrencyToken).ShouldBeTrue(
-                $"{root.DisplayName()} needs a concurrency token (map xmin as its configuration does for Invoice): without one, concurrent edits of the aggregate both commit");
+                $"{root.DisplayName()} needs a concurrency token (PostgresDialect.MapRowVersion, as InvoiceConfiguration calls it): without one, concurrent edits of the aggregate both commit");
             AggregateConcurrencyInterceptor.PromotableProperty(root).ShouldNotBeNull(
                 $"{root.DisplayName()} needs a plain column the promotion pass can write back when only a child changes");
         }
+    }
+
+    [Theory]
+    [InlineData(4294967296L)]   // one past the widest row version the database hands out
+    [InlineData(-1L)]
+    public void A_version_the_database_could_not_have_issued_is_refused_not_wrapped(long version)
+    {
+        // The token is read as a long through a checked conversion (PostgresDialect.MapRowVersion): a
+        // plain cast would wrap 4294967296 to 0 and compare the write against another row version.
+        IProperty token = Services.GetRequiredService<AppDbContext>().Model
+            .FindEntityType(typeof(Invoice)).ShouldNotBeNull()
+            .FindProperty(nameof(Invoice.Version)).ShouldNotBeNull();
+
+        Func<object?, object?> toStore = token.GetTypeMapping().Converter.ShouldNotBeNull().ConvertToProvider;
+
+        Should.Throw<OverflowException>(() => toStore(version));
+        toStore(42L).ShouldBe(42u);
     }
 
     [Fact]
@@ -58,7 +75,7 @@ public sealed class AggregateConcurrencyTests(DatabaseFixture database) : Integr
         await using AppDbContext second = UnauditedContext();
         Invoice loadedByFirst = await first.Invoices.SingleAsync(invoice => invoice.Id == id, ct);
         Invoice loadedBySecond = await second.Invoices.SingleAsync(invoice => invoice.Id == id, ct);
-        uint versionBefore = loadedByFirst.Version;
+        long versionBefore = loadedByFirst.Version;
 
         loadedByFirst.AddLine("From the first", Money.Create(10m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
         loadedBySecond.AddLine("From the second", Money.Create(20m, "USD").ShouldBeSuccess()).ShouldBeSuccess();
@@ -76,7 +93,7 @@ public sealed class AggregateConcurrencyTests(DatabaseFixture database) : Integr
 
         await using AppDbContext context = UnauditedContext();
         Invoice invoice = await context.Invoices.SingleAsync(loaded => loaded.Id == id, ct);
-        uint versionBefore = invoice.Version;
+        long versionBefore = invoice.Version;
 
         (await context.SaveChangesAsync(ct)).ShouldBe(0);
         invoice.Version.ShouldBe(versionBefore);

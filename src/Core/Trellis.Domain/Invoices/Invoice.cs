@@ -49,12 +49,13 @@ public sealed class Invoice : AggregateRoot<InvoiceId>, IAuditable, ISoftDeletab
     public Money Total => _lines.Aggregate(Money.Zero(Currency), static (sum, line) => sum + line.Amount);
 
     /// <summary>
-    /// Optimistic-concurrency token (Postgres xmin, mapped in Persistence). Surfaces as the API's
-    /// ETag so clients can do conditional requests; never set by domain code.
+    /// Optimistic-concurrency token: the row version the database keeps for the aggregate (mapped in
+    /// Persistence). Surfaces as the API's ETag so clients can do conditional requests; never set by
+    /// domain code.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1144:Unused private types or members should be removed",
-        Justification = "EF Core writes the database-generated xmin value through this setter.")]
-    public uint Version { get; private set; }
+        Justification = "EF Core writes the database-generated row version through this setter.")]
+    public long Version { get; private set; }
 
     public DateTimeOffset CreatedAtUtc { get; set; }
 
