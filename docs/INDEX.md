@@ -11,6 +11,7 @@ Agent entry point — read only what the task needs.
 <!--#endif -->
 - [deployment.md](deployment.md) — a one-host quick start (images, `aspire publish`, `.env`, `docker compose up`, the first probe), container images (tags, an SBOM), what `aspire publish` produces and what to add, edge TLS + forwarded headers, the migration job, required production config, probes, OTLP and trace sampling, the telemetry reference (every source, meter, instrument, attribute and log event id, test-checked), outbox and idempotency runbooks
 - [upgrading.md](upgrading.md) — adopting a newer template version: regenerate, diff, merge; versions and support
+- [switching-database.md](switching-database.md) — moving to another relational engine: the places that are specific to PostgreSQL (the C# files among them on a list a test holds), the SQL Server equivalent where one is known, what is blocked or not verified, the behaviour to prove again, an order of work
 - [faq.md](faq.md) — short answers with their sources: the database, the packages that are refused, the sample feature, changing an option, template versions
 - [features/invoices.md](features/invoices.md) — the canonical "copy me" vertical slice
 - [features/auth.md](features/auth.md) — Identity + JWT, refresh rotation/revocation, permissions, lockout
@@ -27,9 +28,9 @@ Agent entry point — read only what the task needs.
 - [dependencies.md](../.claude/rules/dependencies.md) — `Directory.Packages.props`, `Directory.Build.props`, `global.json`, `.github/dependabot.yml`, `scripts/sdk-image/**`, `.config/dotnet-tools.json`: asking before a package, the license ceilings and the two targets that enforce them, central versions and Dependabot groups, the order to answer a NuGetAudit advisory in, bumping the SDK, a .NET major as a migration
 - [domain.md](../.claude/rules/domain.md) — `src/Core/Trellis.Domain/**/*.cs`: aggregates, lifecycle rules, value objects and what they guarantee, IDs, events, specifications, choosing an `ErrorType`
 - [infrastructure.md](../.claude/rules/infrastructure.md) — `src/Infrastructure/Trellis.Infrastructure/**/*.cs`: adapters, options, outbound HTTP, e-mail
-- [persistence.md](../.claude/rules/persistence.md) — `src/Infrastructure/Trellis.Persistence/**/*.cs`: EF configurations, interceptors, tenancy, outbox, retention, options, migrations, Identity
+- [persistence.md](../.claude/rules/persistence.md) — `src/Infrastructure/Trellis.Persistence/**/*.cs`: EF configurations, the dialect, interceptors, tenancy, outbox, retention, options, migrations, Identity
 - [sharedkernel.md](../.claude/rules/sharedkernel.md) — `src/Core/Trellis.SharedKernel/**/*.cs`: Result and errors, CQRS contracts, the decorator pipeline, cancellation filters, the unit of work
-- [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, test names, the shared test support (`tests/TestSupport/`: `ShouldBeSuccess()`, `InvoiceFactory`) and RSLT001 over tests, arranging through the drivers (`InvoiceDriver`, `InvoiceHttpDriver`) and the switchable `TestCurrentUser`, each test project's conventions (one folder per use case, the validator boundary tests), the fitness suites and their positive controls, the fixture contract and helpers, the OpenAPI snapshot
+- [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, test names, the shared test support (`tests/TestSupport/`: `ShouldBeSuccess()`, `InvoiceFactory`) and RSLT001 over tests, arranging through the drivers (`InvoiceDriver`, `InvoiceHttpDriver`) and the switchable `TestCurrentUser`, each test project's conventions (one folder per use case, the validator boundary tests), the fitness suites and their positive controls, the fixture contract and helpers, the test database, the OpenAPI snapshot
 - [tools.md](../.claude/rules/tools.md) — `tools/**/*.{cs,csproj}`, `.github/**/*.{yml,yaml}`, `docker-compose.yml`: AppHost, MigrationService, the RSLT001 analyzer, CI supply-chain gates
 <!--#if (IncludeUI) -->
 - [ui.md](../.claude/rules/ui.md) — `src/Presentation/UI/**/*.{cs,razor,css,js}`: typed clients and `ApiCall`, problem display, forms, session lifetime, protected pages, accessibility, the design system, the host shell
@@ -119,6 +120,7 @@ Numbered by the template and updated by template upgrades; record your own from 
 <!--#if (IncludeUI) -->
 - [0032](adr/0032-ui-design-system.md) — a design system for the UI: two files (tokens and components), role names, one `light-dark()` pair per colour, the existing classes as the components, the doc as the source of names held by tests both ways, the starting palette
 <!--#endif -->
+- [0033](adr/0033-postgresql-system-of-record.md) — PostgreSQL is the system of record and the one engine: what ties the solution to it, what stands in the way of each other engine, the rule that engine-specific code has named homes, held by a test (`PostgresDialect`, the test database, a `long` version), a document store only as an outbox-fed read model
 
 ## Project decisions (docs/adr/, 0100 and up)
 
