@@ -5,7 +5,7 @@
 | Tool | Needed for | Minimum |
 |---|---|---|
 | **Docker** (Docker Desktop, OrbStack, Colima, Linux Docker Engine; Podman with caveats, see [below](#docker-engines-other-than-docker-desktop)) | everything: PostgreSQL, Testcontainers, the SDK container | a running engine |
-| **.NET 10 SDK** on the host | `aspire run` and the Aspire E2E test (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container | the version `global.json` pins, or a later feature band of its line (`rollForward: latestFeature`) |
+| **.NET 10 SDK** on the host | `aspire run` and the Aspire E2E test (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container | the version `global.json` pins, or a later feature band of its line |
 | **Aspire CLI**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app | 13.5 |
 | **PowerShell** (`pwsh`) | installing the Playwright browsers for the optional UI tests | none stated |
 
@@ -396,9 +396,9 @@ CI holds more than the tests to the code:
   template generates on every pull request. It creates a solution per option leg (default, no UI, UI
   tests without the UI, all options, and Redis, Serilog and multi-tenancy each on alone with the UI
   off), checks each for leftovers (a file or a line still named after the template, an unprocessed
-  directive) and runs the generated project's own link, hook and doctor checks. Every leg but
-  UI-tests-without-the-UI is built in Release and tested, and on Linux the Aspire end-to-end test
-  boots each one's generated AppHost. On Windows the default leg is built and the three test projects
+  directive) and runs the generated project's own link, hook and doctor checks. Every leg is built in
+  Release, and every leg but UI-tests-without-the-UI is tested, on Linux with the Aspire end-to-end
+  test booting its generated AppHost. On Windows the default leg is built and the three test projects
   that need no Docker run. A project is also built from the packed `.nupkg`.
 - **The README and the site** (template repository only): `scripts/check-readme-sync.sh`, a step of
   `.github/workflows/ci.yml`, fails when a copy of a fact in the README, the package README or the site
