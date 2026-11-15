@@ -294,13 +294,14 @@ public sealed class TenancyTests(DatabaseFixture database) : IAsyncLifetime
     }
 
     /// <summary>A context over a probe model (<see cref="ProbeModelCustomizer"/>, say); nothing connects.</summary>
-    private static AppDbContext NewProbeContext<TCustomizer>()
-        where TCustomizer : IModelCustomizer => new(
-        new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql("Host=probe.invalid")
-            .ReplaceService<IModelCustomizer, TCustomizer>()
-            .Options,
-        new FixedTenantContext(TenantA));
+    private AppDbContext NewProbeContext<TCustomizer>()
+        where TCustomizer : IModelCustomizer
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>();
+        database.Server.ConfigureWithoutServer(options);
+        options.ReplaceService<IModelCustomizer, TCustomizer>();
+        return new AppDbContext(options.Options, new FixedTenantContext(TenantA));
+    }
 
     private static void ShouldBeTenantScoped(IEntityType aggregate)
     {

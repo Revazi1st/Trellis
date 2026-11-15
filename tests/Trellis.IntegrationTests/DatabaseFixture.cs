@@ -1,36 +1,32 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using Respawn;
 using Respawn.Graph;
-using Testcontainers.PostgreSql;
 using Trellis.Persistence;
+using Trellis.TestSupport.Database;
 using Xunit;
 
 namespace Trellis.IntegrationTests;
 
-/// <summary>One real PostgreSQL container per test collection; migrations applied once, Respawn wipes data between tests.</summary>
+/// <summary>One real database server per test collection; migrations applied once, Respawn wipes data between tests.</summary>
 public sealed class DatabaseFixture : IAsyncLifetime
 {
-    // Deliberately NOT WithReuse(true): reuse is experimental and the Ryuk reaper kills "reusable"
-    // containers when a parallel test assembly's session ends, failing whoever is still connected.
-    // Debian postgres:18, the image the AppHost, docker-compose.yml and a deployment run: the Alpine image's musl
-    // libc collates text differently, so an ORDER BY on text could pass here and sort otherwise there.
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18").Build();
-
-    private NpgsqlConnection? _connection;
+    private DbConnection? _connection;
     private Respawner? _respawner;
 
-    public string ConnectionString => _container.GetConnectionString();
+    public string ConnectionString => Server.ConnectionString;
+
+    /// <summary>
+    /// The server, for what a test needs from the engine without naming it: options for a context of its
+    /// own (<c>OptionsFor</c>, <c>ModelOnlyOptionsFor</c>) and the reading of a unique violation.
+    /// </summary>
+    internal ITestDatabase Server { get; } = ITestDatabase.Create();
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await Server.StartAsync();
 
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(ConnectionString)
-            .Options;
-
-        await using (var context = new AppDbContext(options
+        await using (var context = new AppDbContext(Server.OptionsFor<AppDbContext>()
 #if (UseMultitenancy)
             , new FixtureTenantContext()
 #endif
@@ -39,9 +35,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
             await context.Database.MigrateAsync();
         }
 
-        _connection = new NpgsqlConnection(ConnectionString);
-        await _connection.OpenAsync();
+        _connection = await Server.OpenConnectionAsync();
 
+        // Respawn's adapter and the schema it empties are the engine's (docs/switching-database.md).
         _respawner = await Respawner.CreateAsync(_connection, new RespawnerOptions
         {
             DbAdapter = DbAdapter.Postgres,
@@ -66,7 +62,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
             await _connection.DisposeAsync();
         }
 
-        await _container.DisposeAsync();
+        await Server.DisposeAsync();
     }
 }
 

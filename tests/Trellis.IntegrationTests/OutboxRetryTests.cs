@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Npgsql;
 using NSubstitute;
 using Shouldly;
 using Trellis.Domain.Invoices;
@@ -27,11 +26,12 @@ namespace Trellis.IntegrationTests;
 /// handler throws, times out, writes, or cannot even be read; what a second processor, a processor that
 /// outlived its lease and a stopping host see; what the meters and spans report; the loop around the batch
 /// (a full batch drained at once, a failed poll retried after the interval, a clean stop); and the runbook's
-/// re-drive statement, which must not re-send a credited receipt. Three test handlers
+/// re-drive statement, which must not re-send a credited receipt (that test runs the engine's SQL as the
+/// runbook prints it and sits in a file of its own, <c>OutboxRetryTests.Runbook.cs</c>). Three test handlers
 /// of <c>InvoicePaidDomainEvent</c> are registered after the real ones (so they are "the later handlers")
 /// and switched on per test; the real receipt e-mail is the side effect that must never be sent twice.
 /// </summary>
-public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTestBase(database)
+public sealed partial class OutboxRetryTests(DatabaseFixture database) : IntegrationTestBase(database)
 {
     private const string PaidType = "invoices.paid.v1";
     private const string IssuedType = "invoices.issued.v1";
@@ -698,57 +698,6 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
     }
 
     [Fact]
-    public async Task The_runbooks_redrive_statement_gives_a_dead_letter_a_fresh_budget_without_resending_the_credited_receipt()
-    {
-        // One attempt only: the receipt goes out and is credited at its checkpoint, the flaky handler fails,
-        // and the row is dead-lettered with the credit kept.
-        var options = new OutboxOptions { MaxAttempts = 1 };
-        _flaky.Throw = true;
-        await PayNewInvoiceAsync();
-        await CreateOutboxProcessor(options).ProcessBatchAsync(Ct);
-        OutboxMessage dead = await RowAsync(PaidType);
-        dead.Status.ShouldBe(OutboxMessageStatus.DeadLettered);
-        dead.Attempts.ShouldBe(1);
-        ShouldCredit(dead, SendReceipt, RecordMetrics, BlockingName);
-        ShouldNotCredit(dead, FlakyName);
-        await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-
-        // The dependency is fixed and the operator runs the single-row statement of docs/deployment.md
-        // ("Outbox operations") as written there, with '<id>' filled in.
-        _flaky.Throw = false;
-        using (IServiceScope scope = CreateScope())
-        {
-            int affected = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.ExecuteSqlAsync($"""
-                UPDATE "OutboxMessages" SET "Status" = 0, "Attempts" = 0, "Error" = NULL, "NextAttemptAtUtc" = now()
-                WHERE "Status" = 2 AND "Id" = {dead.Id}
-                """, Ct);
-            affected.ShouldBe(1);
-        }
-
-        OutboxMessage redriven = await RowAsync(PaidType);
-        redriven.Status.ShouldBe(OutboxMessageStatus.Pending);
-        redriven.Attempts.ShouldBe(0);
-        redriven.Error.ShouldBeNull();
-        redriven.CompletedHandlers.ShouldBe(dead.CompletedHandlers);   // kept on purpose: the credited handlers stay skipped
-
-        // now() is the database's wall clock, not the test's: the row is due once the processor's clock caught up.
-        if (redriven.NextAttemptAtUtc > Time.GetUtcNow())
-        {
-            Time.SetUtcNow(redriven.NextAttemptAtUtc);
-        }
-
-        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(1);
-
-        OutboxMessage finished = await RowAsync(PaidType);
-        finished.Status.ShouldBe(OutboxMessageStatus.Processed);
-        finished.Attempts.ShouldBe(0);
-        finished.Error.ShouldBeNull();
-        ShouldCredit(finished, SendReceipt, RecordMetrics, FlakyName, BlockingName);
-        _flaky.Calls.ShouldBe(2);   // the failed try and the one the re-drive owed
-        await EmailSender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());   // not sent again
-    }
-
-    [Fact]
     public async Task The_loop_drains_a_full_batch_without_sleeping_and_waits_the_poll_interval_after_a_short_one()
     {
         for (int i = 0; i < 3; i++)
@@ -800,7 +749,7 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
             failed.Level.ShouldBe(LogLevel.Warning);
             failed.EventId.Id.ShouldBe(1309);
             failed.EventId.Name.ShouldBe("OutboxBatchFailed");
-            failed.Exception.ShouldBeOfType<NpgsqlException>();
+            failed.Exception.ShouldBeOfType<DatabaseUnavailableException>();
             failed.Message.ShouldContain(options.PollInterval.ToString());
             processor.ExecuteTask.ShouldNotBeNull().IsCompleted.ShouldBeFalse();
 
@@ -1109,10 +1058,13 @@ public sealed class OutboxRetryTests(DatabaseFixture database) : IntegrationTest
         {
             if (Down)
             {
-                throw new NpgsqlException("Simulated: the database is unavailable.");
+                throw new DatabaseUnavailableException("Simulated: the database is unavailable.");
             }
         }
     }
+
+    /// <summary>A database failure that is not the provider's own type, so the retrying strategy in use does not take it for a transient one.</summary>
+    private sealed class DatabaseUnavailableException(string message) : DbException(message);
 
     /// <summary>
     /// The fixture's fake clock, reporting every wait the loop starts. <c>Task.Delay</c> on a

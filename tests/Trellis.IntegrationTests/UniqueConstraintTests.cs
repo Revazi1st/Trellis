@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
 using Shouldly;
 using Trellis.Application.Abstractions;
 using Trellis.Persistence;
@@ -54,9 +53,7 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
         DbUpdateException thrown = await Should.ThrowAsync<DbUpdateException>(
             () => Services.GetRequiredService<IUnitOfWork>().CommitAsync(ct));
 
-        PostgresException violation = thrown.InnerException.ShouldBeOfType<PostgresException>();
-        violation.SqlState.ShouldBe(PostgresErrorCodes.UniqueViolation);
-        violation.ConstraintName.ShouldBe("RoleNameIndex");
+        Database.Server.ViolatedUniqueConstraint(thrown).ShouldBe("RoleNameIndex");
 
         using IServiceScope reader = CreateScope();
         (await reader.ServiceProvider.GetRequiredService<AppDbContext>().Roles
@@ -94,7 +91,7 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
     [Fact]
     public void The_model_walk_flags_an_undecided_constraint_and_a_name_the_model_does_not_hold()
     {
-        using var planted = new PlantedContext();
+        using var planted = new PlantedContext(Database.Server.ModelOnlyOptionsFor<PlantedContext>());
 
         ConstraintAudit audit = Audit(
             planted.Model,
@@ -162,8 +159,16 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
     private static bool IsFaultByItsShape(IKey key) =>
         key.IsPrimaryKey()
         && key.Properties is [IProperty only]
-        && (only.GetColumnType() == "uuid"
-            || (only.GetColumnType() is "integer" or "bigint" && only.ValueGenerated == ValueGenerated.OnAdd));
+        && StoredAs(only) is { } stored
+        && (stored == typeof(Guid)
+            || ((stored == typeof(int) || stored == typeof(long)) && only.ValueGenerated == ValueGenerated.OnAdd));
+
+    /// <summary>The CLR type the column holds, behind any value converter (an ID type is stored as its <see cref="Guid"/>).</summary>
+    private static Type StoredAs(IProperty property)
+    {
+        Microsoft.EntityFrameworkCore.Storage.CoreTypeMapping mapping = property.GetTypeMapping();
+        return mapping.Converter?.ProviderClrType ?? mapping.ClrType;
+    }
 
     private sealed record ConstraintAudit(IReadOnlyList<string> Undecided, IReadOnlyList<string> NotInModel);
 
@@ -173,8 +178,7 @@ public sealed class UniqueConstraintTests(DatabaseFixture database) : Integratio
     /// must still flag (a uuid alternate key, a string primary key, an integer one the database does not
     /// number), a composite key and two unique indexes.
     /// </summary>
-    private sealed class PlantedContext() : DbContext(
-        new DbContextOptionsBuilder<PlantedContext>().UseNpgsql("Host=planted.invalid").Options)
+    private sealed class PlantedContext(DbContextOptions<PlantedContext> options) : DbContext(options)
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

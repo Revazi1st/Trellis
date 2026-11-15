@@ -101,9 +101,5 @@ public sealed class AggregateConcurrencyTests(DatabaseFixture database) : Integr
 
     /// <summary>The real context over the fixture database, but with none of the host's interceptors registered.</summary>
     private AppDbContext UnauditedContext()
-    {
-        string connectionString = Services.GetRequiredService<AppDbContext>().Database.GetConnectionString()!;
-        DbContextOptions<AppDbContext> options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
-        return ActivatorUtilities.CreateInstance<AppDbContext>(Services, options);
-    }
+        => ActivatorUtilities.CreateInstance<AppDbContext>(Services, Database.Server.OptionsFor<AppDbContext>());
 }
