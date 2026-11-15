@@ -120,9 +120,9 @@ policy, the target framework in `Directory.Build.props`, and every package versi
 `Directory.Packages.props`. The solution targets .NET 10, which Microsoft supports as a
 long-term-support release; Microsoft's
 [.NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core) has the dates.
-After generation these pins are the project's own. Dependabot proposes updates to them, and holds back
-the majors of the packages numbered after .NET, because a new .NET major is a migration made by hand
-([development.md](development.md#bumping-the-sdk)).
+After generation these pins are the project's own. Dependabot proposes updates to the SDK and the
+packages, and holds back the majors of the packages numbered after .NET, because a new .NET major is a
+migration made by hand ([development.md](development.md#bumping-the-sdk)).
 
 Template versions follow Semantic Versioning: a breaking change to generated output or to an option's
 meaning raises the major number, or the minor number while the version is below 1.0; a new option or
