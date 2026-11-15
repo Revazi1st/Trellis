@@ -9,8 +9,9 @@ dotnet new trellis -n Your.Project
 
 Documentation: <https://revazi1st.github.io/Trellis/>
 
-Name it with dot-separated parts made of letters and digits (`Acme.Shop`): hyphens, spaces and
-underscores become underscores in namespaces, which fail analyzer rule CA1707.
+Name the project with dot-separated parts made of letters and digits, each starting with a letter
+(`Acme.Shop`): hyphens, spaces and underscores turn into underscores in namespaces, which analyzer rule
+CA1707 rejects.
 
 Options are flags of `dotnet new`, and options in the Visual Studio and Rider new-solution dialogs.
 
