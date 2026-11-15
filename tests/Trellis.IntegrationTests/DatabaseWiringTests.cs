@@ -6,9 +6,10 @@ using Xunit;
 namespace Trellis.IntegrationTests;
 
 /// <summary>
-/// The two ways a context reaches the provider: a host's registration (<c>AddPersistence</c>) runs under
-/// the retrying execution strategy, which is why the outbox claim and the identity transactions run
-/// inside <c>CreateExecutionStrategy()</c> (ADR-0023), and the design-time factory does not retry.
+/// The two ways a context reaches the provider (<c>PostgresDialect.UseServer</c> and <c>UseDesignTime</c>):
+/// a host's registration (<c>AddPersistence</c>) runs under the retrying execution strategy, which is why
+/// the outbox claim and the identity transactions run inside <c>CreateExecutionStrategy()</c> (ADR-0023),
+/// and the design-time factory does not retry.
 /// </summary>
 public sealed class DatabaseWiringTests(DatabaseFixture database) : IntegrationTestBase(database)
 {

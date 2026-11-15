@@ -168,20 +168,11 @@ internal sealed class OutboxProcessor(
                 context.ChangeTracker.Clear();
                 await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
-                // FOR UPDATE SKIP LOCKED: a second replica claims different rows instead of the same ones.
-                // No LINQ on top of this query (no OrderBy, no AsNoTracking): EF would wrap the locking SQL
-                // in a subquery, and the rows must stay tracked so the lease stamp is a plain save. "Id"
-                // (a time-ordered v7 GUID) is the final key, so two rows written in the same microsecond
-                // are still claimed in one order on every poll and every replica, not in page order.
-                List<OutboxMessage> rows = await context.Set<OutboxMessage>()
-                    .FromSql($"""
-                        SELECT * FROM "OutboxMessages"
-                        WHERE "Status" = 0 AND "NextAttemptAtUtc" <= {now}
-                        ORDER BY "OccurredAtUtc", "Id"
-                        LIMIT {options.BatchSize}
-                        FOR UPDATE SKIP LOCKED
-                        """)
-                    .ToListAsync(cancellationToken);
+                // The claim is the dialect's locking query (FOR UPDATE SKIP LOCKED): a second replica claims
+                // different rows instead of the same ones, in one order on every poll, and the rows come
+                // back tracked so the lease stamp below is a plain save.
+                List<OutboxMessage> rows = await PostgresDialect.ClaimDueMessagesAsync(
+                    context.Set<OutboxMessage>(), now, options.BatchSize, cancellationToken);
 
                 if (rows.Count == 0)
                 {

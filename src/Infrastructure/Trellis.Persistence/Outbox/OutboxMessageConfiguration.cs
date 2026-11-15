@@ -10,7 +10,7 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
         builder.ToTable("OutboxMessages");
         builder.HasKey(static m => m.Id);
         builder.Property(static m => m.Type).HasMaxLength(256);
-        builder.Property(static m => m.Content).HasColumnType("jsonb");
+        PostgresDialect.MapJson(builder.Property(static m => m.Content));
         builder.Property(static m => m.TraceParent).HasMaxLength(64);
 #if (UseMultitenancy)
         builder.Property(static m => m.TenantId).HasMaxLength(64);
@@ -24,9 +24,8 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
         // the table: only the model snapshot carries the annotation.
         builder.Property(static m => m.NextAttemptAtUtc).IsConcurrencyToken();
 
-        // Partial index over exactly the processor's scan (pending, due, oldest first): it stays
-        // tiny no matter how much processed history accumulates.
-        builder.HasIndex(static m => new { m.NextAttemptAtUtc, m.OccurredAtUtc })
-            .HasFilter("\"Status\" = 0");
+        // The index over exactly the processor's scan (pending, due, oldest first): filtered to the
+        // pending rows, it stays tiny no matter how much processed history accumulates.
+        PostgresDialect.FilterToPendingMessages(builder.HasIndex(static m => new { m.NextAttemptAtUtc, m.OccurredAtUtc }));
     }
 }
