@@ -83,20 +83,24 @@ the repository: stars are how other .NET developers find it. Thank you!
 
 ## Getting started 🚀
 
+The solution comes with one sample feature, invoicing, which the steps below use and the
+[Domain overview](#domain-overview-) describes.
+
 ### Before you start
 
 - **Docker**: PostgreSQL, the integration tests (Testcontainers) and the SDK container need it. Docker
   Desktop and Linux Docker Engine are the tested engines; OrbStack, Colima and Podman are covered in
   [docs/development.md](docs/development.md#docker-engines-other-than-docker-desktop).
-- **.NET 10 SDK** on the host, to run the orchestrated app. Building and testing work without it too,
+- **.NET 10 SDK** on the host: `dotnet new` needs it to install the template and create the solution,
+  and the orchestrated app needs it to run. Building and testing an existing solution work without it,
   through `./scripts/dotnet.sh` (build its image once with
   `docker build -t trellis-sdk:10.0 scripts/sdk-image`) or the dev container.
 - **Aspire CLI** for `aspire run`: `dotnet tool install -g Aspire.Cli`. Optional, since
   `dotnet run --project tools/Trellis.AppHost` starts the same app.
 - **PowerShell** (`pwsh`), only to install the browsers for the optional Playwright tests.
 
-[docs/development.md](docs/development.md#prerequisites) says what needs each tool and the minimum
-version of each. Once the solution exists, run `./scripts/doctor.sh`: it checks each of these but
+[docs/development.md](docs/development.md#prerequisites) says what needs each tool and the minimum,
+where there is one. Once the solution exists, run `./scripts/doctor.sh`: it checks each of these but
 PowerShell on your machine, the development certificate and the AppHost's ports too, changes nothing,
 and names the fix for anything missing.
 
@@ -118,11 +122,12 @@ git clone https://github.com/Revazi1st/Trellis.git
 dotnet new install ./Trellis
 ```
 
-A newer template changes nothing in a solution you already created:
-[docs/upgrading.md](docs/upgrading.md) adopts a later version by regenerating and diffing.
 `dotnet new uninstall ./Trellis` removes a folder install. A folder install records `0.0.0-source` as
 the template version; packing first (`dotnet pack eng/Trellis.TemplatePack -o nupkg`) and installing
 the `.nupkg` records the package version instead.
+
+A newer template changes nothing in a solution you already created:
+[docs/upgrading.md](docs/upgrading.md) says how to adopt a later version by regenerating and diffing.
 
 ### Create your solution
 
@@ -188,8 +193,8 @@ below.
 CI's browser tests save these pictures of a first run: the invoice list on a laptop and one invoice
 on a phone, showing the invoices the migration worker seeds in Development.
 
-The UI is built from a design system of its own, with a light and a dark theme, a switch the user
-keeps and tokens that export as JSON for a design tool
+The UI is built from a design system of its own, with a light and a dark theme, a theme switch that
+remembers the choice and tokens that export as JSON for a design tool
 ([docs/design-system.md](docs/design-system.md), [ADR-0032](docs/adr/0032-ui-design-system.md)).
 
 ### Walk an invoice through its life
@@ -539,8 +544,8 @@ endpoint with its one permission and fails on a missing, extra or stale row. A w
 each endpoint with only that permission and with every other one, expecting its own answer and then a
 403 ([Authorization](#authorization-)).
 
-**Dependency bumps that merge themselves.** Dependabot holds a new version back for a cooldown (a
-security update arrives at once), and
+**Dependency bumps that merge themselves.** Dependabot holds a new version back for a waiting period
+(a security update arrives at once), and
 [`dependabot-auto-merge.yml`](.github/workflows/dependabot-auto-merge.yml) merges its patch and minor
 pull requests once the required checks pass, where the repository allows auto-merge and `main` requires
 status checks. A major, a .NET SDK bump and the GitHub Actions group wait for a person, and
