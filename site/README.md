@@ -61,7 +61,9 @@ derive what frontmatter would have held and adapt the rest:
   as one block per row at every width, the first cell the title and every other cell under its column's
   name, the short ones side by side; any other table of three columns or more with long rows does so on a
   phone only, where its last columns would sit off-screen. In a table, code breaks at its slashes and dots
-  when its column is narrow. A Markdown table on one of the site's own pages takes the same layouts.
+  when its column is narrow. A Markdown table on one of the site's own pages takes the same layouts: the
+  comparison table is one block per row at every width, and the Install page's prerequisites table is one
+  block per tool on a phone.
 - **Architecture** opens with the rings picture, both themes, read from `eng/readme/rings-*.svg` at build
   time (`docs/architecture.md` cannot embed it: `eng/readme/` never ships).
 - **The README's wide pictures** (the architecture, the request pipeline and the test suites,
