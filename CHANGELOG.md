@@ -77,7 +77,7 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   repoints the entries of `docs/overview.md` that link it and the example in `docs/faq.md`; a new
   feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
 
-## [0.2.0] - 2026-11-14
+## [0.2.0] - 2026-11-15
 
 A minor release. The Blazor UI gets a design system with a light and a dark theme and a switch between
 them. The repository an agent works in gains three reviewers, hooks that ask before the edits your
