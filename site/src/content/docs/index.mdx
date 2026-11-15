@@ -100,7 +100,7 @@ Architecture tests pin the layer rules, integration tests run on a real PostgreS
 
 <Card title="Secure by default" icon="padlock">
 
-Every endpoint of the versioned API needs a signed-in caller unless it is on the anonymous allowlist, and one that needs more names exactly one permission. One test holds the allowlist and pins each endpoint's permission, and register and login sit under a strict rate limit.
+Every endpoint of the versioned API needs a signed-in caller unless it is on the anonymous allowlist. An endpoint that needs more than that names exactly one permission. One test holds the allowlist and pins each endpoint's permission, and register and login sit under a strict rate limit.
 
 [The Auth feature →](/features/auth/)
 
@@ -116,7 +116,7 @@ A quick start for one host from the Compose files `aspire publish` writes, a one
 
 <Card title="Dependencies you can ship" icon="setting">
 
-The build refuses every package on the license ceilings, transitive ones included, and a test holds each container image to an allowlist that names its license. NuGetAudit checks the whole graph, every version lives in one file, and Dependabot's updates wait out a cooldown.
+The build refuses every package on the license ceilings, transitive ones included, and a test holds each container image to an allowlist that names its license. NuGetAudit checks the whole graph, every package version lives in one file, and Dependabot's updates wait out a cooldown.
 
 [The license ceiling decision →](/decisions/0011-license-ceiling-policy/)
 
@@ -176,15 +176,16 @@ The build refuses every package on the license ceilings, transitive ones include
 <p class="sub">CI's browser tests save these pictures of a first run: the invoice list on a laptop and one invoice on a phone, showing the invoices the migration worker seeds in Development.</p>
 
 <Tabs>
-  <TabItem label="Laptop, 1280 px">
+  <TabItem label={`Laptop, ${listLight.width} px`}>
     <div class="trellis-table">
       <img class="rings-light" src={listLight.src} width={listLight.width} height={listLight.height} alt="The Invoices page of the web UI: a filter per state above a table of the seeded invoices, each with its customer, status, total, due date, creation date and a View link." />
       {/* The light picture, hidden in dark, still counts as a sibling: without the margin, Starlight's gap between blocks would open above this one. */}
       <img class="rings-dark" style="margin:0" src={listDark.src} width={listDark.width} height={listDark.height} alt="The Invoices page of the web UI: a filter per state above a table of the seeded invoices, each with its customer, status, total, due date, creation date and a View link." />
     </div>
   </TabItem>
-  <TabItem label="Phone, 400 px">
-    <div class="trellis-table" style="max-width:400px">
+  <TabItem label={`Phone, ${phoneLight.width} px`}>
+    {/* As wide as the picture and its two borders, centred: a max-width of the picture's own width would hold the borders too, and scale the picture down by two pixels. */}
+    <div class="trellis-table" style="width:fit-content;margin-inline:auto">
       <img class="rings-light" src={phoneLight.src} width={phoneLight.width} height={phoneLight.height} alt="A draft invoice on a phone-width screen: its status, e-mail, total and due date, its line, then the forms that add a line, issue it or void it." />
       <img class="rings-dark" style="margin:0" src={phoneDark.src} width={phoneDark.width} height={phoneDark.height} alt="A draft invoice on a phone-width screen: its status, e-mail, total and due date, its line, then the forms that add a line, issue it or void it." />
     </div>
