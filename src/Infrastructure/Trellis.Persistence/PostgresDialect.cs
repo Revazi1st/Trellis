@@ -12,7 +12,9 @@ namespace Trellis.Persistence;
 /// its retrying strategy, the concurrency token, the outbox payload's column type, the outbox index's
 /// filter, the claim query and the reading of a unique violation. The rest of the project names neither
 /// the provider nor a store type, and writes no SQL: each place calls the member below that it needs.
-/// The generated migrations are the engine's too.
+/// <c>DatabaseEngineTests</c> (ArchitectureTests) fails on a file that does otherwise, and on a type
+/// outside this one that calls into the provider. The generated migrations are the engine's too and are
+/// outside that rule.
 /// <para>
 /// Not an abstraction: nothing implements or replaces these members at run time. A project that moves to
 /// another relational engine rewrites this file member by member and generates its migrations again
