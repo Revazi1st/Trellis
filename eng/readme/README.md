@@ -81,7 +81,7 @@ starts, and a column that continues a folder opens with its path.
 ## The visual language
 
 The pictures share one look with the website (`site/`, whose `lattice.css` maps these tokens onto
-Starlight) and future screenshots: calm and precise, hairlines instead of outlines, a dark stage for the
+Starlight): calm and precise, hairlines instead of outlines, a dark stage for the
 banner, monospace for real names, the lattice as texture and the leaf as the one accent. Nothing is copied from the templates the README credits: the ideas are credited,
 the art is ours.
 
@@ -224,7 +224,7 @@ Every other place that states the pitch copies it from here:
 | `title-light.svg`, `title-dark.svg` | the short form, as the tagline | `render-diagrams.py --check` |
 | the first paragraph of `eng/Trellis.TemplatePack/README.md` | the pitch | `scripts/check-readme-sync.sh` |
 | `<Description>` in `eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj` | the pitch without the asterisks | `scripts/check-readme-sync.sh` |
-| `description` in `.template.config/template.json`, which `dotnet new trellis --help` and the IDE dialogs show | the pitch without the asterisks | `scripts/check-readme-sync.sh` |
+| `description` in `.template.config/template.json`, which `dotnet new trellis --help` prints | the pitch without the asterisks | `scripts/check-readme-sync.sh` |
 | the site's description, `description: pitch,` in `site/astro.config.mjs`, read from this file by `site/trellis.config.mjs` | the pitch, derived | `scripts/check-readme-sync.sh` |
 | the hero title and the head title in the frontmatter of `site/src/content/docs/index.mdx` | each ends with the short form | `scripts/check-readme-sync.sh` |
 
@@ -257,16 +257,18 @@ release*):
 
 ```bash
 run=$(gh run list --workflow ci.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-gh run download "$run" -n ui-screenshots -D "$TMPDIR/ui-screenshots"
+dir=$(mktemp -d)
+gh run download "$run" -n ui-screenshots -D "$dir"
 for f in first-run-invoices-1280-light first-run-invoices-1280-dark first-run-invoice-400-light first-run-invoice-400-dark; do
-  cp "$TMPDIR/ui-screenshots/$f.png" eng/readme/shots/
+  cp "$dir/$f.png" eng/readme/shots/
 done
 ```
 
 No page holds a picture's height: the README sets a width only, and the site reads the width and the
 height from the file when it builds, so a refresh is a copy. `scripts/check-readme-sync.sh` fails
-when a picture the README names is missing, and when a file in `shots/` is used neither by the README
-nor by the site.
+when a picture the README names is missing, when a file in `shots/` is used neither by the README nor
+by the site, and when the alt text of a screenshot or the caption under them is not on the site's
+landing page word for word.
 
 ## Why `eng/`, not `docs/`
 

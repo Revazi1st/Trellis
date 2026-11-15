@@ -34,10 +34,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ### Changed
 
-- **The template's description is one sentence**, the one `dotnet new trellis --help` and the
-  Visual Studio and Rider dialogs show: "Trellis is a dotnet new template for .NET 10 that generates
-  a rich-DDD solution with Clean Architecture the tests enforce." The package description on nuget.org
-  is the same sentence.
+- **The template's description is one sentence**, the one `dotnet new trellis --help` prints:
+  "Trellis is a dotnet new template for .NET 10 that generates a rich-DDD solution with Clean
+  Architecture the tests enforce." The package description on nuget.org is the same sentence.
 - **The `remove-feature` and `add-feature` skills name the two new docs**: removing the sample
   repoints the entries of `docs/overview.md` that link it and the example in `docs/faq.md`; a new
   feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
