@@ -94,8 +94,9 @@ The `add-toggle` skill covers adding a toggle; `docs/releasing.md` covers releas
 The documentation website (<https://revazi1st.github.io/Trellis/>) lives in `site/`: Astro and
 Starlight, rendering the files under `docs/` in place, so `docs/` stays the content and there is
 nothing to copy or sync. Run it with Node 22: `cd site && npm ci && npm run dev`, then open
-<http://localhost:4321/Trellis/>. Its build is a check: a pull request that touches `docs/` or `site/`
-builds it, and a link or an `#anchor` that points nowhere fails it (`npm run build` runs the same check
+<http://localhost:4321/Trellis/>. Its build is a check: a pull request that touches a file the build reads
+builds it (the comment above the *Compare with the base branch* step of `.github/workflows/site.yml`
+lists them), and a link or an `#anchor` that points nowhere fails it (`npm run build` runs the same check
 locally). [site/README.md](site/README.md) says what the build does to a doc and how the site is
 deployed; it never ships in a generated project.
 

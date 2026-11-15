@@ -62,8 +62,8 @@ jobs:
 
       # What the build reads, the one list of it (docs/releasing.md and site/README.md point here):
       # docs/ and site/; the template's configuration in .template.config/ (the Options page, the
-      # logo); eng/readme/ (the pitch, the README pictures and the screenshots); README.md; global.json
-      # (the SDK pin); the project files under src/ and tests/ (the facts strip counts them);
+      # logo); eng/readme/ (the pitch, the README pictures and the screenshots); global.json (the SDK
+      # pin); the project files under src/ and tests/ (the facts strip counts them);
       # tools/Trellis.MigrationService/SeedOptions.cs (the seeded login); .claude/rules, skills, agents
       # and hooks and .mcp.json (the landing page's agent block); this workflow; and every file an
       # <Excerpt> on a site page quotes (its lines are found by content, so a change there can break
@@ -75,7 +75,7 @@ jobs:
         run: |
           changed="$(git diff --name-only "$BASE_SHA"...HEAD)"
           quoted="$(grep -rhoE '<Excerpt path="[^"]+"' site/src/content/docs | sed -E 's/.*path="([^"]+)"/\1/' || true)"
-          if grep -qE '^(docs/|site/|eng/readme/|\.template\.config/|README\.md$|global\.json$|\.github/workflows/site\.yml$|(src|tests)/.+\.csproj$|tools/Trellis\.MigrationService/SeedOptions\.cs$|\.claude/(rules|skills|agents|hooks)/|\.mcp\.json$)' <<< "$changed" ||
+          if grep -qE '^(docs/|site/|eng/readme/|\.template\.config/|global\.json$|\.github/workflows/site\.yml$|(src|tests)/.+\.csproj$|tools/Trellis\.MigrationService/SeedOptions\.cs$|\.claude/(rules|skills|agents|hooks)/|\.mcp\.json$)' <<< "$changed" ||
              grep -qxF -f <(printf '%s\n' "$quoted") <<< "$changed"; then
             echo "site=true" >> "$GITHUB_OUTPUT"
             echo "The pull request changes what the site renders: building it."
