@@ -19,14 +19,17 @@
 #        template.json, in its order with skipRestore last: the flag linked to its section of the
 #        site's Options page, on or off as its default, and its description word for word.
 #   C2b  each boolean parameter's displayName is its name.text in ide.host.json.
+#   C2c  every `--flag` code span of README.md's prose is the flag of a boolean parameter.
 #   C3   every "dotnet new" and "git clone" line of a fenced block in the two READMEs is a quickstart
 #        string of site/src/data/repo.mjs (between "// readme-sync:quickstart" and
-#        "// readme-sync:end") or the banner's create line; README.md shows install, both update lines,
-#        uninstall, create and the first two clone lines, and the package README shows install.
+#        "// readme-sync:end") or the banner's create line (its placeholder read from
+#        render-diagrams.py); README.md shows install, both update lines, uninstall, create and the
+#        first two clone lines, and the package README shows install.
 #   C4   the use-case tables of README.md hold exactly the operations of docs/api/openapi.v1.json, each
-#        row opened by the **Name** of a use-case folder under src/Core/Trellis.Application/Features/.
+#        row opened by the **Name** of a use-case folder under src/Core/Trellis.Application/Features/,
+#        and every `METHOD /api/vN/...` code span of its prose is one of those operations.
 #   C4b  their Permission column is EndpointMetadataTests.ExpectedPermissions, resolved through
-#        Permissions.cs.
+#        Permissions.cs, in both directions.
 #   C5   every file in login_copies below holds the seeded e-mail of SeedOptions.cs and, unless it is
 #        marked e-mail only, its password; no other file under README.md, AGENTS.md, docs/, .claude/,
 #        .template.config/ and .github/workflows/ holds the e-mail.
@@ -36,21 +39,25 @@
 #   C7   a link from the two READMEs to the site (<PackageProjectUrl>, which is site + base of
 #        site/trellis.config.mjs) names a page site/src/content/docs has, with an anchor only on the
 #        Options page and only an option's flag; a <RepositoryUrl>/blob/main/ or /tree/main/ link names
-#        a path that exists.
+#        a path that exists, and a <RepositoryUrl>/actions/workflows/<file> link names a workflow.
 #   C8   every picture README.md names exists, and every eng/readme/shots/*.png is used by README.md or
-#        a file under site/src.
+#        a file under site/src; the alt text of each screenshot README.md shows, and the caption under
+#        them, are on the landing page too.
 #   C9   every guide directly under docs/ is listed in docs/INDEX.md.
 #   C10  every #anchor of a repository link in the two READMEs is a heading (GitHub's slug) or an <a>
 #        name or id of its file, and every ## and ### heading of README.md below the table of contents
 #        has its entry there, in order.
 #   C11  the tools of docs/development.md's prerequisites table are the bullets of the README's "Before
 #        you start" and the first cells of the Install page's prerequisites table.
-#   C12  every port README.md names (localhost:<n>, host port <n>) is in a launchSettings.json or is a
-#        default port of docker-compose.yml.
-#   C13  "Built for AI agents" in README.md links every shipped skill and reviewer and names every MCP
-#        server of .mcp.json.
+#   C12  every port README.md names (localhost:<n>, host port <n>) is in an applicationUrl of a
+#        launchSettings.json or is a default port of docker-compose.yml.
+#   C13  "Built for AI agents" in README.md links every shipped skill and reviewer, and its bullet that
+#        links .mcp.json names every MCP server of .mcp.json before the words "MCP server".
 #   C14  the number word of the site's walkthrough (index.mdx, start/install.mdx) is the row count of the
 #        Try it table in docs/features/invoices.md.
+#   C15  "With an option" in docs/overview.md has a bullet for every option but --skip-restore, each
+#        opening with its flag and alone in an #if block that names its symbol, and no other bullet.
+# Only these copies are compared; a fact stated anywhere else has no check behind it.
 # A source that yields nothing (no boolean parameter, no operation, no marker) is a failure of its own.
 #
 # Usage:
@@ -62,12 +69,16 @@ set -euo pipefail
 # Bytes, not the locale's collation: macOS awk would otherwise read a multi-byte heading differently
 # from CI's.
 export LC_ALL=C
+unset GREP_OPTIONS   # BSD grep honours it: --color=always would put escapes into the values cut out
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 usage() { echo "usage: scripts/check-readme-sync.sh [--self-test]" >&2; exit 2; }
 
 fail=0
 tab=$'\t'
+# Records whose fields may be empty use the unit separator: tab is whitespace to read, which folds two
+# tabs into one and moves every later field one to the left.
+us=$'\037'
 
 # report FILE LINE TEXT
 report() {
@@ -128,10 +139,14 @@ development=docs/development.md
 doctor=scripts/doctor.sh
 index=docs/INDEX.md
 invoices_doc=docs/features/invoices.md
+overview=docs/overview.md
 compose=docker-compose.yml
 launch_settings='tools/Trellis.AppHost/Properties/launchSettings.json
 src/Presentation/Api/Trellis.Api/Properties/launchSettings.json
 src/Presentation/UI/Trellis.UI.Web/Properties/launchSettings.json'
+
+# A permission as the README's Permission column writes it: one code span of the shape resource:action.
+permission_span='^`[a-z0-9._-]+:[a-z0-9._-]+`$'
 
 # Every file that states the seeded login (C5). "email-only" marks a file that names the e-mail and not
 # the password. A new copy goes here, so a change of the login reaches every one of them.
@@ -159,7 +174,7 @@ if [ -f "$pack_csproj" ]; then
 fi
 
 # The boolean parameters of template.json in its order, skipRestore last:
-# "Name<TAB>default<TAB>displayName<TAB>description<TAB>line", the strings unescaped.
+# "Name<US>default<US>displayName<US>description<US>line", the strings unescaped.
 read_params() {
   awk '
     function val(s) {
@@ -188,7 +203,7 @@ read_params() {
     ins && name != "" && /^      "description": "/ { desc = val($0) }
     ins && name != "" && /^    [}],?[[:space:]]*$/ {
       if (isbool) {
-        row = name "\t" def "\t" disp "\t" desc "\t" at
+        row = name "\037" def "\037" disp "\037" desc "\037" at
         if (name == "skipRestore") last = row; else print row
       }
       name = ""
@@ -353,10 +368,12 @@ check_options_table() {  # FILE
     report "$file" "${rows%%"$tab"*}" "C2: the options table of $file has $n_rows rows and template.json has $n_expected boolean parameters; the home is template.json; give each parameter its row, in template.json's order with --skip-restore last"
   fi
   i=0
-  while IFS=$'\t' read -r name def disp desc _; do
+  while IFS="$us" read -r name def disp desc _; do
     [ -n "$name" ] || continue
     i=$((i + 1))
-    flag="--$(long_name "$name")"
+    flag=$(long_name "$name")
+    [ -n "$flag" ] || continue   # no longName: check_options has said so, and there is no row to expect
+    flag="--$flag"
     row=$(awk -F'\t' -v i="$i" 'NR == i { print; exit }' <<< "$rows")
     [ -n "$row" ] || continue
     at=${row%%"$tab"*}
@@ -380,6 +397,26 @@ check_options_table() {  # FILE
   done <<< "$params"
 }
 
+# all_flags: every boolean parameter's flag, "--<longName>", one per line.
+all_flags() {
+  local name
+  while IFS="$us" read -r name _; do
+    if [ -n "$name" ] && [ -n "$(long_name "$name")" ]; then printf -- '--%s\n' "$(long_name "$name")"; fi
+  done <<< "$params"
+}
+
+# C2c: a code span of README.md's prose that is a flag alone (`--use-redis`) names a boolean parameter.
+check_option_flags() {
+  local at flag known
+  [ -f "$readme" ] || return 0
+  known=$(all_flags)
+  while IFS=$'\t' read -r at flag; do
+    [ -n "$at" ] || continue
+    in_list "$flag" "$known" ||
+      report "$readme" "$at" "C2c: \`$flag\` is no flag of a boolean parameter in $cli_host; the home is the longName there; update the copy"
+  done <<< "$(awk '/^[[:space:]]*(```|~~~)/ { fence = !fence; next } !fence { s = $0; while (match(s, /`--[a-z][a-z0-9-]*`/)) { print NR "\t" substr(s, RSTART + 1, RLENGTH - 2); s = substr(s, RSTART + RLENGTH) } }' "$readme")"
+}
+
 check_options() {
   local name def disp desc at text
   need "$template" C2 || return 0
@@ -387,7 +424,7 @@ check_options() {
     report "$template" 1 "C2: read no boolean parameters from $template (format changed?); teach scripts/check-readme-sync.sh"
     return 0
   fi
-  while IFS=$'\t' read -r name def disp desc at; do
+  while IFS="$us" read -r name def disp desc at; do
     [ -n "$name" ] || continue
     case "$desc" in
       *"|"*) report "$template" "$at" "C2: the description of $name holds '|', which a Markdown table cannot show; reword it in template.json" ;;
@@ -398,10 +435,15 @@ check_options() {
   done <<< "$params"
   check_options_table "$readme"
   check_options_table "$pack_readme"
+  check_option_flags
 
   need "$ide_host" C2b || return 0
-  while IFS=$'\t' read -r name def disp desc at; do
+  while IFS="$us" read -r name def disp desc at; do
     [ -n "$name" ] || continue
+    if [ -z "$disp" ]; then
+      report "$template" "$at" "C2b: the boolean parameter $name has no displayName in $template, the label the dialogs show; add one, and the same text as its name.text in $ide_host"
+      continue
+    fi
     text=$(N="$name" awk '$0 ~ "\"id\": \"" ENVIRON["N"] "\"" { f = 1; next } f && /"text": "/ { v = $0; sub(/.*"text": "/, "", v); sub(/".*/, "", v); print v; exit }' "$ide_host")
     if [ -z "$text" ]; then
       report "$ide_host" 1 "C2b: $ide_host has no name.text for the boolean parameter $name; add its entry with the displayName \"$disp\""
@@ -413,9 +455,10 @@ check_options() {
 
 # --- C3: the commands -----------------------------------------------------------------------------
 
-# quickstart_strings: "key<TAB>n<TAB>string<TAB>line" for every literal between the markers, with
-# ${packageId} and ${templateShortName} substituted; "NOMARK", "NOEND" or "BAD<TAB>line" on a shape
-# this script cannot read.
+# quickstart_strings: "key<US>n<US>string<US>line" for every literal between the markers, with
+# ${packageId} and ${templateShortName} substituted; "NOMARK", "NOEND" or "BAD<US>line" on a shape
+# this script cannot read: a key whose value goes on to the next line, a double-quoted string, an
+# unclosed quote, another substitution.
 quickstart_strings() {
   PKG="$package_id" SHORT="$short_name" awk '
     function replace(s, from, to,   out, i) {
@@ -425,21 +468,24 @@ quickstart_strings() {
     }
     /^\/\/ readme-sync:quickstart/ { m = 1; found = 1; next }
     m && /^\/\/ readme-sync:end/ { m = 0; ended = 1; next }
+    m && /^    / { print "BAD\037" NR; next }
     m && /^  [A-Za-z]+: / {
       key = $0; sub(/^  /, "", key); sub(/:.*/, "", key)
       rest = $0; sub(/^  [A-Za-z]+: /, "", rest)
+      if (rest ~ /^[[({][[:space:]]*$/) { print "BAD\037" NR; next }
       n = 0
       while (length(rest) > 0) {
         c = substr(rest, 1, 1)
+        if (c == "\"") { print "BAD\037" NR; break }
         if (c == "`" || c == "\047") {
           j = index(substr(rest, 2), c)
-          if (j == 0) { print "BAD\t" NR; break }
+          if (j == 0) { print "BAD\037" NR; break }
           lit = substr(rest, 2, j - 1)
           lit = replace(lit, "${packageId}", ENVIRON["PKG"])
           lit = replace(lit, "${templateShortName}", ENVIRON["SHORT"])
-          if (index(lit, "${") > 0) { print "BAD\t" NR; break }
+          if (index(lit, "${") > 0) { print "BAD\037" NR; break }
           n++
-          print key "\t" n "\t" lit "\t" NR
+          print key "\037" n "\037" lit "\037" NR
           rest = substr(rest, j + 2)
         } else {
           rest = substr(rest, 2)
@@ -466,7 +512,7 @@ command_lines() {
 }
 
 check_commands() {
-  local strings allowed first line cmd key n lit at have file
+  local strings allowed first line cmd key n lit at have file placeholder
   need "$repo_data" C3 || return 0
   if [ -z "$package_id" ] || [ -z "$short_name" ]; then
     report "$template" 1 "C3: read no templatePackageId value or shortName from $template (format changed?); teach scripts/check-readme-sync.sh"
@@ -485,13 +531,23 @@ check_commands() {
     return 0
   fi
   if grep -q '^BAD' <<< "$strings"; then
-    at=$(awk -F'\t' '$1 == "BAD" { print $2; exit }' <<< "$strings")
-    report "$repo_data" "$at" "C3: this quickstart line holds a string this script cannot read (an unclosed quote, or a substitution other than \${packageId} and \${templateShortName}); teach scripts/check-readme-sync.sh"
+    at=$(awk -F"$us" '$1 == "BAD" { print $2; exit }' <<< "$strings")
+    report "$repo_data" "$at" "C3: this quickstart line holds what this script cannot read (a value continued on the next line, a double-quoted string, an unclosed quote, or a substitution other than \${packageId} and \${templateShortName}); keep each key on one line with backtick or single-quote strings, or teach scripts/check-readme-sync.sh"
     return 0
   fi
-  allowed=$(awk -F'\t' '{ print $3 }' <<< "$strings")
+  for key in install update uninstall create fromClone; do
+    awk -F"$us" -v k="$key" '$1 == k { f = 1 } END { exit f ? 0 : 1 }' <<< "$strings" ||
+      report "$repo_data" 1 "C3: read no $key string from the quickstart of $repo_data (format changed?); the README's commands are held to it, so restore the key or teach scripts/check-readme-sync.sh"
+  done
+  placeholder=""
+  [ -f "$renderer" ] && placeholder=$(sed -n 's/^PROJECT_PLACEHOLDER = "\([^"]*\)".*/\1/p' "$renderer")
+  if [ -z "$placeholder" ]; then
+    report "$renderer" 1 "C3: read no PROJECT_PLACEHOLDER from $renderer (format changed?); it names the project in the banner's create line"
+    return 0
+  fi
+  allowed=$(awk -F"$us" '{ print $3 }' <<< "$strings")
   allowed="$allowed
-dotnet new $short_name -n Your.Project"
+dotnet new $short_name -n $placeholder"
 
   for file in "$readme" "$pack_readme"; do
     [ -f "$file" ] || continue
@@ -503,7 +559,7 @@ dotnet new $short_name -n Your.Project"
       fi
     done <<< "$have"
     have=$(awk -F'\t' '{ print $2 }' <<< "$have")
-    while IFS=$'\t' read -r key n lit _; do
+    while IFS="$us" read -r key n lit _; do
       [ -n "$key" ] || continue
       case "$file:$key:$n" in
         "$readme":install:1 | "$readme":update:1 | "$readme":update:2 | "$readme":uninstall:1 | "$readme":create:1 | \
@@ -519,7 +575,8 @@ dotnet new $short_name -n Your.Project"
 
 # --- C4, C4b: the use cases -----------------------------------------------------------------------
 
-# use_case_rows: "NR<TAB>METHOD path<TAB>Name<TAB>last cell" for each README table row with a request span.
+# use_case_rows: "NR<US>METHOD path<US>Name<US>last cell" for each README table row with a request span
+# (the Name is empty when the row opens with none).
 use_case_rows() {
   awk '
     /^[|]/ {
@@ -533,7 +590,25 @@ use_case_rows() {
       n = split(row, p, " [|] ")
       last = p[n]
       sub(/^[[:space:]]+/, "", last)
-      print NR "\t" span "\t" name "\t" last
+      print NR "\037" span "\037" name "\037" last
+    }
+  ' "$readme"
+}
+
+# prose_requests: "NR<TAB>METHOD path" for each request code span outside a table row and a fence, its
+# query dropped.
+prose_requests() {
+  awk '
+    /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
+    fence || /^[|]/ { next }
+    {
+      s = $0
+      while (match(s, /`(GET|POST|PUT|PATCH|DELETE) \/api\/v[0-9]+\/[^`]*`/)) {
+        span = substr(s, RSTART + 1, RLENGTH - 2)
+        sub(/[?].*/, "", span)
+        print NR "\t" span
+        s = substr(s, RSTART + RLENGTH)
+      }
     }
   ' "$readme"
 }
@@ -555,7 +630,7 @@ check_use_cases() {
     report "$readme" 1 "C4: read no use-case rows (a table row holding \`METHOD /api/vN/...\`) from README.md (format changed?); teach scripts/check-readme-sync.sh"
     return 0
   fi
-  while IFS=$'\t' read -r at op name last; do
+  while IFS="$us" read -r at op name last; do
     [ -n "$at" ] || continue
     if ! in_list "$op" "$ops"; then
       report "$readme" "$at" "C4: \`$op\` is no operation of $openapi; the home is the committed OpenAPI document; update the row"
@@ -568,10 +643,15 @@ check_use_cases() {
   done <<< "$rows"
   while IFS= read -r op; do
     [ -n "$op" ] || continue
-    if ! in_list "$op" "$(awk -F'\t' '{ print $2 }' <<< "$rows")"; then
+    if ! in_list "$op" "$(awk -F"$us" '{ print $2 }' <<< "$rows")"; then
       report "$readme" 1 "C4: the operation \`$op\` of $openapi has no row in the use-case tables of README.md; add one"
     fi
   done <<< "$ops"
+  while IFS=$'\t' read -r at op; do
+    [ -n "$at" ] || continue
+    in_list "$op" "$ops" ||
+      report "$readme" "$at" "C4: \`$op\` is no operation of $openapi; the home is the committed OpenAPI document; update the copy"
+  done <<< "$(prose_requests)"
 
   need "$endpoint_tests" C4b || return 0
   need "$permissions" C4b || return 0
@@ -603,7 +683,7 @@ check_use_cases() {
       report "$endpoint_tests" "$at" "C4b: Permissions.$ref resolves to no 'public const string' in $permissions; teach scripts/check-readme-sync.sh"
       continue
     fi
-    row=$(awk -F'\t' -v k="$key" '{ op = $2; sub(/ \/api\/v[0-9]+\//, " ", op) } op == k && $4 ~ /^`[a-z]+:[a-z]+`$/ { print $1 "\t" $4; exit }' <<< "$rows")
+    row=$(awk -F"$us" -v k="$key" -v re="$permission_span" '{ op = $2; sub(/ \/api\/v[0-9]+\//, " ", op) } op == k && $4 ~ re { print $1 "\t" $4; exit }' <<< "$rows")
     if [ -z "$row" ]; then
       report "$readme" 1 "C4b: '$key' of ExpectedPermissions ($endpoint_tests) has no use-case row with a \`resource:action\` permission in README.md; add the row"
       continue
@@ -615,6 +695,14 @@ check_use_cases() {
       report "$readme" "${row%%"$tab"*}" "C4b: '$key' needs \`$value\` (ExpectedPermissions, $endpoint_tests) and README.md says \`$perm\`; the home is the test's table; update the copy"
     fi
   done <<< "$expected"
+  # The other direction: a row that states a permission for an endpoint the test's table does not list.
+  while IFS="$us" read -r at op name last; do
+    [ -n "$at" ] || continue
+    grep -qE -- "$permission_span" <<< "$last" || continue
+    key=$(sed 's| /api/v[0-9]*/| |' <<< "$op")
+    awk -F'\t' -v k="$key" '$2 == k { f = 1 } END { exit f ? 0 : 1 }' <<< "$expected" ||
+      report "$readme" "$at" "C4b: README.md says \`$op\` needs $last, and ExpectedPermissions ($endpoint_tests) has no '$key'; the home is the test's table; update the copy"
+  done <<< "$rows"
 }
 
 # --- C5: the seeded login -------------------------------------------------------------------------
@@ -754,7 +842,7 @@ check_links() {
   if [ "$site_url" != "$expected" ]; then
     report "$pack_csproj" "$(line_of "$pack_csproj" '<PackageProjectUrl>')" "C7: <PackageProjectUrl> is $site_url and the site is at $expected (site + base in $site_config); update the copy"
   fi
-  flags=$(while IFS=$'\t' read -r name _; do if [ -n "$name" ]; then printf -- '--%s\n' "$(long_name "$name")"; fi; done <<< "$params")
+  flags=$(all_flags)
   for file in "$readme" "$pack_readme"; do
     [ -f "$file" ] || continue
     while IFS=$'\t' read -r at url; do
@@ -785,6 +873,14 @@ check_links() {
       case "$url" in
         "$repo_url/blob/main/"*) path=${url#"$repo_url/blob/main/"} ;;
         "$repo_url/tree/main/"*) path=${url#"$repo_url/tree/main/"} ;;
+        "$repo_url/actions/workflows/"*)
+          path=${url#"$repo_url/actions/workflows/"}
+          path=".github/workflows/${path%%/*}"
+          ;;
+        "$repo_url/blob/"* | "$repo_url/tree/"*)
+          report "$file" "$at" "C7: $url links a ref other than main, which this script cannot check against the tree; link main, or teach scripts/check-readme-sync.sh"
+          continue
+          ;;
         *) continue ;;
       esac
       path=${path%%#*}
@@ -815,6 +911,29 @@ check_pictures() {
     if [ -d site/src ] && grep -rqF --exclude-dir=node_modules -- "$name" site/src; then continue; fi
     report "$shot" 1 "C8: $shot is used neither by README.md nor by a file under site/src; show it or delete it"
   done
+  check_picture_words
+}
+
+# The screenshots' alt texts and their caption, which README.md and the landing page say word for word.
+check_picture_words() {
+  local page at alt caption last
+  [ -f "$landing" ] || return 0
+  page=$(plain < "$landing")
+  while IFS=$'\t' read -r at alt; do
+    [ -n "$at" ] || continue
+    grep -qF -- "$alt" <<< "$page" ||
+      report "$readme" "$at" "C8: the alt text \"$alt\" of a screenshot is not on the landing page ($landing); the two say the same words; make them agree"
+  done <<< "$(awk 'index($0, "src=\"eng/readme/shots/") && match($0, /alt="[^"]*"/) { print NR "\t" substr($0, RSTART + 5, RLENGTH - 6) }' "$readme")"
+  last=$(awk 'index($0, "eng/readme/shots/") { n = NR } END { print n + 0 }' "$readme")
+  [ "$last" -gt 0 ] || return 0
+  # The caption: the first paragraph after the last line that names a screenshot, past the closing tags.
+  caption=$(awk -v l="$last" 'NR <= l { next } !c && (/^[[:space:]]*$/ || /^[[:space:]]*</) { next } !c && /^#/ { exit } /^[[:space:]]*$/ { exit } { c = 1; print }' "$readme" | plain)
+  at=$(awk -v l="$last" 'NR > l && NF && !/^[[:space:]]*</ { print NR; exit }' "$readme")
+  if [ -z "$caption" ]; then
+    report "$readme" "$last" "C8: read no caption paragraph under the screenshots of README.md (format changed?); teach scripts/check-readme-sync.sh"
+  elif ! grep -qF -- "$caption" <<< "$page"; then
+    report "$readme" "${at:-$last}" "C8: the caption under the screenshots (\"$caption\") is not on the landing page ($landing); the two say the same words; make them agree"
+  fi
 }
 
 # --- C9: the index --------------------------------------------------------------------------------
@@ -1017,7 +1136,7 @@ check_ports() {
     [ -n "$file" ] || continue
     if need "$file" C12; then
       homes="$homes
-$(grep -oE '(localhost|0[.]0[.]0[.]0):[0-9]+' "$file" | sed 's/.*://' || true)"
+$(grep -F '"applicationUrl"' "$file" | grep -oE '(localhost|0[.]0[.]0[.]0):[0-9]+' | sed 's/.*://' || true)"
     fi
   done <<< "$launch_settings"
   if need "$compose" C12; then
@@ -1026,7 +1145,7 @@ $(grep -oE '[$][{][A-Za-z0-9_]+:-[0-9]+[}]:' "$compose" | sed -e 's/.*:-//' -e '
   fi
   while IFS=$'\t' read -r at n; do
     [ -n "$at" ] || continue
-    in_list "$n" "$homes" || report "$readme" "$at" "C12: port $n is in no launchSettings.json and is no default port of $compose; the home is the launch settings or the compose file; update the copy"
+    in_list "$n" "$homes" || report "$readme" "$at" "C12: port $n is in no applicationUrl of a launchSettings.json and is no default port of $compose; the home is the launch settings or the compose file; update the copy"
   done <<< "$(awk '{ s = $0; while (match(s, /(localhost:|host port )[0-9]+/)) { v = substr(s, RSTART, RLENGTH); sub(/^[^0-9]*/, "", v); print NR "\t" v; s = substr(s, RSTART + RLENGTH) } }' "$readme")"
 }
 
@@ -1056,8 +1175,11 @@ excluded() {
 }
 
 check_agents() {
-  local section f name servers
+  local section f name servers bullet list
   need "$readme" C13 || return 0
+  if [ -f "$template" ] && ! grep -q '^      "exclude": \[' "$template"; then
+    report "$template" 1 "C13: read no exclude list ('      \"exclude\": [') from $template (format changed?), so every skill and reviewer counts as shipped; teach scripts/check-readme-sync.sh"
+  fi
   section=$(awk '/^## Built for AI agents/ { s = 1; next } s && /^## / { exit } s' "$readme")
   if [ -z "$section" ]; then
     report "$readme" 1 "C13: read no '## Built for AI agents' section from README.md (format changed?); teach scripts/check-readme-sync.sh"
@@ -1086,11 +1208,23 @@ check_agents() {
     report .mcp.json 1 "C13: read no servers under \"mcpServers\" from .mcp.json (format changed?); teach scripts/check-readme-sync.sh"
     return 0
   fi
-  section=$(tr '[:upper:]' '[:lower:]' <<< "$section")
+  # The servers are named in the bullet that links .mcp.json, in the words before "MCP server", code spans
+  # aside: elsewhere in the section a name can stand for something else (the Playwright MCP of a
+  # reviewer, `aspire run`).
+  bullet=$(awk 'index($0, "(.mcp.json)") && !b { b = 1; print; next } b && (/^- / || /^[[:space:]]*$/ || /^#/) { exit } b { print }' <<< "$section")
+  if [ -z "$bullet" ]; then
+    report "$readme" "$at" "C13: 'Built for AI agents' has no bullet that links (.mcp.json) and names its servers; add one"
+    return 0
+  fi
+  list=$(tr '\n' ' ' <<< "$bullet" | sed 's/`[^`]*`//g' | awk '{ i = index(tolower($0), "mcp server"); if (i) print substr($0, 1, i - 1) }')
+  if [ -z "$list" ]; then
+    report "$readme" "$(line_of "$readme" '(.mcp.json)')" "C13: read no 'MCP server' in the bullet that links .mcp.json (format changed?); name the servers before those words, or teach scripts/check-readme-sync.sh"
+    return 0
+  fi
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    grep -qF -- "$(tr '[:upper:]-' '[:lower:] ' <<< "$name")" <<< "$section" ||
-      report "$readme" "$at" "C13: 'Built for AI agents' does not name the MCP server $name of .mcp.json; the home is .mcp.json; name it"
+    grep -qiwF -- "$(sed 's/-/ /g' <<< "$name")" <<< "$list" ||
+      report "$readme" "$(line_of "$readme" '(.mcp.json)')" "C13: the bullet that links .mcp.json does not name the MCP server $name before the words 'MCP server'; the home is .mcp.json; name it"
   done <<< "$servers"
 }
 
@@ -1116,6 +1250,74 @@ check_steps() {
   done
 }
 
+# --- C15: the options of the overview ------------------------------------------------------------
+
+# overview_bullets: "NR<US>flag<US>condition<US>closed" for each bullet of "## With an option": its
+# `--flag` (empty when it opens with none), the condition of an <!--#if (...) --> on the line right above
+# it (empty when there is none), and whether an <!--#endif --> is the line right after it.
+overview_bullets() {
+  awk '
+    function flush(next_line) {
+      if (open_b) print bnr "\037" flag "\037" cond "\037" (next_line ~ /^<!--#endif -->[[:space:]]*$/ ? "closed" : "open")
+      open_b = 0
+    }
+    /^## With an option[[:space:]]*$/ { s = 1; next }
+    s && /^## / { flush(""); exit }
+    !s { next }
+    open_b && /^  [^ ]/ { next }
+    {
+      flush($0)
+      if ($0 ~ /^- /) {
+        flag = ""
+        if ($0 ~ /^- `--[a-z][a-z0-9-]*`:/) { flag = $0; sub(/^- `/, "", flag); sub(/`.*/, "", flag) }
+        cond = prev
+        if (cond ~ /^<!--#if [(].*[)] -->[[:space:]]*$/) { sub(/^<!--#if [(]/, "", cond); sub(/[)] -->[[:space:]]*$/, "", cond) } else cond = ""
+        open_b = 1; bnr = NR
+      }
+      prev = $0
+    }
+    END { flush("") }
+  ' "$overview"
+}
+
+check_overview_options() {
+  local at bullets name flag line cond closed toggle_flags
+  need "$overview" C15 || return 0
+  [ -n "$params" ] || return 0   # check_options has said why
+  at=$(line_of "$overview" '## With an option')
+  if [ -z "$at" ]; then
+    report "$overview" 1 "C15: read no '## With an option' section from $overview (format changed?); it lists what each option adds"
+    return 0
+  fi
+  bullets=$(overview_bullets)
+  toggle_flags=""
+  while IFS="$us" read -r name _; do
+    [ -n "$name" ] && [ "$name" != skipRestore ] || continue
+    flag=$(long_name "$name")
+    [ -n "$flag" ] || continue   # check_options has said so
+    flag="--$flag"
+    toggle_flags="$toggle_flags
+$flag$us$name"
+    awk -F"$us" -v f="$flag" '$2 == f { x = 1 } END { exit x ? 0 : 1 }' <<< "$bullets" ||
+      report "$overview" "$at" "C15: 'With an option' in $overview has no bullet for $flag ($name); add '- \`$flag\`: ...' alone in a <!--#if ($name) --> block (the add-toggle skill)"
+  done <<< "$params"
+  while IFS="$us" read -r line flag cond closed; do
+    [ -n "$line" ] || continue
+    if [ -z "$flag" ]; then
+      report "$overview" "$line" "C15: this bullet of 'With an option' opens with no \`--flag\` and a colon; each bullet there is one option's"
+      continue
+    fi
+    name=$(awk -F"$us" -v f="$flag" '$1 == f { print $2; exit }' <<< "$toggle_flags")
+    if [ -z "$name" ]; then
+      report "$overview" "$line" "C15: \`$flag\` is no option of template.json (its flag in $cli_host); the home is template.json; update the copy"
+    elif [ -z "$cond" ] || [ "$closed" != closed ]; then
+      report "$overview" "$line" "C15: the bullet for $flag is not alone in an #if block; put <!--#if ($name) --> on the line above it and <!--#endif --> on the line below"
+    elif ! grep -qwF -- "$name" <<< "$cond"; then
+      report "$overview" "$line" "C15: the bullet for $flag sits in a block on ($cond), which does not name $name; a solution without the option would list it"
+    fi
+  done <<< "$bullets"
+}
+
 run_checks() {
   check_pitch
   check_pitch_copies
@@ -1132,8 +1334,9 @@ run_checks() {
   check_ports
   check_agents
   check_steps
+  check_overview_options
   if [ "$fail" -eq 0 ]; then
-    echo "readme-sync check passed — the pitch, the options, the commands, the use cases, the seeded login, the gate numbers, the prerequisites, the ports, the agent toolkit, the links and their anchors, the pictures and the index agree with their sources."
+    echo "readme-sync check passed — the pitch, the options, the commands, the use cases, the seeded login, the gate numbers, the prerequisites, the ports, the agent toolkit, the links and their anchors, the pictures and their words, the index and the overview's options agree with their sources."
   fi
   return "$fail"
 }
@@ -1142,8 +1345,16 @@ run_checks() {
 
 # put PATH: writes stdin to PATH under the self-test's tree, making its folder.
 put() { mkdir -p "$(dirname "$tree/$1")"; cat > "$tree/$1"; }
-# edit PATH SED-SCRIPT: rewrites PATH under the tree with sed (no -i: BSD and GNU sed differ).
-edit() { sed -e "$2" "$tree/$1" > "$tree/$1.new" && mv "$tree/$1.new" "$tree/$1"; }
+# edit PATH SED-SCRIPT: rewrites PATH under the tree with sed (no -i: BSD and GNU sed differ). An edit
+# that changes nothing fails the next case: a plant that missed its line would prove nothing.
+edit() {
+  sed -e "$2" "$tree/$1" > "$tree/$1.new"
+  if cmp -s "$tree/$1" "$tree/$1.new"; then
+    echo "self-test: the edit '$2' of $1 changed nothing"
+    unchanged=1
+  fi
+  mv "$tree/$1.new" "$tree/$1"
+}
 
 # seed: a tree in which every comparison agrees.
 seed() {
@@ -1155,6 +1366,7 @@ Sample is a dotnet new template for .NET 10 with *Clean Architecture the tests e
 EOF
   put eng/readme/render-diagrams.py <<'EOF'
 PITCH_FILE = "eng/readme/pitch.md"
+PROJECT_PLACEHOLDER = "Your.Project"
 EOF
   : > "$tree/eng/readme/title-light.svg"
   : > "$tree/eng/readme/title-dark.svg"
@@ -1171,6 +1383,8 @@ EOF
 dotnet new install Sample.Templates
 dotnet new sample -n Your.Project
 ```
+
+[![CI](https://github.com/example/Sample/actions/workflows/ci.yml/badge.svg)](https://github.com/example/Sample/actions/workflows/ci.yml)
 
 Documentation: https://example.github.io/Sample/
 
@@ -1219,6 +1433,8 @@ Sign in as `admin@example.test` / `Pass123!`. The dashboard is at <https://local
 
 <img alt="The list" src="eng/readme/shots/list.png" width="100%">
 
+The pictures show a first run, with `--use-thing` off. `GET /api/v1/things/{id}` reads one.
+
 ## Use cases
 
 | Use case | Request | Permission |
@@ -1232,8 +1448,9 @@ Sign in as `admin@example.test` / `Pass123!`. The dashboard is at <https://local
 
 ## Built for AI agents 🤖
 
-[`run-app`](.claude/skills/run-app/SKILL.md), [`ui-reviewer`](.claude/agents/ui-reviewer.md) and the
-Context Seven MCP server.
+- [`run-app`](.claude/skills/run-app/SKILL.md) and [`ui-reviewer`](.claude/agents/ui-reviewer.md), which
+  look things up through Context Seven.
+- **[.mcp.json](.mcp.json)** wires up the Context Seven MCP server, for `context seven` lookups.
 
 <a name="credits"></a>
 
@@ -1389,6 +1606,9 @@ hero:
 import phone from '@repo/eng/readme/shots/phone.png';
 
 Walk the three-step tour.
+
+<p class="sub">The pictures show a first run, with `--use-thing` off. `GET /api/v1/things/{id}` reads one.</p>
+<img alt="The list" src={phone.src} />
 EOF
   put site/src/content/docs/start/install.mdx <<'EOF'
 ---
@@ -1479,7 +1699,10 @@ EOF
 { "applicationUrl": "http://localhost:5171" }
 EOF
   put src/Presentation/UI/Trellis.UI.Web/Properties/launchSettings.json <<'EOF'
-{ "applicationUrl": "http://0.0.0.0:5170" }
+{
+  "applicationUrl": "http://0.0.0.0:5170",
+  "Services__api__http__0": "http://localhost:5171"
+}
 EOF
   put docker-compose.yml <<'EOF'
     ports:
@@ -1492,6 +1715,24 @@ EOF
 - [guide.md](guide.md)
 - [development.md](development.md)
 - [deployment.md](deployment.md)
+- [overview.md](overview.md)
+EOF
+  put docs/overview.md <<'EOF'
+# What you get
+
+## With an option
+
+Each option this solution has is listed here.
+
+<!--#if (IncludeUI) -->
+- `--include-ui`: the UI.
+<!--#endif -->
+<!--#if (UseThing) -->
+- `--use-thing`: a thing,
+  on two lines.
+<!--#endif -->
+
+## Make it yours
 EOF
   put docs/guide.md <<'EOF'
 # Guide
@@ -1574,19 +1815,28 @@ self_test() {
   self="$PWD/scripts/check-readme-sync.sh"
   local cases=0 failed=0
 
-  # expect NAME pass|fail [TEXT]: runs the tree's copy of the check; for a failure, TEXT must be in
-  # its output. The tree is seeded again before the next case, so every plant is undone.
+  # expect NAME pass|fail [TEXT [ABSENT]]: runs the tree's copy of the check; for a failure, TEXT must be
+  # in its output, and ABSENT, when given, must not be. The tree is seeded again before the next case,
+  # so every plant is undone; a case whose edit changed nothing fails.
+  unchanged=0
   expect() {
-    local name="$1" want="$2" text="${3:-}" out got
+    local name="$1" want="$2" text="${3:-}" absent="${4:-}" out got
     cases=$((cases + 1))
     if out="$(GITHUB_ACTIONS='' bash "$tree/scripts/check-readme-sync.sh" 2>&1)"; then got=pass; else got=fail; fi
-    if [ "$got" != "$want" ]; then
+    if [ "$unchanged" = 1 ]; then
+      echo "self-test case '$name': an edit of its plant matched nothing, so the case proves nothing"
+      failed=$((failed + 1))
+    elif [ "$got" != "$want" ]; then
       echo "self-test case '$name': expected $want, got $got:"; printf '%s\n' "$out" | sed 's/^/  /'
       failed=$((failed + 1))
     elif [ -n "$text" ] && ! grep -qF -- "$text" <<< "$out"; then
       echo "self-test case '$name': the output does not say '$text':"; printf '%s\n' "$out" | sed 's/^/  /'
       failed=$((failed + 1))
+    elif [ -n "$absent" ] && grep -qF -- "$absent" <<< "$out"; then
+      echo "self-test case '$name': the output says '$absent', which it must not:"; printf '%s\n' "$out" | sed 's/^/  /'
+      failed=$((failed + 1))
     fi
+    unchanged=0
     seed
   }
 
@@ -1629,6 +1879,12 @@ description: A description of its own./'
   expect "C2: the package README's table" fail "C2: the description of --include-ui in eng/Trellis.TemplatePack/README.md"
   edit .template.config/ide.host.json 's/"text": "Use a thing"/"text": "Use thing"/'
   expect "C2b: a name.text that differs" fail "C2b: the dialog label of UseThing"
+  edit .template.config/template.json '/"displayName": "Use a thing",/d'
+  expect "C2b: a parameter without a displayName" fail "C2b: the boolean parameter UseThing has no displayName" "C2: the description of --use-thing"
+  edit .template.config/template.json '/"defaultValue": "false",/d'
+  expect "C2: parameters without a defaultValue, read as off" pass "readme-sync check passed"
+  edit README.md 's/with `--use-thing` off/with `--use-other` off/'
+  expect "C2c: a flag in the README's prose that is no option" fail "C2c: \`--use-other\` is no flag"
 
   edit README.md 's/^dotnet new update$/dotnet new update\
 dotnet new sample -n Other.Name/'
@@ -1639,6 +1895,18 @@ dotnet new sample -n Other.Name/'
   expect "C3: the package README's install line" fail "C3: eng/Trellis.TemplatePack/README.md shows no 'dotnet new install Sample.Templates'"
   edit site/src/data/repo.mjs '/^\/\/ readme-sync:quickstart$/d'
   expect "C3: a removed marker comment" fail "C3: read no '// readme-sync:quickstart' marker"
+  edit site/src/data/repo.mjs 's/^  update: \[/  update: [\
+    /'
+  expect "C3: a quickstart value continued on the next line" fail "C3: this quickstart line holds what this script cannot read"
+  edit site/src/data/repo.mjs 's/`dotnet new update`\]/"dotnet new update"]/'
+  expect "C3: a double-quoted quickstart string" fail "C3: this quickstart line holds what this script cannot read"
+  edit site/src/data/repo.mjs 's/^  uninstall:/  remove:/'
+  edit README.md '/^dotnet new uninstall Sample.Templates$/d'
+  expect "C3: a quickstart key renamed, its README line gone" fail "C3: read no uninstall string"
+  edit eng/readme/render-diagrams.py 's/"Your.Project"/"My.Project"/'
+  edit README.md 's/^dotnet new sample -n Your.Project$/dotnet new sample -n My.Project/'
+  edit eng/Trellis.TemplatePack/README.md 's/^dotnet new sample -n Your.Project$/dotnet new sample -n My.Project/'
+  expect "C3: the banner's placeholder renamed with its copies" pass "readme-sync check passed"
 
   edit README.md '/^| \*\*GetThing\*\*/d'
   expect "C4: a use-case row removed" fail "C4: the operation \`GET /api/v1/things/{id}\` of docs/api/openapi.v1.json has no row"
@@ -1655,6 +1923,15 @@ dotnet new sample -n Other.Name/'
   expect "C4: a bold row without a request span" pass "readme-sync check passed"
   edit README.md 's/`things:read` |$/`things:write` |/'
   expect "C4b: a permission changed in the README" fail "C4b: 'GET things/{id}' needs \`things:read\`"
+  edit README.md 's/^| \*\*Login\*\*: sign in/| Login: sign in/'
+  expect "C4: a row without a Name" fail "C4: this use-case row opens with no **Name**"
+  edit README.md 's/`GET \/api\/v1\/things\/{id}` reads one/`GET \/api\/v1\/bills\/{id}` reads one/'
+  expect "C4: a request in the prose that is no operation" fail "C4: \`GET /api/v1/bills/{id}\` is no operation"
+  edit README.md 's/| `POST \/api\/v1\/auth\/login` | anyone |/| `POST \/api\/v1\/auth\/login` | `auth:login` |/'
+  expect "C4b: a permission for an endpoint the test does not list" fail "C4b: README.md says \`POST /api/v1/auth/login\` needs \`auth:login\`"
+  edit src/Core/Trellis.Application/Authorization/Permissions.cs 's/"things:write"/"thing-items:write"/'
+  edit README.md 's/`things:write`/`thing-items:write`/'
+  expect "C4b: a permission with a hyphen" pass "readme-sync check passed"
 
   edit docs/features/auth.md 's/Pass123!/Pass456!/'
   expect "C5: the password in one listed copy" fail "C5: docs/features/auth.md does not hold the seeded password"
@@ -1677,11 +1954,19 @@ EOF
   expect "C7: an anchor on a page other than Options" fail "C7: the anchor #a-row of"
   edit README.md 's/blob\/main\/docs\/guide.md#a-section/blob\/main\/docs\/gone.md/'
   expect "C7: a blob/main path that does not exist" fail "C7: https://github.com/example/Sample/blob/main/docs/gone.md names docs/gone.md, which does not exist"
+  edit README.md 's/actions\/workflows\/ci.yml)/actions\/workflows\/gone.yml)/'
+  expect "C7: a badge for a workflow that does not exist" fail "names .github/workflows/gone.yml, which does not exist"
+  edit README.md 's/blob\/main\/docs\/guide.md#a-section/blob\/v1\/docs\/guide.md/'
+  expect "C7: a link to a ref other than main" fail "links a ref other than main"
 
   rm "$tree/eng/readme/title-dark.svg"
   expect "C8: a missing picture" fail "C8: the picture eng/readme/title-dark.svg does not exist"
   : > "$tree/eng/readme/shots/unused.png"
   expect "C8: an unused screenshot" fail "C8: eng/readme/shots/unused.png is used neither"
+  edit README.md 's/<img alt="The list"/<img alt="The whole list"/'
+  expect "C8: a screenshot's alt text the landing page does not have" fail "C8: the alt text \"The whole list\""
+  edit site/src/content/docs/index.mdx 's/The pictures show a first run/The pictures show the first run/'
+  expect "C8: a caption the landing page does not have" fail "C8: the caption under the screenshots"
   : > "$tree/docs/orphan.md"
   expect "C9: a guide missing from the index" fail "C9: docs/orphan.md is not listed"
 
@@ -1701,17 +1986,47 @@ EOF
   edit site/src/content/docs/start/install.mdx 's/^| Docker, any engine/| Podman, any engine/'
   expect "C11: a row of the Install page that names no tool" fail "C11: 'Podman, any engine' opens with no tool name"
   edit README.md 's/localhost:5171/localhost:5172/'
-  expect "C12: a port changed in the README" fail "C12: port 5172 is in no launchSettings.json"
+  expect "C12: a port changed in the README" fail "C12: port 5172 is in no applicationUrl"
+  edit src/Presentation/Api/Trellis.Api/Properties/launchSettings.json 's/localhost:5171/localhost:5181/'
+  expect "C12: a port only another project's environment still names" fail "C12: port 5171 is in no applicationUrl"
 
-  edit README.md 's/\[`run-app`\](.claude\/skills\/run-app\/SKILL.md), //'
+  edit README.md 's/\[`run-app`\](.claude\/skills\/run-app\/SKILL.md) and //'
   expect "C13: a skill without a link" fail "C13: 'Built for AI agents' does not link the skill run-app"
-  edit README.md 's/Context Seven MCP server/other MCP servers/'
-  expect "C13: a server that is not named" fail "C13: 'Built for AI agents' does not name the MCP server context-seven"
+  edit README.md 's/the Context Seven MCP server/the MCP servers/'
+  expect "C13: a server named elsewhere in the section only" fail "C13: the bullet that links .mcp.json does not name the MCP server context-seven"
+  edit README.md 's/the Context Seven MCP server, for `context seven` lookups/the `context seven` MCP server/'
+  expect "C13: a server named in a code span only" fail "C13: the bullet that links .mcp.json does not name the MCP server context-seven"
   edit site/src/content/docs/index.mdx 's/three-step tour/four-step tour/'
   expect "C14: the step word" fail "C14: 'four' steps"
 
+  edit docs/overview.md '/^<!--#if (UseThing) -->$/,/^<!--#endif -->$/d'
+  expect "C15: an option without its bullet" fail "C15: 'With an option' in docs/overview.md has no bullet for --use-thing"
+  edit docs/overview.md 's/^<!--#if (UseThing) -->$/<!--#if (IncludeUI) -->/'
+  expect "C15: a bullet in a block that does not name its option" fail "C15: the bullet for --use-thing sits in a block on (IncludeUI)"
+  edit docs/overview.md 's/^- `--use-thing`:/- `--use-other`:/'
+  expect "C15: a bullet for a flag no option has" fail "C15: \`--use-other\` is no option"
+  edit docs/overview.md '/^<!--#if (UseThing) -->$/d'
+  expect "C15: a bullet outside an #if block" fail "C15: the bullet for --use-thing is not alone in an #if block"
+
   edit .template.config/template.json 's/^    "\([A-Za-z]*\)": {$/  "\1": {/'
   expect "template.json re-indented, so no symbol is read" fail "C2: read no boolean parameters from .template.config/template.json"
+
+  # Under GitHub Actions a failure is an annotation; a bad argument is the usage and exit 2.
+  local out code
+  cases=$((cases + 1))
+  edit docs/features/auth.md 's/Pass123!/Pass456!/'
+  out="$(GITHUB_ACTIONS=true bash "$tree/scripts/check-readme-sync.sh" 2>&1)" && code=0 || code=$?
+  if [ "$code" != 1 ] || ! grep -qF '::error file=docs/features/auth.md,line=' <<< "$out"; then
+    echo "self-test case 'an annotation under GitHub Actions': exit $code:"; printf '%s\n' "$out" | sed 's/^/  /'
+    failed=$((failed + 1))
+  fi
+  seed
+  cases=$((cases + 1))
+  out="$(bash "$tree/scripts/check-readme-sync.sh" --bogus 2>&1)" && code=0 || code=$?
+  if [ "$code" != 2 ] || ! grep -qF 'usage: scripts/check-readme-sync.sh [--self-test]' <<< "$out"; then
+    echo "self-test case 'a bad argument': exit $code:"; printf '%s\n' "$out" | sed 's/^/  /'
+    failed=$((failed + 1))
+  fi
 
   if [ "$failed" -eq 0 ]; then
     echo "readme-sync self-test passed: $cases cases"
