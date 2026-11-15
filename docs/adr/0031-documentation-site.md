@@ -2,6 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-25
+- **Amended**: 2026-11-15 — one home per fact, held by a check (see *Amendment (2026-11-15)* below)
 - **Prior art**: [cleanarchitecture.jasontaylor.dev](https://cleanarchitecture.jasontaylor.dev), the documentation website of [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT): a website as the template's home, with the install command and a short quick start on its landing page, a linear path through getting started, an installation page that also updates and uninstalls, a page per option, an architecture page led by one diagram, and the documented version in the footer. The ideas only: no code or CSS was copied, and the look is the Lattice language of `eng/readme/`.
 
 ## Context
@@ -96,3 +97,25 @@ adapter for conditionals and links that this ADR describes. Starlight does the j
 lines of configuration, which is also what the prior art above uses. The cost accepted was a Node
 toolchain in the repository, kept maintainer-only so a generated project never needs it. Revisit if a
 .NET static documentation generator reaches Starlight's level of Markdown support and link checking.
+
+## Amendment (2026-11-15): one home per fact
+
+The README, the package README and the site had come to state the same facts in their own words, and
+the copies drifted: the template was described in several wordings, and the README's list of toggled
+files missed four that `template.json` names. From this amendment a fact that the README, the package
+README or the site states is given one home. The README quotes it or links to it, the site renders it
+or derives it at build time, and `scripts/check-readme-sync.sh` (maintainer-only, run by `ci.yml` in
+its template-source block) compares each copy that its header lists with that copy's home and names
+the copy to update. A copy the list does not name has no check behind it.
+
+- **The pitch** is one sentence in `eng/readme/pitch.md`, whose one emphasised span is the short form.
+  The README, the package README, the package description, `template.json`'s description and the
+  site's description copy it; the banner picture draws the short form from it, and the landing page's
+  hero title ends with it.
+- **The options** are `template.json`'s boolean parameters: the two READMEs show each one's flag,
+  default and description word for word, and link the Options page for the rest.
+- **The site gains two pages of its own**, *Why Trellis* and *Compared with other templates*, and
+  serves the README's wide pictures on the Architecture and Testing pages.
+- **The comparison states dated facts only**: each cell about another project is read from that
+  project's own repository on the date the page names, with no ranking and no score, and a cell that
+  could not be read is a dash.

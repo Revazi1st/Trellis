@@ -4,7 +4,7 @@ description: The prerequisites and the commands that check them, installing, upd
 ---
 
 import { Aside, Code, TabItem, Tabs } from '@astrojs/starlight/components';
-import { packageId, packagePublished, quickstart, sdkVersion } from '../../../data/repo.mjs';
+import { aspireCliFloor, packageId, packagePublished, quickstart, sdkTemplateFloor, sdkVersion } from '../../../data/repo.mjs';
 
 ## Prerequisites
 
@@ -12,9 +12,10 @@ Each tool says when you need it; only the SDK is needed to create a solution.
 
 | Tool | Needed for | Check it |
 |---|---|---|
-| .NET 10 SDK, {sdkVersion} or later | installing the template, creating, building and running the solution | `dotnet --version` |
+| .NET 10 SDK {sdkTemplateFloor} or later | installing the template and creating a solution (the template's own constraint) | `dotnet --version` |
+| .NET 10 SDK {sdkVersion} or a later 10.0.x | building and running the solution (its `global.json`) | `dotnet --version` |
 | Docker (Docker Desktop or Linux Docker Engine) | PostgreSQL, the integration tests (Testcontainers), the SDK container | `docker version` |
-| Aspire CLI 13.5 or later, optional | `aspire run`; `dotnet run --project tools/<Name>.AppHost` starts the same app | `aspire --version` |
+| Aspire CLI {aspireCliFloor} or later, optional | `aspire run`; `dotnet run --project tools/<Name>.AppHost` starts the same app | `aspire --version` |
 | PowerShell, optional | installing the browsers for the optional Playwright tests | `pwsh --version` |
 
 OrbStack, Colima and Podman work too: see [Docker engines other than Docker Desktop](/develop/development/#docker-engines-other-than-docker-desktop).

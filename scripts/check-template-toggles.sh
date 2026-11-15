@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Fails if the template toggle surface drifts: every boolean parameter in
 # .template.config/template.json must be exposed in dotnetcli.host.json (CLI flag) AND
-# ide.host.json (VS/Rider checkbox), and every '#if (X' symbol in template sources (C#, project,
-# solution, JSON and Razor files, and the .template.config/consumer/ stubs the second source ships)
-# must be a symbol declared in template.json (a typo'd symbol silently strips code).
+# ide.host.json (an option in the Visual Studio and Rider dialogs), and every '#if (X' symbol in
+# template sources (C#, project, solution, JSON and Razor files, and the .template.config/consumer/
+# stubs the second source ships) must be a symbol declared in template.json (a typo'd symbol
+# silently strips code).
 #
 # YAML files (workflows, compose, dependabot), .editorconfig, .gitignore, .gitattributes, .dockerignore
 # and Dockerfile get two more checks, because the template engine processes hash-comment conditionals

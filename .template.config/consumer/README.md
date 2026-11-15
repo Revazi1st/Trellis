@@ -88,6 +88,8 @@ against the `main` of its own moment, so consider a nightly `schedule:` trigger 
 - [AGENTS.md](AGENTS.md): the conventions and boundaries, written for people and coding agents alike.
 - [docs/INDEX.md](docs/INDEX.md): architecture, development, deployment, the threat model and the
   decision records in `docs/adr/`.
+- [docs/overview.md](docs/overview.md): what the solution contains, each capability with its doc and
+  its decision; [docs/faq.md](docs/faq.md): short answers to the first questions.
 - `.claude/`: the agent toolkit, its skills, reviewers and hooks, beside the MCP servers in `.mcp.json`;
   [docs/INDEX.md](docs/INDEX.md) lists each one with when to use it, and `AGENTS.md` says which reviewer
   a change needs. `/finish-change` runs the gates CI runs, and the reviewers, before a change is

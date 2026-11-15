@@ -8,7 +8,7 @@ change the code or the script, then render again.
 
 | Picture | Shows | Read from |
 |---|---|---|
-| `title` | the banner, 1200 × 320: the Trellis mark, the wordmark and the tagline on a dark stage, beside a terminal with the two install commands | `.template.config/icon.svg`; the package id in `eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj` and the short name in `template.json`, both checked against the install block in the root `README.md` |
+| `title` | the banner, 1200 × 320: the Trellis mark, the wordmark and the tagline on a dark stage, beside a terminal with the two install commands; the tagline is the emphasised span of [`pitch.md`](pitch.md) | `.template.config/icon.svg`; [`pitch.md`](pitch.md); the package id in `eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj` and the short name in `template.json`, both checked against the install block in the root `README.md` |
 | `rings` | the rings as a 160 px mark: Domain and SharedKernel at the centre, Application, Infrastructure ∥ Persistence, Presentation | the palette |
 | `architecture` | a bento of ring cards, every project a card holding its real folders and files, the references between them pointing inward, the ring legend below | `src/`, `tools/`, `.template.config/template.json`, each `.csproj`, [AGENTS.md](../../AGENTS.md)'s dependency flow |
 | `testing` | each test suite as a card as wide as the layers it runs through, under a rail of the layers; its needs as a pill, opt-in suites dashed, ArchitectureTests as a bracket over the rail | `tests/`, with labels condensed from the Tests table in [docs/development.md](../../docs/development.md#tests) |
@@ -27,8 +27,8 @@ Render after a change that the pictures show, and commit the SVGs in the same ch
 project added, renamed or moved; a folder or a top-level file added to or removed from a project under
 `src/` or `tools/` (a collapsed folder shows its name only, so a file inside one changes nothing); the
 decorator order; an event handler of `InvoicePaidDomainEvent`; a template option that adds or removes a
-file; the package id, the template's short name or the install block in the root `README.md`. The output
-is deterministic, so a render that changes nothing writes nothing.
+file; the package id, the template's short name or the install block in the root `README.md`; the pitch
+in [`pitch.md`](pitch.md). The output is deterministic, so a render that changes nothing writes nothing.
 
 `--check` exits **0** when every SVG matches a fresh render, **1** when one is missing, differs (it prints
 the first lines of the difference) or is a left-over `-light.svg`/`-dark.svg` the script no longer draws,
@@ -81,7 +81,7 @@ starts, and a column that continues a folder opens with its path.
 ## The visual language
 
 The pictures share one look with the website (`site/`, whose `lattice.css` maps these tokens onto
-Starlight) and future screenshots: calm and precise, hairlines instead of outlines, a dark stage for the
+Starlight): calm and precise, hairlines instead of outlines, a dark stage for the
 banner, monospace for real names, the lattice as texture and the leaf as the one accent. Nothing is copied from the templates the README credits: the ideas are credited,
 the art is ours.
 
@@ -209,6 +209,66 @@ at the bottom, so it is no help here. Check both themes, on GitHub's page colour
 - **The art is our own.** The pictures take their idea from the walkthrough-style README of
   [amantinband/clean-architecture](https://github.com/amantinband/clean-architecture), credited in the
   README; nothing of its artwork is reused, and colours, shapes, type and composition stay ours.
+
+## The pitch
+
+[`pitch.md`](pitch.md) holds the one sentence that says what the template is. It is one line with
+exactly one `*…*` span, and that span is the short form of the pitch. The file is plain text, with no
+backtick, `&`, `<`, `>`, `"`, `\` or `|`, because the sentence is copied into JSON, XML and Markdown.
+Every other place that states the pitch copies it from here:
+
+| Place | What it holds | Held by |
+|---|---|---|
+| the paragraph under the header of the root `README.md` | the pitch | `scripts/check-readme-sync.sh` |
+| the alt text of the title picture in the root `README.md` | the short form | `scripts/check-readme-sync.sh` |
+| `title-light.svg`, `title-dark.svg` | the short form, as the tagline | `render-diagrams.py --check` |
+| the first paragraph of `eng/Trellis.TemplatePack/README.md` | the pitch | `scripts/check-readme-sync.sh` |
+| `<Description>` in `eng/Trellis.TemplatePack/Trellis.TemplatePack.csproj` | the pitch without the asterisks | `scripts/check-readme-sync.sh` |
+| `description` in `.template.config/template.json`, which `dotnet new trellis --help` prints | the pitch without the asterisks | `scripts/check-readme-sync.sh` |
+| the site's description, `description: pitch,` in `site/astro.config.mjs`, read from this file by `site/trellis.config.mjs` | the pitch, derived | `scripts/check-readme-sync.sh` |
+| the hero title and the head title in the frontmatter of `site/src/content/docs/index.mdx` | each ends with the short form | `scripts/check-readme-sync.sh` |
+
+`.template.config/consumer/README.md`, `AGENTS.md` and `docs/architecture.md` open with a description
+of the generated solution, not of the template, and do not copy the pitch. To change the sentence,
+edit `pitch.md`, render the pictures again, then run `./scripts/check-readme-sync.sh`: it names each
+copy that no longer agrees and says which side to change.
+
+## Screenshots
+
+[`shots/`](shots) holds four pictures of the web UI on a first run. The root `README.md` shows them
+under *What it looks like*, and the site's landing page shows them in a block of the same name.
+
+| File | Shows |
+|---|---|
+| `first-run-invoices-1280-light.png`, `first-run-invoices-1280-dark.png` | the Invoices page on a laptop, 1280 px wide, with only the invoices the migration worker seeds in Development |
+| `first-run-invoice-400-light.png`, `first-run-invoice-400-dark.png` | the seeded draft, "Draft & Co", on a phone, 400 px wide |
+
+`render-diagrams.py` does not draw them. CI's Playwright job (*Playwright UI* in
+`.github/workflows/ci.yml`) takes them: its step "Keep pictures of the first run" runs one browser
+test on the freshly seeded database before any other browser test runs, and the job uploads the four
+files with the rest of its screenshots as the `ui-screenshots` artifact. The current set comes from
+run 43654229380, CI on `main` at `f5152f3`.
+
+Nothing regenerates them, and nothing compares them: a screenshot is looked at, never diffed
+(`tests/Trellis.UiTests/DesignSystemProofTests.cs` says why). Refresh them by hand from the newest
+green CI run on `main` when a UI page or `src/Presentation/UI/Trellis.UI.Common/wwwroot/tokens.css`
+changed, and before each minor release ([docs/releasing.md](../../docs/releasing.md), *Cutting a
+release*):
+
+```bash
+run=$(gh run list --workflow ci.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+dir=$(mktemp -d)
+gh run download "$run" -n ui-screenshots -D "$dir"
+for f in first-run-invoices-1280-light first-run-invoices-1280-dark first-run-invoice-400-light first-run-invoice-400-dark; do
+  cp "$dir/$f.png" eng/readme/shots/
+done
+```
+
+No page holds a picture's height: the README sets a width only, and the site reads the width and the
+height from the file when it builds, so a refresh is a copy. `scripts/check-readme-sync.sh` fails
+when a picture the README names is missing, when a file in `shots/` is used neither by the README nor
+by the site, and when the alt text of a screenshot or the caption under them is not on the site's
+landing page word for word.
 
 ## Why `eng/`, not `docs/`
 

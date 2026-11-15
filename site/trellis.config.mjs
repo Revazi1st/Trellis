@@ -34,6 +34,20 @@ export const githubTree = (repoPath) => `${github.url}/tree/${github.ref}/${repo
 // Edits always land on main: that is where the gated file lives.
 export const githubEdit = (repoPath) => `${github.url}/edit/main/${repoPath}`;
 
+// The pitch: one sentence in eng/readme/pitch.md, its one *emphasised* span the short form. It is the
+// site's description (astro.config.mjs) and the Why page's first line; the README, the pack and
+// template.json copy it, and scripts/check-readme-sync.sh holds every copy to this file.
+function readPitch() {
+  const file = 'eng/readme/pitch.md';
+  const lines = readFileSync(path.join(repoRoot, file), 'utf8').split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length !== 1) throw new Error(`${file}: expected one line, found ${lines.length}`);
+  const [line] = lines;
+  const spans = [...line.matchAll(/\*([^*]+)\*/g)];
+  if (spans.length !== 1 || (line.match(/\*/g) ?? []).length !== 2) throw new Error(`${file}: expected exactly one *emphasised* span in "${line}"`);
+  return { pitch: line.replace(/\*/g, '').trim(), pitchShort: spans[0][1].trim() };
+}
+export const { pitch, pitchShort } = readPitch();
+
 // docs/<file> -> site route (without base or slashes): the sidebar groups, as URLs.
 // A file not listed here keeps its own path (docs/foo/bar.md -> foo/bar) and the build warns.
 export const routes = {
@@ -47,7 +61,9 @@ export const routes = {
   'features/invoices.md': 'features/invoices',
   'features/auth.md': 'features/auth',
   'features/exchange-rates.md': 'features/exchange-rates',
-  // The agent entry point: reachable, searchable off, not in the sidebar.
+  'overview.md': 'start/what-you-get',
+  'faq.md': 'start/faq',
+  // The agent entry point: in the sidebar (Agent toolkit), searchable off.
   'INDEX.md': 'reference/docs-index',
 };
 
@@ -71,6 +87,18 @@ export const sectionPages = [
     description:
       'What each test project proves about which layer, what it needs to run, and when a test of yours belongs in it.',
   },
+];
+
+// The README's wide pictures (eng/readme/<name>-light.svg and -dark.svg, drawn by render-diagrams.py),
+// shown on the page that explains each (markdown-plugins.mjs) and served at full size by
+// src/pages/pictures/[name].svg.ts. A picture sits after a heading of its doc (`heading`, the GitHub slug)
+// or after the first paragraph of a section page (`sectionPage`, the section's anchor); the build fails
+// when that place is missing, or when a heading would follow the picture directly. None is the first node
+// of its page: a picture only one build has can then be hidden without moving what follows it.
+export const docPictures = [
+  { name: 'architecture', doc: 'architecture.md', heading: 'the-rings' },
+  { name: 'pipeline', doc: 'architecture.md', heading: 'a-request-stage-by-stage' },
+  { name: 'testing', doc: 'development.md', sectionPage: 'tests' },
 ];
 
 // Template options, read from the template's own configuration at build time.
@@ -109,7 +137,7 @@ export const optionNotes = {
     docs: ['adr/0015-blazor-everywhere-shared-ui.md', 'adr/0012-presentation-structure-common-libraries.md'],
   },
   UseRedis: {
-    after: 'Nothing for `aspire run`: the AppHost starts the `cache` resource, with a RedisInsight tile, and the API reads its connection string. In the dev-container flow, `docker compose --profile redis up -d` starts Redis.',
+    after: 'Nothing for `aspire run`: the AppHost starts the `cache` resource, Valkey, and the API reads its connection string. In the dev-container flow, `docker compose --profile redis up -d` starts it.',
     docs: ['adr/0026-read-caching.md', 'deployment.md#deploy-to-one-host'],
   },
   UseSerilog: {

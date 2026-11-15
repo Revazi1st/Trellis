@@ -1,8 +1,6 @@
 # Trellis.Templates
 
-A rich-DDD, Clean Architecture .NET 10 solution template. Like its namesake — the lattice a
-gardener puts up for climbing plants — Trellis is the load-bearing frame your application grows
-over: it shapes the structure, then fades from view as your features fill it in.
+Trellis is a dotnet new template for .NET 10 that generates a rich-DDD solution with Clean Architecture the tests enforce.
 
 ```bash
 dotnet new install Trellis.Templates
@@ -11,21 +9,22 @@ dotnet new trellis -n Your.Project
 
 Documentation: <https://revazi1st.github.io/Trellis/>
 
-Name it with dot-separated parts made of letters and digits (`Acme.Shop`): hyphens, spaces and
-underscores become underscores in namespaces, which fail analyzer rule CA1707.
+Name the project with dot-separated parts made of letters and digits, each starting with a letter
+(`Acme.Shop`): hyphens, spaces and underscores turn into underscores in namespaces, which analyzer rule
+CA1707 rejects.
 
-Toggles (checkboxes in Visual Studio / Rider, flags on the CLI):
+Options are flags of `dotnet new`, and options in the Visual Studio and Rider new-solution dialogs.
 
-| Flag | Default | What it adds |
+| Option | Default | What it does |
 |---|---|---|
-| `--include-ui` | on | Blazor web UI (UI.Common + UI.Web), orchestrated by Aspire |
-| `--use-redis` | off | A Redis-protocol distributed cache (Valkey by default) as a HybridCache L2 |
-| `--use-serilog` | off | Serilog structured logging (console) alongside OpenTelemetry |
-| `--use-multitenancy` | off | Tenant seam: `tenant` claim on the principal, `TenantId` column + `"Tenant"` query filter on every aggregate root (regenerate the initial migration once before the first run) |
-| `--include-ui-tests` | off | Playwright browser tests for the Blazor UI (opt-in at run time) |
-| `--skip-restore` | off | Skip the automatic `dotnet restore` |
+| [`--include-ui`](https://revazi1st.github.io/Trellis/start/options/#--include-ui) | on | Include the Blazor web UI (UI.Common + UI.Web) and wire it into the Aspire AppHost. |
+| [`--use-redis`](https://revazi1st.github.io/Trellis/start/options/#--use-redis) | off | Add a Redis-protocol distributed cache (HybridCache L2), Valkey by default, and wire it into the Aspire AppHost. |
+| [`--use-serilog`](https://revazi1st.github.io/Trellis/start/options/#--use-serilog) | off | Use Serilog for structured logging (console sink) in the API and web hosts, alongside OpenTelemetry. |
+| [`--use-multitenancy`](https://revazi1st.github.io/Trellis/start/options/#--use-multitenancy) | off | Add a tenant seam: a tenant claim on the principal (ITenantContext), a TenantId shadow column and a "Tenant" EF query filter on every aggregate root. Regenerate the initial migration after enabling. |
+| [`--include-ui-tests`](https://revazi1st.github.io/Trellis/start/options/#--include-ui-tests) | off | Include a browser-driven UI test project (Playwright). Tests are opt-in at run time via RUN_UI_TESTS=1. |
+| [`--skip-restore`](https://revazi1st.github.io/Trellis/start/options/#--skip-restore) | off | Skip the automatic 'dotnet restore' after the project is created. |
 
-Feature-based minimal APIs, separate Infrastructure and Persistence, hand-rolled CQRS + Result, EF Core 10, ASP.NET Identity + JWT, a transactional outbox, idempotent writes, Aspire orchestration, and an AI-friendly repository (CLAUDE.md/AGENTS.md, .claude rules/agents/skills).
+What a generated solution contains: <https://github.com/Revazi1st/Trellis/blob/main/docs/overview.md>
 
 The generated project gets its own README and an empty CHANGELOG, plus `.trellis-template.json`
 recording this package's version and the options you chose; its `docs/upgrading.md` uses that file to

@@ -91,6 +91,18 @@ jobs:
       # exists. Re-render with: python3 eng/readme/render-diagrams.py
       - name: README pictures are current
         run: python3 eng/readme/render-diagrams.py --check
+
+      # Template source only: the self-test plants a disagreement for every comparison of
+      # scripts/check-readme-sync.sh in a throwaway tree, so a comparison that stopped reading its
+      # files fails here before the real run below could pass without it.
+      - name: README sync self-test
+        run: ./scripts/check-readme-sync.sh --self-test
+
+      # Template source only: every copy of a fact in the README, the package README and the site
+      # (the pitch, the options, the commands, the use cases, the login, the ports, the agent
+      # toolkit) agrees with its one home, and the message names the copy to update.
+      - name: README and site agree with their sources
+        run: ./scripts/check-readme-sync.sh
 #endif
       - name: Build (warnings as errors)
         run: dotnet build Trellis.slnx --no-restore -c Release

@@ -3,17 +3,19 @@ name: Site
 # The documentation site (site/, ADR-0031): Astro + Starlight rendering docs/ in place, published on
 # GitHub Pages. Maintainer-only: template.json and the pack project exclude this workflow, so a generated
 # project never has it. Three ways in, one build:
-#   - pull_request: a pull request that touches what the site renders (docs/, site/, README.md,
-#     .template.config/, global.json, eng/readme/, a source file a site page quotes, this file) is built
-#     and link-checked, never deployed. The workflow runs on every pull request and skips the build when
-#     none of those changed, instead of a paths filter: a required check whose workflow a paths filter
-#     never starts stays pending and blocks the merge, while a skipped job counts as passed.
+#   - pull_request: a pull request that touches what the site build reads (the list is in the comment
+#     above the "Compare with the base branch" step, its one home) is built and link-checked, never
+#     deployed. The workflow runs on every pull request and skips the build when none of those changed,
+#     instead of a paths filter: a required check whose workflow a paths filter never starts stays
+#     pending and blocks the merge, while a skipped job counts as passed.
 #   - workflow_call: release.yml deploys the site from the release tag once the package is published.
 #   - workflow_dispatch: a preview from any ref (default main). It replaces the published site until the
 #     next deploy; any ref but a release tag shows a banner on every page saying it is a preview. Restore
 #     the release with: gh workflow run site.yml -f ref=vX.Y.Z (docs/releasing.md). With site_ref, the
 #     docs come from ref and site/ from site_ref: a fix to the site's own code, deployed for the release
-#     without a new one (gh workflow run site.yml -f ref=vX.Y.Z -f site_ref=main).
+#     without a new one (gh workflow run site.yml -f ref=vX.Y.Z -f site_ref=main). It works only for a
+#     tag that holds every file the site/ of site_ref reads (docs/releasing.md, "The documentation
+#     site").
 on:
   pull_request:
     branches: [main]
@@ -58,9 +60,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      # What the build reads: docs/ and site/, the template's configuration (the Options page, the logo),
-      # the SDK pin and the README pictures, and every file an <Excerpt> on a site page quotes (its
-      # lines are found by content, so a change there can break the build).
+      # What the build reads, the one list of it (docs/releasing.md and site/README.md point here):
+      # docs/ and site/; the template's configuration in .template.config/ (the Options page, the
+      # logo); eng/readme/ (the pitch, the README pictures and the screenshots); global.json (the SDK
+      # pin); the project files under src/ and tests/ (the facts strip counts them);
+      # tools/Trellis.MigrationService/SeedOptions.cs (the seeded login); .claude/rules, skills, agents
+      # and hooks and .mcp.json (the landing page's agent block); this workflow; and every file an
+      # <Excerpt> on a site page quotes (its lines are found by content, so a change there can break
+      # the build).
       - name: Compare with the base branch
         id: diff
         env:
@@ -68,7 +75,7 @@ jobs:
         run: |
           changed="$(git diff --name-only "$BASE_SHA"...HEAD)"
           quoted="$(grep -rhoE '<Excerpt path="[^"]+"' site/src/content/docs | sed -E 's/.*path="([^"]+)"/\1/' || true)"
-          if grep -qE '^(docs/|site/|eng/readme/|\.template\.config/|README\.md$|global\.json$|\.github/workflows/site\.yml$)' <<< "$changed" ||
+          if grep -qE '^(docs/|site/|eng/readme/|\.template\.config/|global\.json$|\.github/workflows/site\.yml$|(src|tests)/.+\.csproj$|tools/Trellis\.MigrationService/SeedOptions\.cs$|\.claude/(rules|skills|agents|hooks)/|\.mcp\.json$)' <<< "$changed" ||
              grep -qxF -f <(printf '%s\n' "$quoted") <<< "$changed"; then
             echo "site=true" >> "$GITHUB_OUTPUT"
             echo "The pull request changes what the site renders: building it."

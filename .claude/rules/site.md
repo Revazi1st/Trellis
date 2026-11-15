@@ -47,6 +47,11 @@ build does to a doc; this file says how the site may change.
 - Screenshots of the touched pages at 400, 1280 and 2000 px in both themes, before and after, in the
   pull request. A change meant for the light theme proves the dark pages unchanged with a pixel diff
   of zero; a structural fix that applies to both themes says so and shows both.
+- A change that adds or edits a block proves the rest of the page identical with those blocks hidden
+  by the same injected CSS on both builds. A block only the new build has may be hidden only where it
+  is not the first child of its container and does not stand between two headings: Starlight spaces
+  blocks with sibling selectors, and a hidden element still counts as a previous sibling.
 - The live site documents the release tag. A fix to the site's own code reaches it without a release:
   `gh workflow run site.yml --ref main -f ref=v<released> -f site_ref=<branch or main>`. A change to a
-  doc's words reaches it with the next release only.
+  doc's words reaches it with the next release only. `site_ref` works only for a tag that holds every
+  file the `site/` of `site_ref` reads (`docs/releasing.md`, *The documentation site*).

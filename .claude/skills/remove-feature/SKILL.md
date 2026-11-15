@@ -58,7 +58,7 @@ Delete `SeedSampleDataAsync`, its `Seeded` helper and its call in `MigrationWork
 - `grep -rl Invoice tests` afterwards lists anything this step missed.
 
 ## 8. Docs
-Delete `docs/features/invoices.md` and the paragraph in `README.md` that points newcomers to it; fix the mentions of the slice as the reference pattern in `AGENTS.md`, `.claude/rules/` and `.claude/skills/add-feature/`. A final `grep -ri invoice` catches stragglers (XML doc comments citing it as an example may simply be reworded).
+Delete `docs/features/invoices.md` and the paragraph in `README.md` that points newcomers to it; fix the mentions of the slice as the reference pattern in `AGENTS.md`, `.claude/rules/` and `.claude/skills/add-feature/`. In `docs/overview.md`, delete the reference-slice bullet and the *Make it yours* bullet that removes the sample, and repoint to your feature's doc (or delete) the other bullets that link `features/invoices.md`. In `docs/faq.md`, the database answer names the sample's `InvoiceConfiguration.cs` as the example of the `xmin` concurrency token: name one of your own configurations instead; and the question about removing the sample feature or adding your own keeps only its `add-feature` half ("How do I add a feature?"). A final `grep -ri invoice` catches stragglers (XML doc comments citing it as an example may simply be reworded).
 
 ## 9. Migration + finish
 Delete `src/Infrastructure/Trellis.Persistence/Migrations/` and regenerate the single initial migration (pre-release convention, see `add-migration`):

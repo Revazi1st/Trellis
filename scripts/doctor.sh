@@ -14,8 +14,8 @@
 #                    (DOCKER_BIN, then Docker Desktop's ~/.docker/bin)
 #   SDK image        the image scripts/dotnet.sh runs (its name read from that script, its override
 #                    variable honoured), and the one line that builds it
-#   Aspire CLI       13.5 or later, for aspire run and the aspire MCP server in .mcp.json (optional:
-#                    dotnet run --project on the AppHost starts the same app)
+#   Aspire CLI       aspire_floor (below) or later, for aspire run and the aspire MCP server in
+#                    .mcp.json (optional: dotnet run --project on the AppHost starts the same app)
 #   dev certificate  trusted, for the AppHost's https profile (dotnet dev-certs https --check --trust;
 #                    with a local SDK only)
 #   AppHost ports    every localhost port tools/*.AppHost/Properties/launchSettings.json names (each

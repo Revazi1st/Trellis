@@ -5,7 +5,7 @@
     <PackageId>Trellis.Templates</PackageId>
     <Title>Trellis Clean Architecture Solution Template</Title>
     <Authors>Trellis contributors</Authors>
-    <Description>A rich-DDD, Clean Architecture .NET 10 solution template: feature-based minimal APIs, separate Infrastructure and Persistence, Aspire orchestration, Blazor UI, and an AI-friendly repository.</Description>
+    <Description>Trellis is a dotnet new template for .NET 10 that generates a rich-DDD solution with Clean Architecture the tests enforce.</Description>
     <PackageTags>dotnet-new;templates;clean-architecture;ddd;cqrs;vertical-slice;aspire;blazor;postgresql</PackageTags>
     <Version>0.1.0</Version>
     <!-- nuget.org's "Release Notes": the GitHub release of this version, whose notes are its CHANGELOG
@@ -69,6 +69,7 @@
       ..\..\.claude\skills\add-toggle\**;
       ..\..\scripts\check-template-toggles.sh;
       ..\..\scripts\test-template.sh;
+      ..\..\scripts\check-readme-sync.sh;
       ..\..\docs\releasing.md;
       ..\..\.claude\rules\site.md;
       ..\..\docs\adr\0031-documentation-site.md;

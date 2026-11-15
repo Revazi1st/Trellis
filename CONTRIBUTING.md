@@ -39,6 +39,10 @@ With a local SDK you can also `aspire run` the full app. See
   runs the CI check locally) and, if you made a load-bearing decision, add an ADR numbered below
   0100 (`docs/adr/`, see the `new-adr` skill). An accepted ADR is never edited, only amended at its
   end (`scripts/check-adr-history.sh main` runs CI's check locally; the `adr-rewrite` label skips it).
+- A change to the pitch (`eng/readme/pitch.md`), an option's description, an endpoint or its
+  permission, a port, a skill or a reviewer, or an install command runs
+  `./scripts/check-readme-sync.sh`, which names each copy in the README, the package README or the
+  site to update.
 - A user-visible change gets a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), written
   for the people who generate projects from the template.
 - A change that copies or adapts someone else's work (an idea, a pattern, a layout, text or code)
@@ -90,8 +94,9 @@ The `add-toggle` skill covers adding a toggle; `docs/releasing.md` covers releas
 The documentation website (<https://revazi1st.github.io/Trellis/>) lives in `site/`: Astro and
 Starlight, rendering the files under `docs/` in place, so `docs/` stays the content and there is
 nothing to copy or sync. Run it with Node 22: `cd site && npm ci && npm run dev`, then open
-<http://localhost:4321/Trellis/>. Its build is a check: a pull request that touches `docs/` or `site/`
-builds it, and a link or an `#anchor` that points nowhere fails it (`npm run build` runs the same check
+<http://localhost:4321/Trellis/>. Its build is a check: a pull request that touches a file the build reads
+builds it (the comment above the *Compare with the base branch* step of `.github/workflows/site.yml`
+lists them), and a link or an `#anchor` that points nowhere fails it (`npm run build` runs the same check
 locally). [site/README.md](site/README.md) says what the build does to a doc and how the site is
 deployed; it never ships in a generated project.
 
