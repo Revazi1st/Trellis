@@ -136,10 +136,11 @@ jobs:
 
           # The template does not ship its maintainer-only scripts (check-template-toggles.sh,
           # test-template.sh, check-readme-sync.sh); a workflow step that runs one belongs in a block
-          # conditioned on the TemplateSource symbol (see ci.yml); a hook or an agent file that names
-          # one, likewise.
-          if grep -rInE 'check-template-toggles|test-template\.sh|check-readme-sync' .github .claude; then
-            echo "::error::Generated workflows or agent files reference a maintainer-only script the template does not ship (listed above)."
+          # conditioned on the TemplateSource symbol (see ci.yml); a hook, an agent file, AGENTS.md or
+          # a doc that names one, likewise. Every generated file is searched, not only .github and
+          # .claude: the shipped mentions sit in AGENTS.md and docs/ too.
+          if grep -rInE "${skip[@]}" 'check-template-toggles|test-template\.sh|check-readme-sync' .; then
+            echo "::error::Generated files reference a maintainer-only script the template does not ship (listed above)."
             fail=1
           fi
 
