@@ -45,7 +45,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   provider and its retrying strategy, the design-time provider, the `xmin` concurrency token, the outbox
   payload's `jsonb`, the outbox index's filter, the `FOR UPDATE SKIP LOCKED` claim and the reading of a
   unique violation are members of one internal static class, which the registration, the design-time
-  factory, the configurations, the outbox processor and `UniqueConstraintErrors` call. The model, the SQL
+  factory, the configurations, the outbox processor and `UniqueConstraintErrors` call. With
+  multi-tenancy, the per-column settings a tenant-led unique index carries over (collation, operator
+  class, NULLS order) are a member too, which `AppDbContext.LeadWithTenant` calls. The model, the SQL
   and the shipped migration are unchanged, so a project that takes this has no schema change.
 - **`DatabaseEngineTests` holds the list of files that may name the engine.** A scan of `src/`, `tools/`
   and `tests/` fails on a file outside its allowlist that names the provider, a store type, a collation
@@ -54,7 +56,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   Each entry carries its reason, and `docs/switching-database.md` must name every one. What an upgrading
   project meets once it takes the class: its own `HasColumnType`, `HasFilter`, raw SQL or provider call
   in Persistence fails the scan until it moves into a member of the dialect or onto the allowlist with
-  its reason, and so does a test that names the provider or starts a PostgreSQL container of its own.
+  its reason, and so does a test that names the provider or starts a PostgreSQL container of its own
+  through the Testcontainers module.
 - **The tests reach the database through `ITestDatabase`** (`tests/TestSupport/Database/`, linked into
   IntegrationTests and ApiTests). `PostgresTestDatabase` is the one test file that starts the server and
   configures the provider; the other test files that name the engine are on the list for stated reasons,
@@ -62,20 +65,21 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   exempt the rest of the class. A test of your own that built its own options over the fixture's
   database asks `Database.Server` instead (`OptionsFor<TContext>()`, `ModelOnlyOptionsFor<TContext>()`,
   `ViolatedUniqueConstraint`).
-- **An aggregate's `Version` is a `long` in the Domain and in Application** (it was a `uint`), read from
-  `xmin` through a checked conversion in `PostgresDialect.MapRowVersion`. The ETag, the OpenAPI document,
+- **An aggregate's `Version` is a `long` in the Domain and in Application** (it was a `uint`), mapped
+  onto `xmin` by `PostgresDialect.MapRowVersion`: reading widens, and a `long` handed to the database is
+  converted with a check (ADR-0006, amendment of 2026-11-16; ADR-0033). The ETag, the OpenAPI document,
   the database and every answer of the API are unchanged, and the `If-Match` parser still reads a `uint`,
   the range this store can issue. What an upgrading project changes in an aggregate of its own: the
-  property becomes a `long` and its configuration calls `PostgresDialect.MapRowVersion` instead of
-  mapping `xmin` itself, with no migration (the model snapshot stays the same); until then the aggregate
-  keeps working at run time and fails the engine scan. Its endpoints keep compiling, and API clients
-  see nothing.
+  property and the response that carries it become a `long` (the commands' `ExpectedVersion` may stay or
+  follow) and its configuration calls `PostgresDialect.MapRowVersion` instead of mapping `xmin` itself,
+  with no migration (the model snapshot stays the same); until then the aggregate keeps working at run
+  time and fails the engine scan. Its endpoints keep compiling, and API clients see nothing.
 - **The template's description is one sentence**, the one `dotnet new trellis --help` prints:
   "Trellis is a dotnet new template for .NET 10 that generates a rich-DDD solution with Clean
   Architecture the tests enforce." The package description on nuget.org is the same sentence.
-- **The `remove-feature` and `add-feature` skills name the two new docs**: removing the sample
-  repoints the entries of `docs/overview.md` that link it and the example in `docs/faq.md`; a new
-  feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
+- **The `remove-feature` and `add-feature` skills name the new docs**: removing the sample repoints
+  the entries of `docs/overview.md` that link it and the sections of `docs/switching-database.md` that
+  name it; a new feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
 
 ## [0.2.0] - 2026-11-15
 
