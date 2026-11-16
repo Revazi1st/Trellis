@@ -14,7 +14,7 @@ namespace Trellis.IntegrationTests;
 public sealed class InvoicePersistenceTests(DatabaseFixture database) : IntegrationTestBase(database)
 {
     [Fact]
-    public async Task Full_aggregate_roundtrips_through_postgres()
+    public async Task Full_aggregate_roundtrips_through_the_database()
     {
         // A lower-case currency: stored as the normalised code.
         InvoiceId id = await Services.CreateInvoiceAsync("ACME Corp", "billing@acme.com", currency: "usd");
