@@ -17,13 +17,20 @@ namespace Trellis.ArchitectureTests;
 /// provider's assemblies, because a provider extension method need not carry the provider's name (an
 /// index's access method, a function on <c>EF.Functions</c>).
 /// <para>
-/// What neither fact sees: a connection string, wherever it is written; a provider extension method called
-/// in <c>tools/</c> or <c>tests/</c> without the provider's name in the file (the compiled check reads two
-/// assemblies, and the text scan alone holds the rest); a store type or SQL handed to a member the pattern
-/// does not know, or held in an attribute list the pattern does not expect; the range of versions the
-/// <c>If-Match</c> parser accepts (<c>TryGetExpectedVersion</c> reads a <c>uint</c>, the widest row version
-/// this engine issues); and code that is neutral in text and in its references but relies on how the
-/// engine behaves. The guide lists those by hand.
+/// What neither fact sees: a connection string, wherever it is written; a container a test starts through
+/// Testcontainers' generic <c>ContainerBuilder</c> (the builder names no engine, and the image is a
+/// lower-case literal); a provider extension method called in <c>tools/</c> or <c>tests/</c> without the
+/// provider's name in the file (the compiled check reads two assemblies, and the text scan alone holds the
+/// rest); a store type or SQL handed to a member the pattern does not know (an annotation set by its key
+/// with <c>HasAnnotation</c>, say), or written in an attribute form the pattern does not expect (an
+/// attribute list such as <c>[Required, Timestamp]</c>, or the attribute with its namespace); the range of
+/// versions the <c>If-Match</c> parser accepts (<c>TryGetExpectedVersion</c> reads a <c>uint</c>, the
+/// widest row version this engine issues); and code that is neutral in text and in its references but
+/// relies on how the engine behaves. The guide lists those by hand.
+/// </para>
+/// <para>
+/// The migrations folder is exempt as a whole, by its path in the scan and by its namespace in the
+/// compiled check, so a class written by hand there is seen by neither.
 /// </para>
 /// </summary>
 public sealed partial class DatabaseEngineTests
@@ -85,7 +92,7 @@ public sealed partial class DatabaseEngineTests
             "in src/, move the provider call, the store type or the SQL into a member of PostgresDialect and call it; in tests/, "
             + "ask the fixture's ITestDatabase (.claude/rules/persistence.md and tests.md, ADR-0033). Code that cannot live "
             + "there goes on EngineAllowlist with its reason, and into docs/switching-database.md. (A solution whose own name "
-            + "contains the engine's or the provider's name is a hit on every namespace line: except that name in EngineSpecific().)");
+            + "contains the engine's or the provider's name is a hit on every namespace line: exclude that name in EngineSpecific().)");
     }
 
     [Fact]
@@ -111,11 +118,13 @@ public sealed partial class DatabaseEngineTests
     /// <summary>
     /// Positive control for the scan, which expects zero hits outside its allowlist: the provider's name in a
     /// using, a call, an exception type or an annotation, the engine's name in an Aspire call, in the
-    /// Testcontainers module and in the health-check package, each call that hands the database a store
-    /// type, a collation, SQL text or a row version, and the attribute and ADO.NET forms of the same are
-    /// found; a call into the dialect or the test database, prose that spells the engine's name in a string, a
-    /// query filter, a neutral mapping and a comparison of a type name are not. The scan reads this file, so
-    /// every flagged row is assembled from two literals.
+    /// Testcontainers module, in the health-check package and in a class named after a seam, each call that
+    /// hands the database a store type, a collation, SQL text or a row version (through the fluent builder or
+    /// the metadata API, with a nested type argument, or with its dot at the end of the line before), and the
+    /// attribute and ADO.NET forms of the same are found; a call into the dialect or the test database, prose
+    /// that spells the engine's name in a string, a query filter, a neutral mapping, a comparison of a type
+    /// name and a member of that name with an expression body are not. The scan reads this file, so every
+    /// flagged row is assembled from two literals.
     /// </summary>
     [Theory]
     [InlineData("using Npg" + "sql;", true)]
@@ -141,6 +150,17 @@ public sealed partial class DatabaseEngineTests
     [InlineData("[Column(Type" + "Name = \"jsonb\")]", true)]
     [InlineData("command.Command" + "Text = \"SELECT 1 FOR UPDATE SKIP LOCKED\";", true)]
     [InlineData("[Time" + "stamp]", true)]
+    [InlineData("[Time" + "stampAttribute]", true)]
+    [InlineData("builder.ToSql" + "Query(\"SELECT * FROM orders\");", true)]
+    [InlineData("public sealed class Postg" + "resDialectTests", true)]
+    [InlineData("builder.Property(static o => o.Notes).Metadata.SetColumn" + "Type(\"jsonb\");", true)]
+    [InlineData("builder.HasIndex(static o => o.Code).Metadata.SetFil" + "ter(\"\\\"DeletedAtUtc\\\" IS NULL\");", true)]
+    [InlineData("property.SetDefaultValue" + "Sql(\"now()\");", true)]
+    [InlineData("property.SetComputedColumn" + "Sql(\"\\\"Net\\\" + \\\"Tax\\\"\");", true)]
+    [InlineData("property.SetCollat" + "ion(\"und-x-icu\");", true)]
+    [InlineData("modelBuilder.HasCollat" + "ion(\"ci\", locale: \"und-u-ks-level2\", provider: \"icu\", deterministic: false);", true)]
+    [InlineData("var rows = context.Database.Sql" + "Query<Dictionary<string, int>>($\"SELECT 1\");", true)]
+    [InlineData("builder.Property(static o => o.Notes).\n        HasColumn" + "Type(\"jsonb\");", true)]
     [InlineData("PostgresDialect.MapJson(builder.Property(static m => m.Content));", false)]
     [InlineData("private readonly ITestDatabase _database = new PostgresTestDatabase(null);", false)]
     [InlineData("logger.LogInformation(\"Connected to PostgreSQL\");", false)]
@@ -148,6 +168,8 @@ public sealed partial class DatabaseEngineTests
     [InlineData("builder.Property(static o => o.Total).HasPrecision(18, 2);", false)]
     [InlineData("builder.Property(static m => m.NextAttemptAtUtc).IsConcurrencyToken();", false)]
     [InlineData("if (mapping.TypeName == expected) { return; }", false)]
+    [InlineData("public string TypeName => \"orders.paid.v1\";", false)]
+    [InlineData("public string CommandText => _text;", false)]
     public void The_database_engine_scan_flags_the_provider_a_store_type_and_SQL_text(string code, bool flagged)
         => EngineSpecificsIn(new SourceFile("Planted.cs", code)).Any().ShouldBe(flagged);
 
@@ -326,14 +348,16 @@ public sealed partial class DatabaseEngineTests
     /// Testcontainers module's among them; case-sensitive, so prose that spells PostgreSQL in a string is not
     /// a hit); a call that takes a store type, a collation, SQL text or a database-generated row version (a
     /// column type, also before conventions, an index filter, a default, a computed column, a check
-    /// constraint, a raw query or command); and the same written as a mapping attribute or as an ADO.NET
-    /// command's text. Each name is written with a one-letter class so that this pattern does not match its
-    /// own text.
+    /// constraint, a raw query or command), through the fluent builder or the metadata API's <c>Set…</c>
+    /// twin; and the same written as a mapping attribute or as an ADO.NET command's text. A member of your
+    /// own named <c>TypeName</c> or <c>CommandText</c> is a hit where it is assigned or initialised, not where
+    /// it is read or has an expression body. Each name is written with a one-letter class so that this
+    /// pattern does not match its own text.
     /// </summary>
     [GeneratedRegex(
         @"N[p]g[sS]ql|P[o]stgres(?!Dialect\b|TestDatabase\b)|P[o]stgre[S]ql"
-        + @"|\.(?:HasColumn[T]ype|HaveColumn[T]ype|UseCollat[i]on|HasFil[t]er|HasDefaultValue[S]ql|HasComputedColumn[S]ql|HasCheck[C]onstraint|IsRow[V]ersion|From[S]ql\w*|Sql[Q]uery\w*|Execute[S]ql\w*|ToSql[Q]uery)\s*(?:<[^<>()]*>\s*)?\("
-        + @"|\b(?:Type[N]ame|Command[T]ext)\s*=(?!=)|\[Time[s]tamp\b",
+        + @"|\.\s*(?:(?:Has|Set)Column[T]ype|HaveColumn[T]ype|(?:Has|Use|Set)Collat[i]on|(?:Has|Set)Fil[t]er|(?:Has|Set)DefaultValue[S]ql|(?:Has|Set)ComputedColumn[S]ql|HasCheck[C]onstraint|IsRow[V]ersion|From[S]ql\w*|Sql[Q]uery\w*|Execute[S]ql\w*|ToSql[Q]uery)\s*(?:<(?:[^<>()]|<[^<>()]*>)*>\s*)?\("
+        + @"|\b(?:Type[N]ame|Command[T]ext)\s*=(?![=>])|\[Time[s]tamp(?:Attribute)?\b",
         RegexOptions.None,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex EngineSpecific();
