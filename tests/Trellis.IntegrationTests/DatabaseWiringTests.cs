@@ -23,6 +23,7 @@ public sealed class DatabaseWiringTests(DatabaseFixture database) : IntegrationT
     {
         using AppDbContext context = new AppDbContextFactory().CreateDbContext([]);
 
-        context.Database.CreateExecutionStrategy().RetriesOnFailure.ShouldBeFalse();
+        context.Database.CreateExecutionStrategy().RetriesOnFailure.ShouldBeFalse(
+            "dotnet ef builds this context and keeps the provider's default strategy, as before the dialect; change this fact together with PostgresDialect.UseDesignTime");
     }
 }
