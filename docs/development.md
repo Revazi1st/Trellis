@@ -300,8 +300,9 @@ project) and the `add-feature` skill point here rather than repeat it.
 `tests/TestSupport/` is not a project: it holds the test files several projects share
 (`ResultAssertions.cs` with `ShouldBeSuccess()`, `Invoices/InvoiceFactory.cs`, and
 `Database/ITestDatabase.cs` with `Database/PostgresTestDatabase.cs`: the database server the two
-fixtures start; the one test file that starts it and configures the provider), each compiled into the
-projects that need it by a linked `<Compile Include>` in their csproj.
+fixtures start, and `Database/PostgresTestDatabase.cs` is the one test file that starts it and
+configures the provider), each compiled into the projects that need it by a linked `<Compile Include>`
+in their csproj.
 
 <!--#if (IncludeUI) -->
 - **`ApiTests/Ui`** (with the UI; optional): UI.Common's typed clients, token handling and form logic over a
