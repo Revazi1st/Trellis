@@ -111,8 +111,9 @@ gathers what only PostgreSQL understands into `PostgresDialect`, and the token's
 
 - **Every aggregate root's `Version` is a `long` with a private setter**, mapped by
   `PostgresDialect.MapRowVersion`: still `xmin`, type `xid`, generated on add and update and a
-  concurrency token, read through a checked conversion, so a value the column cannot hold throws
-  instead of wrapping to another row's version.
+  concurrency token. Reading widens the 32-bit value into the `long`, and a `long` handed to the
+  database is converted with a check, so a value the column cannot hold throws instead of wrapping to
+  another row's version.
 - **The commands' `ExpectedVersion` is a `long?`.** `HttpRequest.TryGetExpectedVersion` keeps reading a
   `uint`, the range of versions this store can issue, so a tag outside it is still refused before the
   lookup.

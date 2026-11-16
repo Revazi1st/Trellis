@@ -10,8 +10,9 @@ The solution depends on PostgreSQL in more places than its provider registration
 the concurrency token, reaches the API as the ETag.
 
 These are the ties. Each names the file that uses it (a path is under
-`src/Infrastructure/Trellis.Persistence/` unless it starts with `src/`, `tools/` or `tests/`); the
-*Decision* below says where the engine-specific code itself lives.
+`src/Infrastructure/Trellis.Persistence/` unless it starts with `src/`, `tools/` or `tests/`, or is a
+file at the repository root or under `.claude/`); the *Decision* below says where the engine-specific
+code itself lives.
 
 - The `xmin` system column is every aggregate root's concurrency token (mapped in the root's
   configuration, `Configurations/InvoiceConfiguration.cs` in the sample), and the API sends it as the
@@ -23,8 +24,9 @@ These are the ties. Each names the file that uses it (a path is under
 - A unique violation is read from `PostgresException`: SQLSTATE 23505 and the constraint's name
   (`UniqueConstraintErrors.cs`, ADR-0018).
 - The shipped migration was written by the Npgsql provider (`Migrations/`).
-- PostgreSQL orders `uuid` by its bytes, so a version-7 id is the last key of the claim's `ORDER BY`
-  and of every page (`SpecificationPagingTests` asserts the order).
+- PostgreSQL orders `uuid` by its bytes, and a version-7 id starts with the millisecond it was made
+  in, so the ids sort by time. The id is the last key of the claim's `ORDER BY` and of every page
+  (`SpecificationPagingTests` asserts the order).
 - Smaller ones: every instant is written as UTC for `timestamptz`
   (`Conversions/UtcDateTimeOffsetConverter.cs`); the outbox rows of one save sit one microsecond apart
   (`Interceptors/OutboxWriteInterceptor.cs`); a string holding U+0000 is refused at the API because
@@ -189,12 +191,12 @@ What stays outside the dialect, and why:
 
 - `Only_the_listed_files_name_the_database_engine_or_write_its_SQL` scans every C# file under `src/`,
   `tools/` and `tests/`, the generated migrations aside. A hit is the provider's name; the engine's name
-  in an identifier, the dialect's and the test database's own names aside; a call that hands the
-  database a store type, a collation, SQL text or a database-generated row version; or the same written
-  as a mapping attribute or as an ADO.NET command's text. Its allowlist is the list of C# files that
-  name the engine, each with its reason. An entry exempts its whole file, so a test whose subject is the
-  engine sits in a file as small as that subject, and an entry for a file only an option ships is held
-  only where the file exists.
+  in an identifier, written `Postgres` or `PostgreSql` (`PostgresDialect` and `PostgresTestDatabase`
+  aside); a call that hands the database a store type, a collation, SQL text or a database-generated row
+  version; or the same written as a mapping attribute or as an ADO.NET command's text. Its allowlist is
+  the list of C# files that name the engine, each with its reason. An entry exempts its whole file, so a
+  test whose subject is the engine sits in a file as small as that subject, and an entry for a file only
+  an option ships is held only where the file exists.
 - `Only_the_dialect_and_the_migrations_call_into_the_provider` reads the compiled Persistence and Api
   assemblies, through NetArchTest's custom rule over Mono.Cecil, which NetArchTest already depends on
   (no package is added). A type outside `PostgresDialect` and the migrations whose signatures or method
@@ -206,11 +208,18 @@ What stays outside the dialect, and why:
   in full in [switching-database.md](../switching-database.md), so the checklist cannot fall behind the
   code.
 
-None of them sees a connection string, a provider extension method called in `tools/` or `tests/` in a
-file that does not name the provider (the compiled check reads two assemblies), a store type or SQL
-handed to a member the pattern does not list, the range of versions the `If-Match` parser accepts, or
-code that is neutral in text and in its references but relies on how the engine behaves. The guide lists
-those by hand.
+<!--#if (UseMultitenancy) -->
+With multi-tenancy, `tests/Trellis.IntegrationTests/TenancyTests.cs` is on the list as a whole file. Its
+engine-specific part is two tests and the probe model they share, and it is not split out, so the entry
+exempts the rest of the file too.
+<!--#endif -->
+
+None of them sees a connection string, a container a test starts through Testcontainers' generic
+`ContainerBuilder` (the builder names no engine, and the image is a lower-case literal), a provider
+extension method called in `tools/` or `tests/` in a file that does not name the provider (the compiled
+check reads two assemblies), a store type or SQL handed to a member the pattern does not list, the range
+of versions the `If-Match` parser accepts, or code that is neutral in text and in its references but
+relies on how the engine behaves. The guide lists those by hand.
 
 ### The test database
 
@@ -229,8 +238,9 @@ abstraction, so it does not contradict the second decision.
 `Invoice.Version` is a `long`, and so is everything that carries it in the Domain and in Application:
 `InvoiceResponse.Version`, the commands' `ExpectedVersion` (`long?`) and `InvoicePreconditions.ToWrite`.
 `uint` is the provider's type for `xid`; with `long` the Domain and Application no longer carry the
-engine's type. `MapRowVersion` reads the column through a checked conversion, so a value the database
-could not have issued (above `4294967295`, or negative) throws `OverflowException` instead of wrapping to
+engine's type. `MapRowVersion` maps the `long` onto the 32-bit column: reading widens, and a `long`
+handed to the database (a filter on `Version`) is converted with a check, so a value the database could
+not have issued (above `4294967295`, or negative) throws `OverflowException` instead of wrapping to
 another row's version.
 
 `HttpRequest.TryGetExpectedVersion` keeps reading a `uint?` (ADR-0025): that is the range of versions
@@ -259,27 +269,33 @@ the API.
   restate it. Code that cannot live there goes on the allowlist with its reason, and into the guide.
 - A solution whose own name contains `Postgres` or `Npgsql` is a hit on every namespace line of the scan,
   because the template engine writes the name into every namespace. The scan's failure message names the
-  fix: except the name in the pattern, `EngineSpecific()` in `DatabaseEngineTests.cs`.
-- What a project generated from an earlier version meets when it takes this change: no database change
-  and no migration; the sample's files that carry the version (the aggregate, its response, its
-  commands, its preconditions and its configuration), taken as they are or merged; an aggregate of its own with a `uint Version` keeps working at run time, and fails the scan
-  once the project takes `DatabaseEngineTests` until the property is a `long` and its configuration calls
-  `PostgresDialect.MapRowVersion` (the model snapshot stays the same); any other store type, index
-  filter or raw SQL in its Persistence, and any test that names the provider or starts its own container,
-  fails the scan until it moves into the dialect, asks the test database, or goes on the allowlist with
-  its reason. Its endpoints keep compiling, and API clients see nothing.
+  fix: exclude the name in the pattern, `EngineSpecific()` in `DatabaseEngineTests.cs`. A name that
+  starts with `Npgsql.` also fails the compiled check, which takes every assembly named `Npgsql.*` for
+  the provider's (`ProviderAssembly` in the same file).
+- What a project generated from an earlier version meets when it takes this change:
+  - no database change and no migration;
+  - the sample's files that carry the version (the aggregate, its response, its commands, its
+    preconditions and its configuration), taken as they are or merged;
+  - an aggregate of its own with a `uint Version` keeps working at run time, and fails the scan once the
+    project takes `DatabaseEngineTests` until the property is a `long` (its response's version too: a
+    `long` does not convert to a `uint` without a cast) and its configuration calls
+    `PostgresDialect.MapRowVersion`; the model snapshot stays the same;
+  - any other store type, index filter or raw SQL in its Persistence, and any test that names the
+    provider or starts a container through the engine's Testcontainers module, fails the scan until it
+    moves into the dialect, asks the test database, or goes on the allowlist with its reason;
+  - its endpoints keep compiling, and API clients see nothing.
 - Not decided here: the `choice` option itself, a second set of migrations, a read-model recipe, and SQL
-  Server test legs.
+  Server test runs in CI.
 
 ## Alternatives / Revisit when
 
 - *A database option now*: two shipped migrations on top of the multi-tenancy regeneration, a second
-  claim to keep equal in meaning to the first, every persistence test run twice, and SQL Server legs that
-  cannot run in a supported way on an arm64 machine.
+  claim to keep equal in meaning to the first, every persistence test run twice, and SQL Server tests in
+  CI that cannot run in a supported way on an arm64 machine.
 - *Every provider compiled in, chosen by configuration*: every project carries every provider's packages
   and one set of migrations per provider, and the model itself differs per engine (the token).
 - *A document store as the write store*: no migrations, and the commit boundary of aggregate, outbox row
   and idempotency key would need a replica set.
 - Revisit when a supported arm64 container image of SQL Server exists; when Pomelo publishes a release
   for EF Core 10 (MySQL then needs the same list of changes); or when a project asks for SQL Server and is
-  willing to carry its legs.
+  willing to carry its test runs in CI.
