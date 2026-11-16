@@ -2,7 +2,6 @@ using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using Trellis.Application.Abstractions;
 using Trellis.Application.Features.Auth;
 using Trellis.Persistence.Idempotency;
@@ -48,11 +47,7 @@ internal static class UniqueConstraintErrors
     /// </summary>
     public static bool TryMap(DbUpdateException exception, [NotNullWhen(true)] out Error? error)
     {
-        if (exception.InnerException is PostgresException
-            {
-                SqlState: PostgresErrorCodes.UniqueViolation,
-                ConstraintName: { } constraintName,
-            })
+        if (PostgresDialect.TryGetViolatedUniqueConstraint(exception, out string? constraintName))
         {
             return ByConstraintName.TryGetValue(constraintName, out error);
         }

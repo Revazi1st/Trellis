@@ -1,8 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
-using Npgsql;
 using Shouldly;
 using Trellis.Domain.Common;
 using Trellis.Persistence;
@@ -15,13 +13,13 @@ namespace Trellis.IntegrationTests;
 /// object a complex type, and EF Core 10 cannot index a complex-type member; a single-value value object
 /// that needs an index is mapped through <see cref="ScalarValueObjectConverter{TValueObject, TValue}"/>
 /// instead, one line per type. This probe model does that for <see cref="EmailAddress"/> and
-/// <see cref="Currency"/>, in a schema of its own on the fixture's server, and shows what it buys (a
+/// <see cref="Currency"/>, in a database of its own on the fixture's server, and shows what it buys (a
 /// unique index, <c>Contains</c>) and what it costs (no reaching inside the value in a query).
 /// </summary>
 [Collection(DatabaseCollection.Name)]
 public sealed class ScalarValueObjectConverterTests(DatabaseFixture database) : IAsyncLifetime
 {
-    private const string Schema = "converted_scalar_probe";
+    private const string ProbeDatabase = "converted_scalar_probe";
 
     private static readonly EmailAddress Jane = EmailAddress.Create("jane@example.com").ShouldBeSuccess();
     private static readonly EmailAddress Omar = EmailAddress.Create("omar@example.com").ShouldBeSuccess();
@@ -30,14 +28,14 @@ public sealed class ScalarValueObjectConverterTests(DatabaseFixture database) : 
     public async ValueTask InitializeAsync()
     {
         await using ProbeContext context = CreateContext();
-        await DropSchemaAsync(context);
-        await context.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(TestContext.Current.CancellationToken);
+        await context.Database.EnsureDeletedAsync(TestContext.Current.CancellationToken);
+        await context.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
     }
 
     public async ValueTask DisposeAsync()
     {
         await using ProbeContext context = CreateContext();
-        await DropSchemaAsync(context);
+        await context.Database.EnsureDeletedAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -48,7 +46,11 @@ public sealed class ScalarValueObjectConverterTests(DatabaseFixture database) : 
 
         IProperty email = subscriber.FindProperty(nameof(Subscriber.Email)).ShouldNotBeNull();
         email.GetValueConverter().ShouldBeOfType<ScalarValueObjectConverter<EmailAddress, string>>();
-        email.GetColumnType().ShouldBe("character varying(254)");
+        // One bounded text column, read from the mapping the provider resolved and not from the annotation
+        // the convention wrote: the store type's size, and the type the converter hands the database.
+        RelationalTypeMapping column = email.GetRelationalTypeMapping();
+        column.Size.ShouldBe(EmailAddress.MaxLength);
+        column.Converter.ShouldNotBeNull().ProviderClrType.ShouldBe(typeof(string));
         subscriber.GetComplexProperties().ShouldBeEmpty();
 
         subscriber.GetIndexes().ShouldHaveSingleItem().Properties.ShouldBe([email]);
@@ -68,7 +70,7 @@ public sealed class ScalarValueObjectConverterTests(DatabaseFixture database) : 
         {
             duplicate.Subscribers.Add(new Subscriber(Jane, Usd));
             DbUpdateException refused = await Should.ThrowAsync<DbUpdateException>(() => duplicate.SaveChangesAsync(ct));
-            refused.InnerException.ShouldBeOfType<PostgresException>().SqlState.ShouldBe(PostgresErrorCodes.UniqueViolation);
+            database.Server.ViolatedUniqueConstraint(refused).ShouldNotBeNull("the save was refused, but not by the unique index");
         }
 
         await using ProbeContext reader = CreateContext();
@@ -89,12 +91,7 @@ public sealed class ScalarValueObjectConverterTests(DatabaseFixture database) : 
             () => context.Subscribers.Where(static s => s.Email.Value.StartsWith("jane")).ToQueryString());
     }
 
-    private static async Task DropSchemaAsync(ProbeContext context)
-        => await context.Database.ExecuteSqlRawAsync(
-            $"DROP SCHEMA IF EXISTS {Schema} CASCADE", TestContext.Current.CancellationToken);
-
-    private ProbeContext CreateContext()
-        => new(new DbContextOptionsBuilder<ProbeContext>().UseNpgsql(database.ConnectionString).Options);
+    private ProbeContext CreateContext() => new(database.Server.OptionsFor<ProbeContext>(ProbeDatabase));
 
     private sealed class Subscriber
     {
@@ -123,7 +120,6 @@ public sealed class ScalarValueObjectConverterTests(DatabaseFixture database) : 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.HasDefaultSchema(Schema);
             modelBuilder.Entity<Subscriber>(static subscriber =>
             {
                 subscriber.HasKey(static s => s.Id);

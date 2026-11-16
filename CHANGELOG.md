@@ -31,17 +31,57 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   migration job seeded: with the variable the test fails unless the list shows exactly the seeded invoices,
   and without it the test skips, so the other browser tests' invoices never reach these pictures
   (`docs/development.md`, *UI tests*). The `remove-feature` skill names the class and the step.
+- **ADR-0033 and `docs/switching-database.md`.** PostgreSQL stays the one database engine the template
+  ships, and ADR-0033 records why: what ties the solution to it, and what stands in the way of SQL
+  Server, MySQL, SQLite, MongoDB, Oracle and CockroachDB, as their vendors' documentation and the
+  package registry stated it on 2026-11-08. The guide is the checklist for a project that must move to
+  another relational engine anyway: the places that are specific to PostgreSQL, with the SQL Server
+  equivalent where the vendors' documentation gives one, an order of work, and a list of what nobody has
+  verified.
 
 ### Changed
 
+- **Everything in Persistence that only PostgreSQL understands is in `PostgresDialect.cs`.** The
+  provider and its retrying strategy, the design-time provider, the `xmin` concurrency token, the outbox
+  payload's `jsonb`, the outbox index's filter, the `FOR UPDATE SKIP LOCKED` claim and the reading of a
+  unique violation are members of one internal static class, which the registration, the design-time
+  factory, the configurations, the outbox processor and `UniqueConstraintErrors` call. With
+  multi-tenancy, the per-column settings a tenant-led unique index carries over (collation, operator
+  class, NULLS order) are a member too, which `AppDbContext.LeadWithTenant` calls. The model, the SQL
+  and the shipped migration are unchanged, so a project that takes this has no schema change.
+- **`DatabaseEngineTests` holds the list of files that may name the engine.** A scan of `src/`, `tools/`
+  and `tests/` fails on a file outside its allowlist that names the provider, a store type, a collation
+  or SQL, and a check of the compiled Persistence and Api assemblies fails on a type outside the dialect
+  that calls into the provider, even through an extension method whose name does not say whose it is.
+  Each entry carries its reason, and `docs/switching-database.md` must name every one. What an upgrading
+  project meets once it takes the class: its own `HasColumnType`, `HasFilter`, raw SQL or provider call
+  in Persistence fails the scan until it moves into a member of the dialect or onto the allowlist with
+  its reason, and so does a test that names the provider or starts a PostgreSQL container of its own
+  through the Testcontainers module.
+- **The tests reach the database through `ITestDatabase`** (`tests/TestSupport/Database/`, linked into
+  IntegrationTests and ApiTests). `PostgresTestDatabase` is the one test file that starts the server and
+  configures the provider; the other test files that name the engine are on the list for stated reasons,
+  and the outbox runbook's test moved into `OutboxRetryTests.Runbook.cs` so that its entry does not
+  exempt the rest of the class. A test of your own that built its own options over the fixture's
+  database asks `Database.Server` instead (`OptionsFor<TContext>()`, `ModelOnlyOptionsFor<TContext>()`,
+  `ViolatedUniqueConstraint`).
+- **An aggregate's `Version` is a `long` in the Domain and in Application** (it was a `uint`), mapped
+  onto `xmin` by `PostgresDialect.MapRowVersion`: reading widens, and a `long` handed to the database is
+  converted with a check (ADR-0006, amendment of 2026-11-16; ADR-0033). The ETag, the OpenAPI document,
+  the database and every answer of the API are unchanged, and the `If-Match` parser still reads a `uint`,
+  the range this store can issue. What an upgrading project changes in an aggregate of its own: the
+  property and the response that carries it become a `long` (the commands' `ExpectedVersion` may stay or
+  follow) and its configuration calls `PostgresDialect.MapRowVersion` instead of mapping `xmin` itself,
+  with no migration (the model snapshot stays the same); until then the aggregate keeps working at run
+  time and fails the engine scan. Its endpoints keep compiling, and API clients see nothing.
 - **The template's description is one sentence**, the one `dotnet new trellis --help` prints:
   "Trellis is a dotnet new template for .NET 10 that generates a rich-DDD solution with Clean
   Architecture the tests enforce." The package description on nuget.org is the same sentence.
-- **The `remove-feature` and `add-feature` skills name the two new docs**: removing the sample
-  repoints the entries of `docs/overview.md` that link it and the example in `docs/faq.md`; a new
-  feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
+- **The `remove-feature` and `add-feature` skills name the new docs**: removing the sample repoints
+  the entries of `docs/overview.md` that link it and the sections of `docs/switching-database.md` that
+  name it; a new feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
 
-## [0.2.0] - 2026-11-14
+## [0.2.0] - 2026-11-15
 
 A minor release. The Blazor UI gets a design system with a light and a dark theme and a switch between
 them. The repository an agent works in gains three reviewers, hooks that ask before the edits your

@@ -4,6 +4,7 @@
 - **Date**: 2026-07-14
 - **Amended**: 2026-10-11 — concurrency at the aggregate boundary by convention, value objects nesting value objects, and converted columns for a single-value value object that needs an index (see *Amendment (2026-10-11)* below)
 - **Amended**: 2026-11-09 — the code, not this record, lists which value objects are converted (see *Amendment (2026-11-09)* below)
+- **Amended**: 2026-11-16 — the concurrency token is mapped by the dialect and read as a `long` (see *Amendment (2026-11-16)* below)
 
 ## Context
 
@@ -96,3 +97,34 @@ contradicts the model, because an accepted record only takes amendments and noth
 
 - A feature that converts a value object leaves this record true, and the reviewer reads the decision in
   `ConfigureConventions` and the feature doc rather than in a list here.
+
+## Amendment (2026-11-16): the token through the dialect, as a long
+
+### Why
+
+The concurrency token was the Domain's one type shaped by the engine: `Invoice.Version` was a `uint`
+because that is what the Npgsql provider reads `xmin` as, and it travelled as a `uint` through
+`InvoiceResponse`, the four commands' `ExpectedVersion` and `InvoicePreconditions.ToWrite`. ADR-0033
+gathers what only PostgreSQL understands into `PostgresDialect`, and the token's mapping is part of it.
+
+### Decision
+
+- **Every aggregate root's `Version` is a `long` with a private setter**, mapped by
+  `PostgresDialect.MapRowVersion`: still `xmin`, type `xid`, generated on add and update and a
+  concurrency token. Reading widens the 32-bit value into the `long`, and a `long` handed to the
+  database is converted with a check, so a value the column cannot hold throws instead of wrapping to
+  another row's version.
+- **The commands' `ExpectedVersion` is a `long?`.** `HttpRequest.TryGetExpectedVersion` keeps reading a
+  `uint`, the range of versions this store can issue, so a tag outside it is still refused before the
+  lookup.
+- The rest of the 2026-10-11 amendment stands: the token guards the whole aggregate, and
+  `AggregateConcurrencyTests` fails a root without one.
+
+### Consequences
+
+- No schema change and no change of an answer: the model snapshot, the migration, the SQL, the ETag and
+  the OpenAPI document are the same.
+- An existing aggregate's `uint Version` changes type when its project takes the engine rule
+  (`DatabaseEngineTests` fails on a `HasColumnType("xid")` outside the dialect); no migration follows.
+- A project that moves to an engine with a wider row version widens the parser too
+  (`docs/switching-database.md`).

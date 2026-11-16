@@ -83,8 +83,9 @@ after each layer.
 - [ ] `Configurations/{Aggregate}Configuration`: value objects as `ComplexProperty`, children
       `AutoInclude()` + field access. With multi-tenancy, add **no** tenant column or filter: every
       `AggregateRoot<>` gets them by convention [`TenancyTests`, all-options leg].
-- [ ] A concurrency token on the root: map `xmin` as `InvoiceConfiguration` does (a `uint Version`
-      with a private setter). A change to children alone still writes the root row and bumps it
+- [ ] A concurrency token on the root:
+      `PostgresDialect.MapRowVersion(builder.Property(static x => x.Version))`, as
+      `InvoiceConfiguration` calls it (a `long Version` with a private setter). A change to children alone still writes the root row and bumps it
       (`AggregateConcurrencyInterceptor`), so the token guards the whole aggregate
       [`AggregateConcurrencyTests`].
 - [ ] One line in `AppDbContext.ConfigureConventions` per new ID; a `DbSet`; the repository in
@@ -258,10 +259,12 @@ The reference slice is one aggregate. These shapes are not in it; each has a hom
   (Persistence), which asks `userManager.FindByEmailAsync` before it writes and answers
   `AuthErrors.EmailAlreadyInUse`; for the index, `UserNameIndex` and the same `Error` its row in
   `UniqueConstraintErrors` maps to. An e-mail key is case-insensitive like Auth's: a nondeterministic
-  ICU collation (`HasCollation(…, deterministic: false)` in `AppDbContext.OnModelCreating`,
-  `UseCollation` on the column) or a normalized column (Identity's `NormalizedUserName`, the e-mail
-  upper-cased, under `UserNameIndex`), and a test row that adds the same address in another case gets
-  the index's `Error`.
+  ICU collation, declared and applied through members of `PostgresDialect` that
+  `AppDbContext.OnModelCreating` and the configuration call (they hold the provider's
+  `HasCollation(…, deterministic: false)` and the column's `UseCollation`, which `DatabaseEngineTests`
+  refuses anywhere else), or a normalized column (Identity's `NormalizedUserName`, the e-mail
+  upper-cased, under `UserNameIndex`), which needs no dialect member; a test row that adds the same
+  address in another case gets the index's `Error`.
 - **Work on a timer**: `docs/architecture.md`, *Scheduled use cases*.
 - **Telling another system**: an integration event from a translate-and-send handler,
   `docs/architecture.md`; being told by one (a webhook): the `add-integration` skill, step 7.

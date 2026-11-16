@@ -1,4 +1,6 @@
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.Logging;
 using Trellis.SharedKernel.Domain;
 using Trellis.SharedKernel.Messaging;
@@ -84,5 +86,39 @@ internal static class PlantedViolations
         }
 
         internal static Result<AggregateCreatedByItsParent> Create(PlantedId id) => new AggregateCreatedByItsParent(id);
+    }
+
+    /// <summary>
+    /// A mapping that calls a provider extension method whose name does not say whose it is: an index's
+    /// access method compiles with EF Core's namespace alone, and belongs in the dialect all the same.
+    /// </summary>
+    internal static class IndexMethodOutsideTheDialect
+    {
+        public static void Configure(IndexBuilder index) => index.HasMethod("gin");
+    }
+
+    /// <summary>
+    /// The same call inside a lambda. The compiler moves a lambda's body into a nested class of its own
+    /// making, so a check that reads only a type's own methods finds nothing here.
+    /// </summary>
+    internal static class ProviderCallInALambda
+    {
+        public static Action<IndexBuilder> Configure { get; } = static index => index.HasMethod("gin");
+    }
+
+    /// <summary>
+    /// A provider function in an async query, the shape of a repository method. The compiler moves an async
+    /// method's body into a nested state machine, and the function's name carries no provider's name.
+    /// </summary>
+    internal static class ProviderCallInAnAsyncMethod
+    {
+        public static async Task<int> CountAsync(IQueryable<string> names, CancellationToken cancellationToken)
+            => await names.CountAsync(static name => EF.Functions.ILike(name, "a%"), cancellationToken);
+    }
+
+    /// <summary>The nearest shape the provider check accepts: an index mapped with EF Core's own members.</summary>
+    internal static class NeutralIndexMapping
+    {
+        public static void Configure(IndexBuilder index) => index.HasDatabaseName("IX_Planted").IsUnique();
     }
 }

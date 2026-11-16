@@ -16,9 +16,7 @@ namespace Trellis.Persistence;
 public static class DependencyInjection
 {
     public static IServiceCollection AddPersistence(this IServiceCollection services, string connectionString)
-        => services.AddPersistence(options => options.UseNpgsql(
-            connectionString,
-            static npgsql => npgsql.EnableRetryOnFailure()));
+        => services.AddPersistence(options => PostgresDialect.UseServer(options, connectionString));
 
     public static IServiceCollection AddPersistence(
         this IServiceCollection services,

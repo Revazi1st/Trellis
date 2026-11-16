@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 #endif
 using Trellis.Domain.Invoices;
 using Trellis.Persistence.Identity;
@@ -137,9 +136,7 @@ public sealed class AppDbContext(
         IMutableProperty[] columns =
             [aggregate.FindProperty(Interceptors.TenantInterceptor.TenantIdProperty)!, .. unique.Properties];
         IReadOnlyList<bool>? descending = unique.IsDescending;
-        IReadOnlyList<string>? collation = unique.GetCollation();
-        IReadOnlyList<string>? operators = unique.GetOperators();
-        IReadOnlyList<NullSortOrder>? nullSortOrder = unique.GetNullSortOrder();
+        Action<IMutableIndex> carryColumnSettings = PostgresDialect.CarryColumnSettingsBehindALeadingColumn(unique);
         IAnnotation[] annotations = [.. unique.GetAnnotations()];
 
         aggregate.RemoveIndex(unique);
@@ -158,27 +155,9 @@ public sealed class AppDbContext(
             _ => [false, .. descending],
         };
 
-        // Annotations, stored as the value given, so each is a real array: a collection expression passed
-        // as an IReadOnlyList<T> becomes a list type the compiler makes up, which the C# migration generator
-        // cannot write ('migrations add' throws) and Npgsql's DDL skips without a word (the index loses
-        // its COLLATE, operator class and NULLS order).
-        if (collation is not null)
-        {
-            string[] shifted = [null!, .. collation];
-            scoped.SetCollation(shifted);
-        }
-
-        if (operators is not null)
-        {
-            string[] shifted = [null!, .. operators];
-            scoped.SetOperators(shifted);
-        }
-
-        if (nullSortOrder is not null)
-        {
-            NullSortOrder[] shifted = [NullSortOrder.Unspecified, .. nullSortOrder];
-            scoped.SetNullSortOrder(shifted);
-        }
+        // The per-column settings only the provider has (collation, operator class, NULLS order) move
+        // one place along too; the dialect reads and writes them.
+        carryColumnSettings(scoped);
     }
 #endif
 

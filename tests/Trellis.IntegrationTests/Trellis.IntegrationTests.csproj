@@ -16,10 +16,13 @@
   </ItemGroup>
 
   <!-- Shared test support (tests/TestSupport): one source file compiled into each test project that sees the
-       SharedKernel, no project of its own. ShouldBeSuccess() comes with the global using; the Invoice
-       factory, which needs the Application commands, only where they are visible. -->
+       SharedKernel, no project of its own. ShouldBeSuccess() comes with the global using; the test database
+       (TestSupport/Database: ITestDatabase and the server it starts) here and in ApiTests, every file in
+       that folder in both, so a file there uses only what both projects reference (ApiTests has no
+       Respawn); the Invoice factory, which needs the Application commands, only where they are visible. -->
   <ItemGroup>
     <Compile Include="..\TestSupport\ResultAssertions.cs" Link="TestSupport\ResultAssertions.cs" />
+    <Compile Include="..\TestSupport\Database\*.cs" LinkBase="TestSupport\Database" />
     <Compile Include="..\TestSupport\Invoices\InvoiceFactory.cs" Link="TestSupport\Invoices\InvoiceFactory.cs" />
     <Using Include="Trellis.TestSupport" />
   </ItemGroup>

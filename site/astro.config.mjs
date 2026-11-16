@@ -137,6 +137,7 @@ export default defineConfig({
             { label: 'Design system', slug: 'develop/design-system' },
             { label: 'Upgrading', slug: 'develop/upgrading' },
             { label: 'Versions and support', link: '/develop/upgrading/#versions-and-support' },
+            { label: 'Switching the database', slug: 'develop/switching-database' },
             { label: 'Agent toolkit', link: '/reference/docs-index/' },
           ],
         },

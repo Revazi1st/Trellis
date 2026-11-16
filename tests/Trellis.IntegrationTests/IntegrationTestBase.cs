@@ -36,9 +36,12 @@ public abstract class IntegrationTestBase(DatabaseFixture database) : IAsyncLife
 
     protected IServiceProvider Services => _scope!.ServiceProvider;
 
+    /// <summary>The collection's database: <c>Database.Server</c> answers what a test needs from the engine.</summary>
+    protected DatabaseFixture Database { get; } = database;
+
     public async ValueTask InitializeAsync()
     {
-        await database.ResetAsync();
+        await Database.ResetAsync();
 
         var services = new ServiceCollection();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
@@ -49,7 +52,7 @@ public abstract class IntegrationTestBase(DatabaseFixture database) : IAsyncLife
         services.AddSingleton<Trellis.Application.Abstractions.ITenantContext, SystemTenantContext>();
 #endif
         services.AddApplication();
-        services.AddPersistence(database.ConnectionString);
+        services.AddPersistence(Database.ConnectionString);
         ConfigureServices(services);
 
         _provider = services.BuildServiceProvider();

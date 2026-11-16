@@ -55,6 +55,7 @@ export const routes = {
   'development.md': 'develop/development',
   'design-system.md': 'develop/design-system',
   'upgrading.md': 'develop/upgrading',
+  'switching-database.md': 'develop/switching-database',
   'releasing.md': 'develop/releasing',
   'deployment.md': 'operate/deployment',
   'threat-model.md': 'operate/threat-model',

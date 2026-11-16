@@ -15,13 +15,9 @@ internal sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.HasKey(static i => i.Id);
         builder.Property(static i => i.Id).ValueGeneratedNever();
 
-        // Optimistic concurrency via the Postgres 'xmin' system column — no schema column added.
-        // Surfaced as Invoice.Version so the API can emit it as an ETag.
-        builder.Property(static i => i.Version)
-            .HasColumnName("xmin")
-            .HasColumnType("xid")
-            .ValueGeneratedOnAddOrUpdate()
-            .IsConcurrencyToken();
+        // Optimistic concurrency: the dialect maps Invoice.Version onto the row version the database keeps
+        // (ADR-0033), and the API emits it as the ETag.
+        PostgresDialect.MapRowVersion(builder.Property(static i => i.Version));
 
         builder.Property(static i => i.CustomerName).HasMaxLength(Invoice.CustomerNameMaxLength);
         builder.Property(static i => i.Status).HasConversion<string>().HasMaxLength(16);
