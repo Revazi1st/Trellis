@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import glob
 import json
 import math
 import os
@@ -1273,9 +1274,14 @@ class Facts:
 
 
 def mentions(project: str, text: str) -> bool:
-    """True when a C# file of the project contains the text."""
-    files = sorted((ROOT / project).rglob("*.cs"))
-    return any(text in f.read_text(encoding="utf-8") for f in files)
+    """True when a C# file the project compiles contains the text: one of its own, or one its project
+    file links in with <Compile Include="..\\TestSupport\\…"> (the test database starts the container)."""
+    folder = ROOT / project
+    files = set(folder.rglob("*.cs"))
+    for csproj in folder.glob("*.csproj"):
+        for include in re.findall(r'<Compile\s+Include="([^"]+\.cs)"', csproj.read_text(encoding="utf-8")):
+            files.update(Path(p) for p in glob.glob(os.path.join(folder, include.replace("\\", "/"))))
+    return any(text in f.read_text(encoding="utf-8") for f in sorted(files))
 
 
 def gather_facts() -> Facts:
