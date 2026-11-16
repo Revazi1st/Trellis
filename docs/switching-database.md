@@ -5,9 +5,11 @@ The solution runs on PostgreSQL, and no option changes that
 relational engine changes (the code and the tests that name the engine, the packages, the configuration
 and tooling files outside C#, and the behaviour to prove again), each with the SQL Server equivalent
 where the vendor's documentation gives one. The docs, rules and skills that mention PostgreSQL in prose
-are not listed one by one: `grep -rIil -e postgres -e npgsql docs .claude scripts README.md AGENTS.md .gitleaks.toml`
-finds them. The page was written from the code and from that documentation, and the solution has not
-been run on another engine.
+are not listed one by one:
+`grep -rIil -e postgres -e npgsql -e xmin -e 'skip locked' docs .claude scripts README.md AGENTS.md .gitleaks.toml`
+finds them, among them the records that describe `xmin` or the claim without naming the engine. The
+page was written from the code and from that documentation, and the solution has not been run on
+another engine.
 
 ## Before you start
 
@@ -37,8 +39,8 @@ been run on another engine.
 
 ## Packages
 
-Each package's version is in `Directory.Packages.props`, and the project files named after it reference
-it. The SQL Server packages are MIT-licensed, from nuget.org.
+Each package's version is in `Directory.Packages.props`, and each bullet names the project files that
+reference the package. The SQL Server packages are MIT-licensed, from nuget.org.
 
 - `Npgsql.EntityFrameworkCore.PostgreSQL` becomes `Microsoft.EntityFrameworkCore.SqlServer`, at the
   version of `Microsoft.EntityFrameworkCore` already pinned:
@@ -68,7 +70,7 @@ a member, the code that calls it, and what each engine does there. The paths in 
 |---|---|---|---|
 | `UseServer`, called by `DependencyInjection.AddPersistence` | `UseNpgsql` with `EnableRetryOnFailure` | `UseSqlServer` with `EnableRetryOnFailure`, and the same `CreateExecutionStrategy` pattern; `UseAzureSql` sets resiliency itself | |
 | `UseDesignTime`, called by `AppDbContextFactory` | `UseNpgsql` without the retrying strategy, and a fallback connection string in Npgsql's syntax | the provider call without the retrying strategy, and a connection string in SQL Server's syntax | the connection string's syntax: no source of this page gives it |
-| `MapRowVersion`, called by every aggregate root's configuration (`Configurations/InvoiceConfiguration.cs` in the sample) | `xmin`, type `xid`, read through a checked conversion into the `long` property, generated on add and update, a concurrency token; no column in the table | `rowversion`. *Handling concurrency conflicts* maps a `byte[]` with `[Timestamp]` or `IsRowVersion()`; *Value conversions* (section "Use ulong for timestamp/rowversion") calls the column "8-byte binary" and maps a `ulong` with `.IsRowVersion().HasConversion<byte[]>()`. It changes on every UPDATE of the row, so a change to a child alone still bumps it (`AggregateConcurrencyInterceptor`). It is a column of the table, so the migration changes | not run here; the documentation's example is a `ulong`, and a `long` mapped that way has not been run |
+| `MapRowVersion`, called by every aggregate root's configuration (`Configurations/InvoiceConfiguration.cs` in the sample) | `xmin`, type `xid`, widened into the `long` property on reading and converted back with a check, generated on add and update, a concurrency token; no column in the table | `rowversion`. *Handling concurrency conflicts* maps a `byte[]` with `[Timestamp]` or `IsRowVersion()`; *Value conversions* (section "Use ulong for timestamp/rowversion") calls the column "8-byte binary" and maps a `ulong` with `.IsRowVersion().HasConversion<byte[]>()`. It changes on every UPDATE of the row, so a change to a child alone still bumps it (`AggregateConcurrencyInterceptor`). It is a column of the table, so the migration changes | not run here; the documentation's example is a `ulong`, and a `long` mapped that way has not been run |
 | `MapJson`, called by `Outbox/OutboxMessageConfiguration.cs` for the payload | `jsonb` | `json` when the provider is configured with `UseAzureSql` or `UseCompatibilityLevel(170)`; `nvarchar(max)` otherwise | |
 | `FilterToPendingMessages`, called by `Outbox/OutboxMessageConfiguration.cs` for the index over the pending rows | `HasFilter("\"Status\" = 0")` | `HasFilter("[Status] = 0")` | |
 | `ClaimDueMessagesAsync`, called by `Outbox/OutboxProcessor.cs` | the statement below | `SELECT TOP (@n) * FROM [OutboxMessages] WITH (UPDLOCK, READPAST, ROWLOCK) WHERE [Status] = 0 AND [NextAttemptAtUtc] <= @now ORDER BY [OccurredAtUtc], [Id]`. `READPAST` works only under READ COMMITTED or REPEATABLE READ, and not under READ COMMITTED with `READ_COMMITTED_SNAPSHOT` on unless `READCOMMITTEDLOCK` is added | how SQL Server orders a version-7 `uniqueidentifier`, the last key of the `ORDER BY` |
@@ -90,7 +92,7 @@ the transaction ends, and return them in one order on every replica. `OutboxRetr
 
 One place is outside the dialect because it names no provider: `AppDbContext.ConfigureConventions` maps
 every `DateTimeOffset` through `Conversions/UtcDateTimeOffsetConverter.cs`, because Npgsql refuses a
-non-zero offset for `timestamptz`. Keep it on another engine: it keeps one convention. Which type the
+non-zero offset for `timestamptz`. Keep it on another engine: it keeps every instant in UTC. Which type the
 SQL Server provider maps a `DateTimeOffset` to, whether that type keeps the offset, and its precision
 are not verified.
 
@@ -133,15 +135,20 @@ outside C#, the connection strings, and the behaviour to prove again. The files 
 What the test does not see:
 
 - a connection string, wherever it is written;
+- a container a test starts through Testcontainers' generic `ContainerBuilder`: the builder names no
+  engine, and the image is a lower-case literal;
 - a provider extension method called in `tools/` or `tests/` in a file that does not name the provider
-  (the compiled check reads the Persistence and Api assemblies only);
+  (the compiled check reads the Persistence and Api assemblies only), such as the planted calls of
+  `tests/Trellis.ArchitectureTests/PlantedViolations.cs` (*Tests*);
 - a store type or SQL handed to a member the pattern does not list;
 - the range of the `If-Match` parser (*The aggregate's version*);
 - behaviour (*Behaviour to prove again*).
 
 A solution whose own name contains `Postgres` or `Npgsql` is a hit on every namespace line, because the
-template engine writes the name into every namespace: except the name in the pattern,
-`EngineSpecific()` in `DatabaseEngineTests.cs`.
+template engine writes the name into every namespace: exclude the name in the pattern,
+`EngineSpecific()` in `DatabaseEngineTests.cs`. A name that starts with `Npgsql.` also fails the compiled
+check, which takes every assembly named `Npgsql.*` for the provider's (`ProviderAssembly` in the same
+file).
 
 <!--#if (UseMultitenancy) -->
 ### With multi-tenancy
@@ -150,7 +157,9 @@ template engine writes the name into every namespace: except the name in the pat
   class and NULLS order, which are the provider's own settings per column, onto the tenant-led index
   that `AppDbContext.LeadWithTenant` puts in its place. It changes with the provider.
 - `tests/Trellis.IntegrationTests/TenancyTests.cs` is on the list: it asserts those settings in the
-  model and the exact `CREATE UNIQUE INDEX` text the migration writes.
+  model and the exact `CREATE UNIQUE INDEX` text the migration writes. It is on the list as a whole
+  file: its engine-specific part is two tests and the probe model they share, not split out, so the
+  entry exempts the rest of the file too.
 - A row written with no tenant relies on NULLs being distinct in a unique index
   (`.claude/rules/persistence.md`, *Multi-tenancy*). What SQL Server does there is not verified.
 - The migration is regenerated with the option anyway
@@ -170,8 +179,9 @@ and the ETag). A `uint` is left in two places:
   endpoints that declare its `out uint?`: it refuses a tag the store could not have issued, with a 412
   before the lookup.
 
-An engine with a wider row version changes both, and the `"4294967296"` row of `InvoiceContractTests`
-(one past the widest version PostgreSQL issues, answered with a 412) with them. SQL Server's `rowversion` needs a
+An engine with a wider row version changes both, and the two rows of `InvoiceContractTests` that hold
+the parser's range with them: `"4294967295"`, the widest version PostgreSQL issues, is looked up (a 404
+for a missing invoice), and `"4294967296"`, one past it, is a 412. SQL Server's `rowversion` needs a
 conversion to `byte[]`, and a `long` mapped that way has not been run (*Persistence*, the
 `MapRowVersion` row).
 
@@ -234,6 +244,11 @@ The other test files on the list, each with what changes there:
   `ThrowawayDatabaseTests` also declares the server with `AddPostgres`.
 - `tests/Trellis.ArchitectureTests/ContainerImageTests.cs`: the image allowlist (*Hosts and the AppHost*).
 
+`tests/Trellis.ArchitectureTests/PlantedViolations.cs` is not on the list, because it does not name the
+provider, and it still compiles only against it: three planted calls to the provider's extension
+methods (`HasMethod` twice and `EF.Functions.ILike`) are the shapes the compiled check's control must
+find. Replace them with calls the new provider declares.
+
 A test of your own asks `Database.Server`, the fixture's `ITestDatabase`, for options over the server, a
 model that never connects or the name of a violated unique constraint, instead of naming the provider
 or starting a container of its own.
@@ -250,8 +265,9 @@ Each item names its test and claims nothing about another engine.
 - `"0"` and `"1"` are used as versions no invoice has (`InvoiceContractTests`,
   `ProblemDetailsContractTests`): check that neither can be a row's first version, or read the version
   and send another.
-- A string holding U+0000 is a 400 at the API because PostgreSQL's `text` stores none. What another
-  engine does is not known here, and the 400 can stay.
+- A string holding U+0000 is a 400 at the API because PostgreSQL's `text` stores none
+  (`ProblemDetailsContractTests` for a body, `EndpointContractTests` for a query string,
+  `EndpointMetadataTests` for a path). What another engine does is not known here, and the 400 can stay.
 - The runbook's SQL in [deployment.md](deployment.md#outbox-operations) and the test that runs it.
 
 ## What is not known
@@ -266,10 +282,11 @@ Each item names its test and claims nothing about another engine.
 - The settings of `EnrichSqlServerDbContext`: whether it can turn its own retry and health check off.
 - How `MsSqlBuilder` uses its image constant.
 - Respawn's SQL Server adapter at the version `Directory.Packages.props` pins.
-- Whether a SQL Server unique index treats NULLs as distinct (a tenant-less row relies on it with
-  multi-tenancy).
 - A counterpart to the pgAdmin tile in the AppHost.
 - Identity columns and the length of identifiers, which the sources of this page do not cover.
+<!--#if (UseMultitenancy) -->
+- Whether a SQL Server unique index treats NULLs as distinct (a tenant-less row relies on it).
+<!--#endif -->
 
 ## Order of work
 
@@ -283,6 +300,12 @@ Each item names its test and claims nothing about another engine.
 6. The unique violation (`TryGetViolatedUniqueConstraint`), until `UniqueConstraintTests`,
    `RegistrationRaceTests` and `IdempotencyStoreTests` pass.
 7. The hosts and the AppHost.
-8. `DatabaseEngineTests`: its pattern names this provider and this engine, so give it the new names, and
-   keep its allowlist and this page in step.
+8. `DatabaseEngineTests`: its pattern names this provider and this engine, and so do the compiled
+   check's `ProviderAssembly` and the dialect's type name, so give them the new names; replace the
+   planted provider calls in `PlantedViolations.cs` (*Tests*); keep its allowlist and this page in step.
 9. The files outside C#, then the docs.
+<!--#if (UseMultitenancy) -->
+
+With multi-tenancy, port `PostgresDialect.CarryColumnSettingsBehindALeadingColumn` with the unique
+violation (step 6), until `TenancyTests` passes.
+<!--#endif -->
