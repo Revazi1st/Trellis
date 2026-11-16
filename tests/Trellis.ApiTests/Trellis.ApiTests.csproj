@@ -32,7 +32,9 @@
 
   <!-- Shared test support (tests/TestSupport): one source file compiled into each test project that sees the
        SharedKernel, no project of its own. ShouldBeSuccess() comes with the global using; the test database
-       (TestSupport/Database: ITestDatabase and the server it starts) here and in IntegrationTests. -->
+       (TestSupport/Database: ITestDatabase and the server it starts) here and in IntegrationTests, every
+       file in that folder in both, so a file there uses only what both projects reference (this one has
+       no Respawn). -->
   <ItemGroup>
     <Compile Include="..\TestSupport\ResultAssertions.cs" Link="TestSupport\ResultAssertions.cs" />
     <Compile Include="..\TestSupport\Database\*.cs" LinkBase="TestSupport\Database" />
