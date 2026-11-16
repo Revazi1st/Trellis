@@ -173,10 +173,8 @@ public sealed partial class DatabaseEngineTests
     {
         Assembly assembly = layer == Architecture.Persistence ? Architecture.PersistenceAssembly : Architecture.ApiAssembly;
 
-        ProviderCallersIn(assembly)
-            .Where(static type => !IsTheDialectOrAMigration(type))
-            .Select(static type => type.FullName)
-            .ShouldBeEmpty("call a member of PostgresDialect instead; a provider extension method is the dialect's to call, whatever its name");
+        ProviderCallersOutsideTheDialect(assembly).ShouldBeEmpty(
+            "call a member of PostgresDialect instead; a provider extension method is the dialect's to call, whatever its name");
     }
 
     /// <summary>
@@ -187,23 +185,30 @@ public sealed partial class DatabaseEngineTests
 
     /// <summary>
     /// Positive control for the compiled check, and proof that it reads something: the dialect itself is
-    /// found by name; so is a planted call to a provider extension whose name does not say whose it is,
+    /// found by name; the exemption covers the dialect and the migrations and not the rest of Persistence; a
+    /// planted call to a provider extension whose name does not say whose it is fails the fact's own filter,
     /// written directly, inside a lambda and inside an async method (the compiler moves the last two into
-    /// nested types of its own making, where most Persistence and Api code runs); and a mapping written
-    /// with EF Core's own members is not.
+    /// nested types of its own making, where most Persistence and Api code runs), and the failure names the
+    /// provider member it reached; and a mapping written with EF Core's own members is not reported.
     /// </summary>
     [Fact]
     public void The_provider_check_finds_the_dialect_and_a_provider_call_that_does_not_name_the_provider()
     {
         ProviderCallersIn(Architecture.PersistenceAssembly)
             .ShouldContain(static type => type.FullName == Architecture.Persistence + ".PostgresDialect");
+        Type registration = Architecture.PersistenceAssembly.GetType(Architecture.Persistence + ".DependencyInjection", throwOnError: true)!;
+        IsTheDialectOrAMigration(registration).ShouldBeFalse("the exemption is the dialect and the migrations; the rest of Persistence is held");
 
-        Type[] planted = [.. ProviderCallersIn(typeof(PlantedViolations).Assembly)];
-        planted.ShouldContain(typeof(PlantedViolations.IndexMethodOutsideTheDialect));
-        planted.ShouldContain(typeof(PlantedViolations.ProviderCallInALambda));
-        planted.ShouldContain(typeof(PlantedViolations.ProviderCallInAnAsyncMethod));
-        planted.ShouldNotContain(typeof(PlantedViolations.NeutralIndexMapping));
+        string[] planted = ProviderCallersOutsideTheDialect(typeof(PlantedViolations).Assembly);
+        planted.ShouldContain(line => Reports(line, typeof(PlantedViolations.IndexMethodOutsideTheDialect), ".HasMethod"));
+        planted.ShouldContain(line => Reports(line, typeof(PlantedViolations.ProviderCallInALambda), ".HasMethod"));
+        planted.ShouldContain(line => Reports(line, typeof(PlantedViolations.ProviderCallInAnAsyncMethod), ".ILike"));
+        planted.ShouldNotContain(line => line.StartsWith(typeof(PlantedViolations.NeutralIndexMapping).FullName + ":", StringComparison.Ordinal));
     }
+
+    /// <summary>True when a line of the compiled check's failure is about <paramref name="caller"/> and names <paramref name="providerMember"/>.</summary>
+    private static bool Reports(string line, Type caller, string providerMember)
+        => line.StartsWith(caller.FullName + ": ", StringComparison.Ordinal) && line.Contains(providerMember, StringComparison.Ordinal);
 
     private const string Guide = "docs/switching-database.md";
 
@@ -234,34 +239,62 @@ public sealed partial class DatabaseEngineTests
             || outermost.Namespace == Architecture.Persistence + ".Migrations";
     }
 
+    /// <summary>
+    /// The fact's result, which its control shares: each type of <paramref name="assembly"/> outside the
+    /// dialect and the migrations that uses the provider, as its full name and what it uses
+    /// (<c>method -&gt; provider member</c>), because a call whose name does not say whose it is cannot be found by
+    /// searching for the provider's name.
+    /// </summary>
+    private static string[] ProviderCallersOutsideTheDialect(Assembly assembly)
+    {
+        Type[] callers = [.. ProviderCallersIn(assembly).Where(static type => !IsTheDialectOrAMigration(type))];
+        if (callers.Length == 0)
+        {
+            return [];
+        }
+
+        using ModuleDefinition module = ModuleDefinition.ReadModule(assembly.Location);
+        return [.. callers.Select(type => module.GetType(type.FullName!.Replace('+', '/')) is { } definition
+            ? $"{type.FullName}: {string.Join("; ", ProviderUsesIn(definition).Distinct(StringComparer.Ordinal))}"
+            : type.FullName)];
+    }
+
     /// <summary>The types of <paramref name="assembly"/> with a member whose signature or body uses a type of the provider's assemblies.</summary>
     private static IEnumerable<Type> ProviderCallersIn(Assembly assembly)
-        => Types.InAssembly(assembly).That().MeetCustomRule(UsesTheProvider).GetTypes()
+        => Types.InAssembly(assembly).That().MeetCustomRule(static type => ProviderUsesIn(type).Any()).GetTypes()
             .Select(static type => type.ReflectionType)
             .OfType<Type>();
 
     /// <summary>
-    /// The type's own members, and those of the nested types the compiler made for it: the body of a lambda,
-    /// of an async method and of an iterator is compiled into one (<c>&lt;&gt;c</c>, <c>&lt;Name&gt;d__0</c>), and the
-    /// rule is handed the declared types only.
+    /// What the type's own members, and those of the nested types the compiler made for it, use of the
+    /// provider's assemblies, each as <c>method -&gt; provider type or member</c>. The body of a lambda, of an
+    /// async method and of an iterator is compiled into such a type (<c>&lt;&gt;c</c>, <c>&lt;Name&gt;d__0</c>), so the
+    /// rule reads it with the type that owns it.
     /// </summary>
-    private static bool UsesTheProvider(TypeDefinition type)
-        => MembersUseTheProvider(type)
-            || type.NestedTypes.Where(static nested => nested.Name.StartsWith('<')).Any(UsesTheProvider);
+    private static IEnumerable<string> ProviderUsesIn(TypeDefinition type)
+        => type.Fields
+            .Where(static field => IsTheProviders(field.FieldType))
+            .Select(field => $"{type.Name}.{field.Name} -> {field.FieldType.Name}")
+            .Concat(type.Methods.SelectMany(method => ProviderUsesInMethod(method).Select(used => $"{type.Name}.{method.Name} -> {used}")))
+            .Concat(type.NestedTypes.Where(static nested => nested.Name.StartsWith('<')).SelectMany(ProviderUsesIn));
 
-    private static bool MembersUseTheProvider(TypeDefinition type)
-        => type.Fields.Any(static field => IsTheProviders(field.FieldType))
-            || type.Methods.Any(static method =>
-                IsTheProviders(method.ReturnType)
-                || method.Parameters.Any(static parameter => IsTheProviders(parameter.ParameterType))
-                || (method.HasBody
-                    && (method.Body.Variables.Any(static variable => IsTheProviders(variable.VariableType))
-                        || method.Body.Instructions.Any(static instruction => instruction.Operand switch
-                        {
-                            TypeReference used => IsTheProviders(used),
-                            MemberReference member => IsTheProviders(member.DeclaringType),
-                            _ => false,
-                        }))));
+    /// <summary>The provider's types and members that a method's signature, locals and instructions use.</summary>
+    private static IEnumerable<string> ProviderUsesInMethod(MethodDefinition method)
+        => method.Parameters.Select(static parameter => parameter.ParameterType)
+            .Append(method.ReturnType)
+            .Concat(method.HasBody ? method.Body.Variables.Select(static variable => variable.VariableType) : [])
+            .Where(IsTheProviders)
+            .Select(static used => used.Name)
+            .Concat(method.HasBody
+                ? method.Body.Instructions
+                    .Select(static instruction => instruction.Operand switch
+                    {
+                        TypeReference used when IsTheProviders(used) => used.Name,
+                        MemberReference member when IsTheProviders(member.DeclaringType) => $"{member.DeclaringType.Name}.{member.Name}",
+                        _ => null,
+                    })
+                    .OfType<string>()
+                : []);
 
     /// <summary>True for a type declared in an assembly named <c>Npgsql</c> or <c>Npgsql.*</c>, or built from one.</summary>
     private static bool IsTheProviders(TypeReference? type)
