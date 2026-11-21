@@ -11,9 +11,9 @@ namespace Trellis.UiTests;
 /// as the ui-screenshots artifact) and failed when it scrolls sideways; Dark chosen in the switch over a light
 /// system; and the focus ring on the first top-bar link a keyboard reaches. Nothing compares the images: fonts
 /// render differently from one machine to the next, so a screenshot is looked at, never diffed.
-/// Opt-in (RUN_UI_TESTS=1), like <see cref="LoginFlowTests"/>: needs installed browsers and the app running.
+/// Opt-in (RUN_UI_TESTS=1), like <see cref="LoginFlowTests"/>: needs the browser installed.
 /// </summary>
-public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser browser)
+public sealed class DesignSystemProofTests(AppHostFixture app, DesignSystemProofTests.ProofBrowser browser)
     : IClassFixture<DesignSystemProofTests.ProofBrowser>
 {
     private const string Login = "login";
@@ -77,7 +77,7 @@ public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser b
         string address, int width, string scheme)
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,
-            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+            "Browser UI test — set RUN_UI_TESTS=1 with the browser installed (needs Docker and a .NET SDK on the host, or CI).");
 
         // The sign-in pages each get a page of their own; the protected ones share the class's signed-in page.
         bool signedOut = address is Login or Register;
@@ -104,7 +104,7 @@ public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser b
     public async Task Dark_chosen_in_the_switch_holds_over_a_light_system_on_the_invoice_list()
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,
-            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+            "Browser UI test — set RUN_UI_TESTS=1 with the browser installed (needs Docker and a .NET SDK on the host, or CI).");
 
         // A page of its own: the choice is kept in its browser storage, which the shared page must not see.
         IPage page = await browser.NewPageAsync();
@@ -112,7 +112,7 @@ public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser b
         {
             await page.SetViewportSizeAsync(Laptop, ViewportHeight);
             await page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Light });
-            await Session.SignInAsAdminAsync(page);
+            await Session.SignInAsAdminAsync(page, await app.WebBaseUrlAsync());
             await WaitForTheListAsync(page, "All");
 
             await page.SelectOptionAsync("select.theme-select", Dark);
@@ -134,12 +134,12 @@ public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser b
     public async Task Tab_from_the_top_of_the_page_reaches_the_first_top_bar_link_with_its_focus_ring_showing()
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,
-            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+            "Browser UI test — set RUN_UI_TESTS=1 with the browser installed (needs Docker and a .NET SDK on the host, or CI).");
 
         IPage page = await browser.NewPageAsync();
         try
         {
-            await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/{Login}");
+            await page.GotoAsync($"{await app.WebBaseUrlAsync()}/{Login}");
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
             // Once the circuit renders, FocusOnNavigate (Routes.razor) puts focus on the h1, as after every
             // navigation, and a Tab would go on from there. A click on the top bar's top edge, where nothing
@@ -171,12 +171,12 @@ public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser b
     /// protected pages are reached through the app's links: a full page load would start a signed-out circuit
     /// (ADR-0007). <paramref name="customer"/> names the draft the invoice page's case creates.
     /// </summary>
-    private static async Task OpenAsync(IPage page, string address, string customer)
+    private async Task OpenAsync(IPage page, string address, string customer)
     {
         switch (address)
         {
             case Login or Register:
-                await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/{address}");
+                await page.GotoAsync($"{await app.WebBaseUrlAsync()}/{address}");
                 // Wait for the Blazor Server circuit to attach: the page is the interactive one from here.
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 await page.Locator("h1").WaitForAsync(new() { Timeout = 15_000 });
@@ -273,7 +273,7 @@ public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser b
     /// so a run without browsers starts nothing; a failed sign-in is kept, and every later case fails with it
     /// instead of signing in again. The cases of one class run one at a time, taking turns on the shared page.
     /// </summary>
-    public sealed class ProofBrowser : IAsyncDisposable
+    public sealed class ProofBrowser(AppHostFixture app) : IAsyncDisposable
     {
         private IPlaywright? _playwright;
         private Task<IBrowser>? _browser;
@@ -315,7 +315,7 @@ public sealed class DesignSystemProofTests(DesignSystemProofTests.ProofBrowser b
         private async Task<IPage> SignInAsync()
         {
             IPage page = await NewPageAsync();
-            await Session.SignInAsAdminAsync(page);
+            await Session.SignInAsAdminAsync(page, await app.WebBaseUrlAsync());
             return page;
         }
     }
