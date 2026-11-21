@@ -25,13 +25,17 @@
 #
 # The generated tests include the Aspire E2E, which boots each generated AppHost as Template CI does
 # on its Linux runners, in a run of its own after the suites (its processes and Testcontainers would
-# otherwise race for the same host ports); RUN_ASPIRE_E2E=0 skips it. The browser tests stay off, as in CI. Needs a .NET
-# SDK that satisfies global.json, a running Docker (Testcontainers, the E2E), and jq and git (for the
-# toggle check). Template CI's content gates (leftovers of the template's name, the consumer files,
-# actionlint over the generated workflows) and its Windows job run only in CI.
+# otherwise race for the same host ports); RUN_ASPIRE_E2E=0 skips it. The browser tests of a leg that
+# has them (browser: true) run only when you ask, with RUN_UI_TESTS=1: after the E2E, Chromium is
+# installed through the generated playwright.ps1 (pwsh is needed, and checked before the pack) and the
+# two browser steps run, each starting the generated AppHost. The variable is read and unset first, so
+# the suites never start a browser beside Testcontainers; without it the BROWSER column says "skip".
+# Needs a .NET SDK that satisfies global.json, a running Docker (Testcontainers, the E2E), and jq and
+# git (for the toggle check). Template CI's content gates (leftovers of the template's name, the
+# consumer files, actionlint over the generated workflows) and its Windows job run only in CI.
 #
 # KEEP IN SYNC with .github/workflows/template-ci.yml. The legs and their flags are read from its
-# instantiate matrix (keys name, args, out, test and regenerate-migration, one per line, args in
+# instantiate matrix (keys name, args, out, test, regenerate-migration and browser, one per line, args in
 # double quotes), so a leg added there runs here with no edit, and a key this script does not know,
 # in a leg or beside include (an exclude list, a dimension such as os), stops it until it learns
 # what the key means. The commands in run_leg mirror that job's steps.
@@ -44,17 +48,17 @@ usage() {
   sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
 }
 
-# One record per leg of the instantiate job's matrix: LEG|name|out|test|regenerate|args, test and
-# regenerate as 1 or 0. ERR|message when the matrix holds something this reader does not understand:
-# a key in a leg it does not know, or anything in the matrix beside include.
+# One record per leg of the instantiate job's matrix: LEG|name|out|test|regenerate|browser|args, test,
+# regenerate and browser as 1 or 0. ERR|message when the matrix holds something this reader does not
+# understand: a key in a leg it does not know, or anything in the matrix beside include.
 read_legs() {
   awk '
     function indent(s) { match(s, /^ */); return RLENGTH }
     function flush() {
       if (name == "") return
       if (out == "") { printf "ERR|the leg %s has no out key\n", name }
-      printf "LEG|%s|%s|%d|%d|%s\n", name, out, (test == "true"), (regen == "true"), args
-      name = ""; out = ""; args = ""; test = ""; regen = ""
+      printf "LEG|%s|%s|%d|%d|%d|%s\n", name, out, (test == "true"), (regen == "true"), (browser == "true"), args
+      name = ""; out = ""; args = ""; test = ""; regen = ""; browser = ""
     }
     /^  instantiate:[[:space:]]*$/ { job = 1; next }
     job && /^  [^[:space:]#]/      { flush(); job = 0 }
@@ -93,6 +97,7 @@ read_legs() {
       else if (key == "out") out = value
       else if (key == "test") test = value
       else if (key == "regenerate-migration") regen = value
+      else if (key == "browser") browser = value
       else printf "ERR|the matrix key %s (leg %s) is new to this script\n", key, name
     }
     END { flush() }
@@ -126,10 +131,11 @@ if [ -z "$records" ]; then
 fi
 
 if [ "$list_only" -eq 1 ]; then
-  printf '%-26s %-6s %-10s %s\n' LEG TESTED MIGRATION FLAGS
-  while IFS='|' read -r name _ test regen args; do
-    printf '%-26s %-6s %-10s %s\n' "$name" "$([ "$test" = 1 ] && echo yes || echo no)" \
-      "$([ "$regen" = 1 ] && echo regen || { [ "$name" = default ] && echo probe; } || echo -)" "${args:-(defaults)}"
+  printf '%-26s %-6s %-10s %-7s %s\n' LEG TESTED MIGRATION BROWSER FLAGS
+  while IFS='|' read -r name _ test regen browser args; do
+    printf '%-26s %-6s %-10s %-7s %s\n' "$name" "$([ "$test" = 1 ] && echo yes || echo no)" \
+      "$([ "$regen" = 1 ] && echo regen || { [ "$name" = default ] && echo probe; } || echo -)" \
+      "$([ "$browser" = 1 ] && echo yes || echo -)" "${args:-(defaults)}"
   done <<< "$records"
   exit 0
 fi
@@ -163,9 +169,17 @@ if cut -d'|' -f3 <<< "$legs" | grep -qx 1 && ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-# What the generated tests read from the environment, set as Template CI sets it.
+# What the generated tests read from the environment, set as Template CI sets it. RUN_UI_TESTS is
+# read here and then unset: the suites must not start browsers or an AppHost beside Testcontainers,
+# and the browser steps set it for themselves.
 e2e="${RUN_ASPIRE_E2E-1}"
-unset RUN_UI_TESTS UI_TESTS_BASE_URL UPDATE_OPENAPI_SNAPSHOT RUN_LIVE_SMOKE_TESTS
+browser_tests="${RUN_UI_TESTS-0}"
+unset RUN_UI_TESTS UI_TESTS_BASE_URL UI_TESTS_FIRST_RUN UI_TESTS_SCREENSHOTS UI_TESTS_LOGS UPDATE_OPENAPI_SNAPSHOT RUN_LIVE_SMOKE_TESTS
+
+if [ "$browser_tests" = 1 ] && cut -d'|' -f5 <<< "$legs" | grep -qx 1 && ! command -v pwsh >/dev/null 2>&1; then
+  echo "error: RUN_UI_TESTS=1 needs PowerShell (pwsh) to install the browser for the legs with browser: true" >&2
+  exit 1
+fi
 
 echo "==> scripts/check-template-toggles.sh"
 ./scripts/check-template-toggles.sh
@@ -227,6 +241,17 @@ test_solution() {
   RUN_ASPIRE_E2E=1 dotnet test ./tests/*.ApiTests -c Release --no-build -- \
     --filter-trait Category=AspireE2E --ignore-exit-code 8
 }
+# Mirrors template-ci.yml's three browser steps (install the browser, the first-run pictures in a run
+# of their own, then every browser test); runs in the generated folder. $1 = where the screenshots and
+# the application's logs go.
+browser_solution() {
+  local out="$1"
+  pwsh artifacts/bin/*.UiTests/release/playwright.ps1 install chromium || return
+  RUN_UI_TESTS=1 UI_TESTS_FIRST_RUN=1 UI_TESTS_SCREENSHOTS="$out/screenshots" UI_TESTS_LOGS="$out/applogs/first-run" \
+    dotnet test ./tests/*.UiTests -c Release --no-build --filter-class '*FirstRunPicturesTests' || return
+  RUN_UI_TESTS=1 UI_TESTS_SCREENSHOTS="$out/screenshots" UI_TESTS_LOGS="$out/applogs/browser-tests" \
+    dotnet test ./tests/*.UiTests -c Release --no-build
+}
 in_dir() {  # $1 = folder, rest = command (a function above, or a program)
   local dir="$1"
   shift
@@ -234,13 +259,13 @@ in_dir() {  # $1 = folder, rest = command (a function above, or a program)
 }
 
 # Results, one entry per leg (indexed arrays: macOS still ships bash 3.2).
-r_name=() r_inst=() r_mig=() r_build=() r_fmt=() r_test=() r_time=()
+r_name=() r_inst=() r_mig=() r_build=() r_fmt=() r_test=() r_browser=() r_time=()
 failed=0
 
-run_leg() {  # name out test regen args
-  local name="$1" out="$2" test="$3" regen="$4" args="$5"
+run_leg() {  # name out test regen browser args
+  local name="$1" out="$2" test="$3" regen="$4" browser="$5" args="$6"
   local dir="$work/$name" log="$work/logs/$name.log" started=$SECONDS
-  local inst=- mig=- build=- fmt=- tst=- flags=()
+  local inst=- mig=- build=- fmt=- tst=- brw=" " flags=()
   # MIGRATION is the regeneration on the legs that regenerate, and the first-migration probe on the
   # default leg, as in Template CI.
   [ "$regen" = 1 ] || [ "$name" = default ] || mig=" "
@@ -283,6 +308,18 @@ run_leg() {  # name out test regen args
     if logged "$log" in_dir "$dir" test_solution; then tst=ok; else tst=FAIL; fi
   fi
 
+  # The browser steps, on a leg that has them: after the tests passed, and only when asked (they
+  # install a browser and start the generated AppHost twice).
+  if [ "$browser" = 1 ]; then
+    brw=-
+    if [ "$browser_tests" != 1 ]; then
+      brw=skip
+    elif [ "$tst" = ok ]; then
+      echo "==> $name: the browser tests (RUN_UI_TESTS=1)"
+      if logged "$log" in_dir "$dir" browser_solution "$work/browser/$name"; then brw=ok; else brw=FAIL; fi
+    fi
+  fi
+
   local elapsed=$((SECONDS - started))
   r_name+=("$name")
   r_inst+=("$inst")
@@ -290,23 +327,24 @@ run_leg() {  # name out test regen args
   r_build+=("$build")
   r_fmt+=("$fmt")
   r_test+=("$tst")
+  r_browser+=("$brw")
   r_time+=("$((elapsed / 60))m$(printf '%02d' $((elapsed % 60)))s")
-  case "$inst $mig $build $fmt $tst" in
+  case "$inst $mig $build $fmt $tst $brw" in
     *FAIL*) failed=1 ;;
   esac
 }
 
-while IFS='|' read -r name out test regen args; do
-  run_leg "$name" "$out" "$test" "$regen" "$args"
+while IFS='|' read -r name out test regen browser args; do
+  run_leg "$name" "$out" "$test" "$regen" "$browser" "$args"
 done <<< "$legs"
 
 echo
-printf '%-26s %-12s %-10s %-6s %-7s %-6s %s\n' LEG INSTANTIATE MIGRATION BUILD FORMAT TEST TIME
+printf '%-26s %-12s %-10s %-6s %-7s %-6s %-8s %s\n' LEG INSTANTIATE MIGRATION BUILD FORMAT TEST BROWSER TIME
 for i in "${!r_name[@]}"; do
-  printf '%-26s %-12s %-10s %-6s %-7s %-6s %s\n' \
-    "${r_name[$i]}" "${r_inst[$i]}" "${r_mig[$i]}" "${r_build[$i]}" "${r_fmt[$i]}" "${r_test[$i]}" "${r_time[$i]}"
+  printf '%-26s %-12s %-10s %-6s %-7s %-6s %-8s %s\n' \
+    "${r_name[$i]}" "${r_inst[$i]}" "${r_mig[$i]}" "${r_build[$i]}" "${r_fmt[$i]}" "${r_test[$i]}" "${r_browser[$i]}" "${r_time[$i]}"
 done
-echo "(blank: the leg does not have that step; -: skipped after an earlier failure)"
+echo "(blank: the leg does not have that step; -: skipped after an earlier failure; skip: the browser tests run with RUN_UI_TESTS=1)"
 
 if [ "$failed" -ne 0 ]; then
   echo
