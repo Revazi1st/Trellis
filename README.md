@@ -676,7 +676,8 @@ against are not listed (ADR-0002 names them).
   - the error-code vocabulary fitness test and the value-object constructor test;
   - the build-time analyzer for a discarded `Result`.
 - [CleanArchitecture](https://github.com/jasontaylordev/CleanArchitecture) by Jason Taylor (MIT):
-  - booting the generated solution's AppHost from its own test suite in template CI, and a template-CI leg for every option value;
+  - browser tests that boot the AppHost through Aspire's testing builder and read the web address from the app model (`Web.AcceptanceTests`, `AspireSetup.cs`);
+  - booting the generated solution's AppHost from its own test suite in template CI, its browser tests included, and a template-CI leg for every option value;
   - a local script that instantiates, builds and tests every template leg and prints a results table (`build/test.ps1`);
   - release notes in the package metadata;
   - a persistent-lifetime database container in the AppHost, Aspire's guidance as his AppHost applies it;
@@ -685,6 +686,7 @@ against are not listed (ADR-0002 names them).
   - logging each use case under its own request type's category (`ILogger<TRequest>`), the acting user's id on every request's log line, and a slow use case surfaced at Warning past a threshold (`LoggingBehaviour`, `PerformanceBehaviour`);
   - stamping audit columns with the user's id rather than a display name (`AuditableEntityInterceptor`);
   - opening the API's root on its Scalar reference;
+  - the UI clients' routes tied to the OpenAPI document instead of standing as unchecked hand-written strings (his client is generated from the document, `nswag.json`; ours stays hand-written and a test holds every request it sends to the document);
   - a short, ordered deployment quick start, which Getting started points at (`docs/deployment.md`, *Deploy to one host*);
   - a section of the README that lists the versions of the template (the *Versions* section of his README; ours is *Versions and support* in `docs/upgrading.md`);
   - a documentation website as the template's home: a landing page with the install command, feature cards and a three-step quick start; a Getting started / Architecture / Features sidebar with a linear path; an installation page with update and uninstall; one page per option that says what each choice adds and what to do after creation; an architecture page led by one ring diagram and the dependency rule; the documented version in the footer; a Testing page with one table of test projects and one run command; Astro + Starlight on GitHub Pages (ideas from cleanarchitecture.jasontaylor.dev; no code or CSS copied).
