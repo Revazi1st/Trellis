@@ -60,5 +60,4 @@ isolation only the first-run pictures need, which get it from a test run of thei
 process through `WebApplicationFactory` on real listeners (two hosts, the migration job and a database
 wired together by hand in the test, which is what the removed shell steps did and is not what
 `aspire run` starts).
-
 <!--#endif -->
