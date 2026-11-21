@@ -78,9 +78,10 @@ into a private hive (`--debug:custom-hive`, so your real template list stays unt
 leg instantiates it with the leg's flags, runs `scripts/ef.sh`'s first-migration command on the
 unbuilt tree (the default leg only), regenerates the initial migration where the leg does, builds
 Release, runs the generated `ci.yml`'s format check (`dotnet format --verify-no-changes`) and then
-the tests on the legs Template CI tests, as Template CI's instantiate job does. It prints a table of
-results and exits 1 on any failure, keeping the logs and the generated solutions in the folder it
-names.
+the tests on the legs Template CI tests and, when you set `RUN_UI_TESTS=1`, the browser tests of the
+leg that has them (it needs `pwsh`, installs Chromium and starts the generated AppHost twice), as
+Template CI's instantiate job does. It prints a table of results and exits 1 on any failure, keeping
+the logs and the generated solutions in the folder it names.
 Because it packs, the legs get the package's content, as an install from nuget.org does, where
 Template CI's instantiate job installs the source folder; the two exclude lists that decide those
 contents (`TemplateContentExclude` in the pack project, `sources[0].exclude` in `template.json`) are
