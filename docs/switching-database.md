@@ -125,7 +125,7 @@ outside C#, the connection strings, and the behaviour to prove again. The files 
 - `tests/Trellis.IntegrationTests/DatabaseFixture.cs`: Respawn's adapter and the schema it empties.
 - `tests/Trellis.IntegrationTests/OutboxRetryTests.Runbook.cs`: runs the runbook's re-drive statement
   as `docs/deployment.md` prints it.
-- `tests/Trellis.ApiTests/AppHostTestingExtensions.cs`: swaps the AppHost's database server for a
+- `tests/TestSupport/AppHost/AppHostTestingExtensions.cs`: swaps the AppHost's database server for a
   throwaway one, found by its resource name.
 - `tests/Trellis.ApiTests/ThrowawayDatabaseTests.cs`: pins that swap against an AppHost model with the
   same resource.
@@ -239,7 +239,7 @@ The other test files on the list, each with what changes there:
   version `Directory.Packages.props` pins.
 - `tests/Trellis.IntegrationTests/OutboxRetryTests.Runbook.cs`: the re-drive statement, which stays the
   runbook's text in [deployment.md](deployment.md#outbox-operations); the two change together.
-- `tests/Trellis.ApiTests/AppHostTestingExtensions.cs` and `tests/Trellis.ApiTests/ThrowawayDatabaseTests.cs`:
+- `tests/TestSupport/AppHost/AppHostTestingExtensions.cs` and `tests/Trellis.ApiTests/ThrowawayDatabaseTests.cs`:
   the Aspire test's throwaway database server, found by its resource name (`ServiceNames.Postgres`);
   `ThrowawayDatabaseTests` also declares the server with `AddPostgres`.
 - `tests/Trellis.ArchitectureTests/ContainerImageTests.cs`: the image allowlist (*Hosts and the AppHost*).

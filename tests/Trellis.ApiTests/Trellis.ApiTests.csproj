@@ -38,6 +38,7 @@
   <ItemGroup>
     <Compile Include="..\TestSupport\ResultAssertions.cs" Link="TestSupport\ResultAssertions.cs" />
     <Compile Include="..\TestSupport\Database\*.cs" LinkBase="TestSupport\Database" />
+    <Compile Include="..\TestSupport\AppHost\AppHostTestingExtensions.cs" Link="TestSupport\AppHost\AppHostTestingExtensions.cs" />
     <Using Include="Trellis.TestSupport" />
   </ItemGroup>
 

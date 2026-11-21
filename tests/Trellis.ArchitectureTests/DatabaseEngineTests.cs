@@ -59,7 +59,7 @@ public sealed partial class DatabaseEngineTests
             "runs the re-drive statement of docs/deployment.md (Outbox operations) as written there",
         ["tests/Trellis.IntegrationTests/TenancyTests.cs"] =
             "with multi-tenancy: the tenant-led index keeps the provider's per-column settings, in the model and in the DDL",
-        ["tests/Trellis.ApiTests/AppHostTestingExtensions.cs"] =
+        ["tests/TestSupport/AppHost/AppHostTestingExtensions.cs"] =
             "swaps the AppHost's database server for a throwaway one, found by its resource name",
         ["tests/Trellis.ApiTests/ThrowawayDatabaseTests.cs"] =
             "pins that swap against an AppHost model with the same resource",

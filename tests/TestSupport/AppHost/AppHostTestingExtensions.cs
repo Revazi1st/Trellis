@@ -3,11 +3,12 @@ using Aspire.Hosting.ApplicationModel;
 using Shouldly;
 using Trellis.ServiceDefaults;
 
-namespace Trellis.ApiTests;
+namespace Trellis.TestSupport.AppHost;
 
 /// <summary>
 /// Steps a test applies to the AppHost's app model before it builds and starts it. Feature-free, so
-/// <c>remove-feature</c> keeps it: an Aspire E2E of your own starts with the same step.
+/// <c>remove-feature</c> keeps it: an Aspire E2E of your own starts with the same step. Compiled into ApiTests
+/// and, with the browser tests, into UiTests (a linked file, as the rest of tests/TestSupport).
 /// </summary>
 internal static class AppHostTestingExtensions
 {
@@ -39,5 +40,39 @@ internal static class AppHostTestingExtensions
         {
             postgres.Annotations.Remove(annotation);
         }
+
+        // Nothing else may outlive the run either. A resource added to the AppHost later with a volume, a
+        // writable bind mount or a persistent lifetime would be found by the same derived names, and the test
+        // would attach to the developer's own. The step refuses to go on instead: strip that resource here,
+        // beside postgres. ThrowawayDatabaseTests runs this on the real app model in every test run.
+        KeptBetweenRuns(appHost.Resources).ShouldBeEmpty(
+            "a test that starts this AppHost would share these with 'aspire run'; strip them in UseThrowawayDatabase, as postgres is");
+    }
+
+    /// <summary>
+    /// Each resource that keeps something from one run of the AppHost to the next, as <c>name: what it keeps</c>:
+    /// a volume, a bind mount the container may write to, or a persistent lifetime.
+    /// </summary>
+    internal static string[] KeptBetweenRuns(IEnumerable<IResource> resources)
+    {
+        List<string> kept = [];
+        foreach (IResource resource in resources)
+        {
+            kept.AddRange(resource.Annotations.OfType<ContainerMountAnnotation>()
+                .Where(static mount => mount.Type == ContainerMountType.Volume || !mount.IsReadOnly)
+                .Select(mount => mount.Type == ContainerMountType.Volume
+                    ? $"{resource.Name}: the volume {mount.Source ?? "(unnamed)"}"
+                    : $"{resource.Name}: the writable bind mount {mount.Source}"));
+#pragma warning disable ASPIREPERSISTENCE001 // experimental in Aspire 13.6, as above
+            if (resource.Annotations.Any(static a =>
+                    a is PersistenceAnnotation { Mode: not PersistenceMode.Session }
+                        or ContainerLifetimeAnnotation { Lifetime: ContainerLifetime.Persistent }))
+#pragma warning restore ASPIREPERSISTENCE001
+            {
+                kept.Add($"{resource.Name}: a persistent lifetime");
+            }
+        }
+
+        return [.. kept];
     }
 }

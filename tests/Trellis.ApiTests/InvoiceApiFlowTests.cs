@@ -12,6 +12,7 @@ using Trellis.Api.Contracts.Auth;
 using Trellis.Api.Contracts.Common;
 using Trellis.Api.Contracts.Invoices;
 using Trellis.ServiceDefaults;
+using Trellis.TestSupport.AppHost;
 using Xunit;
 
 namespace Trellis.ApiTests;
