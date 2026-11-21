@@ -248,7 +248,8 @@ Worth alerting on:
   five minutes, or `trellis.outbox.pending` growing steadily — the drain is stalled or cannot keep up
   (a handler's dependency is slow, the database claim fails, no API replica runs the processor). Both
   gauges are sampled by the processor on each poll and are the same global number from every replica:
-  take `max`, not `sum`.
+  take `max`, not `sum`. The sample is the poll's first query, so while the database is unreachable both
+  gauges hold the last value sampled; the signal for that is event 1309 on every poll.
 - `trellis.outbox.retries` rate (`error.type` names the exception; `AggregateException` means several
   handlers of one message failed) — a handler's dependency is struggling; the per-attempt line is
   logged at Warning (event 1301) and each failed handler by name (event 1304). Its sibling handlers
