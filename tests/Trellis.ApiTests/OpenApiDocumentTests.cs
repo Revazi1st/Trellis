@@ -1,3 +1,6 @@
+extern alias apihost;
+
+using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Shouldly;
@@ -19,7 +22,8 @@ public sealed partial class OpenApiDocumentTests
 {
     private const string ProblemMediaType = "application/problem+json";
     private const string ProblemSchemaRef = "#/components/schemas/ProblemResponse";
-    private static readonly string[] HttpMethods = ["get", "post", "put", "patch", "delete"];
+    /// <summary>The keys of a path item that are operations (it may also hold <c>parameters</c>, <c>summary</c> and <c>description</c>).</summary>
+    internal static readonly string[] HttpMethods = ["get", "post", "put", "patch", "delete"];
 
     /// <summary>
     /// The writes under a resource whose GET answers an <c>ETag</c> that take no <c>If-Match</c>, each
@@ -86,6 +90,100 @@ public sealed partial class OpenApiDocumentTests
         ids.ShouldAllBe(static entry => !string.IsNullOrWhiteSpace(entry.OperationId), string.Join(", ", ids.Where(static i => i.OperationId is null).Select(static i => i.Name)));
         ids.Select(static entry => entry.OperationId).ShouldBeUnique(StringComparer.Ordinal);
     }
+
+    /// <summary>
+    /// A client generator and the API reference group operations by their tag, so every operation carries
+    /// one, and it is a tag a feature declares: the <c>Tag</c> constant of its <c>&lt;Feature&gt;Endpoints</c>
+    /// class (<c>AuthEndpoints.Tag</c>), which each endpoint passes to <c>.WithTags(...)</c>. Counting the
+    /// tags would not catch a forgotten call: ASP.NET Core then tags the operation with the endpoint class's
+    /// name, one tag again and a group of one in every client. So the value is held, to the constants the
+    /// Api assembly declares, read by reflection without starting the host.
+    /// <para>
+    /// The document is the subject, not the endpoint's metadata: a tag a route group adds is overridden by the
+    /// endpoint's own and never reaches the document, so it is not seen here.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Every_operation_carries_one_tag_and_a_feature_declares_it()
+    {
+        string[] declared = DeclaredTags(typeof(apihost::Program).Assembly);
+
+        declared.ShouldNotBeEmpty("the reader no longer finds a 'const string Tag' in the Api assembly (AuthEndpoints.Tag)");
+        OperationsOffTheirTag(Operations(), declared).ShouldBeEmpty(
+            $"every endpoint calls .WithTags(<Feature>Endpoints.Tag) with its feature's Tag constant (declared: {string.Join(", ", declared)}); "
+            + "an endpoint without the call is tagged with its class name, and a literal is a group of its own. "
+            + "Then regenerate docs/api/openapi.v1.json (UPDATE_OPENAPI_SNAPSHOT=1)");
+    }
+
+    /// <summary>
+    /// Positive control: an operation with no tags, with an empty list, with a blank tag, with two, and with one
+    /// tag no feature declares (the endpoint class's name, which is what a forgotten <c>.WithTags</c> leaves, and
+    /// a declared tag in another case) is reported; one that carries a declared tag is not.
+    /// </summary>
+    [Fact]
+    public void The_tag_check_flags_no_tag_two_tags_and_a_tag_no_feature_declares()
+    {
+        using JsonDocument planted = JsonDocument.Parse(
+            """
+            {
+              "paths": {
+                "/api/v1/things": { "get": { "tags": ["Things"] }, "post": {} },
+                "/api/v1/things/{id}": {
+                  "parameters": [],
+                  "get": { "tags": ["Things", "Admin"] },
+                  "put": { "tags": [" "] },
+                  "patch": { "tags": ["RenameThing"] },
+                  "delete": { "tags": [] }
+                },
+                "/api/v1/things/{id}/archive": { "post": { "tags": ["things"] } }
+              }
+            }
+            """);
+
+        string[] reported =
+        [
+            "DELETE /api/v1/things/{id} (no tag)",
+            "GET /api/v1/things/{id} (two tags: Things, Admin)",
+            "PATCH /api/v1/things/{id} (tagged RenameThing, which no Tag constant declares)",
+            "POST /api/v1/things (no tag)",
+            "POST /api/v1/things/{id}/archive (tagged things, which no Tag constant declares)",
+            "PUT /api/v1/things/{id} (a blank tag)",
+        ];
+        OperationsOffTheirTag(PathsOf(planted), ["Admin", "Things"]).ShouldBe(reported);
+    }
+
+    /// <summary>The value of every <c>const string Tag</c> a type of <paramref name="api"/> declares, in order.</summary>
+    private static string[] DeclaredTags(Assembly api)
+        => [.. api.GetTypes()
+            .SelectMany(static type => type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+            .Where(static field => field is { IsLiteral: true, Name: "Tag" } && field.FieldType == typeof(string))
+            .Select(static field => (string)field.GetRawConstantValue()!)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// Each operation that does not carry exactly one tag out of <paramref name="declared"/>, as
+    /// <c>METHOD path (what it carries)</c>, in order.
+    /// </summary>
+    private static string[] OperationsOffTheirTag(IEnumerable<(string Path, JsonElement Item)> paths, IReadOnlyCollection<string> declared)
+        => [.. paths
+            .SelectMany(static entry => entry.Item.EnumerateObject()
+                .Where(static o => HttpMethods.Contains(o.Name, StringComparer.Ordinal))
+                .Select(o => (Name: $"{o.Name.ToUpperInvariant()} {entry.Path}", Tags: TagsOf(o.Value))))
+            .Select(operation => (operation.Name, Problem: operation.Tags switch
+            {
+                [] => "no tag",
+                [var tag] when string.IsNullOrWhiteSpace(tag) => "a blank tag",
+                [var tag] when !declared.Contains(tag, StringComparer.Ordinal) => $"tagged {tag}, which no Tag constant declares",
+                [_] => null,
+                _ => $"two tags: {string.Join(", ", operation.Tags)}",
+            }))
+            .Where(static operation => operation.Problem is not null)
+            .Select(static operation => $"{operation.Name} ({operation.Problem})")
+            .Order(StringComparer.Ordinal)];
+
+    private static string[] TagsOf(JsonElement operation)
+        => operation.TryGetProperty("tags", out JsonElement tags) ? [.. tags.EnumerateArray().Select(static tag => tag.GetString() ?? string.Empty)] : [];
 
     [Fact]
     public void Every_path_template_variable_is_a_declared_path_parameter()
