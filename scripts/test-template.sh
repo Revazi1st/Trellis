@@ -204,10 +204,16 @@ first_migration_probe() {
     dotnet restore ./*.slnx --verbosity quiet &&
     dotnet dotnet-ef migrations has-pending-model-changes --project src/Infrastructure/*.Persistence
 }
-# Mirrors template-ci.yml's "Regenerate the initial migration" step; runs in the generated folder.
+# What template-ci.yml's "Regenerate the initial migration" step does, without its first command; runs
+# in the generated folder. 'migrations remove --force' asks a database whether the migration was applied
+# and reverts it there when it was (InitialCreate's Down drops every table), and the design-time default
+# is localhost:5432 with the development credentials: in the SDK container and on a CI runner nothing
+# answers, on your machine your own PostgreSQL may. This script runs dotnet-ef on the host, so it deletes
+# the generated migration files instead, which is all 'remove' does to the tree of a project with one
+# migration; 'migrations add' reads the model and never connects.
 regenerate_migration() {
   dotnet tool restore &&
-    dotnet dotnet-ef migrations remove --force --project src/Infrastructure/*.Persistence &&
+    rm -f src/Infrastructure/*.Persistence/Migrations/*.cs &&
     dotnet dotnet-ef migrations add InitialCreate --project src/Infrastructure/*.Persistence
 }
 build_solution() { dotnet build ./*.slnx -c Release; }
