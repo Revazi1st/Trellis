@@ -1093,8 +1093,8 @@ class Suite:
 
 SUITES: Tuple[Suite, ...] = (
     Suite("UiTests", "tests/Trellis.UiTests", "browser", "database", "card",
-          "the pages in a real browser, against a running app (Playwright)",
-          "installed browsers and a running app",
+          "the pages in a real browser, on an application they start (Playwright)",
+          "an installed browser, a local SDK or CI",
           ("tests/Trellis.UiTests/UiTestEnvironment.cs", "RUN_UI_TESTS"), browser=True),
     Suite("Aspire E2E", "tests/Trellis.ApiTests", "tools", "database", "card",
           "InvoiceApiFlowTests: the AppHost starts PostgreSQL, the migration job and the API",

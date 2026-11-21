@@ -58,8 +58,8 @@
   <text class="s14w600" x="64" y="246" fill="#14231b">UiTests</text>
   <rect x="128.61" y="229" width="125" height="22" rx="11" fill="#eef6e8" stroke="#1f5c3d" stroke-width="1" stroke-opacity="0.21" stroke-dasharray="3 3"/>
   <text class="m12" x="191.11" y="244.2" fill="#14231b" text-anchor="middle">RUN_UI_TESTS=1</text>
-  <text class="s13" x="64" y="270" fill="#14231b">the pages in a real browser, against a running app (Playwright)</text>
-  <text class="s13" x="64" y="288" fill="#566b5f">generated with --include-ui-tests; needs installed browsers and a running app</text>
+  <text class="s13" x="64" y="270" fill="#14231b">the pages in a real browser, on an application they start (Playwright)</text>
+  <text class="s13" x="64" y="288" fill="#566b5f">generated with --include-ui-tests; needs an installed browser, a local SDK or CI</text>
   <line x1="96" y1="310" x2="1104" y2="310" stroke="#566b5f" stroke-width="1.25" stroke-linecap="round" stroke-opacity="0.5"/>
   <circle cx="96" cy="310" r="4.5" fill="#ffffff" stroke="#14231b" stroke-width="1" stroke-opacity="0.56"/>
   <circle cx="208" cy="310" r="4.5" fill="#e9ecea" stroke="#2a332d" stroke-width="1" stroke-opacity="0.56"/>
