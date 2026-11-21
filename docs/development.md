@@ -5,7 +5,7 @@
 | Tool | Needed for | Minimum |
 |---|---|---|
 | **Docker** (Docker Desktop, OrbStack, Colima, Linux Docker Engine; Podman with caveats, see [below](#docker-engines-other-than-docker-desktop)) | everything: PostgreSQL, Testcontainers, the SDK container | a running engine |
-| **.NET 10 SDK** on the host | `aspire run` and the Aspire E2E test (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container | the version `global.json` pins, or a later feature band of its line |
+| **.NET 10 SDK** on the host | `aspire run`, the Aspire E2E test and the optional browser tests (ADR-0008). Build, tests and the dev-container flow work without it, through the SDK container | the version `global.json` pins, or a later feature band of its line |
 | **Aspire CLI**: `dotnet tool install -g Aspire.Cli` | `aspire run` / `aspire publish`. A separate install from the SDK, and `aspire --version` shows what you have. Without it, `dotnet run --project tools/Trellis.AppHost` starts the same app | 13.5 |
 | **PowerShell** (`pwsh`) | installing the Playwright browsers for the optional UI tests | none stated |
 
@@ -240,20 +240,45 @@ on a migration no database you keep has applied.
 ## UI tests (optional)
 
 Generate with `--include-ui-tests` to add `tests/Trellis.UiTests` (Playwright). The project always
-builds, but the browser tests are **opt-in at run time** — they need real browsers and a running app
-at a known address. `UI_TESTS_BASE_URL` names it (default `https://localhost:7170`, the web host's
-`https` launch profile). `aspire run` gives the web host a port of its own choosing, so either copy the
-`web` URL from the dashboard into `UI_TESTS_BASE_URL`, or run the projects from their launch profiles
-(migration job, then the API's and the web host's `https` profiles) so the default fits:
+builds, but the browser tests are **opt-in at run time**: they need a real browser, and they start
+the whole application. With `RUN_UI_TESTS=1` the first test starts the AppHost (PostgreSQL, the
+migration job, the API and the web host, as `aspire run` does, on ports of Aspire's choosing), every
+test drives that one application, and it stops when the run ends. Its database is a container of the
+run's own, migrated and seeded by the migration job and removed with the run, never the one
+`aspire run` keeps. So the tests need what the Aspire E2E needs: Docker, and a .NET SDK on the host,
+or CI (ADR-0008).
 
 ```bash
 dotnet build tests/Trellis.UiTests                                        # creates playwright.ps1
 pwsh artifacts/bin/Trellis.UiTests/debug/playwright.ps1 install chromium  # once
-RUN_UI_TESTS=1 UI_TESTS_BASE_URL=http://localhost:5170 dotnet test tests/Trellis.UiTests   # the http profile
+RUN_UI_TESTS=1 dotnet test tests/Trellis.UiTests
 ```
 
-Without `RUN_UI_TESTS=1` they skip, so the normal suite stays fast and browser-free
-(the same opt-in pattern as the Aspire E2E test).
+Run the project, not the solution: beside the Testcontainers suites the AppHost's processes would
+race them for host ports, as the Aspire E2E would. Without `RUN_UI_TESTS=1` every browser test skips
+and nothing starts, so the normal suite stays fast and browser-free, in the SDK container too (the
+same opt-in pattern as the Aspire E2E test).
+
+To drive an application that is already running instead, name its web address in
+`UI_TESTS_BASE_URL`; nothing is started then. `aspire run` (with its data) gives the web host a port
+of its own choosing: copy the `web` URL from the dashboard. Run from its `http` launch profile, the
+web host is at `http://localhost:5170`.
+
+In the dev container the tests cannot start the application: the AppHost cannot orchestrate from
+inside a container (ADR-0008), so without an address every browser test fails at once and says so.
+Run the projects from their `(dev container)` launch profiles
+([above](#from-the-ide-in-the-dev-container-no-local-sdk)) and name the web host:
+
+```bash
+RUN_UI_TESTS=1 UI_TESTS_BASE_URL=http://localhost:5170 dotnet test tests/Trellis.UiTests
+```
+
+When the application does not come up, every browser test fails with the same message: each
+resource's state and its last lines. Everything each resource printed is in `TestResults/applogs`
+under the test run's working directory (`artifacts/bin/Trellis.UiTests/debug/TestResults/applogs`
+after the commands above), one file per resource (`migrations.log`, `api.log`, `web.log`, the
+containers', and `apphost.log` for the AppHost itself); `UI_TESTS_LOGS` names another folder. CI's
+`ui-tests` job prints them when it fails and keeps them for 14 days as the `ui-app-logs` artifact.
 <!--#if (IncludeUI) -->
 
 `DesignSystemProofTests` is the design system's *Proof* ([docs/design-system.md](design-system.md#proof)):
@@ -269,13 +294,15 @@ or failed. Nothing compares them with earlier ones: a reviewer opens them.
 at 1280 px and the seeded draft at 400 px, each in light and dark, named `first-run-invoices-1280-<scheme>.png`
 and `first-run-invoice-400-<scheme>.png`. They show a first run, so the run has to say the database is one:
 the test skips without `UI_TESTS_FIRST_RUN=1`, and with it fails unless the list holds exactly the invoices
-the migration job seeds. CI's `ui-tests` job runs it alone, in a step of its own, before the other browser
-tests create their invoices; on your machine, run it against a freshly migrated database:
+the migration job seeds. A test run starts its own application on its own database, so run the
+class alone, as CI's `ui-tests` job does in a step of its own before the other browser tests:
 
 ```bash
-RUN_UI_TESTS=1 UI_TESTS_FIRST_RUN=1 UI_TESTS_BASE_URL=http://localhost:5170 \
-  dotnet test tests/Trellis.UiTests --filter-class '*FirstRunPicturesTests'
+RUN_UI_TESTS=1 UI_TESTS_FIRST_RUN=1 dotnet test tests/Trellis.UiTests --filter-class '*FirstRunPicturesTests'
 ```
+
+With `UI_TESTS_BASE_URL` (the dev container), the application you name must be on a freshly migrated
+database: the test fails on a list that holds anything but the seed.
 
 A test signs in through `Session.SignInAsAdminAsync`, on its own page: the circuit holds the tokens, so a
 full page load starts signed out and a signed-in test moves on through the app's links. The API allows ten
@@ -295,25 +322,27 @@ project) and the `add-feature` skill point here rather than repeat it.
 | `Application.UnitTests` | each handler's orchestration over faked ports (NSubstitute, `FakeTimeProvider`), the validators, event handlers, and the decorator pipeline itself (order, span, outcome line, validation) | nothing | you write a handler, a validator or an event handler, or touch a decorator: one folder per use case under `Features/<Feature>/<UseCase>/`, the validators' bounds in `Features/<Feature>/<Feature>CommandValidatorTests.cs` |
 | `ArchitectureTests` | the rules files hold: layer boundaries and every project under `src/` anchored to one, conventions by reflection and source scan (aggregates created through `Result`, no `throw` in the Domain, the use cases or the endpoints, time from `TimeProvider` and ids from their type, no sleep in a test, nothing silencing RSLT001, nothing outside the dialect, the host wiring and the listed test files naming the database engine or writing its SQL), the error-code vocabulary, options validated at boot, telemetry names and the telemetry reference, every package and container image within the license ceilings; with the UI, the design system (one token file writing every colour as a light/dark pair, contrast on every ground, every class documented, and the JSON export `scripts/export-design-tokens.sh` writes for a design tool true to the token file and the doc) and the UI rules a scan can see (no endpoint `[Authorize]`, no raw `HttpClient`, no inline script) | nothing | you introduce a convention: it gets a rule and a positive control, not just prose |
 | `IntegrationTests` | Persistence against a real PostgreSQL: mappings and round trips, specifications translated to SQL, interceptors, concurrency, the outbox and the idempotency store, retention, the migration matching the model | Docker (Testcontainers starts PostgreSQL) | a query, a mapping, an interceptor or anything transactional changes |
-| `ApiTests` | the HTTP contract through the real pipeline: authentication and each endpoint's permission, problem details, idempotency, caching and conditional requests, the served OpenAPI document equal to the committed one, the reference integration over a scripted socket, the e-mail adapters (the SMTP one against a fake relay on a loopback socket) and, from the AppHost's app model without starting it, where `aspire run` sends the API's e-mail | Docker for the in-process tests (contract and serialization tests run without it). The Aspire E2E also needs `RUN_ASPIRE_E2E=1` and a local SDK or CI, otherwise it skips; CI runs it as its own step after the other suites, because its processes and Testcontainers would otherwise race for the same host ports; it drops the AppHost's postgres data volume and persistent lifetime (`appHost.UseThrowawayDatabase()`, which an Aspire test of your own calls too), so it runs its own container and database and never touches your `aspire run` ones | an endpoint answers something the fitness suites do not already pin: its own 404, a business 409, the field codes of its 400, a notable flow end to end |
+| `ApiTests` | the HTTP contract through the real pipeline: authentication and each endpoint's permission, problem details, idempotency, caching and conditional requests, the served OpenAPI document equal to the committed one, the reference integration over a scripted socket, the e-mail adapters (the SMTP one against a fake relay on a loopback socket) and, from the AppHost's app model without starting it, where `aspire run` sends the API's e-mail | Docker for the in-process tests (contract and serialization tests run without it). The Aspire E2E also needs `RUN_ASPIRE_E2E=1` and a local SDK or CI, otherwise it skips; CI runs it as its own step after the other suites, because its processes and Testcontainers would otherwise race for the same host ports; it drops the AppHost's postgres data volume and persistent lifetime (`appHost.UseThrowawayDatabase()`, which an Aspire test of your own calls too), and refuses to go on when any other resource of the AppHost keeps a volume or a persistent lifetime, so it runs its own container and database and never touches your `aspire run` ones | an endpoint answers something the fitness suites do not already pin: its own 404, a business 409, the field codes of its 400, a notable flow end to end |
 
 `tests/TestSupport/` is not a project: it holds the test files several projects share
-(`ResultAssertions.cs` with `ShouldBeSuccess()`, `Invoices/InvoiceFactory.cs`, and
+(`ResultAssertions.cs` with `ShouldBeSuccess()`; `Invoices/InvoiceFactory.cs`;
 `Database/ITestDatabase.cs` with `Database/PostgresTestDatabase.cs`: the database server the two
 fixtures start, and `Database/PostgresTestDatabase.cs` is the one test file that starts it and
-configures the provider), each compiled into the projects that need it by a linked `<Compile Include>`
-in their csproj.
+configures the provider; and `AppHost/AppHostTestingExtensions.cs`, the step that gives an Aspire test
+a database server of its own, compiled into ApiTests and, with the browser tests, UiTests), each
+compiled into the projects that need it by a linked `<Compile Include>` in their csproj.
 
 <!--#if (IncludeUI) -->
 - **`ApiTests/Ui`** (with the UI; optional): UI.Common's typed clients, token handling and form logic over a
-  scripted `HttpMessageHandler` and a manual clock, no browser. Needs nothing more than the rest of
+  scripted `HttpMessageHandler` and a manual clock, no browser, and every request a typed client sends
+  held to the committed OpenAPI document (`ClientRoutesTests`). Needs nothing more than the rest of
   `ApiTests`. Write one when a client, a form or a page's behaviour changes.
 <!--#endif -->
 <!--#if (IncludeUiTests && IncludeUI) -->
 - **`UiTests`** (`--include-ui-tests`; optional, and opt-in at run time): the pages in a real browser
-  against a running app. Needs `RUN_UI_TESTS=1`, installed browsers and a running app (see
-  [UI tests](#ui-tests-optional)), otherwise it skips. Write one for a flow only a browser shows; keep
-  them few.
+  against the application the tests start themselves, through the AppHost. Needs `RUN_UI_TESTS=1`, an
+  installed browser, Docker and a local SDK or CI (see [UI tests](#ui-tests-optional)), otherwise it
+  skips. Write one for a flow only a browser shows; keep them few.
 <!--#endif -->
 <!--#if (UseMultitenancy) -->
 - **`TenancyTests`** (IntegrationTests) and **`TenantIsolationTests`** (ApiTests), with multi-tenancy
@@ -402,7 +431,8 @@ CI holds more than the tests to the code:
   off), checks each for leftovers (a file or a line still named after the template, an unprocessed
   directive) and runs the generated project's own link, hook and doctor checks. Every leg is built in
   Release, and every leg but UI-tests-without-the-UI is tested, on Linux with the Aspire end-to-end
-  test booting its generated AppHost. On Windows the default leg is built and the three test projects
+  test booting its generated AppHost, and the all-options leg then runs its browser tests against that
+  AppHost. On Windows the default leg is built and the three test projects
   that need no Docker run. A project is also built from the packed `.nupkg`.
 - **The README and the site** (template repository only): `scripts/check-readme-sync.sh`, a step of
   `.github/workflows/ci.yml`, fails when a copy its header lists, in the README, the package README or
