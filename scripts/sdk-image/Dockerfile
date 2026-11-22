@@ -6,7 +6,7 @@
 # which moves the two together when the 10.0 line is republished.
 #   tag: mcr.microsoft.com/dotnet/sdk:10.0 — the digest decides which 10.0 SDK and runtime the image
 #   carries (`docker run --rm trellis-sdk:10.0 dotnet --version` tells); global.json must accept it.
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:bef136a371963aaa46ec97882845ef6f54dec15728bb4b128b1c2a400ffbc9b4
 
 # The docker CLI comes from Docker's static-binary channel, which publishes no checksums, so the
 # SHA-256 of each architecture's tarball is pinned here and checked before anything is unpacked.
