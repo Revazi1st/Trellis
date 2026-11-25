@@ -540,7 +540,9 @@ cat '$state/listening' '$state/hidden' | grep -q \"^\$port \""
   }
   never() { # never TEXT: no line of the last run holds TEXT
     cases=$((cases + 1))
-    if grep -qF -- "$1" "$out"; then flunk "expected no line holding '$1'"; fi
+    # The working folder's own path is taken out first: its name is random, the run prints it (the engine's
+    # socket), and a random name can hold a short TEXT by chance ("jq" in tmp.IjqPTbKzVc, seen in CI).
+    if sed "s|$work|<work>|g" "$out" | grep -qF -- "$1"; then flunk "expected no line holding '$1'"; fi
   }
 
   label="everything in place"
@@ -555,6 +557,7 @@ cat '$state/listening' '$state/hidden' | grep -q \"^\$port \""
   line ok "AppHost ports free: 41001 41002 41003 41004 41005 41006 (tools/Acme.AppHost/Properties/launchSettings.json)"
   never 41999
   line ok "Testcontainers: the engine at $work/docker.sock; published ports at host.docker.internal"
+  never "${work##*/}"
   line ok "git version 2.47.1"
   line ok "jq 1.7.1, which scripts/needs-jq.sh needs"
   never "scripts/doctor.sh"

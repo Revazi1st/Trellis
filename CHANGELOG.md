@@ -101,6 +101,11 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   U+FFFD, and the mask keeps the whole first character as a reader sees it, a whole emoji or a letter with
   its combining accent, as does the copy that masks the e-mail of security event 1102. If you copied the
   mask into code of your own, take the first text element there too (`StringInfo.GetNextTextElementLength`).
+- **`./scripts/doctor.sh --self-test` no longer fails by chance.** One of its cases asserts that no line
+  of a run mentions `jq`, and the run prints the self-test's own temporary folder (the engine's socket):
+  a folder that `mktemp` happened to name `tmp.IjqPTbKzVc` failed the case, about once in a few hundred
+  runs on Linux, in the CI job that runs the self-test. The assertion now leaves the folder's own path
+  out, and a new case fails if it ever stops doing so.
 
 ## [0.2.0] - 2026-11-15
 
