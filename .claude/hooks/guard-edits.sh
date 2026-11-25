@@ -38,11 +38,12 @@ if [[ "/$rel" =~ $migrations ]]; then
 fi
 
 #if (TemplateSource)
-# Template source only: the second initial migration the template ships, the multi-tenant model's. It is
-# generated like the first one and kept outside every project, so the rule above does not see it.
-tenancy_set='/\.template\.config/tenancy/Migrations/'
-if [[ "/$rel" =~ $tenancy_set ]]; then
-  decide ask "$rel is a generated migration, the one a project created with multi-tenancy gets: generated, never hand-edited. Change the model, then regenerate both shipped sets: ./scripts/regenerate-initial-migrations.sh (MigrationSnapshotTests holds the two sets to one model)."
+# Template source only: an initial migration the template ships in place of the default one for an
+# option (.template.config/tenancy/ for multi-tenancy, and any later set beside it). It is generated
+# like the first one and kept outside every project, so the rule above does not see it.
+shipped_set='/\.template\.config/[^/]+/Migrations/'
+if [[ "/$rel" =~ $shipped_set ]]; then
+  decide ask "$rel is a generated migration, one the template ships in place of the default set for an option: generated, never hand-edited. Change the model, then regenerate the shipped sets: ./scripts/regenerate-initial-migrations.sh (MigrationSnapshotTests holds them to one model)."
 fi
 #endif
 
