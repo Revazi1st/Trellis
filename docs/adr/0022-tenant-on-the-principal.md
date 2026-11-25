@@ -4,7 +4,7 @@
 - **Date**: 2026-10-07
 - **Supersedes**: the tenant-resolution and per-aggregate wiring bullets of ADR-0019 (the toggle,
   the interceptor and the named-filter pattern stand)
-- **Amended**: 2026-11-12 — a unique index on an aggregate root is unique per tenant, by the same convention (see *Amendment (2026-11-12)* below)
+- **Amended**: 2026-11-12 — a unique index on an aggregate root is unique per tenant, by the same convention (see *Amendment (2026-11-12)* below); 2026-11-25 — the multi-tenant initial migration ships (see *Amendment (2026-11-25)* below)
 
 ## Context
 
@@ -155,3 +155,14 @@ caller that another tenant holds the value.
   teaching the convention loop to leave that index as EF made it.
 - The toggle-off model, and so the shipped `InitialCreate`, is unchanged; the regenerated
   multi-tenant `InitialCreate` carries `(TenantId, key)` for each such index.
+
+## Amendment (2026-11-25): the migration ships, it is no longer regenerated
+
+Decision 8 kept the migration story as it was: the template shipped `InitialCreate` for the model
+without the option, and a project generated with it regenerated the migration. ADR-0019's amendment of
+the same date changes that. A project created with `--use-multitenancy` gets an initial migration
+generated for the multi-tenant model, which carries what this decision adds to it:
+`AspNetUsers.TenantId` with its index. (`TenantId` leads a unique index an aggregate root declares;
+the reference model declares none, so the shipped migration shows none.) The consequence about a
+project that already has users without a tenant stands as written: turning the option on in an
+existing project is that project's own schema change, with its data migration.
