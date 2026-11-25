@@ -156,23 +156,80 @@ public sealed class TimeSpanRangeAttributeTests
 
     /// <summary>
     /// What this attribute exists for, held without racing it: everything it adds to <see cref="ValidationAttribute"/>
-    /// is fixed by its constructor, so two threads validating with one instance read the same bounds. The base
-    /// class's lazily built message accessor is the same for every caller (built from what was set before the
-    /// instance was handed out), which is <see cref="RangeAttribute"/>'s case too; its bounds were the race.
+    /// is a <see cref="TimeSpan"/> fixed by its constructor, so two threads validating with one instance read the
+    /// same bounds. A readonly field is not enough: <see cref="RangeAttribute"/>'s defect would hide as well behind
+    /// a readonly reference to something that changes (an array converted on first use, a cache) or in a static,
+    /// so every field the class declares, static or not, must be a readonly <see cref="TimeSpan"/> or a constant.
+    /// The base class's lazily built message accessor is the same for every caller (built from what was set before
+    /// the instance was handed out), which is <see cref="RangeAttribute"/>'s case too; its bounds were the race.
     /// </summary>
     [Fact]
     public void The_attribute_holds_no_state_that_changes_after_construction()
     {
         Type type = typeof(TimeSpanRangeAttribute);
-        FieldInfo[] fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
 
         type.IsSealed.ShouldBeTrue("a subclass could add state of its own");
-        fields.ShouldNotBeEmpty("the bounds are fields; reflection found none, so the check below would prove nothing");
-        fields.Where(static field => !field.IsInitOnly).Select(static field => field.Name).ShouldBeEmpty("every field is readonly");
-        type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
-            .Where(static property => property.CanWrite)
-            .Select(static property => property.Name)
-            .ShouldBeEmpty("no property of its own can be set");
+        type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+            .ShouldNotBeEmpty("the bounds are fields; reflection found none, so the check below would prove nothing");
+        StateThatCanChange(type).ShouldBeEmpty("every field is a readonly TimeSpan or a constant, and no property of its own can be set");
+    }
+
+    /// <summary>
+    /// Positive control for the fact above, which expects nothing: each planted class holds one kind of state
+    /// that can change after construction, and the same reading names it.
+    /// </summary>
+    [Fact]
+    public void The_reading_of_state_that_can_change_names_what_a_planted_class_holds()
+    {
+        // Each planted class is used as written, so that what the reading names below is really state it holds.
+        new BoundsConvertedOnFirstUse("00:00:01", "01:00:00").Minimum.ShouldBe("00:00:01");
+        BoundsInAStaticCache.Count.ShouldBe(0);
+        new BoundsThatCanBeSet { Maximum = TimeSpan.FromHours(1) }.Maximum.ShouldBe(TimeSpan.FromHours(1));
+
+        StateThatCanChange(typeof(BoundsConvertedOnFirstUse)).ShouldBe(["_bounds"]);
+        StateThatCanChange(typeof(BoundsInAStaticCache)).ShouldBe(["Parsed"]);
+        StateThatCanChange(typeof(BoundsThatCanBeSet)).Contains("Maximum", StringComparer.Ordinal).ShouldBeTrue("a property with a setter is state that can change");
+    }
+
+    /// <summary>
+    /// The members <paramref name="type"/> declares that can hold something different later: a field, static or
+    /// not, that is neither a constant nor a readonly <see cref="TimeSpan"/>, and a property with a setter.
+    /// </summary>
+    private static string[] StateThatCanChange(Type type)
+    {
+        const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+
+        return
+        [
+            .. type.GetFields(Declared)
+                .Where(static field => !field.IsLiteral && !(field.IsInitOnly && field.FieldType == typeof(TimeSpan)))
+                .Select(static field => field.Name),
+            .. type.GetProperties(Declared)
+                .Where(static property => property.CanWrite)
+                .Select(static property => property.Name),
+        ];
+    }
+
+    /// <summary>The old attribute's shape behind a readonly reference: the array is fixed, what it holds is not.</summary>
+    private sealed class BoundsConvertedOnFirstUse(string minimum, string maximum)
+    {
+        private readonly object[] _bounds = [minimum, maximum];
+
+        public object Minimum => _bounds[0];
+    }
+
+    /// <summary>A cache every instance shares.</summary>
+    private static class BoundsInAStaticCache
+    {
+        private static readonly Dictionary<string, TimeSpan> Parsed = new(StringComparer.Ordinal);
+
+        public static int Count => Parsed.Count;
+    }
+
+    /// <summary>A bound anyone holding the instance can move.</summary>
+    private sealed class BoundsThatCanBeSet
+    {
+        public TimeSpan Maximum { get; set; }
     }
 
     private static RangeAttribute OldRange(string minimum, string maximum, string? errorMessage = null)

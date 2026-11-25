@@ -205,6 +205,20 @@ public sealed partial class OptionsConventionTests
     }
 
     /// <summary>
+    /// Control for the list the fact above reads by name (a tools host is read as text, its assembly is not loaded):
+    /// it knows the attributes an options class here is written with, <c>TimeSpanRange</c> included, which is the
+    /// only way left to state a <see cref="TimeSpan"/> limit, and not an attribute that validates nothing.
+    /// </summary>
+    [Theory]
+    [InlineData("[Required]", true)]
+    [InlineData("[ Range(1, 50, ErrorMessage = \"Outbox:BatchSize must be between {1} and {2}.\")]", true)]
+    [InlineData("[TimeSpanRange(\"00:00:01\", \"01:00:00\")]", true)]
+    [InlineData("[Obsolete]", false)]
+    [InlineData("[JsonPropertyName(\"range\")]", false)]
+    public void The_tools_host_scan_knows_a_validation_attribute_by_its_name(string code, bool known)
+        => ValidationAttributeUsage().IsMatch(code).ShouldBe(known);
+
+    /// <summary>
     /// No limit is a <c>RangeAttribute</c> built with a type (<c>[Range(typeof(TimeSpan), "00:00:01", "01:00:00")]</c>):
     /// that constructor keeps the two strings, converts them on the attribute's first use and writes the converted
     /// values back without a lock, and one attribute instance serves every host in the process. Two hosts that
@@ -213,6 +227,9 @@ public sealed partial class OptionsConventionTests
     /// #110917, which the runtime keeps). The numeric constructors (<c>[Range(1, 50)]</c>) start converted and pass.
     /// Not only options: a form or request model validated on many threads at once meets the same race, so the
     /// scan reads every <c>.cs</c> and <c>.razor</c> file under <c>src/</c> and <c>tools/</c>.
+    /// It reads text, so it does not follow the attribute under an alias, a class derived from it that hands the
+    /// type on (<c>: base(typeof(TimeSpan), minimum, maximum)</c>), or a type held in a variable: none of those
+    /// is a way round the race, only round this scan.
     /// </summary>
     [Fact]
     public void No_limit_is_a_RangeAttribute_built_with_a_type()
@@ -229,7 +246,9 @@ public sealed partial class OptionsConventionTests
             "RangeAttribute with a type argument converts its bounds on first use without a lock, so two threads validating at once "
             + "(two hosts starting in one process, as parallel test fixtures do) can throw: "
             + "state a TimeSpan limit with [TimeSpanRange(\"00:00:01\", \"01:00:00\", ErrorMessage = \"Section:Key must be between {1} and {2}.\")] "
-            + "(Trellis.SharedKernel.Validation), a number with the int or double constructor; a deliberate exception goes on TypedRangeAllowlist with its reason");
+            + "(Trellis.SharedKernel.Validation), a number with the int or double constructor; a project that does not see the SharedKernel "
+            + "(the UI, ServiceDefaults, Api.Contracts) keeps a copy of that attribute held to the same rows by a test, never a new reference; "
+            + "a deliberate exception goes on TypedRangeAllowlist with its reason");
     }
 
     /// <summary>
@@ -298,7 +317,7 @@ public sealed partial class OptionsConventionTests
     [GeneratedRegex(@"\bclass\s+(?<name>\w+Options)\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex OptionsClassDeclaration();
 
-    [GeneratedRegex(@"\[\s*(?:Required|Range|MinLength|MaxLength|StringLength|Length|EmailAddress|Url|RegularExpression|EnumDataType|AllowedValues|DeniedValues)\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"\[\s*(?:Required|Range|TimeSpanRange|MinLength|MaxLength|StringLength|Length|EmailAddress|Url|RegularExpression|EnumDataType|AllowedValues|DeniedValues)\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex ValidationAttributeUsage();
 
     /// <summary>

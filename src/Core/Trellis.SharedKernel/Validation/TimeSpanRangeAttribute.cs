@@ -17,8 +17,8 @@ namespace Trellis.SharedKernel.Validation;
 /// half-converted, and one of them fails to start with an <see cref="InvalidCastException"/> or an
 /// <see cref="ArgumentException"/> instead of validating (dotnet/runtime#1143 and #110917; the runtime keeps it).
 /// This one parses both bounds in its constructor, so a malformed bound fails where the attribute is read, and
-/// it holds nothing that changes afterwards. <c>OptionsConventionTests</c> fails on the other form under
-/// <c>src/</c> and <c>tools/</c>.
+/// it adds no state that changes afterwards (the base class builds its message accessor on first use, the same
+/// for every caller). <c>OptionsConventionTests</c> fails on the other form under <c>src/</c> and <c>tools/</c>.
 /// </para>
 /// <para>
 /// A null value passes: whether one is required is <see cref="RequiredAttribute"/>'s business, as with
