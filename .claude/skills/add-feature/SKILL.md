@@ -152,7 +152,10 @@ after each layer.
 - [ ] A feature a person uses gets its pages, as Invoices has them: a list, a detail page and a form
       per write, the typed client, the nav link and the render tests below. An API-only feature says
       so, and why, in its doc's *UI* section, and `ui-reviewer` reads that sentence.
-- [ ] A typed client method over the contracts, through `ApiCall`; POSTs through the idempotent helper.
+- [ ] A typed client method over the contracts, through `ApiCall`; POSTs through the idempotent helper;
+      a row in `ClientRoutesTests.Calls` per request the method can send, naming the operation it means
+      by its `operationId` (the endpoint class's name), and for a new client a property on `UiHarness`
+      [`ClientRoutesTests`].
 - [ ] A page in `Pages/` that inherits `ProtectedPage` (overriding `RequiredPermission` when a permission
       gates the whole page), with a `<PageTitle>`, one `h1`, and a `class="back"` link to its list above
       the heading when it sits below one, there whatever the load state (`.claude/rules/ui.md`).
