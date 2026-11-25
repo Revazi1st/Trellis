@@ -192,6 +192,17 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   parallel against one application, so a test that created an invoice and then looked for it at the
   head of the list could find another class's invoice there, now and then. The classes run one at a
   time; a browser test class of your own needs nothing for it.
+- **Two API hosts started at once in one process no longer fail now and then validating their options.**
+  A `TimeSpan` limit written `[Range(typeof(TimeSpan), "00:00:01", "1.00:00:00")]` converts its bounds on
+  its first use without a lock, and one attribute instance serves every host in the process, so two hosts
+  validating the same options class at the same moment, as parallel test fixtures do, could stop one of
+  them at start with `InvalidCastException: Unable to cast object of type 'System.TimeSpan' to type
+  'System.String'` (a running application starts one host and was not affected). `OutboxOptions`,
+  `RetentionOptions` and `UseCaseLoggingOptions` now state their limits with `[TimeSpanRange("00:00:01",
+  "1.00:00:00", ErrorMessage = …)]` (`Trellis.SharedKernel.Validation`), which reads its bounds once, when
+  it is built; a valid value and the boot error for an invalid one are what they were. An options class of
+  your own that states a `TimeSpan` limit with `RangeAttribute` carries the same flake: use `TimeSpanRange`,
+  because `OptionsConventionTests` now fails on a `RangeAttribute` built with a type under `src/` and `tools/`.
 
 ### Security
 

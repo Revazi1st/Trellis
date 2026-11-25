@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Trellis.SharedKernel.Validation;
 
 namespace Trellis.Persistence.Outbox;
 
@@ -20,8 +21,7 @@ public sealed class OutboxOptions
     public const string SectionName = "Outbox";
 
     /// <summary>Sleep between two polls once a batch came back short; a full batch is followed by another claim at once.</summary>
-    [Range(typeof(TimeSpan), "00:00:00.100", "00:10:00", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
-        ErrorMessage = "Outbox:PollInterval must be between {1} and {2}.")]
+    [TimeSpanRange("00:00:00.100", "00:10:00", ErrorMessage = "Outbox:PollInterval must be between {1} and {2}.")]
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(5);
 
     /// <summary>Messages claimed per poll — the LIMIT of the <c>FOR UPDATE SKIP LOCKED</c> claim.</summary>
@@ -33,13 +33,11 @@ public sealed class OutboxOptions
     public int MaxAttempts { get; init; } = 8;
 
     /// <summary>Wait after the first failure; it doubles with every further failure up to <see cref="MaxRetryDelay"/>.</summary>
-    [Range(typeof(TimeSpan), "00:00:01", "01:00:00", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
-        ErrorMessage = "Outbox:BaseRetryDelay must be between {1} and {2}.")]
+    [TimeSpanRange("00:00:01", "01:00:00", ErrorMessage = "Outbox:BaseRetryDelay must be between {1} and {2}.")]
     public TimeSpan BaseRetryDelay { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Cap on the doubling, so a late attempt does not wait half an hour. At least <see cref="BaseRetryDelay"/> (checked where the section is bound).</summary>
-    [Range(typeof(TimeSpan), "00:00:01", "1.00:00:00", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
-        ErrorMessage = "Outbox:MaxRetryDelay must be between {1} and {2}.")]
+    [TimeSpanRange("00:00:01", "1.00:00:00", ErrorMessage = "Outbox:MaxRetryDelay must be between {1} and {2}.")]
     public TimeSpan MaxRetryDelay { get; init; } = TimeSpan.FromMinutes(15);
 
     /// <summary>
@@ -48,8 +46,7 @@ public sealed class OutboxOptions
     /// cooperative handler cannot hold a message past it. Matches the 30 s total timeout of the standard
     /// resilience handler a handler's <c>HttpClient</c> already has.
     /// </summary>
-    [Range(typeof(TimeSpan), "00:00:01", "00:10:00", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
-        ErrorMessage = "Outbox:DispatchTimeout must be between {1} and {2}.")]
+    [TimeSpanRange("00:00:01", "00:10:00", ErrorMessage = "Outbox:DispatchTimeout must be between {1} and {2}.")]
     public TimeSpan DispatchTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>

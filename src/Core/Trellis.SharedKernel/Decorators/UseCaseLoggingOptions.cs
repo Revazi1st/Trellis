@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+using Trellis.SharedKernel.Validation;
 
 namespace Trellis.SharedKernel.Decorators;
 
@@ -27,7 +27,6 @@ public sealed class UseCaseLoggingOptions
     /// something unexpected happened (ADR-0028), and only an operator knows what slow means for a system
     /// (<c>Telemetry:SlowUseCaseThreshold</c>).
     /// </summary>
-    [Range(typeof(TimeSpan), "00:00:00.001", "01:00:00", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
-        ErrorMessage = "Telemetry:SlowUseCaseThreshold must be between {1} and {2}.")]
+    [TimeSpanRange("00:00:00.001", "01:00:00", ErrorMessage = "Telemetry:SlowUseCaseThreshold must be between {1} and {2}.")]
     public TimeSpan? SlowUseCaseThreshold { get; init; }
 }

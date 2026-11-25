@@ -24,6 +24,13 @@ public sealed partial class OptionsConventionTests
 {
     private const string SigningKey = "architecture-tests-signing-key-0123456789abcdef";
 
+    /// <summary>
+    /// The files under <c>src/</c> and <c>tools/</c> that may state a limit with <c>RangeAttribute</c> and a type
+    /// argument, keyed by repository-relative path, each with its reason. Empty on purpose: that attribute converts
+    /// its bounds on its first use without a lock, and a <see cref="TimeSpan"/> limit is <c>TimeSpanRange</c>.
+    /// </summary>
+    private static readonly Dictionary<string, string> TypedRangeAllowlist = new(StringComparer.Ordinal);
+
     private static readonly Assembly[] OptionsAssemblies =
     [
         Architecture.SharedKernelAssembly,
@@ -197,6 +204,78 @@ public sealed partial class OptionsConventionTests
         violations.ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// Control for the list the fact above reads by name (a tools host is read as text, its assembly is not loaded):
+    /// it knows the attributes an options class here is written with, <c>TimeSpanRange</c> included, which is the
+    /// only way left to state a <see cref="TimeSpan"/> limit, and not an attribute that validates nothing.
+    /// </summary>
+    [Theory]
+    [InlineData("[Required]", true)]
+    [InlineData("[ Range(1, 50, ErrorMessage = \"Outbox:BatchSize must be between {1} and {2}.\")]", true)]
+    [InlineData("[TimeSpanRange(\"00:00:01\", \"01:00:00\")]", true)]
+    [InlineData("[Obsolete]", false)]
+    [InlineData("[JsonPropertyName(\"range\")]", false)]
+    public void The_tools_host_scan_knows_a_validation_attribute_by_its_name(string code, bool known)
+        => ValidationAttributeUsage().IsMatch(code).ShouldBe(known);
+
+    /// <summary>
+    /// No limit is a <c>RangeAttribute</c> built with a type (<c>[Range(typeof(TimeSpan), "00:00:01", "01:00:00")]</c>):
+    /// that constructor keeps the two strings, converts them on the attribute's first use and writes the converted
+    /// values back without a lock, and one attribute instance serves every host in the process. Two hosts that
+    /// validate the same options type for the first time at once, as parallel test fixtures do, can read a bound
+    /// half-converted, and one fails to start with an <see cref="InvalidCastException"/> (dotnet/runtime#1143 and
+    /// #110917, which the runtime keeps). The numeric constructors (<c>[Range(1, 50)]</c>) start converted and pass.
+    /// Not only options: a form or request model validated on many threads at once meets the same race, so the
+    /// scan reads every <c>.cs</c> and <c>.razor</c> file under <c>src/</c> and <c>tools/</c>.
+    /// It reads text, so it does not follow the attribute under an alias, a class derived from it that hands the
+    /// type on (<c>: base(typeof(TimeSpan), minimum, maximum)</c>), or a type held in a variable: none of those
+    /// is a way round the race, only round this scan.
+    /// </summary>
+    [Fact]
+    public void No_limit_is_a_RangeAttribute_built_with_a_type()
+    {
+        List<SourceFile> scanned =
+        [
+            .. RepositorySource.CSharpFiles("src", "tools"),
+            .. RepositorySource.RazorAndCssFiles("src", "tools").Where(static file => file.RelativePath.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)),
+        ];
+
+        scanned.ShouldNotBeEmpty("the typed-range scan found no file under src/ or tools/; is the repository root right?");
+        SourceScan.StaleEntries(scanned, TypedRangeAllowlist, TypedRangesIn).ShouldBeEmpty();
+        SourceScan.Violations(scanned, TypedRangeAllowlist, TypedRangesIn).ShouldBeEmpty(
+            "RangeAttribute with a type argument converts its bounds on first use without a lock, so two threads validating at once "
+            + "(two hosts starting in one process, as parallel test fixtures do) can throw: "
+            + "state a TimeSpan limit with [TimeSpanRange(\"00:00:01\", \"01:00:00\", ErrorMessage = \"Section:Key must be between {1} and {2}.\")] "
+            + "(Trellis.SharedKernel.Validation), a number with the int or double constructor; a project that does not see the SharedKernel "
+            + "(the UI, ServiceDefaults, Api.Contracts) keeps a copy of that attribute held to the same rows by a test, never a new reference; "
+            + "a deliberate exception goes on TypedRangeAllowlist with its reason");
+    }
+
+    /// <summary>
+    /// Positive control for the typed-range scan, which expects zero hits outside its allowlist: the attribute with a
+    /// type is found however it is spelled (short or long name, qualified, constructed, the type named or placed last,
+    /// across lines in a Razor <c>@code</c> block);
+    /// the numeric constructors and <c>TimeSpanRange</c> are not. Each row is assembled from two literals, so the
+    /// control holds the forbidden text whole nowhere, should the scan ever read <c>tests/</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("[Range(type", "of(TimeSpan), \"00:00:01\", \"01:00:00\")]", true)]
+    [InlineData("[Range( type", "of( TimeSpan ), \"00:00:01\", \"01:00:00\", ParseLimitsInInvariantCulture = true)]", true)]
+    [InlineData("[RangeAttribute(type", "of(decimal), \"0\", \"100\")]", true)]
+    [InlineData("[System.ComponentModel.DataAnnotations.Range(type", "of(DateTime), \"2000-01-01\", \"2100-01-01\")]", true)]
+    [InlineData("var range = new RangeAttribute(type", "of(TimeSpan), minimum, maximum);", true)]
+    [InlineData("[Range(type: type", "of(TimeSpan), minimum: \"00:00:01\", maximum: \"01:00:00\")]", true)]
+    [InlineData("[Range(minimum: \"00:00:01\", maximum: \"01:00:00\", type: type", "of(TimeSpan))]", true)]
+    [InlineData("@code { [Range(\n        type", "of(decimal), \"0\", \"100\")] public decimal Amount { get; set; } }", true)]
+    [InlineData("[Range(1, ", "50, ErrorMessage = \"Outbox:MaxAttempts must be between {1} and {2}.\")]", false)]
+    [InlineData("[Range(0d, ", "double.MaxValue)] public decimal Amount { get; init; }", false)]
+    [InlineData("[TimeSpanRange(\"00:00:01\", ", "\"01:00:00\", ErrorMessage = \"Outbox:BaseRetryDelay must be between {1} and {2}.\")]", false)]
+    [InlineData("var kind = type", "of(RangeAttribute);", false)]
+    public void The_typed_range_scan_flags_the_attribute_built_with_a_type_and_not_a_numeric_or_a_TimeSpan_range(string head, string tail, bool flagged)
+        => TypedRangesIn(new SourceFile("Planted.cs", head + tail)).Any().ShouldBe(flagged);
+
+    private static IEnumerable<int> TypedRangesIn(SourceFile file) => TypedRange().Matches(file.Code).Select(static match => match.Index);
+
     /// <summary>Each <c>AddOptions&lt;name&gt;()</c> statement in <paramref name="code"/>, up to its semicolon.</summary>
     private static IEnumerable<string> Registrations(string code, string name)
     {
@@ -238,8 +317,15 @@ public sealed partial class OptionsConventionTests
     [GeneratedRegex(@"\bclass\s+(?<name>\w+Options)\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex OptionsClassDeclaration();
 
-    [GeneratedRegex(@"\[\s*(?:Required|Range|MinLength|MaxLength|StringLength|Length|EmailAddress|Url|RegularExpression|EnumDataType|AllowedValues|DeniedValues)\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"\[\s*(?:Required|Range|TimeSpanRange|MinLength|MaxLength|StringLength|Length|EmailAddress|Url|RegularExpression|EnumDataType|AllowedValues|DeniedValues)\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex ValidationAttributeUsage();
+
+    /// <summary>
+    /// <c>Range</c> or <c>RangeAttribute</c> (a word of its own, so <c>TimeSpanRange</c> is not it) opening an argument
+    /// list that names a type before it closes: a <c>typeof</c> at the first level of the parentheses, first or not.
+    /// </summary>
+    [GeneratedRegex(@"\bRange(?:Attribute)?\s*\([^()]*?\btypeof\s*\(", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex TypedRange();
 
     /// <summary>
     /// An application's real host — its own <c>Program</c>, its own registrations, its own configuration —
