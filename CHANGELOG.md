@@ -120,8 +120,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   `Session.SignInAsAdminAsync(page, address)`. When you upgrade a solution created with
   `--include-ui-tests`, take the tests, `Trellis.UiTests.csproj` (two project references, a package
   reference and a linked file) and the `ui-tests` job together: the new job starts no application for
-  the old tests, and the old tests look for port 7170. Or keep your job as it is and set
-  `UI_TESTS_BASE_URL` in it.
+  the old tests, and the old tests look for port 7170. Or keep your job as it is: it starts the
+  application and already names it in `UI_TESTS_BASE_URL`, so the new tests drive that one and start
+  nothing.
 - **`UseThrowawayDatabase` moved** to `tests/TestSupport/AppHost/AppHostTestingExtensions.cs` (namespace
   `Trellis.TestSupport.AppHost`), linked into ApiTests and UiTests. An Aspire test of your own adds the
   `using`.
