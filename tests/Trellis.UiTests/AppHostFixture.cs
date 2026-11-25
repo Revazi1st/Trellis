@@ -23,9 +23,11 @@ namespace Trellis.UiTests;
 /// <para>
 /// Nothing starts in the constructor: xUnit creates an assembly fixture before any test runs, and a run
 /// without RUN_UI_TESTS=1 (the SDK container, an ordinary <c>dotnet test</c>) skips every browser test, so
-/// it must start nothing. A start that fails is kept: every test fails with the same message, which holds
-/// each resource's state and last lines, and the whole of what they printed is in
-/// <see cref="UiTestEnvironment.LogRoot"/>.
+/// it must start nothing. The start ends as soon as a resource the web host needs fails (the web host
+/// itself and everything it waits for: <c>RunUnlessOneFailsAsync</c> over <c>NeededBy</c>), and otherwise
+/// at <see cref="StartTimeout"/>. A start that fails is kept: every test fails with the same message, which
+/// holds the reason, each resource's state and the last lines of the migration job, the API, the web host
+/// and the AppHost, and the whole of what each resource printed is in <see cref="UiTestEnvironment.LogRoot"/>.
 /// </para>
 /// <para>
 /// It needs what the Aspire E2E needs (ADR-0008): a .NET SDK on the host or CI, and Docker. In a container
@@ -73,7 +75,7 @@ public sealed class AppHostFixture : IAsyncDisposable
     /// <summary>
     /// What a test gets when the run is in a container and names no address. The AppHost is not started
     /// there: its projects would run in the container and PostgreSQL beside it on the host, the two cannot
-    /// reach each other, and the wait would end at <see cref="StartTimeout"/> with nothing to read.
+    /// reach each other, and the start would fail on that instead of on anything the tests are about.
     /// </summary>
     internal const string InContainerMessage =
         "The browser tests cannot start the application from inside a container (the dev container, the SDK container): "
@@ -165,20 +167,29 @@ public sealed class AppHostFixture : IAsyncDisposable
             // Every line, whatever the AppHost's own appsettings filter: the files are read after a failure.
             appHost.Services.AddLogging(logging => logging.AddProvider(logs).AddFilter<AppLogs>(category: null, LogLevel.Information));
             resources = [.. appHost.Resources.Select(static resource => resource.Name)];
+            // The web host and everything it waits for: the API, the migration job, the database and its
+            // server. Not the tool tiles: a pgAdmin that crashes does not stop the browser tests.
+            string[] needed = AppHostTestingExtensions.NeededBy(appHost.Resources, ServiceNames.Web);
 
-            app = await appHost.BuildAsync(ct);
-            await app.StartAsync(ct);
+            DistributedApplication started = app = await appHost.BuildAsync(ct);
 
-            // Healthy is each host's own /health answering (the AppHost's WithHttpHealthCheck), and the API
-            // starts only once the migration worker has migrated, seeded and exited with 0. A resource that
-            // fails or exits ends the wait at once: that is the testing builder's default, named here so the
-            // start does not depend on it. The time limit covers what is left, a resource that keeps running
-            // and never becomes healthy.
-            await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Api, WaitBehavior.StopOnResourceUnavailable, ct);
-            await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Web, WaitBehavior.StopOnResourceUnavailable, ct);
+            // StartAsync does not return while a resource waits for a dependency, and a resource whose
+            // dependency has exited goes on waiting (CI saw the web host wait for an API that had crashed at
+            // boot, until the time limit). So the start and the two waits each run under a watch of the needed
+            // resources: the first of them that fails to start, or exits with a code other than 0, ends the
+            // start at once with its own sentence. Healthy is each host's own /health answering (the AppHost's
+            // WithHttpHealthCheck), and the API starts only once the migration job has migrated, seeded and
+            // exited with 0. The waits keep StopOnResourceUnavailable, Aspire's own stop for the resource a
+            // wait names; the watch covers the resources behind it. The time limit covers what is left: a
+            // resource that keeps running and never becomes healthy.
+            await started.RunUnlessOneFailsAsync(needed, started.StartAsync, ct);
+            await started.RunUnlessOneFailsAsync(needed, token => started.ResourceNotifications.WaitForResourceHealthyAsync(
+                ServiceNames.Api, WaitBehavior.StopOnResourceUnavailable, token), ct);
+            await started.RunUnlessOneFailsAsync(needed, token => started.ResourceNotifications.WaitForResourceHealthyAsync(
+                ServiceNames.Web, WaitBehavior.StopOnResourceUnavailable, token), ct);
 
-            string address = UiTestEnvironment.WithoutTrailingSlash(app.GetEndpoint(ServiceNames.Web).ToString());
-            _app = app;
+            string address = UiTestEnvironment.WithoutTrailingSlash(started.GetEndpoint(ServiceNames.Web).ToString());
+            _app = started;
             return address;
         }
         catch (Exception exception)

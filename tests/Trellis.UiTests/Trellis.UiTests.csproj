@@ -20,7 +20,8 @@
   </ItemGroup>
 
   <!-- Shared test support (tests/TestSupport), linked as in ApiTests: the step that keeps an Aspire
-       test away from the developer's own database. -->
+       test away from the developer's own database, and the watch that ends a start when a resource
+       the application needs fails. -->
   <ItemGroup>
     <Compile Include="..\TestSupport\AppHost\AppHostTestingExtensions.cs" Link="TestSupport\AppHost\AppHostTestingExtensions.cs" />
   </ItemGroup>
