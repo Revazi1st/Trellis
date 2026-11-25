@@ -4,7 +4,8 @@
 - **Date**: 2026-10-07
 - **Supersedes**: the tenant-resolution and per-aggregate wiring bullets of ADR-0019 (the toggle,
   the interceptor and the named-filter pattern stand)
-- **Amended**: 2026-11-12 — a unique index on an aggregate root is unique per tenant, by the same convention (see *Amendment (2026-11-12)* below); 2026-11-25 — the multi-tenant initial migration ships (see *Amendment (2026-11-25)* below)
+- **Amended**: 2026-11-12 — a unique index on an aggregate root is unique per tenant, by the same convention (see *Amendment (2026-11-12)* below)
+- **Amended**: 2026-11-25 — the multi-tenant initial migration ships (see *Amendment (2026-11-25)* below)
 
 ## Context
 
