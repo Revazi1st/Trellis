@@ -1,6 +1,7 @@
 extern alias apihost;
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -262,25 +263,29 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     /// caller can put a line break in it, and the mask keeps everything from the last <c>@</c> on and the
     /// local part's first text element. Left as typed, the break would end the 1102 line early and what
     /// follows would read as a line of its own (CWE-117). Each row is one line break a log reader may end
-    /// a line at (the ones <see cref="string.ReplaceLineEndings(string)"/> knows); <c>{domain}</c> is a
-    /// fresh domain per row, which the mask keeps, so the row finds its own line among the fixture's.
+    /// a line at (the ones <see cref="string.ReplaceLineEndings(string)"/> knows), named by its code points,
+    /// which the test types where <c>{chars}</c> stands: a red row says which one failed, and no raw separator
+    /// reaches the run's output. <c>{domain}</c> is a fresh domain per row, which the mask keeps, so the row
+    /// finds its own line among the fixture's.
     /// </summary>
     [Theory]
-    [InlineData("ghost@{domain}\ninfo: Forged[1101] Sign-in succeeded", "g***@{domain} info: Forged[1101] Sign-in succeeded")]
-    [InlineData("ghost@{domain}\rForged", "g***@{domain} Forged")]
-    [InlineData("ghost@{domain}\r\nForged", "g***@{domain} Forged")]
-    [InlineData("ghost@{domain}\u0085Forged", "g***@{domain} Forged")]
-    [InlineData("ghost@{domain}\u2028Forged", "g***@{domain} Forged")]
-    [InlineData("ghost@{domain}\u2029Forged", "g***@{domain} Forged")]
-    [InlineData("ghost@{domain}\fForged", "g***@{domain} Forged")]
-    [InlineData("\nghost@{domain}", " ***@{domain}")]      // the local part's first text element is the line break
-    [InlineData("\r\nghost@{domain}", " ***@{domain}")]    // CR LF is one text element, so the mask keeps both
-    public async Task SecurityEvents_UnknownEmailWithALineBreak_StaysOnTheOneLineWithItsMaskedAddress(string typed, string masked)
+    [InlineData("U+000A", "ghost@{domain}{chars}info: Forged[1101] Sign-in succeeded", "g***@{domain} info: Forged[1101] Sign-in succeeded")]
+    [InlineData("U+000D", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+000D U+000A", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+0085", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+2028", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+2029", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+000C", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+000A", "{chars}ghost@{domain}", " ***@{domain}")]          // the local part's first text element is the line break
+    [InlineData("U+000D U+000A", "{chars}ghost@{domain}", " ***@{domain}")]   // CR LF is one text element, so the mask keeps both
+    public async Task SecurityEvents_UnknownEmailWithALineBreak_StaysOnTheOneLineWithItsMaskedAddress(string codePoints, string typed, string masked)
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         string domain = $"{Guid.NewGuid():N}.inprocess.test";
-        string email = typed.Replace("{domain}", domain, StringComparison.Ordinal);
-        string expectedLine = $"Sign-in failed for {masked.Replace("{domain}", domain, StringComparison.Ordinal)}: no such account";
+        string email = typed
+            .Replace("{domain}", domain, StringComparison.Ordinal)
+            .Replace("{chars}", FromCodePoints(codePoints), StringComparison.Ordinal);
+        string maskedAddress = masked.Replace("{domain}", domain, StringComparison.Ordinal);
 
         HttpResponseMessage response = await factory.CreateClient()
             .PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(email, Password), ct);
@@ -292,8 +297,11 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         CapturedLog line = factory.Logs.All
             .Where(e => e.EventName == "LoginFailedUnknownAccount" && e.Message.Contains(domain, StringComparison.Ordinal))
             .ShouldHaveSingleItem();
-        line.Message.IndexOfAny(['\r', '\n', '\u0085', '\u2028', '\u2029', '\f']).ShouldBe(-1, $"line: {line.Message}");
-        line.Message.ShouldBe(expectedLine);
+        line.Message.IndexOfAny(['\r', '\n', '\u0085', '\u2028', '\u2029', '\f']).ShouldBe(-1, $"{codePoints} typed, line: {Printable(line.Message)}");
+        // Both forms, compiled in every configuration: under --use-serilog the line is Serilog's rendering, the address in double quotes.
+        line.Message.ShouldBeOneOf(
+            $"Sign-in failed for {maskedAddress}: no such account",
+            $"Sign-in failed for \"{maskedAddress}\": no such account");
     }
 
     [Fact]
@@ -389,6 +397,33 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
             ? code.GetString()
             : problem.RootElement.GetProperty("title").GetString();
     }
+
+    /// <summary>The text a row names by its code points: <c>U+000D U+000A</c> is CR LF.</summary>
+    private static string FromCodePoints(string codePoints)
+        => string.Concat(codePoints.Split(' ').Select(static codePoint =>
+            char.ConvertFromUtf32(int.Parse(codePoint.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture))));
+
+    /// <summary>The text with each control character and each line or paragraph separator written as its escape (<c>\u000A</c>).</summary>
+    private static string Printable(string text)
+    {
+        var printable = new StringBuilder(text.Length);
+        foreach (char c in text)
+        {
+            if (IsBreakOrControl(c))
+            {
+                printable.Append(CultureInfo.InvariantCulture, $"\\u{(int)c:X4}");
+            }
+            else
+            {
+                printable.Append(c);
+            }
+        }
+
+        return printable.ToString();
+    }
+
+    /// <summary>A control character (C0, DEL, C1) or U+2028/U+2029: what a log reader may end a line at or a terminal act on.</summary>
+    private static bool IsBreakOrControl(char c) => char.IsControl(c) || c is '\u2028' or '\u2029';
 
     /// <summary><see cref="ApiFactory"/> with registration explicitly open and the three observers swapped in.</summary>
     public sealed class Factory : ApiFactory
