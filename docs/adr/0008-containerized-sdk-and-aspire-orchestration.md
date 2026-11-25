@@ -51,9 +51,12 @@ what the AppHost declares.
 - **The project, not the solution**: `dotnet test tests/Trellis.UiTests`. In a run of the whole solution
   with the variable set, the AppHost's processes and Testcontainers would race for host ports, the
   reason the E2E is a CI step of its own.
-- **A failed start is read from the run**: the failing tests' message names each resource's state and
-  last lines, and the fixture writes what every resource printed to a file per resource, which CI prints
-  and keeps.
+- **A failed start is read from the run**: a resource the application needs (the web host and
+  everything it waits for) that fails to start or exits with a code other than 0 ends the start at once,
+  since Aspire's own start goes on waiting for a dependency that has exited; the failing tests' message
+  names that resource, each resource's state, and the first error lines and the last lines of each of
+  the application's processes and of the AppHost; and the fixture writes what every resource printed to
+  a file per resource, which CI prints and keeps.
 
 Considered: one application per test class (four starts and four sets of containers at once, for an
 isolation only the first-run pictures need, which get it from a test run of their own); the hosts in

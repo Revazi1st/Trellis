@@ -276,12 +276,19 @@ pwsh artifacts/bin/Trellis.UiTests/debug/playwright.ps1 install chromium --with-
 RUN_UI_TESTS=1 UI_TESTS_BASE_URL=http://localhost:5170 dotnet test tests/Trellis.UiTests
 ```
 
-When the application does not come up, every browser test fails with the same message: each
-resource's state and its last lines. Everything each resource printed is in `TestResults/applogs`
-under the test run's working directory (`artifacts/bin/Trellis.UiTests/debug/TestResults/applogs`
-after the commands above), one file per resource (`migrations.log`, `api.log`, `web.log`, the
-containers', and `apphost.log` for the AppHost itself); `UI_TESTS_LOGS` names another folder. CI's
-`ui-tests` job prints them when it fails and keeps them for 14 days as the `ui-app-logs` artifact.
+When the application does not come up, every browser test fails with the same message. The start
+ends at once when a resource the web host needs fails to start or exits with a code other than 0 (the
+web host and everything it waits for, down to the database server; not pgAdmin or the mail catcher,
+which nothing waits for), and the message says first which one, in what state and, when it exited,
+with what exit code. A resource that keeps running and never becomes healthy ends the start at the
+time limit instead. The message then holds each resource's state and, for the migration job, the API,
+the web host and the AppHost, the first lines each logged as an error and the last lines each printed:
+the reason a host crashed is usually among the first, and the bottom of its stack trace is the last.
+Everything each resource printed is in `TestResults/applogs` under the test run's working directory
+(`artifacts/bin/Trellis.UiTests/debug/TestResults/applogs` after the commands above), one file per
+resource (`migrations.log`, `api.log`, `web.log`, the containers', and `apphost.log` for the AppHost
+itself); `UI_TESTS_LOGS` names another folder. CI's `ui-tests` job prints them when it fails and keeps
+them for 14 days as the `ui-app-logs` artifact.
 <!--#if (IncludeUI) -->
 
 `DesignSystemProofTests` is the design system's *Proof* ([docs/design-system.md](design-system.md#proof)):
