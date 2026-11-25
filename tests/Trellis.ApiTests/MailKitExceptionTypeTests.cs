@@ -20,8 +20,12 @@ namespace Trellis.ApiTests;
 /// A rethrown row names the catch that takes the type, read from the adapter's compiled catch clauses.
 /// <para>
 /// What this does not catch: a listed type whose message starts quoting an address or a reply in a later release
-/// (only MailKit's release notes say so, <c>.claude/rules/infrastructure.md</c>), and the BCL exceptions MailKit
-/// throws (<see cref="IOException"/>, a socket error, <see cref="NotSupportedException"/>), which are not its types.
+/// (only MailKit's release notes say so, <c>.claude/rules/infrastructure.md</c>); the BCL exceptions MailKit
+/// throws (<see cref="IOException"/>, a socket error, <see cref="NotSupportedException"/>), which are not its types;
+/// and what a catch throws: a rethrown row proves the catch exists, and only <c>EmailSenderTests</c> proves its
+/// words (a refused recipient, a 530, MailKit's SMTPUTF8 refusals), so the refused-credentials
+/// (<see cref="AuthenticationException"/>) and broken-conversation (<see cref="SmtpProtocolException"/>) arms have
+/// no such fact yet.
 /// </para>
 /// </summary>
 public sealed class MailKitExceptionTypeTests
@@ -75,16 +79,19 @@ public sealed class MailKitExceptionTypeTests
     [Fact]
     public void The_exception_type_check_flags_a_type_without_a_row_a_row_without_a_type_and_a_row_the_catches_do_not_bear_out()
     {
+        // Inputs of its own, not the live table, types and catches: a MailKit release that adds a type turns the
+        // rule red and leaves this green, so a red here is the check's fault, not the table's.
         // SmtpFailedRecipientException is the BCL's, and its message quotes the address: the shape a new MailKit type could have.
-        Dictionary<string, Treatment> planted = new(Treatments, StringComparer.Ordinal)
+        Type[] types = [typeof(System.Net.Mail.SmtpFailedRecipientException), typeof(ServiceNotConnectedException), typeof(SaslException)];
+        Dictionary<string, Treatment> planted = new(StringComparer.Ordinal)
         {
             ["MailKit.Net.Smtp.SmtpRemovedException"] = CannotReach("planted: a type no release has"),
             ["MailKit.ServiceNotConnectedException"] = Rethrown(typeof(ServiceNotAuthenticatedException), "planted: a catch the adapter does not have"),
             ["MailKit.Security.SaslException"] = PassesThrough("planted: a catch takes it"),
         };
+        Type[] catches = [typeof(AuthenticationException)];
 
-        IReadOnlyList<string> problems = Problems(
-            [.. ExceptionTypes(), typeof(System.Net.Mail.SmtpFailedRecipientException)], planted, AdapterCatches());
+        IReadOnlyList<string> problems = Problems(types, planted, catches);
 
         problems.ShouldBe(
         [
