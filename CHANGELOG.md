@@ -50,9 +50,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   printed is kept in a file per resource (`UI_TESTS_LOGS`), which the `ui-tests` job prints on failure
   and uploads as `ui-app-logs` (`docs/development.md`, *UI tests*; ADR-0008's amendment).
 - **`ClientRoutesTests`** (with the UI). Every request a typed client of the UI sends is held to
-  `docs/api/openapi.v1.json`: its method and path are an operation of the document and its query
-  parameters are that operation's, by name. A client member without a row in the test's table fails, so a
-  route renamed on one side no longer waits for a browser to be noticed.
+  `docs/api/openapi.v1.json`: each row of the test's table names the client, the member and the operation
+  the member means, by its `operationId` (the endpoint class's name, as `PayInvoice`), and the request
+  must be that operation, method and path, with only the query parameters it declares, by name. A
+  request the document does not hold fails, and so does one that is another operation's (a member that
+  sends its neighbour's route); a client member without a row fails too, so a route renamed on one side
+  no longer waits for a browser to be noticed.
 - **Every operation of the OpenAPI document carries one tag, and a feature declares it**: the `Tag`
   constant of its `<Feature>Endpoints` class, held by `OpenApiDocumentTests`. The fact holds the tag's
   value, so an operation fails, named, when its tag is one no `Tag` constant declares: the class name
