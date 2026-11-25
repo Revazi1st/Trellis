@@ -10,10 +10,10 @@ namespace Trellis.UiTests;
 /// <c>{AppHost}.Resources.{resource}</c>; this provider writes each resource's lines to
 /// <c>{resource}.log</c> in <see cref="Folder"/> as they arrive, the AppHost's own lines to
 /// <c>apphost.log</c>, and remembers two things of each for the message of a failed start: its first lines
-/// logged at Error or above, and its last lines. The first error lines are there because the last ones are
-/// often the bottom of a stack trace, while what went wrong is the exception's message above it (a resource's
-/// standard error arrives at Error). The files are what explains a start that failed: CI prints them and
-/// keeps them as an artifact.
+/// logged at Error or above, and its last lines, a line's exception by its first line only (the file holds
+/// the whole of it). The first error lines are there because the last ones are often the bottom of a stack
+/// trace, while what went wrong is the exception's message above it (a resource's standard error arrives at
+/// Error). The files are what explains a start that failed: CI prints them and keeps them as an artifact.
 /// </summary>
 internal sealed class AppLogs(string folder) : ILoggerProvider
 {
@@ -23,6 +23,9 @@ internal sealed class AppLogs(string folder) : ILoggerProvider
     private const string ResourceInfix = ".Resources.";
     private const int TailLength = 15;
     private const int FirstErrorsLength = 5;
+
+    /// <summary>Puts an exception's first line under its log line's text, past the level's column.</summary>
+    private const string Indent = "            ";
 
     private readonly ConcurrentDictionary<string, Sink> _sinks = new(StringComparer.Ordinal);
 
@@ -73,9 +76,16 @@ internal sealed class AppLogs(string folder) : ILoggerProvider
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             string line = string.Create(CultureInfo.InvariantCulture, $"{logLevel,-11} {formatter(state, exception)}");
+            // The file takes an exception whole. The message of a failed start takes its first line, the type
+            // and the message: the AppHost logs every failed health check with its exception, and their stack
+            // traces would fill the AppHost's last lines as its HTTP client's requests did.
+            string remembered = line;
             if (exception is not null)
             {
-                line += Environment.NewLine + exception;
+                string whole = exception.ToString();
+                line += Environment.NewLine + whole;
+                int end = whole.IndexOfAny(['\r', '\n']);
+                remembered += Environment.NewLine + Indent + (end < 0 ? whole : whole[..end]);
             }
 
             lock (_gate)
@@ -96,10 +106,10 @@ internal sealed class AppLogs(string folder) : ILoggerProvider
                 _received++;
                 if (logLevel >= LogLevel.Error && _firstErrors.Count < FirstErrorsLength)
                 {
-                    _firstErrors.Add((_received, line));
+                    _firstErrors.Add((_received, remembered));
                 }
 
-                _tail.Enqueue(line);
+                _tail.Enqueue(remembered);
                 if (_tail.Count > TailLength)
                 {
                     _tail.Dequeue();

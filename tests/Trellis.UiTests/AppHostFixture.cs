@@ -139,7 +139,8 @@ public sealed class AppHostFixture : IAsyncDisposable
         {
             foreach (string line in lines)
             {
-                text.Append("  ").AppendLine(line);
+                // A line with an exception is two: the exception's first line goes under its text.
+                text.Append("  ").AppendLine(line.Replace(Environment.NewLine, Environment.NewLine + "  ", StringComparison.Ordinal));
             }
         }
     }

@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
 using Shouldly;
 using Trellis.ServiceDefaults;
@@ -153,7 +154,9 @@ public sealed class UiTestConfigurationTests
                 Print(api, line < 9 ? LogLevel.Information : LogLevel.Error, line == 9 ? Reason : $"api line {line}");
             }
 
-            Print(logs.CreateLogger("Aspire.Hosting.Dcp.DcpExecutor"), LogLevel.Error, "Host terminated unexpectedly", new InvalidOperationException("no signing key"));
+            // An exception with a stack trace, as a failed health check logs it.
+            Exception withStack = ExceptionDispatchInfo.SetCurrentStackTrace(new InvalidOperationException("no signing key"));
+            Print(logs.CreateLogger("Aspire.Hosting.Dcp.DcpExecutor"), LogLevel.Error, "Host terminated unexpectedly", withStack);
 
             string message = AppHostFixture.Describe(
                 $"{ServiceNames.Api} failed: Finished, exit code 134",
@@ -181,16 +184,21 @@ public sealed class UiTestConfigurationTests
             message.ShouldNotContain($"First error lines of {ServiceNames.Migrations}:");
             message.ShouldNotContain($"First error lines of {ServiceNames.Web}:");
             message.ShouldContain($"Last lines of {ServiceNames.Web}: (it printed nothing)");
-            // An error among the last lines is printed once, there.
+            // An error among the last lines is printed once, there, and its exception by its first line, under it.
             message.ShouldNotContain($"First error lines of {AppLogs.AppHost}:");
-            message.ShouldContain("Host terminated unexpectedly");
-            message.ShouldContain("no signing key");
+            message.ShouldContain(
+                "  Error       Host terminated unexpectedly" + Environment.NewLine
+                + "              System.InvalidOperationException: no signing key" + Environment.NewLine);
+            message.ShouldNotContain("   at ");
             message.ShouldContain(folder);
 
-            // Every line is on disk while the application still runs: a cancelled job keeps what was printed.
+            // Every line is on disk while the application still runs: a cancelled job keeps what was printed,
+            // an exception with its stack trace.
             ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Migrations}.log")).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length.ShouldBe(20);
             ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Api}.log")).ShouldContain(Reason);
-            ReadWhileOpen(Path.Combine(folder, $"{AppLogs.AppHost}.log")).ShouldContain("no signing key");
+            string appHostFile = ReadWhileOpen(Path.Combine(folder, $"{AppLogs.AppHost}.log"));
+            appHostFile.ShouldContain("System.InvalidOperationException: no signing key");
+            appHostFile.ShouldContain("   at ");
         }
         finally
         {
