@@ -128,8 +128,9 @@ export function readTemplateOptions() {
 
 // What the Options page (start/options) says about each option beyond what template.json holds. The page
 // generates one section per boolean option from template.json (the description, the default, the files
-// only that option brings, the reminder `dotnet new` prints) and adds, from here, what to do after creating
-// a solution with it and the docs that explain it. Inline `code` and [links](development.md#anchor) to
+// only that option brings, the folder it replaces, the reminder `dotnet new` prints) and adds, from here,
+// what to do after creating a solution with it, the docs that explain it and, for a folder it replaces,
+// what the replacement is (`replaces`). Inline `code` and [links](development.md#anchor) to
 // files under docs/ are allowed; the links validator checks them. A boolean option without an entry fails
 // the build, so a new toggle gets its section in the change that adds it.
 export const optionNotes = {
@@ -146,11 +147,12 @@ export const optionNotes = {
     docs: ['deployment.md#observability'],
   },
   UseMultitenancy: {
-    after: 'Regenerate the shipped initial migration once, before the first run: it has no tenant columns. The two commands are in [Multi-tenancy](development.md#multi-tenancy-optional).',
+    after: 'Nothing before the first run: the initial migration the solution ships with already has the tenant columns. The seeded admin and the demo data are in tenant `default`; see [Multi-tenancy](development.md#multi-tenancy-optional).',
+    replaces: 'the initial migration, generated for the model with the tenant columns',
     docs: ['development.md#multi-tenancy-optional', 'adr/0019-multitenancy-toggle.md', 'adr/0022-tenant-on-the-principal.md'],
   },
   IncludeUiTests: {
-    after: 'Build the project once and install a browser before the first browser run; the tests skip unless `RUN_UI_TESTS=1`. See [UI tests](development.md#ui-tests-optional).',
+    after: 'Build the project once and install a browser before the first browser run; the tests skip unless `RUN_UI_TESTS=1`. They start the application themselves, on a database of their own, so they need Docker and a .NET SDK on the host, or CI. See [UI tests](development.md#ui-tests-optional).',
     docs: ['development.md#ui-tests-optional', 'development.md#tests'],
   },
   skipRestore: {

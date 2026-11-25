@@ -4,6 +4,7 @@
 //   - the default, the description and the flag (template.json, dotnetcli.host.json)
 //   - the option's label in the Visual Studio and Rider dialogs (ide.host.json, the Visual Studio host file)
 //   - the files only the option brings (template.json's conditional excludes)
+//   - the files the option replaces (a conditional source laid over a folder a modifier excludes)
 //   - the reminder `dotnet new` prints after creating a solution with it (template.json's post-actions)
 
 import { readFileSync } from 'node:fs';
@@ -73,10 +74,23 @@ export function optionSections() {
   const ide = json('.template.config/ide.host.json');
   const options = readTemplateOptions();
   const bySymbol = Object.fromEntries(options.map((o) => [o.symbol, o]));
+  // A source after the first that is laid over a folder of the solution under a condition, and a modifier
+  // of the first source that keeps that folder out under the same condition: together a replacement (the
+  // multi-tenant initial migration), not files the option adds or files it takes away.
+  const overlays = (tpl.sources ?? []).slice(1).filter((s) => s.condition && s.target && s.target !== './');
   const modifiers = (tpl.sources?.[0]?.modifiers ?? []).map((m) => {
     const excludedWhen = parseExpression(m.condition.replace(/^\((.*)\)$/, '$1'));
-    return { presentWhen: negate(excludedWhen), paths: m.exclude ?? [] };
+    const overlay = overlays.find((s) => s.condition === m.condition && (m.exclude ?? []).includes(`${s.target.replace(/^\.\//, '')}**`));
+    return { excludedWhen, presentWhen: negate(excludedWhen), paths: m.exclude ?? [], overlay };
   });
+  for (const s of overlays) {
+    if (!modifiers.some((m) => m.overlay === s)) throw new Error(`template.json: the source ${s.source} is laid over ${s.target} and no modifier under ${s.condition} excludes that folder; both sets would ship`);
+  }
+  // A replacement is shown under the one option whose condition it is; any other condition would vanish
+  // from the page without a word.
+  for (const m of modifiers.filter((m) => m.overlay)) {
+    if (m.excludedWhen.type !== 'var' || !bySymbol[m.excludedWhen.name]) throw new Error(`template.json: the source ${m.overlay.source} is laid over ${m.overlay.target} under ${m.overlay.condition}, which is not one option; teach site/src/lib/options.mjs to show it`);
+  }
   const reminders = (tpl.postActions ?? [])
     .filter((a) => a.condition && a.actionId?.toUpperCase() === 'AC1156F7-BB77-4DB8-B28F-24EEBCCA1E5C')
     .map((a) => ({ when: parseExpression(a.condition.replace(/^\((.*)\)$/, '$1')), text: a.manualInstructions?.map((i) => i.text).join(' ') }));
@@ -94,7 +108,7 @@ export function optionSections() {
 
     const items = [];
     // The files only this option brings: the conditional excludes whose condition names it.
-    const own = modifiers.filter((m) => identifiers(m.presentWhen).has(o.symbol));
+    const own = modifiers.filter((m) => !m.overlay && identifiers(m.presentWhen).has(o.symbol));
     for (const m of own) {
       const files = m.paths.map((p) => code(p.replace(/\/\*\*$/, '/')));
       const joined = files.flatMap((f, i) => (i === 0 ? [f] : [text(i === files.length - 1 ? ' and ' : ', '), f]));
@@ -106,6 +120,11 @@ export function optionSections() {
       items.push(item([strong('A command-line convenience: '), text('it changes nothing in the solution.')]));
     } else if (own.length === 0) {
       items.push(item([strong('Files it adds: '), text('none of its own. Its code sits in conditional blocks of files every solution has.')]));
+    }
+    // The folders it replaces: a modifier with an overlay, excluded when this option alone is on.
+    for (const m of modifiers.filter((m) => m.overlay && m.excludedWhen.type === 'var' && m.excludedWhen.name === o.symbol)) {
+      const folder = code(m.overlay.target.replace(/^\.\//, ''));
+      items.push(item([strong('Files it replaces: '), folder, text(`: ${notes.replaces ?? 'the set the template keeps for this option'}.`)]));
     }
     for (const r of reminders.filter((r) => r.when.type === 'var' && r.when.name === o.symbol)) {
       items.push(item([strong('dotnet new reminds you: '), text(`“${r.text}”`)]));
