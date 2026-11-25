@@ -103,8 +103,8 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   so outbox payloads hold personal data until processed and then for `Retention` windows (3 days
   processed, 30 days dead-lettered), longer in backups. Prefer ids over personal data in event
   payloads, or shorten the windows if your data-protection regime requires it. A failed send's
-  exception is written there too, as the row's `Error`, and into the retry and dead-letter log lines
-  and the span. The SMTP adapter's exceptions name an address only masked (`j***@example.com`: the
+  exception is written there too, as the row's `Error`, and into the handler-failed, retry and
+  dead-letter log lines and the span. The SMTP adapter's exceptions name an address only masked (`j***@example.com`: the
   recipient, or the address MailKit refused) and never carry the relay's reply; `EmailSenderTests`
   (a refused recipient, a 530, MailKit's SMTPUTF8 refusals) and `MailKitExceptionTypeTests` (every
   public exception type of MailKit and MimeKit.Core) hold that.

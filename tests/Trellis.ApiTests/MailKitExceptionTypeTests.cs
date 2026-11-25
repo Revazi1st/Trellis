@@ -52,7 +52,7 @@ public sealed class MailKitExceptionTypeTests
         ["MimeKit.Tnef.TnefException"] = CannotReach("the TNEF reader: the adapter reads none"),
 
         ["MailKit.Security.SslHandshakeException"] = PassesThrough("STARTTLS failed: the relay's host, its certificate's DNS names and the chain's status; the certificates it keeps are the relay's"),
-        ["MailKit.ServiceNotConnectedException"] = PassesThrough("MailKit's fixed text, \"The SmtpClient is not connected.\""),
+        ["MailKit.ServiceNotConnectedException"] = PassesThrough("MailKit's constant texts (\"The SmtpClient is not connected.\", \"... must be connected before you can authenticate.\"): no address, no reply"),
         ["MimeKit.ParseException"] = PassesThrough("a From or To that does not parse: an offset and at most one character of the text"),
     };
 
@@ -73,13 +73,14 @@ public sealed class MailKitExceptionTypeTests
     }
 
     [Fact]
-    public void The_exception_type_check_flags_a_type_without_a_row_a_row_without_a_type_and_a_catch_that_is_not_there()
+    public void The_exception_type_check_flags_a_type_without_a_row_a_row_without_a_type_and_a_row_the_catches_do_not_bear_out()
     {
         // SmtpFailedRecipientException is the BCL's, and its message quotes the address: the shape a new MailKit type could have.
         Dictionary<string, Treatment> planted = new(Treatments, StringComparer.Ordinal)
         {
             ["MailKit.Net.Smtp.SmtpRemovedException"] = CannotReach("planted: a type no release has"),
             ["MailKit.ServiceNotConnectedException"] = Rethrown(typeof(ServiceNotAuthenticatedException), "planted: a catch the adapter does not have"),
+            ["MailKit.Security.SaslException"] = PassesThrough("planted: a catch takes it"),
         };
 
         IReadOnlyList<string> problems = Problems(
@@ -90,6 +91,7 @@ public sealed class MailKitExceptionTypeTests
             "System.Net.Mail.SmtpFailedRecipientException has no row: read what its message and members can hold, then give it one",
             "MailKit.Net.Smtp.SmtpRemovedException has a row but no type in MailKit or MimeKit.Core: remove the row",
             "MailKit.ServiceNotConnectedException is rethrown by the catch of ServiceNotAuthenticatedException, says its row, but the adapter's catch that takes it is none",
+            "MailKit.Security.SaslException is PassesThrough, says its row, but the adapter's catch of AuthenticationException takes it",
         ], ignoreOrder: true);
     }
 
