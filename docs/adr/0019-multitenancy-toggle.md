@@ -54,7 +54,12 @@ Core bump regenerates both, in one run** (`scripts/regenerate-initial-migrations
 - `template.json` ships one of them: a source conditional on `UseMultitenancy` lays the second set over
   the first one's folder, and a modifier under the same condition keeps the first out. Without the
   modifier `dotnet new` succeeds and ships both; a source folder that is missing or empty makes the
-  whole template invalid.
+  whole template invalid. The engine renames the source's target with the project name as typed,
+  while every other path gets the identifier-safe form (`projectPathName`). A dotted name has one
+  form for both; for a name that needs that form (`acme-shop`, which `dotnet new` warns will not
+  build and should be re-created) the set lands in `acme-shop.Persistence/Migrations/`, beside the
+  `acme_shop.Persistence` project, which then has no migration. A set for another option is wired
+  the same way and lands the same way.
 - The script generates each set where its model exists: in a project created from the working tree
   under the template's own name, with the option on for the second set, so no name is rewritten. It
   deletes the old files there and adds the migration; it never runs `migrations remove`, which on a
@@ -62,10 +67,10 @@ Core bump regenerates both, in one run** (`scripts/regenerate-initial-migrations
   asked for can ship (an id that holds a port literal cannot). Its `--check` mode writes nothing and
   fails unless each committed file is what the script generates, the id aside.
 - Held by `MigrationSnapshotTests` (both sets on the pinned EF Core, no port literal in either id, the
-  same migrations in the Persistence namespace, the second snapshot equal to the first plus the tenant
-  seam, the wiring in `template.json`) and by Template CI: its content gate counts one set per leg, the
-  right one, its first-migration command and `MigrationDriftTests` run on the two multi-tenancy legs,
-  which no longer regenerate, and its pack job runs the script's `--check`.
+  same migrations in the Persistence namespace, the second snapshot equal to the first once the tenant
+  seam is taken out, the wiring in `template.json`) and by Template CI: its content gate counts one set
+  per leg, the right one, its first-migration command and `MigrationDriftTests` run on the two
+  multi-tenancy legs, which no longer regenerate, and its pack job runs the script's `--check`.
 - Considered: regenerating in every generated project, as before (a step every multi-tenant project
   had to remember before its first run, and one the template's own CI ran instead of testing what
   ships); a subfolder of the Persistence project (the snapshot hazard above); building this repository
