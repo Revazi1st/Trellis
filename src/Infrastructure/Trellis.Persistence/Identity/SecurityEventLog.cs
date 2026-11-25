@@ -6,8 +6,9 @@ namespace Trellis.Persistence.Identity;
 /// <summary>
 /// Structured security events with stable event ids (1100–1199), so an alert or a SIEM rule can match
 /// on the id instead of parsing a message. An event names the account by user id; a sign-in for an
-/// e-mail that matches no account carries the masked e-mail (<see cref="MaskEmail"/>). None of them
-/// ever carries a password.
+/// e-mail that matches no account carries the masked e-mail (<see cref="MaskEmail"/>), its line endings
+/// replaced by spaces. None of them ever carries a password, and none carries a line break a caller typed:
+/// the masked e-mail is the only text here a caller chooses (the rest are user ids and Identity's error codes).
 /// </summary>
 internal static partial class SecurityEventLog
 {
@@ -15,12 +16,17 @@ internal static partial class SecurityEventLog
         Message = "Sign-in failed for user {UserId}: wrong password")]
     public static partial void LoginFailed(ILogger logger, Guid userId);
 
-    /// <summary>Takes the e-mail as typed and logs only its masked form.</summary>
+    /// <summary>
+    /// Takes the e-mail as typed and logs only its masked form, on one line. Sign-in checks no e-mail format,
+    /// so an anonymous caller can type a line break, and the mask keeps the domain and the first text element
+    /// as typed: each line ending becomes a space here, or it would end the line early and let the caller
+    /// write one of their own after it (CWE-117). The mask itself stays as it is, a copy of Infrastructure's.
+    /// </summary>
     public static void LoginFailedUnknownAccount(ILogger logger, string email)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
-            string maskedEmail = MaskEmail(email);
+            string maskedEmail = MaskEmail(email).ReplaceLineEndings(" ");
             LoginFailedUnknownAccountMasked(logger, maskedEmail);
         }
     }

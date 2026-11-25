@@ -257,6 +257,45 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         factory.Logs.All.ShouldNotContain(static e => e.Message.Contains(WrongGuess) || e.Message.Contains(Password));
     }
 
+    /// <summary>
+    /// Sign-in takes the e-mail as typed (its validator checks emptiness and length only), so an anonymous
+    /// caller can put a line break in it, and the mask keeps everything from the last <c>@</c> on and the
+    /// local part's first text element. Left as typed, the break would end the 1102 line early and what
+    /// follows would read as a line of its own (CWE-117). Each row is one line break a log reader may end
+    /// a line at (the ones <see cref="string.ReplaceLineEndings(string)"/> knows); <c>{domain}</c> is a
+    /// fresh domain per row, which the mask keeps, so the row finds its own line among the fixture's.
+    /// </summary>
+    [Theory]
+    [InlineData("ghost@{domain}\ninfo: Forged[1101] Sign-in succeeded", "g***@{domain} info: Forged[1101] Sign-in succeeded")]
+    [InlineData("ghost@{domain}\rForged", "g***@{domain} Forged")]
+    [InlineData("ghost@{domain}\r\nForged", "g***@{domain} Forged")]
+    [InlineData("ghost@{domain}\u0085Forged", "g***@{domain} Forged")]
+    [InlineData("ghost@{domain}\u2028Forged", "g***@{domain} Forged")]
+    [InlineData("ghost@{domain}\u2029Forged", "g***@{domain} Forged")]
+    [InlineData("ghost@{domain}\fForged", "g***@{domain} Forged")]
+    [InlineData("\nghost@{domain}", " ***@{domain}")]      // the local part's first text element is the line break
+    [InlineData("\r\nghost@{domain}", " ***@{domain}")]    // CR LF is one text element, so the mask keeps both
+    public async Task SecurityEvents_UnknownEmailWithALineBreak_StaysOnTheOneLineWithItsMaskedAddress(string typed, string masked)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string domain = $"{Guid.NewGuid():N}.inprocess.test";
+        string email = typed.Replace("{domain}", domain, StringComparison.Ordinal);
+        string expectedLine = $"Sign-in failed for {masked.Replace("{domain}", domain, StringComparison.Ordinal)}: no such account";
+
+        HttpResponseMessage response = await factory.CreateClient()
+            .PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(email, Password), ct);
+
+        // The answer every unknown account gets: the request reached the credential check.
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await ProblemCodeAsync(response, ct)).ShouldBe("Auth.InvalidCredentials");
+
+        CapturedLog line = factory.Logs.All
+            .Where(e => e.EventName == "LoginFailedUnknownAccount" && e.Message.Contains(domain, StringComparison.Ordinal))
+            .ShouldHaveSingleItem();
+        line.Message.IndexOfAny(['\r', '\n', '\u0085', '\u2028', '\u2029', '\f']).ShouldBe(-1, $"line: {line.Message}");
+        line.Message.ShouldBe(expectedLine);
+    }
+
     [Fact]
     public async Task Refresh_ExpiredToken_IsRejected()
     {
