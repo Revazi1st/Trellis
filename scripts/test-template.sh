@@ -26,10 +26,12 @@
 # The generated tests include the Aspire E2E, which boots each generated AppHost as Template CI does
 # on its Linux runners, in a run of its own after the suites (its processes and Testcontainers would
 # otherwise race for the same host ports); RUN_ASPIRE_E2E=0 skips it. The browser tests of a leg that
-# has them (browser: true) run only when you ask, with RUN_UI_TESTS=1: after the E2E, Chromium is
-# installed through the generated playwright.ps1 (pwsh is needed, and checked before the pack) and the
-# two browser steps run, each starting the generated AppHost. The variable is read and unset first, so
-# the suites never start a browser beside Testcontainers; without it the BROWSER column says "skip".
+# has them (browser: true) run only when you ask, with RUN_UI_TESTS=1: once every earlier step of the
+# leg passed, as in Template CI (after the E2E, or after the format check on a leg it does not test),
+# Chromium is installed into your Playwright cache through the generated playwright.ps1 (pwsh is
+# needed) and the two browser steps run, each starting the generated AppHost; the run says so before
+# the pack. The variable is read and unset first, so the suites never start a browser beside
+# Testcontainers; without it the BROWSER column says "skip".
 # Needs a .NET SDK that satisfies global.json, a running Docker (Testcontainers, the E2E), and jq and
 # git (for the toggle check). Template CI's content gates (leftovers of the template's name, the
 # consumer files, actionlint over the generated workflows) and its Windows job run only in CI.
@@ -164,10 +166,6 @@ else
 fi
 
 command -v dotnet >/dev/null 2>&1 || { echo "error: dotnet is not on PATH" >&2; exit 1; }
-if cut -d'|' -f3 <<< "$legs" | grep -qx 1 && ! docker info >/dev/null 2>&1; then
-  echo "error: Docker is not running; the generated tests need it (Testcontainers, the Aspire E2E)" >&2
-  exit 1
-fi
 
 # What the generated tests read from the environment, set as Template CI sets it. RUN_UI_TESTS is
 # read here and then unset: the suites must not start browsers or an AppHost beside Testcontainers,
@@ -176,9 +174,25 @@ e2e="${RUN_ASPIRE_E2E-1}"
 browser_tests="${RUN_UI_TESTS-0}"
 unset RUN_UI_TESTS UI_TESTS_BASE_URL UI_TESTS_FIRST_RUN UI_TESTS_SCREENSHOTS UI_TESTS_LOGS UPDATE_OPENAPI_SNAPSHOT RUN_LIVE_SMOKE_TESTS
 
-if [ "$browser_tests" = 1 ] && cut -d'|' -f5 <<< "$legs" | grep -qx 1 && ! command -v pwsh >/dev/null 2>&1; then
-  echo "error: RUN_UI_TESTS=1 needs PowerShell (pwsh) to install the browser for the legs with browser: true" >&2
+# 1 when a selected leg will run its browser steps: it has them and RUN_UI_TESTS=1 asked for them.
+browser_legs=0
+if [ "$browser_tests" = 1 ] && cut -d'|' -f5 <<< "$legs" | grep -qx 1; then
+  browser_legs=1
+fi
+
+if { cut -d'|' -f3 <<< "$legs" | grep -qx 1 || [ "$browser_legs" = 1 ]; } && ! docker info >/dev/null 2>&1; then
+  echo "error: Docker is not running; the generated tests need it (Testcontainers, the Aspire E2E, the browser tests' AppHost)" >&2
   exit 1
+fi
+
+if [ "$browser_legs" = 1 ]; then
+  if ! command -v pwsh >/dev/null 2>&1; then
+    echo "error: RUN_UI_TESTS=1 needs PowerShell (pwsh) to install the browser for the legs with browser: true" >&2
+    exit 1
+  fi
+  # Said now, not minutes in at the leg's step: what the steps do outside the working folder.
+  echo "==> RUN_UI_TESTS=1: each leg with browser: true downloads Chromium into your Playwright cache (it stays"
+  echo "    after the run) and starts the generated AppHost twice, its containers in your Docker; unset RUN_UI_TESTS to skip."
 fi
 
 echo "==> scripts/check-template-toggles.sh"
@@ -308,15 +322,17 @@ run_leg() {  # name out test regen browser args
     if logged "$log" in_dir "$dir" test_solution; then tst=ok; else tst=FAIL; fi
   fi
 
-  # The browser steps, on a leg that has them: after the tests passed, and only when asked (they
-  # install a browser and start the generated AppHost twice).
+  # The browser steps, on a leg that has them, only when asked (they install a browser and start the
+  # generated AppHost twice), and, as Template CI runs them, once every earlier step of the leg passed:
+  # the tests on a leg that has them, the format check on one that does not. Their stdin is /dev/null:
+  # it is the leg list of the loop below, and a command that read it would drop the legs after this one.
   if [ "$browser" = 1 ]; then
     brw=-
     if [ "$browser_tests" != 1 ]; then
       brw=skip
-    elif [ "$tst" = ok ]; then
+    elif [ "$fmt" = ok ] && { [ "$test" != 1 ] || [ "$tst" = ok ]; }; then
       echo "==> $name: the browser tests (RUN_UI_TESTS=1)"
-      if logged "$log" in_dir "$dir" browser_solution "$work/browser/$name"; then brw=ok; else brw=FAIL; fi
+      if logged "$log" in_dir "$dir" browser_solution "$work/browser/$name" </dev/null; then brw=ok; else brw=FAIL; fi
     fi
   fi
 
