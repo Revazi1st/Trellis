@@ -338,7 +338,8 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     /// a noncharacter the JSON reader lets through, with an <see cref="ArgumentException"/>. Sign-in checks no
     /// e-mail format, so an anonymous caller can type it: the answer is an unknown account's, after the same
     /// password-hash work and with its 1102 event, never a 500. The domain carries a fresh marker, which the mask
-    /// keeps, so the test finds its own line; it reads a fragment of it, never the whole line.
+    /// keeps, so the test finds its own line, exactly one for the one sign-in; it reads a fragment of it, never the
+    /// whole line.
     /// </summary>
     [Fact]
     public async Task Login_EmailTheLookupCannotNormalise_IsAnUnknownAccountNotA500()
@@ -355,7 +356,9 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await ProblemCodeAsync(response, ct)).ShouldBe("Auth.InvalidCredentials");
         verifications.ShouldBe(1);
-        factory.Logs.All.ShouldContain(e => e.EventName == "LoginFailedUnknownAccount" && e.Message.Contains(marker, StringComparison.Ordinal));
+        factory.Logs.All
+            .Where(e => e.EventName == "LoginFailedUnknownAccount" && e.Message.Contains(marker, StringComparison.Ordinal))
+            .ShouldHaveSingleItem();
     }
 
     [Fact]
