@@ -58,7 +58,7 @@
       "datatype": "bool",
       "defaultValue": "false",
       "displayName": "Use multi-tenancy",
-      "description": "Add a tenant seam: a tenant claim on the principal (ITenantContext), a TenantId shadow column and a \"Tenant\" EF query filter on every aggregate root. Regenerate the initial migration after enabling."
+      "description": "Add a tenant seam: a tenant claim on the principal (ITenantContext), a TenantId shadow column and a \"Tenant\" EF query filter on every aggregate root."
     },
     "IncludeUiTests": {
       "type": "parameter",
@@ -430,6 +430,12 @@
           ]
         },
         {
+          "condition": "(UseMultitenancy)",
+          "exclude": [
+            "src/Infrastructure/Trellis.Persistence/Migrations/**"
+          ]
+        },
+        {
           "condition": "(!UseSerilog)",
           "exclude": [
             "tests/Trellis.ApiTests/InProcess/SerilogExportTests.cs"
@@ -449,6 +455,11 @@
       "rename": {
         "template-marker.json": ".trellis-template.json"
       }
+    },
+    {
+      "condition": "(UseMultitenancy)",
+      "source": "./.template.config/tenancy/Migrations/",
+      "target": "./src/Infrastructure/Trellis.Persistence/Migrations/"
     }
   ],
   "primaryOutputs": [
@@ -517,18 +528,6 @@
       "manualInstructions": [
         {
           "text": "Run it: 'aspire run' (needs the Aspire CLI: dotnet tool install -g Aspire.Cli), or without the CLI: dotnet run --project tools/Trellis.AppHost. Seeded admin: admin@example.com / Admin123!"
-        }
-      ],
-      "continueOnError": true
-    },
-    {
-      "id": "next steps: multi-tenancy",
-      "condition": "(UseMultitenancy)",
-      "description": "Regenerate the initial migration",
-      "actionId": "AC1156F7-BB77-4DB8-B28F-24EEBCCA1E5C",
-      "manualInstructions": [
-        {
-          "text": "Multi-tenancy is on: regenerate the initial migration before the first run (docs/development.md, 'Multi-tenancy')."
         }
       ],
       "continueOnError": true

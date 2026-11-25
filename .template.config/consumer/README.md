@@ -33,11 +33,6 @@ dotnet run --project tools/Trellis.AppHost
 From Rider or Visual Studio, run the `Trellis.AppHost` project with its `https` launch profile
 (`http` if you have no trusted development certificate yet); the dashboard opens by itself.
 
-<!--#if (UseMultitenancy) -->
-Multi-tenancy is on: regenerate the initial migration before the first run
-([docs/development.md](docs/development.md), "Multi-tenancy").
-
-<!--#endif -->
 Sign in as `admin@example.com` / `Admin123!`; that account and the demo data are seeded in
 Development only (production seeding wants your own password, see
 [docs/deployment.md](docs/deployment.md)). In Development the API serves its reference at `/scalar/v1`.
