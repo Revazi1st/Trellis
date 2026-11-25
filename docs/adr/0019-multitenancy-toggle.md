@@ -55,8 +55,8 @@ Core bump regenerates both, in one run** (`scripts/regenerate-initial-migrations
   the first one's folder, and a modifier under the same condition keeps the first out. Without the
   modifier `dotnet new` succeeds and ships both; a source folder that is missing or empty makes the
   whole template invalid. The engine renames the source's target with the project name as typed,
-  while every other path gets the identifier-safe form (`projectPathName`). A dotted name is the same
-  in both forms; for a name the safe form changes (`acme-shop`, which `dotnet new` warns will not
+  while every other path gets the identifier-safe form (`projectPathName`). A name `dotnet new`
+  does not warn about (`Acme.Shop`) is the same in both forms; for a name the safe form changes (`acme-shop`, which `dotnet new` warns will not
   build and should be re-created) the set lands in `acme-shop.Persistence/Migrations/`, beside the
   `acme_shop.Persistence` project, which then has no migration. A set for another option is wired
   the same way and lands the same way.

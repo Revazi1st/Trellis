@@ -177,8 +177,9 @@ public sealed partial class MigrationSnapshotTests
     /// <c>TenantId</c> (<c>AppDbContext.LeadWithTenant</c>), written back as the default snapshot writes it: the
     /// column out of the list, the tenant's ascending flag out of a descending one, and the database name out
     /// when it is EF's default one for that table and those columns, since the convention names the index
-    /// explicitly to keep that name. A unique index with a per-column provider setting (a collation, an
-    /// operator class, a NULLS order) differs further and is reported. Because the seam's statements go whole,
+    /// explicitly to keep that name. A unique index declared with an EF name (<c>HasIndex(columns, name)</c>,
+    /// which the snapshot writes as an array), or one with a per-column provider setting (a collation, an
+    /// operator class, a NULLS order), differs further and is reported. Because the seam's statements go whole,
     /// a change of the seam itself passes here (the column's length or nullability, an index on it added or
     /// dropped, an aggregate root without the column), and so does a statement that moved to another entity:
     /// <c>scripts/regenerate-initial-migrations.sh --check</c> (Template CI's pack job) and

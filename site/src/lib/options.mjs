@@ -18,7 +18,7 @@ import { title as docTitle } from './doc-text.mjs';
 
 const json = (p) => JSON.parse(readFileSync(path.join(repoRoot, p), 'utf8'));
 /** A template.json condition, parsed: `(X)` and `X` are the same condition. */
-const condition = (c) => parseExpression(c.replace(/^\((.*)\)$/, '$1'));
+const condition = (c) => parseExpression(c);
 const sameCondition = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** A source's target as a folder of the solution: '' for the root, else with one trailing slash. */
 function folderOf(target) {
@@ -100,7 +100,7 @@ export function optionSections() {
     if (pairs.length === 0) {
       const laid = `template.json: the source ${s.source} is laid over ${s.folder || "the solution's root"} under ${s.condition}`;
       if (!s.folder) throw new Error(`${laid}; the Options page shows a conditional source only as the replacement of one folder, so teach site/src/lib/options.mjs to show what it adds or overwrites`);
-      if (existsSync(path.join(repoRoot, s.folder))) throw new Error(`${laid}, a folder the repository has, and no modifier of the first source excludes ${s.folder}** under that condition: unless the first source's own exclude list leaves the folder out, both would ship`);
+      if (existsSync(path.join(repoRoot, s.folder))) throw new Error(`${laid}, a folder the repository has, and no modifier of the first source lists exactly ${s.folder}** under exactly that condition, so the page cannot show a replacement; if nothing else keeps the folder out both would ship: add that exclude to a modifier under ${s.condition}`);
       throw new Error(`${laid}, a folder the repository does not have: it only adds files, and the Options page shows a conditional source only as a replacement; teach site/src/lib/options.mjs to list them`);
     }
     // A replacement is shown under the one option whose condition it is; any other condition would vanish
