@@ -20,7 +20,7 @@ public sealed class EmailAddressMaskTests
     private static readonly string Grinning = char.ConvertFromUtf32(0x1F600);
 
     /// <summary>U+1F469 U+200D U+1F4BB, a woman technologist: three code points, one character on screen.</summary>
-    private static readonly string Technologist = char.ConvertFromUtf32(0x1F469) + "‍" + char.ConvertFromUtf32(0x1F4BB);
+    private static readonly string Technologist = char.ConvertFromUtf32(0x1F469) + "\u200D" + char.ConvertFromUtf32(0x1F4BB);
 
     /// <summary>Each copy by the layer that keeps it: its assembly, its type and its method, which takes the address and returns the mask.</summary>
     private static readonly Dictionary<string, (Assembly Assembly, string Type, string Method)> Copies = new(StringComparer.Ordinal)
@@ -36,8 +36,8 @@ public sealed class EmailAddressMaskTests
         (Grinning + "jane@example.com", Grinning + "***@example.com"),
         (Grinning + "@example.com", Grinning + "***@example.com"),
         (Technologist + "dev@example.com", Technologist + "***@example.com"),
-        ("émile@example.com", "é***@example.com"),   // é decomposed: the letter keeps its accent
-        ("؀@example.com", "؀***@example.com"),          // a prepended mark joins what follows: not the @
+        ("e\u0301mile@example.com", "e\u0301***@example.com"),   // é decomposed: the letter keeps its accent
+        ("\u0600@example.com", "\u0600***@example.com"),          // a prepended mark joins what follows: not the @
         ("jane.doe", "***"),
         ("", "***"),
         ("@example.com", "***"),

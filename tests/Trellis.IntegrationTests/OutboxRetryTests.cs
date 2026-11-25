@@ -200,7 +200,7 @@ public sealed partial class OutboxRetryTests(DatabaseFixture database) : Integra
         paid.Status.ShouldBe(OutboxMessageStatus.Pending);
         paid.Attempts.ShouldBe(1);
         paid.NextAttemptAtUtc.ShouldBe(Now + TimeSpan.FromSeconds(30));
-        paid.Error.ShouldBe("downstream � down");
+        paid.Error.ShouldBe("downstream \uFFFD down");
     }
 
     [Theory]
@@ -220,7 +220,7 @@ public sealed partial class OutboxRetryTests(DatabaseFixture database) : Integra
         OutboxMessage paid = await RowAsync(PaidType);
         paid.Status.ShouldBe(OutboxMessageStatus.DeadLettered);
         paid.Attempts.ShouldBe(1);
-        paid.Error.ShouldBe("downstream � down");
+        paid.Error.ShouldBe("downstream \uFFFD down");
     }
 
     [Fact]

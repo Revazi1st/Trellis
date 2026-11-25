@@ -17,13 +17,14 @@ public sealed class StorableTextTests
     /// </summary>
     private static readonly Dictionary<string, (string Text, string Storable)> Rows = new(StringComparer.Ordinal)
     {
-        ["a lone high surrogate"] = ("smtp \uD83D down", "smtp � down"),
-        ["a lone low surrogate"] = ("smtp \uDE00 down", "smtp � down"),
-        ["a high surrogate that ends the text"] = ("smtp down \uD83D", "smtp down �"),
-        ["a low surrogate before a high one"] = ("\uDE00\uD83D", "��"),
-        ["a high surrogate before a valid pair"] = ("\uD83D😀", "�😀"),
+        ["a lone high surrogate"] = ("smtp \uD83D down", "smtp \uFFFD down"),
+        ["a lone low surrogate"] = ("smtp \uDE00 down", "smtp \uFFFD down"),
+        ["a high surrogate that ends the text"] = ("smtp down \uD83D", "smtp down \uFFFD"),
+        ["a low surrogate before a high one"] = ("\uDE00\uD83D", "\uFFFD\uFFFD"),
+        ["a high surrogate before a valid pair"] = ("\uD83D😀", "\uFFFD😀"),
         ["a valid pair, kept"] = ("smtp 😀 down", "smtp 😀 down"),
-        ["a NUL"] = ("smtp \0 down", "smtp � down"),
+        ["a NUL"] = ("smtp \0 down", "smtp \uFFFD down"),
+        ["a control character that is not NUL, kept"] = ("smtp \u0001\t\n down", "smtp \u0001\t\n down"),
         ["empty"] = ("", ""),
     };
 
@@ -37,6 +38,10 @@ public sealed class StorableTextTests
 
         StorableText.From(text).ShouldBe(storable);
     }
+
+    [Fact]
+    public void A_missing_text_stays_missing()
+        => StorableText.From(null).ShouldBeNull();
 
     [Fact]
     public void Text_with_nothing_to_replace_is_returned_as_the_same_instance()

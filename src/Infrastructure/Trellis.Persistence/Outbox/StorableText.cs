@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Trellis.Persistence.Outbox;
@@ -15,11 +16,20 @@ namespace Trellis.Persistence.Outbox;
 /// </summary>
 internal static class StorableText
 {
-    private const char Replacement = '�';
+    private const char Replacement = '\uFFFD';
 
-    /// <summary><paramref name="text"/> itself when it is storable as it is; otherwise a copy of the same length with each refused code unit replaced.</summary>
-    public static string From(string text)
+    /// <summary>
+    /// <paramref name="text"/> itself when it is storable as it is, a missing text included (an exception type
+    /// may hand back no message); otherwise a copy of the same length with each refused code unit replaced.
+    /// </summary>
+    [return: NotNullIfNotNull(nameof(text))]
+    public static string? From(string? text)
     {
+        if (text is null)
+        {
+            return null;
+        }
+
         char[]? storable = null;
         int index = 0;
         while (index < text.Length)
