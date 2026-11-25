@@ -103,8 +103,9 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
   so outbox payloads hold personal data until processed and then for `Retention` windows (3 days
   processed, 30 days dead-lettered), longer in backups. Prefer ids over personal data in event
   payloads, or shorten the windows if your data-protection regime requires it. What a handler
-  throws is kept there too: a failing row's `Error` holds the exception's message as thrown (the
-  failed handlers' names when several fail) until an attempt succeeds and clears it, and a
+  throws is kept there too: a failing row's `Error` holds the exception's message as thrown, but for
+  characters the database cannot store, which are replaced (the failed handlers' names when several
+  fail) until an attempt succeeds and clears it, and a
   dead-lettered row's keeps it for the dead-letter window, longer in backups; the span and the
   handler-failed and retry log lines carry the whole exception, inner exceptions included, and the
   dead-letter line its message. So a handler of your own must not quote personal data in what it
