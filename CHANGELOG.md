@@ -87,8 +87,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   place of the whole MimeKit, so BouncyCastle and `System.Security.Cryptography.Pkcs` are no longer in
   the API's packages; a project that signs, encrypts or DKIM-signs mail adds `MimeKit.Cryptography` and
   calls `CryptographyModule.Initialize()` at startup. When the relay offers SMTPUTF8, MailKit now
-  refuses an internationalized address that SMTPUTF8 does not allow (two scripts in one address, for
-  one) before `MAIL FROM`, and quotes the address in its `SmtpUtf8AddressException`. The SMTP
+  refuses an internationalized address that fails its SMTPUTF8 address check (two scripts in one
+  address, for one) before `MAIL FROM`, and quotes the address in its `SmtpUtf8AddressException`. The SMTP
   adapter rethrows that exception with its reason and the masked address only, and the outbox retries
   it as it retries a refused recipient. The `Email:Smtp` settings and the adapter's other failures are
   unchanged.

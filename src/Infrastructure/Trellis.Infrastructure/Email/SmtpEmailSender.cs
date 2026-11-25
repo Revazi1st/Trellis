@@ -30,8 +30,8 @@ namespace Trellis.Infrastructure.Email;
 /// that runs the event handler records it and retries with back-off. The relay's reply is dropped from
 /// what is thrown, because a rejected recipient's reply usually quotes the full address (and MailKit's
 /// <see cref="SmtpCommandException.Mailbox"/> carries it) while the outbox writes the message into its row and
-/// the log; the error and status codes and the masked recipient stay. MailKit's own refusal of an address
-/// SMTPUTF8 does not allow (<see cref="SmtpUtf8AddressException"/>, before <c>MAIL FROM</c>, when the relay
+/// the log; the error and status codes and the masked recipient stay. MailKit's own refusal of an address that
+/// fails its SMTPUTF8 address check (<see cref="SmtpUtf8AddressException"/>, before <c>MAIL FROM</c>, when the relay
 /// offers SMTPUTF8) quotes the address too, and is rethrown with its reason and the masked address. Delivery
 /// is at least once — a crash between the relay's acceptance and the outbox's checkpoint sends again; a relay
 /// that accepted the message and then fails the <c>QUIT</c> does not, since MailKit's disconnect ignores that
@@ -45,6 +45,7 @@ namespace Trellis.Infrastructure.Email;
 internal sealed partial class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSender> logger) : IEmailSender
 {
     private const string ReplyLeftOut = "The relay's reply is left out because it can quote the full address; the relay's own log has it.";
+    private const string MailKitRefusedTheAddress = "MailKit refused it before MAIL FROM; the message was not submitted.";
 
     public async Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken)
     {
@@ -90,12 +91,13 @@ internal sealed partial class SmtpEmailSender(IOptions<SmtpOptions> options, ILo
         }
         catch (SmtpUtf8AddressException exception)
         {
-            // Before MAIL FROM, when the relay offers SMTPUTF8, MailKit checks every internationalized address; its
-            // message and Mailbox quote the one it refused (the recipient's, or Email:Smtp:FromAddress).
-            MailboxAddress masked = MaskedMailbox(exception.Mailbox.Address);
+            // Before MAIL FROM, when the relay offers SMTPUTF8, MailKit runs its SMTPUTF8 address check on every
+            // internationalized address; its message and Mailbox quote the one it refused (the recipient's, or
+            // Email:Smtp:FromAddress). The relay never saw that address, so there is no reply to leave out.
+            string masked = EmailAddressMask.Mask(exception.Mailbox.Address);
             string reason = Failed(to, smtp, string.Create(CultureInfo.InvariantCulture,
-                $"{masked.Address} is not an address SMTPUTF8 allows ({exception.Error})."));
-            throw new SmtpUtf8AddressException(masked, exception.Error, reason);
+                $"{masked} does not pass MailKit's SMTPUTF8 address check ({exception.Error})."), MailKitRefusedTheAddress);
+            throw new SmtpUtf8AddressException(MaskedMailbox(masked), exception.Error, reason);
         }
 
         // Masking allocates; skip it when nobody listens.
@@ -130,17 +132,21 @@ internal sealed partial class SmtpEmailSender(IOptions<SmtpOptions> options, ILo
     }
 
     /// <summary>
-    /// The masked address as the mailbox <see cref="SmtpUtf8AddressException"/> must carry, or an empty one when the
-    /// mask does not parse (a quoted local part cut open).
+    /// A mask as the mailbox <see cref="SmtpUtf8AddressException"/> must carry, or an empty one when the mask does
+    /// not parse (a quoted local part cut open); the message names the mask either way.
     /// </summary>
-    private static MailboxAddress MaskedMailbox(string address)
-        => MailboxAddress.TryParse(EmailAddressMask.Mask(address), out MailboxAddress? masked)
-            ? masked
+    private static MailboxAddress MaskedMailbox(string mask)
+        => MailboxAddress.TryParse(mask, out MailboxAddress? mailbox)
+            ? mailbox
             : new MailboxAddress(string.Empty, string.Empty);
 
-    private static string Failed(string to, SmtpOptions smtp, string what)
+    /// <summary>
+    /// The adapter's own words for a failure: masked recipient, relay endpoint, <paramref name="what"/>, then why the
+    /// relay's reply is left out, or another <paramref name="tail"/> when the relay never answered for the address.
+    /// </summary>
+    private static string Failed(string to, SmtpOptions smtp, string what, string tail = ReplyLeftOut)
         => string.Create(CultureInfo.InvariantCulture,
-            $"SMTP submission to {EmailAddressMask.Mask(to)} via {smtp.Host}:{smtp.Port} failed: {what} {ReplyLeftOut}");
+            $"SMTP submission to {EmailAddressMask.Mask(to)} via {smtp.Host}:{smtp.Port} failed: {what} {tail}");
 
     /// <summary>
     /// The fault underneath (a dropped connection), which names no recipient. A nested exception that carries a

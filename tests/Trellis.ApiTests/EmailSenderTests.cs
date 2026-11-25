@@ -30,6 +30,9 @@ public sealed class EmailSenderTests
     private const string Body = "Your password-reset link: https://example.com/reset?token=s3cr3t";
     private const string RelayPassword = "relay-password-s3cr3t";
 
+    /// <summary>How the adapter ends the message of an address MailKit refused itself: the relay never saw it.</summary>
+    private const string MailKitRefusedTheAddress = "MailKit refused it before MAIL FROM; the message was not submitted.";
+
     [Fact]
     public async Task Send_WithTheLoggingProvider_LogsMaskedRecipientSubjectAndLengthOnly()
     {
@@ -118,11 +121,11 @@ public sealed class EmailSenderTests
     }
 
     [Fact]
-    public async Task Send_ToAnAddressSmtpUtf8DoesNotAllow_ThrowsWithoutTheAddress()
+    public async Task Send_ToAnAddressMailKitRefusesForSmtpUtf8_ThrowsWithoutTheAddress()
     {
         // A relay that offers SMTPUTF8 has MailKit check every internationalized address before MAIL FROM, and
         // MailKit's own message quotes the address. Greek and Cyrillic in one local part: EmailAddress accepts
-        // it, SMTPUTF8's one-script rule does not.
+        // it, MailKit's SMTPUTF8 address check (one non-ASCII script per address) does not.
         const string recipient = "jαжne@example.com";
         using var relay = new TcpListener(IPAddress.Loopback, 0);
         relay.Start();
@@ -133,11 +136,61 @@ public sealed class EmailSenderTests
         SmtpUtf8AddressException failure = await Should.ThrowAsync<SmtpUtf8AddressException>(() => SendOneAsync(services, recipient));
         string wire = await conversation;
 
-        wire.ShouldNotContain("MAIL FROM");
-        failure.Error.ShouldBe(SmtpUtf8AddressError.MixedScripts);
-        failure.Mailbox.Address.ShouldBe("j***@example.com", "MailKit's invalid mailbox is the full address");
-        failure.Message.ShouldContain("j***@example.com");
-        failure.ToString().ShouldNotContain(recipient);
+        // What the outbox records (the message, and the exception as text) comes first; every failed condition is reported.
+        failure.ShouldSatisfyAllConditions(
+            () => failure.Message.ShouldContain("j***@example.com does not pass MailKit's SMTPUTF8 address check (MixedScripts)."),
+            () => failure.Message.ShouldEndWith(MailKitRefusedTheAddress),
+            () => failure.Message.ShouldNotContain("relay's reply"),
+            () => failure.ToString().ShouldNotContain(recipient),
+            () => failure.Mailbox.Address.ShouldBe("j***@example.com", "MailKit's invalid mailbox is the full address"),
+            () => failure.Error.ShouldBe(SmtpUtf8AddressError.MixedScripts),
+            () => wire.ShouldNotContain("MAIL FROM"));
+    }
+
+    [Fact]
+    public async Task Send_FromAnAddressMailKitRefusesForSmtpUtf8_NamesTheSendersMaskNotTheRecipients()
+    {
+        // MailKit checks the sender before the recipients, so a refused Email:Smtp:FromAddress fails every message.
+        // The message names the refused address's mask (b***), which the recipient's (j***) cannot stand in for.
+        const string sender = "bαжlling@example.com";
+        using var relay = new TcpListener(IPAddress.Loopback, 0);
+        relay.Start();
+        Task<string> conversation = FakeRelayAsync(
+            relay, recipientReply: "250 ok", TestContext.Current.CancellationToken, offersSmtpUtf8: true);
+        await using ServiceProvider services = BuildServices(
+            new CapturingLoggerProvider(), LocalRelay(relay, $"Email:Smtp:FromAddress={sender}"));
+
+        SmtpUtf8AddressException failure = await Should.ThrowAsync<SmtpUtf8AddressException>(() => SendOneAsync(services, Recipient));
+        string wire = await conversation;
+
+        failure.ShouldSatisfyAllConditions(
+            () => failure.Message.ShouldContain("b***@example.com does not pass MailKit's SMTPUTF8 address check (MixedScripts)."),
+            () => failure.Message.ShouldEndWith(MailKitRefusedTheAddress),
+            () => failure.Message.ShouldNotContain("relay's reply"),
+            () => failure.ToString().ShouldNotContain(sender),
+            () => failure.Mailbox.Address.ShouldBe("b***@example.com", "MailKit's invalid mailbox is the full address"),
+            () => wire.ShouldNotContain("MAIL FROM"));
+    }
+
+    [Fact]
+    public async Task Send_ToAQuotedAddressMailKitRefusesForSmtpUtf8_NamesTheMaskNoMailboxCanHold()
+    {
+        // A quoted local part masks to "***@example.com, which does not parse as a mailbox: the exception's
+        // Mailbox stays empty, and the message still names the mask.
+        const string recipient = "\"jα жne\"@example.com";
+        using var relay = new TcpListener(IPAddress.Loopback, 0);
+        relay.Start();
+        Task<string> conversation = FakeRelayAsync(
+            relay, recipientReply: "250 ok", TestContext.Current.CancellationToken, offersSmtpUtf8: true);
+        await using ServiceProvider services = BuildServices(new CapturingLoggerProvider(), LocalRelay(relay));
+
+        SmtpUtf8AddressException failure = await Should.ThrowAsync<SmtpUtf8AddressException>(() => SendOneAsync(services, recipient));
+        await conversation;
+
+        failure.ShouldSatisfyAllConditions(
+            () => failure.Message.ShouldContain("\"***@example.com does not pass MailKit's SMTPUTF8 address check"),
+            () => failure.ToString().ShouldNotContain("jα жne"),
+            () => failure.Mailbox.Address.ShouldBeEmpty());
     }
 
     [Fact]
@@ -331,9 +384,12 @@ public sealed class EmailSenderTests
     private static Dictionary<string, string?> Relay(params string[] overrides)
         => Settings("Smtp", ["Email:Smtp:Host=smtp.example.com", "Email:Smtp:Port=587", "Email:Smtp:FromAddress=billing@example.com", .. overrides]);
 
-    /// <summary>The relay pointed at the fake on <paramref name="listener"/>, in clear: the fake speaks no TLS.</summary>
-    private static Dictionary<string, string?> LocalRelay(TcpListener listener)
-        => Relay("Email:Smtp:Host=127.0.0.1", $"Email:Smtp:Port={((IPEndPoint)listener.LocalEndpoint).Port}", "Email:Smtp:UseStartTls=false");
+    /// <summary>
+    /// The relay pointed at the fake on <paramref name="listener"/>, in clear: the fake speaks no TLS;
+    /// <paramref name="overrides"/> change one more setting of it.
+    /// </summary>
+    private static Dictionary<string, string?> LocalRelay(TcpListener listener, params string[] overrides)
+        => Relay(["Email:Smtp:Host=127.0.0.1", $"Email:Smtp:Port={((IPEndPoint)listener.LocalEndpoint).Port}", "Email:Smtp:UseStartTls=false", .. overrides]);
 
     private static async Task<IReadOnlyList<Exception>> BootFailuresAsync(IHost host)
     {
