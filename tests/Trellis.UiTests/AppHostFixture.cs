@@ -54,12 +54,17 @@ public sealed class AppHostFixture : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_app is not null)
+        try
         {
-            await _app.DisposeAsync();
+            if (_app is not null)
+            {
+                await _app.DisposeAsync();
+            }
         }
-
-        _logs?.Dispose();
+        finally
+        {
+            _logs?.Dispose();
+        }
     }
 
     /// <summary>
@@ -137,6 +142,9 @@ public sealed class AppHostFixture : IAsyncDisposable
         DistributedApplication? app = null;
         try
         {
+            // Before anything prints: the message of a start refused before its first line then names a
+            // folder that exists, and a folder that cannot be written fails here, with that message.
+            Directory.CreateDirectory(logs.Folder);
             IDistributedApplicationTestingBuilder appHost =
                 await DistributedApplicationTestingBuilder.CreateAsync<Projects.Trellis_AppHost>(ct);
             appHost.UseThrowawayDatabase();
@@ -167,7 +175,16 @@ public sealed class AppHostFixture : IAsyncDisposable
             string message = Describe(reason, resources.Select(name => (name, StateOf(app, name))), logs);
             if (app is not null)
             {
-                await app.DisposeAsync();
+                // The states are read above, before the stop. A stop that throws must not replace the start's
+                // message, which is what every browser test fails with.
+                try
+                {
+                    await app.DisposeAsync();
+                }
+                catch (Exception stopFailure)
+                {
+                    message += Environment.NewLine + $"Stopping what had started failed as well: {stopFailure.Message}";
+                }
             }
 
             throw new InvalidOperationException(message, exception);
