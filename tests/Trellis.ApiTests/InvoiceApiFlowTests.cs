@@ -54,8 +54,9 @@ public sealed class InvoiceApiFlowTests
         string[] needed = AppHostTestingExtensions.NeededBy(appHost.Resources, ServiceNames.Api);
 #endif
         await using DistributedApplication app = await appHost.BuildAsync(ct);
-        // StartAsync does not return while a resource waits for a dependency, also one that has exited: the
-        // first needed resource that fails (AppHostTestingExtensions.FailureOf) ends the start instead.
+        // StartAsync does not return while a resource waits for a dependency, also one that started and then
+        // exited before it was healthy: the first needed resource that fails (AppHostTestingExtensions.FailureOf)
+        // ends the start instead.
         await app.RunUnlessOneFailsAsync(needed, app.StartAsync, ct);
 
         // Healthy implies the migration worker already completed (api WaitsForCompletion on it).

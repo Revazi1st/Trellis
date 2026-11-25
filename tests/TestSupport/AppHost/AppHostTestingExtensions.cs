@@ -142,17 +142,18 @@ internal static class AppHostTestingExtensions
     /// <summary>
     /// Awaits <paramref name="step"/> (the start, a wait for a resource) unless one of the
     /// <paramref name="watched"/> resources fails first. Under the testing builder <c>StartAsync</c> does not
-    /// return while a resource waits for a dependency, and it goes on waiting after that dependency has exited
-    /// (CI saw the web host wait for an API that had crashed, until the time limit), so this watch is what ends
-    /// such a start. It reads every resource's changes (<see cref="ResourceNotificationService.WatchAsync"/>
-    /// begins with each one's current state, so a failure from before the step is seen too) and applies
-    /// <see cref="FailureOf"/> to the watched names only. A failure that comes first cancels the step, lets it
-    /// unwind, and throws a <see cref="DistributedApplicationException"/> whose message is that sentence. A step
-    /// that ends first is the outcome, its exception included, and the watch is stopped; but a step that fails
-    /// while a watched resource has failed (Aspire's own wait stops on the resource it names) ends with that
-    /// resource's sentence too, the step's exception as the inner one, so the message gives the resource, its
-    /// state and its exit code whichever of the two noticed first. The caller's own cancellation (a time limit)
-    /// cancels both, and surfaces from the step as a cancellation.
+    /// return while a resource waits for a dependency, and it goes on waiting for a dependency that started and
+    /// then exited before it was healthy (CI saw the web host wait for an API that had crashed, until the time
+    /// limit), so this watch is what ends such a start. It reads every resource's changes
+    /// (<see cref="ResourceNotificationService.WatchAsync"/> begins with each one's current state, so a failure
+    /// from before the step is seen too) and applies <see cref="FailureOf"/> to the watched names only. A
+    /// failure that comes first cancels the step, lets it unwind, and throws a
+    /// <see cref="DistributedApplicationException"/> whose message is that sentence. A step that ends first is
+    /// the outcome, its exception included, and the watch is stopped; but a step that fails while a watched
+    /// resource has failed (Aspire's own wait stops on the resource it names) ends with that resource's sentence
+    /// too, the step's exception as the inner one, so the message gives the resource, its state and its exit
+    /// code whichever of the two noticed first. The caller's own cancellation (a time limit) cancels both, and
+    /// surfaces from the step as a cancellation.
     /// </summary>
     internal static async Task RunUnlessOneFailsAsync(
         this DistributedApplication app,

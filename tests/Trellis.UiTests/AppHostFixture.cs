@@ -203,16 +203,16 @@ public sealed class AppHostFixture : IAsyncDisposable
 
             DistributedApplication started = app = await appHost.BuildAsync(ct);
 
-            // StartAsync does not return while a resource waits for a dependency, and a resource whose
-            // dependency has exited goes on waiting (CI saw the web host wait for an API that had crashed at
-            // boot, until the time limit). So the start and the two waits each run under a watch of the needed
-            // resources: the first of them that fails to start, or exits with a code other than 0, ends the
-            // start at once with its own sentence. Healthy is each host's own /health answering (the AppHost's
-            // WithHttpHealthCheck), and the API starts only once the migration job has migrated, seeded and
-            // exited with 0. The waits keep StopOnResourceUnavailable, Aspire's own stop for the resource a
-            // wait names, and when that stop comes first the helper still ends with the resource's sentence;
-            // the watch covers the resources behind it. The time limit covers what is left: a resource that
-            // keeps running and never becomes healthy.
+            // StartAsync does not return while a resource waits for a dependency, and a resource goes on waiting
+            // for a dependency that started and then exited before it was healthy (CI saw the web host wait for an
+            // API that had crashed at boot, until the time limit). So the start and the two waits each run under a
+            // watch of the needed resources: the first of them that fails to start, or exits with a code other
+            // than 0, ends the start at once with its own sentence. Healthy is each host's own /health answering
+            // (the AppHost's WithHttpHealthCheck), and the API starts only once the migration job has migrated,
+            // seeded and exited with 0. The waits keep StopOnResourceUnavailable, Aspire's own stop for the
+            // resource a wait names, and when that stop comes first the helper still ends with the resource's
+            // sentence; the watch covers the resources behind it. The time limit covers what is left: a resource
+            // that keeps running and never becomes healthy.
             await started.RunUnlessOneFailsAsync(needed, started.StartAsync, ct);
             await started.RunUnlessOneFailsAsync(needed, token => started.ResourceNotifications.WaitForResourceHealthyAsync(
                 ServiceNames.Api, WaitBehavior.StopOnResourceUnavailable, token), ct);
