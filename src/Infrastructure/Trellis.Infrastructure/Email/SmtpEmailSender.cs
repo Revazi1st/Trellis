@@ -164,10 +164,11 @@ internal sealed partial class SmtpEmailSender(IOptions<SmtpOptions> options, ILo
 
     /// <summary>
     /// The fault underneath (a dropped connection), which names no recipient. A nested exception that carries a
-    /// relay reply is dropped for the reason its parent is.
+    /// relay reply or an address is dropped for the reason its parent is: one of the types the adapter catches.
     /// </summary>
     private static Exception? TransportFault(Exception exception)
-        => exception.InnerException is SmtpCommandException or SmtpProtocolException or AuthenticationException or ServiceNotAuthenticatedException
+        => exception.InnerException is SmtpCommandException or SmtpProtocolException or AuthenticationException
+            or ServiceNotAuthenticatedException or SmtpUtf8AddressException
             ? null
             : exception.InnerException;
 
