@@ -20,7 +20,7 @@ Options are flags of `dotnet new`, and options in the Visual Studio and Rider ne
 | [`--include-ui`](https://revazi1st.github.io/Trellis/start/options/#--include-ui) | on | Include the Blazor web UI (UI.Common + UI.Web) and wire it into the Aspire AppHost. |
 | [`--use-redis`](https://revazi1st.github.io/Trellis/start/options/#--use-redis) | off | Add a Redis-protocol distributed cache (HybridCache L2), Valkey by default, and wire it into the Aspire AppHost. |
 | [`--use-serilog`](https://revazi1st.github.io/Trellis/start/options/#--use-serilog) | off | Use Serilog for structured logging (console sink) in the API and web hosts, alongside OpenTelemetry. |
-| [`--use-multitenancy`](https://revazi1st.github.io/Trellis/start/options/#--use-multitenancy) | off | Add a tenant seam: a tenant claim on the principal (ITenantContext), a TenantId shadow column and a "Tenant" EF query filter on every aggregate root. Regenerate the initial migration after enabling. |
+| [`--use-multitenancy`](https://revazi1st.github.io/Trellis/start/options/#--use-multitenancy) | off | Add a tenant seam: a tenant claim on the principal (ITenantContext), a TenantId shadow column and a "Tenant" EF query filter on every aggregate root. |
 | [`--include-ui-tests`](https://revazi1st.github.io/Trellis/start/options/#--include-ui-tests) | off | Include a browser-driven UI test project (Playwright). Tests are opt-in at run time via RUN_UI_TESTS=1. |
 | [`--skip-restore`](https://revazi1st.github.io/Trellis/start/options/#--skip-restore) | off | Skip the automatic 'dotnet restore' after the project is created. |
 

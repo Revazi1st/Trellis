@@ -222,7 +222,13 @@ unique index it declares is unique per tenant: `TenantId` leads it, under the na
 admin and the demo data are in tenant `default` (`Seed__TenantId`); a self-registered user gets a
 fresh tenant. See ADR-0019 and ADR-0022.
 
-Because this adds a column, **regenerate the initial migration** in the generated project:
+A solution created with the option ships with an initial migration that already has those columns
+(`TenantId` on every aggregate table, on `AspNetUsers` and on `OutboxMessages`, with an index on the
+first two): there is nothing to regenerate before the first run.
+
+Turning the option on later, in a solution created without it, is a schema change
+([upgrading.md](upgrading.md#5-schema-affecting-changes)). While no database is deployed, regenerate
+the initial migration:
 
 ```bash
 env -u TRELLIS_DESIGNTIME_DB ./scripts/ef.sh migrations remove --force --project src/Infrastructure/Trellis.Persistence

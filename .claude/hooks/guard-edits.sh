@@ -37,6 +37,16 @@ if [[ "/$rel" =~ $migrations ]]; then
   decide ask "$rel is a generated migration: migrations are generated, never hand-edited (AGENTS.md, .claude/rules/persistence.md). To change one that is not applied anywhere yet, remove it and generate it again: ./scripts/ef.sh migrations remove --force --project $project, change the model, then ./scripts/ef.sh migrations add <Name> --project $project (the add-migration skill). A data migration (SQL the model cannot express) is the one reason to edit by hand."
 fi
 
+#if (TemplateSource)
+# Template source only: an initial migration the template ships in place of the default one for an
+# option (.template.config/tenancy/ for multi-tenancy, and any later set beside it). It is generated
+# like the first one and kept outside every project, so the rule above does not see it.
+shipped_set='/\.template\.config/[^/]+/Migrations/'
+if [[ "/$rel" =~ $shipped_set ]]; then
+  decide ask "$rel is a generated migration, one the template ships in place of the default set for an option: generated, never hand-edited. Change the model, then regenerate the shipped sets: ./scripts/regenerate-initial-migrations.sh (MigrationSnapshotTests holds them to one model)."
+fi
+#endif
+
 case "/$rel" in
   */docs/api/openapi.v1.json)
     decide ask "$rel is the snapshot of the OpenAPI document the API serves (ADR-0025), regenerated rather than edited: UPDATE_OPENAPI_SNAPSHOT=1 ./scripts/dotnet.sh test tests/Trellis.ApiTests writes it from the running code, and OpenApiSnapshotTests fails while the file and the code disagree. Change the endpoint or the contract instead." ;;

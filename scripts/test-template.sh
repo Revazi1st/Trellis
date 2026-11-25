@@ -11,14 +11,16 @@
 # It runs scripts/check-template-toggles.sh, packs the template once (the working tree as it is,
 # untracked files included), installs the package into a private hive (--debug:custom-hive), so your
 # own template list is never touched, and then for each leg: instantiates it with the leg's flags,
-# on the default leg runs scripts/ef.sh's first-migration command on the unbuilt tree, regenerates
-# the initial migration where the leg says so, builds Release, runs the generated ci.yml's format
-# check (dotnet format --verify-no-changes) and, on the legs Template CI tests, runs dotnet test. A
-# table of results follows, and the exit code is 1 when anything failed. The working folder (under
-# $TMPDIR) keeps every log and generated solution after a failure.
+# on the default leg and on every leg with multi-tenancy runs scripts/ef.sh's first-migration command
+# on the unbuilt tree (which also proves that the initial migration the leg ships matches its model),
+# builds Release, runs the generated ci.yml's format check (dotnet format --verify-no-changes) and,
+# on the legs Template CI tests, runs dotnet test. A table of results follows, and the exit code is 1
+# when anything failed. The working folder (under $TMPDIR) keeps every log and generated solution
+# after a failure.
 #
-# Because it packs, the legs get the package's content, as an install from nuget.org does and as the
-# last step of Template CI's pack job checks; the instantiate job installs the source folder instead.
+# Because it packs, the legs get the package's content, as an install from nuget.org does and as
+# Template CI's pack job checks ("Instantiate & build from the packed template"); the instantiate job
+# installs the source folder instead.
 # The pack csproj's TemplateContentExclude decides what the package holds, template.json's
 # sources[0].exclude what a folder install holds, and the two lists are kept in step by hand: a file
 # missing from one of them ships by one route and not by the other.
@@ -37,7 +39,7 @@
 # consumer files, actionlint over the generated workflows) and its Windows job run only in CI.
 #
 # KEEP IN SYNC with .github/workflows/template-ci.yml. The legs and their flags are read from its
-# instantiate matrix (keys name, args, out, test, regenerate-migration and browser, one per line, args in
+# instantiate matrix (keys name, args, out, test and browser, one per line, args in
 # double quotes), so a leg added there runs here with no edit, and a key this script does not know,
 # in a leg or beside include (an exclude list, a dimension such as os), stops it until it learns
 # what the key means. The commands in run_leg mirror that job's steps.
@@ -50,17 +52,17 @@ usage() {
   sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
 }
 
-# One record per leg of the instantiate job's matrix: LEG|name|out|test|regenerate|browser|args, test,
-# regenerate and browser as 1 or 0. ERR|message when the matrix holds something this reader does not
-# understand: a key in a leg it does not know, or anything in the matrix beside include.
+# One record per leg of the instantiate job's matrix: LEG|name|out|test|browser|args, test and
+# browser as 1 or 0. ERR|message when the matrix holds something this reader does not understand: a
+# key in a leg it does not know, or anything in the matrix beside include.
 read_legs() {
   awk '
     function indent(s) { match(s, /^ */); return RLENGTH }
     function flush() {
       if (name == "") return
       if (out == "") { printf "ERR|the leg %s has no out key\n", name }
-      printf "LEG|%s|%s|%d|%d|%d|%s\n", name, out, (test == "true"), (regen == "true"), (browser == "true"), args
-      name = ""; out = ""; args = ""; test = ""; regen = ""; browser = ""
+      printf "LEG|%s|%s|%d|%d|%s\n", name, out, (test == "true"), (browser == "true"), args
+      name = ""; out = ""; args = ""; test = ""; browser = ""
     }
     /^  instantiate:[[:space:]]*$/ { job = 1; next }
     job && /^  [^[:space:]#]/      { flush(); job = 0 }
@@ -98,12 +100,19 @@ read_legs() {
       else if (key == "args") args = value
       else if (key == "out") out = value
       else if (key == "test") test = value
-      else if (key == "regenerate-migration") regen = value
       else if (key == "browser") browser = value
       else printf "ERR|the matrix key %s (leg %s) is new to this script\n", key, name
     }
     END { flush() }
   ' "$workflow"
+}
+
+# The legs template-ci.yml's "First migration command on an unbuilt tree" step runs on: the default
+# leg, and every leg with multi-tenancy, whose shipped migration is the template's second set.
+probes_migration() {  # $1 = leg name, $2 = its flags
+  [ "$1" = default ] && return 0
+  case " $2 " in *" --use-multitenancy true "*) return 0 ;; esac
+  return 1
 }
 
 keep=0
@@ -134,9 +143,9 @@ fi
 
 if [ "$list_only" -eq 1 ]; then
   printf '%-26s %-6s %-10s %-7s %s\n' LEG TESTED MIGRATION BROWSER FLAGS
-  while IFS='|' read -r name _ test regen browser args; do
+  while IFS='|' read -r name _ test browser args; do
     printf '%-26s %-6s %-10s %-7s %s\n' "$name" "$([ "$test" = 1 ] && echo yes || echo no)" \
-      "$([ "$regen" = 1 ] && echo regen || { [ "$name" = default ] && echo probe; } || echo -)" \
+      "$(probes_migration "$name" "$args" && echo probe || echo -)" \
       "$([ "$browser" = 1 ] && echo yes || echo -)" "${args:-(defaults)}"
   done <<< "$records"
   exit 0
@@ -176,7 +185,7 @@ unset RUN_UI_TESTS UI_TESTS_BASE_URL UI_TESTS_FIRST_RUN UI_TESTS_SCREENSHOTS UI_
 
 # 1 when a selected leg will run its browser steps: it has them and RUN_UI_TESTS=1 asked for them.
 browser_legs=0
-if [ "$browser_tests" = 1 ] && cut -d'|' -f5 <<< "$legs" | grep -qx 1; then
+if [ "$browser_tests" = 1 ] && cut -d'|' -f4 <<< "$legs" | grep -qx 1; then
   browser_legs=1
 fi
 
@@ -224,26 +233,18 @@ nupkg=$(find "$work/nupkg" -name '*.nupkg' | head -n 1)
 logged "$work/logs/pack.log" dotnet new install "$nupkg" --debug:custom-hive "$work/hive" \
   || { echo "error: the package did not install; working folder: $work" >&2; exit 1; }
 
-# Mirrors template-ci.yml's "First migration command on an unbuilt tree" step (the default leg
-# only), which is the command inside scripts/ef.sh's sh -c; runs in the generated folder.
+# Mirrors template-ci.yml's "First migration command on an unbuilt tree" step (the default leg and
+# the legs with multi-tenancy), which is the command inside scripts/ef.sh's sh -c; runs in the
+# generated folder. It reads the model and the snapshot and contacts no database.
 first_migration_probe() {
   rm -rf artifacts &&
     dotnet tool restore &&
     dotnet restore ./*.slnx --verbosity quiet &&
     dotnet dotnet-ef migrations has-pending-model-changes --project src/Infrastructure/*.Persistence
 }
-# What template-ci.yml's "Regenerate the initial migration" step does, without its first command; runs
-# in the generated folder. 'migrations remove --force' asks a database whether the migration was applied
-# and reverts it there when it was (InitialCreate's Down drops every table), and the design-time default
-# is localhost:5432 with the development credentials: in the SDK container and on a CI runner nothing
-# answers, on your machine your own PostgreSQL may. This script runs dotnet-ef on the host, so it deletes
-# the generated migration files instead, which is all 'remove' does to the tree of a project with one
-# migration; 'migrations add' reads the model and never connects.
-regenerate_migration() {
-  dotnet tool restore &&
-    rm -f src/Infrastructure/*.Persistence/Migrations/*.cs &&
-    dotnet dotnet-ef migrations add InitialCreate --project src/Infrastructure/*.Persistence
-}
+# What template-ci.yml's step runs when that command failed: it is the first step that compiles the
+# leg, and dotnet-ef says only "Build failed" then, so the Persistence project's build shows the errors.
+persistence_errors() { dotnet build src/Infrastructure/*.Persistence --nologo --verbosity quiet; }
 build_solution() { dotnet build ./*.slnx -c Release; }
 # Mirrors template-ci.yml's "Format check (generated)" step, the generated ci.yml's Format check.
 format_solution() { dotnet format ./*.slnx --no-restore --verify-no-changes --severity warn; }
@@ -276,13 +277,12 @@ in_dir() {  # $1 = folder, rest = command (a function above, or a program)
 r_name=() r_inst=() r_mig=() r_build=() r_fmt=() r_test=() r_browser=() r_time=()
 failed=0
 
-run_leg() {  # name out test regen browser args
-  local name="$1" out="$2" test="$3" regen="$4" browser="$5" args="$6"
+run_leg() {  # name out test browser args
+  local name="$1" out="$2" test="$3" browser="$4" args="$5"
   local dir="$work/$name" log="$work/logs/$name.log" started=$SECONDS
   local inst=- mig=- build=- fmt=- tst=- brw=" " flags=()
-  # MIGRATION is the regeneration on the legs that regenerate, and the first-migration probe on the
-  # default leg, as in Template CI.
-  [ "$regen" = 1 ] || [ "$name" = default ] || mig=" "
+  # MIGRATION is the first-migration probe, on the legs Template CI runs it on.
+  probes_migration "$name" "$args" || mig=" "
   [ "$test" = 1 ] || tst=" "
   read -r -a flags <<< "$args" || true
 
@@ -296,15 +296,17 @@ run_leg() {  # name out test regen browser args
     inst=FAIL
   fi
 
-  if [ "$inst" = ok ] && [ "$name" = default ]; then
+  if [ "$inst" = ok ] && probes_migration "$name" "$args"; then
     echo "==> $name: the first migration command on an unbuilt tree (scripts/ef.sh's)"
-    if logged "$log" in_dir "$dir" first_migration_probe; then mig=ok; else mig=FAIL; fi
-  fi
-
-  # A failed probe stays FAIL: the regeneration would only overwrite the result.
-  if [ "$inst" = ok ] && [ "$regen" = 1 ] && [ "$mig" != FAIL ]; then
-    echo "==> $name: regenerate the initial migration"
-    if logged "$log" in_dir "$dir" regenerate_migration; then mig=ok; else mig=FAIL; fi
+    if logged "$log" in_dir "$dir" first_migration_probe; then
+      mig=ok
+    else
+      mig=FAIL
+      echo "    The command failed (its output is above). If it says the model has pending changes, the initial migration this leg" >&2
+      echo "    ships does not match its model: scripts/regenerate-initial-migrations.sh regenerates both shipped sets. If it says" >&2
+      echo "    the build failed, this is the first step that compiles the leg, and the compiler's errors follow." >&2
+      logged "$log" in_dir "$dir" persistence_errors || true
+    fi
   fi
 
   if [ "$inst" = ok ] && [ "$mig" != FAIL ]; then
@@ -351,8 +353,8 @@ run_leg() {  # name out test regen browser args
   esac
 }
 
-while IFS='|' read -r name out test regen browser args; do
-  run_leg "$name" "$out" "$test" "$regen" "$browser" "$args"
+while IFS='|' read -r name out test browser args; do
+  run_leg "$name" "$out" "$test" "$browser" "$args"
 done <<< "$legs"
 
 echo

@@ -100,10 +100,17 @@ are all served from the site itself (the fonts' licence is at `/Trellis/fonts-li
 `src/content/docs/` holds the pages that are not in `docs/`: the landing page, Why Trellis, Install and
 create, Options, and Compared with other templates. The Options page is generated from
 `.template.config/`: one section per boolean option with its default, its description, the files only it
-adds and the reminder `dotnet new` prints, plus what to do after creating a solution with it and the docs
-that explain it, from `optionNotes` in `trellis.config.mjs`. A new toggle fails the build until it has an
-entry there. Compared with other templates states facts about other projects, each read from that
-project's own repository on the date the page names; a cell that was not read again is a dash.
+adds, the folder it replaces (a conditional source laid over a folder that a modifier of the first source
+excludes under the same condition, as the multi-tenant initial migration is) and the reminder `dotnet new`
+prints, plus what to do after creating a solution with it, the docs that explain it and what a replaced
+folder holds instead, from `optionNotes` in `trellis.config.mjs`. A new toggle fails the build until it
+has an entry there. So does a conditional source the page cannot show as such a replacement: one that no
+modifier pairs with (laid over a folder the repository has, both would ship; over a new folder or the
+root, its files would go unlisted), one under anything but a single option being on, a second replaced
+folder under one option (`replaces` describes one), and a paired modifier that excludes anything else
+(the rest would vanish from the page). Each failure names what it found and what to change. Compared
+with other templates states facts about other projects, each read from that project's own repository on
+the date the page names; a cell that was not read again is a dash.
 
 The landing page's numbers and lists come from the repository at build time (`src/data/repo.mjs`): the
 facts strip counts a solution created with no options (template.json's conditional excludes evaluated

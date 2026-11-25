@@ -127,6 +127,16 @@ edit "$root/src/Core/Acme.Application/Features/Migrations/Planted.cs" 'a' 'b'
 expect "a Features/Migrations/ folder elsewhere" guard-edits.sh silent
 edit "$root/$persistence/Features/Migrations/Planted.cs" 'a' 'b'
 expect "a Migrations/ folder deeper in the Persistence project" guard-edits.sh silent
+#if (TemplateSource)
+edit "$root/.template.config/tenancy/Migrations/AppDbContextModelSnapshot.cs" 'a' 'b'
+expect "an edit of the multi-tenant migration set the template keeps" guard-edits.sh ask "regenerate-initial-migrations.sh"
+edit "$root/.template.config/redis/Migrations/20261201090000_InitialCreate.cs" 'a' 'b'
+expect "an edit of a later set the template keeps beside it" guard-edits.sh ask "regenerate-initial-migrations.sh"
+edit "$root/.template.config/consumer/README.md" 'a' 'b'
+expect "an edit of another template source's file" guard-edits.sh silent
+edit "$root/.template.config/template.json" 'a' 'b'
+expect "an edit of the template's own configuration" guard-edits.sh silent
+#endif
 write "$root/docs/api/openapi.v1.json" '{}'
 expect "a Write of the OpenAPI snapshot" guard-edits.sh ask "UPDATE_OPENAPI_SNAPSHOT=1"
 write 'docs\\api\\openapi.v1.json' '{}'

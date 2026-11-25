@@ -23,3 +23,10 @@ After scaffolding:
 To undo a not-yet-applied migration: `./scripts/ef.sh migrations remove --force --project src/Infrastructure/Trellis.Persistence`. Without `--force` the command asks a database whether the migration was applied and stops when none answers, as in the SDK container. With it, the command reverts the migration on the database the design-time connection reaches, when that database applied it (`InitialCreate`'s `Down` drops every table), then removes the files; when no database answers, it warns and removes the files. `scripts/ef.sh` forwards `TRELLIS_DESIGNTIME_DB` into the container, so run it with that variable unset (`env -u TRELLIS_DESIGNTIME_DB ./scripts/ef.sh migrations remove --force …`) to make sure none answers, and use it only on a migration no database you keep has applied.
 
 Pre-release, prefer regenerating the single `InitialCreate` over stacking churn migrations.
+<!--#if (TemplateSource) -->
+
+**In the template's repository** the initial migration exists twice, for the default model and for the
+multi-tenant one, and neither is regenerated with the commands above: a model change or an EF Core bump
+regenerates both in one run, `./scripts/regenerate-initial-migrations.sh` (`.claude/rules/tools.md`, the
+source-only section). `./scripts/ef.sh` reaches only the default set.
+<!--#endif -->

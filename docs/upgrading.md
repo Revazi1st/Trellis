@@ -92,6 +92,13 @@ and `AspNetUsers`):
 Either way, finish with `./scripts/dotnet.sh test Trellis.slnx`: the migration-drift guard
 (`HasPendingModelChanges`) fails if the model and the migrations disagree.
 
+A solution created with `--use-multitenancy` from version 0.2.0 or earlier regenerated its initial
+migration when it was created; later versions ship that migration ready. The scratch tree's
+`Migrations/` then holds the template's initial migration, under another id than yours. Keep yours, as
+step 4 says: your database's `__EFMigrationsHistory` records your id, and another id is not a model
+change, so by itself it leaves nothing to apply. A model change the new version brings is the case
+above.
+
 ## 6. Deploying the upgrade
 
 Read the changelog's upgrade notes before the first deploy, not after: a change to how the outbox

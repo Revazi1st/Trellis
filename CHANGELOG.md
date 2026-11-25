@@ -159,6 +159,15 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 - **`docs/deployment.md` says what the outbox gauges show while the database is unreachable**: they hold
   the last value sampled, and event 1309 on every poll is the signal. A comment in `OutboxProcessor`
   said the age climbs; it is corrected.
+- **A solution created with `--use-multitenancy` ships with its initial migration ready.** The template
+  now keeps an initial migration for the multi-tenant model and gives it to such a solution in place of
+  the default one: `TenantId` on every aggregate table, on `AspNetUsers` and on `OutboxMessages`, with
+  an index on the first two. Nothing is regenerated before the first run, `dotnet new` no longer prints
+  the reminder, and the option's description lost its last sentence. **Upgrading**: a solution created
+  with the option from 0.2.0 or earlier regenerated its own initial migration; keep it. The template's
+  has another id, describes the same tables, and nothing is applied to your database
+  (`docs/upgrading.md`, step 5). Turning the option on in an existing solution is unchanged: it is a
+  schema change of yours (the same step). ADR-0019, ADR-0022 and ADR-0033 carry dated amendments.
 
 ### Fixed
 

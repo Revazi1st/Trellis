@@ -164,8 +164,8 @@ file).
   entry exempts the rest of the file too.
 - A row written with no tenant relies on NULLs being distinct in a unique index
   (`.claude/rules/persistence.md`, *Multi-tenancy*). What SQL Server does there is not verified.
-- The migration is regenerated with the option anyway
-  ([development.md](development.md#multi-tenancy-optional)).
+- The initial migration the solution was created with already has the tenant columns; like every
+  migration it is deleted and generated again with the new provider ([Migrations](#migrations)).
 <!--#endif -->
 
 ## The aggregate's version
