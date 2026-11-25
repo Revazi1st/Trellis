@@ -184,6 +184,17 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   head of the list could find another class's invoice there, now and then. The classes run one at a
   time; a browser test class of your own needs nothing for it.
 
+### Security
+
+- **A line break typed at sign-in no longer forges a line in the security event log.** Since 0.1.0,
+  anyone, signed in or not, could sign in with an e-mail that matches no account and carries a line break
+  (CR, LF, NEL, LS, PS or FF) after the `@` or as its first character: security event 1102 logged the
+  masked address with the break as typed, so the 1102 line ended early and the rest read as a log line of
+  their own making, an invented sign-in or lockout included (CWE-117). Closed from this release:
+  `SecurityEventLog.LoginFailedUnknownAccount` replaces every line ending in the masked e-mail with a
+  space, and `AuthFlowTests` sends each one. No other security event carries text a caller typed. If you
+  log anything else a caller typed, pass it through `ReplaceLineEndings(" ")` as a template argument.
+
 ## [0.2.0] - 2026-11-15
 
 A minor release. The Blazor UI gets a design system with a light and a dark theme and a switch between
