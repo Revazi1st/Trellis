@@ -14,7 +14,7 @@ namespace Trellis.ArchitectureTests;
 /// nothing; where a rule could over-reach, the nearest shape it must accept sits beside them. Nothing
 /// registers these types, and no production rule scans this assembly.
 /// </summary>
-internal static class PlantedViolations
+internal static partial class PlantedViolations
 {
     internal sealed record Command : ICommand;
 
@@ -120,5 +120,35 @@ internal static class PlantedViolations
     internal static class NeutralIndexMapping
     {
         public static void Configure(IndexBuilder index) => index.HasDatabaseName("IX_Planted").IsUnique();
+    }
+
+    /// <summary>
+    /// Security events shaped like <c>SecurityEventLog</c>'s, two of which other code can hand a caller's text
+    /// as it was typed: a public and an internal event that take a string. Beside them, the shapes the event
+    /// check accepts: a private event that takes a string, reached only through a wrapper that puts the text on
+    /// one line, and a public event that takes only an id.
+    /// </summary>
+    internal static partial class SecurityEvents
+    {
+        [LoggerMessage(EventId = 9101, EventName = "Typed", Level = LogLevel.Information, Message = "Planted {Text}")]
+        public static partial void Typed(ILogger logger, string text);
+
+        [LoggerMessage(EventId = 9102, EventName = "TypedInTheAssembly", Level = LogLevel.Information, Message = "Planted {Text}")]
+        internal static partial void TypedInTheAssembly(ILogger logger, string text);
+
+        public static void OnOneLine(ILogger logger, string text)
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                string oneLine = text.ReplaceLineEndings(" ");
+                Wrapped(logger, oneLine);
+            }
+        }
+
+        [LoggerMessage(EventId = 9103, EventName = "Wrapped", Level = LogLevel.Information, Message = "Planted {Text}")]
+        private static partial void Wrapped(ILogger logger, string text);
+
+        [LoggerMessage(EventId = 9104, EventName = "ById", Level = LogLevel.Information, Message = "Planted {UserId}")]
+        public static partial void ById(ILogger logger, Guid userId);
     }
 }

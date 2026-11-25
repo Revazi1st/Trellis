@@ -6,8 +6,12 @@ namespace Trellis.Persistence.Identity;
 /// <summary>
 /// Structured security events with stable event ids (1100–1199), so an alert or a SIEM rule can match
 /// on the id instead of parsing a message. An event names the account by user id; a sign-in for an
-/// e-mail that matches no account carries the masked e-mail (<see cref="MaskEmail"/>). None of them
-/// ever carries a password.
+/// e-mail that matches no account carries the masked e-mail (<see cref="MaskEmail"/>), its line endings and
+/// every other control character replaced by spaces. None of them ever carries a password, and none carries a
+/// line break or a control character a caller typed: the masked e-mail is the only text here a caller chooses
+/// (the rest are user ids and Identity's error codes). An event that takes a string is private, reached through
+/// a wrapper that puts the text on one line (<see cref="LoginFailedUnknownAccount"/>), or names the reason no
+/// caller typed it in <c>SecurityEventLogTests</c> (ArchitectureTests), which fails on any other.
 /// </summary>
 internal static partial class SecurityEventLog
 {
@@ -15,12 +19,19 @@ internal static partial class SecurityEventLog
         Message = "Sign-in failed for user {UserId}: wrong password")]
     public static partial void LoginFailed(ILogger logger, Guid userId);
 
-    /// <summary>Takes the e-mail as typed and logs only its masked form.</summary>
+    /// <summary>
+    /// Takes the e-mail as typed and logs only its masked form, on one line. Sign-in checks no e-mail format,
+    /// so an anonymous caller can type a line break or another control character, and the mask keeps the domain
+    /// and the first text element as typed: each line ending becomes a space here, or it would end the line early
+    /// and let the caller write one of their own after it (CWE-117), and so does every other control character
+    /// (a vertical tab or a file separator some log readers end a line at, an escape a terminal acts on). The mask
+    /// itself stays as it is, a copy of Infrastructure's.
+    /// </summary>
     public static void LoginFailedUnknownAccount(ILogger logger, string email)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
-            string maskedEmail = MaskEmail(email);
+            string maskedEmail = ControlCharactersAsSpaces(MaskEmail(email).ReplaceLineEndings(" "));
             LoginFailedUnknownAccountMasked(logger, maskedEmail);
         }
     }
@@ -49,6 +60,20 @@ internal static partial class SecurityEventLog
     [LoggerMessage(EventId = 1106, EventName = "FailedSignInCountNotReset", Level = LogLevel.Warning,
         Message = "The failed sign-in count for user {UserId} was not reset after a successful sign-in ({IdentityErrorCodes})")]
     public static partial void FailedSignInCountNotReset(ILogger logger, Guid userId, string identityErrorCodes);
+
+    /// <summary>
+    /// Every control character left after <see cref="string.ReplaceLineEndings(string)"/> (the sanitiser the analysers
+    /// recognise, which also turns CR LF into one space and covers U+2028 and U+2029, no control characters) as a
+    /// space: the rest of the C0 range, DEL and the C1 range.
+    /// </summary>
+    private static string ControlCharactersAsSpaces(string text)
+        => string.Create(text.Length, text, static (chars, source) =>
+        {
+            for (int i = 0; i < source.Length; i++)
+            {
+                chars[i] = char.IsControl(source[i]) ? ' ' : source[i];
+            }
+        });
 
     /// <summary>
     /// <c>jane.doe@example.com</c> → <c>j***@example.com</c>: enough to spot a run against one domain,
