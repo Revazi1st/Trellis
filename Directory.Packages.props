@@ -81,8 +81,9 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.15" />
-    <!-- The SMTP adapter's client (Email/SmtpEmailSender.cs), MIT, with MimeKit (MIT) for the message. -->
-    <PackageVersion Include="MailKit" Version="4.18.2" />
+    <!-- The SMTP adapter's client (Email/SmtpEmailSender.cs), MIT, with MimeKit.Core (MIT) for the message;
+         since 5.0 neither brings MimeKit's cryptography (MimeKit.Cryptography) nor BouncyCastle. -->
+    <PackageVersion Include="MailKit" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup Label="API">
