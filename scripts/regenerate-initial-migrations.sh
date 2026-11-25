@@ -54,7 +54,8 @@ tenancy_set=.template.config/tenancy/Migrations
 config=.template.config/template.json
 attempts=12
 
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; }
+# By its path from the root, where the cd above left us: "$0" may be relative to another folder.
+usage() { sed -n '2,9p' scripts/regenerate-initial-migrations.sh | sed 's/^# \{0,1\}//'; }
 
 want_default=0
 want_tenancy=0
@@ -112,14 +113,23 @@ generate() {  # $1 = keep | compare
   for attempt in $(seq 1 "$attempts"); do
     mkdir -p "$persistence/Migrations" || return 1
     find "$persistence/Migrations" -maxdepth 1 -name '*.cs' -delete || return 1
-    dotnet dotnet-ef migrations add InitialCreate --project "$persistence" || return 1
+    # dotnet-ef says only "Build failed" when the project does not compile, and this project goes with
+    # the temp folder. Its build prints the errors while it is still here: the multi-tenant set's
+    # project compiles the code under the UseMultitenancy symbol, which this tree's own build never does.
+    if ! dotnet dotnet-ef migrations add InitialCreate --project "$persistence"; then
+      dotnet build "$persistence" --nologo --verbosity quiet >&2 || true
+      echo "error: migrations add failed in the project created for this set: after its 'Build failed' come the compiler's errors (a line in that project, whose files are this tree's with the template's options applied); without it, dotnet-ef's own output above names the cause." >&2
+      return 1
+    fi
     id=$(migration_id "$persistence/Migrations")
     [ -n "$id" ] || { echo "error: migrations add wrote no InitialCreate under $persistence/Migrations" >&2; return 1; }
     [ "$1" = keep ] || return 0
     literal=$(rewritten_literal "$id")
     [ -n "$literal" ] || return 0
+    # The last attempt promises no next one: the error below follows it.
+    [ "$attempt" -lt "$attempts" ] || break
     echo "    the id $id holds $literal, which the template engine rewrites; generating again in a minute (attempt $attempt of $attempts)"
-    [ "$attempt" -eq "$attempts" ] || sleep 60
+    sleep 60
   done
   echo "error: $attempts ids in a row held a port literal, the last one $id. Nothing was changed. An id holds one for ten minutes at most: run the script again later." >&2
   return 1
