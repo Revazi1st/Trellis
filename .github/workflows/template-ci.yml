@@ -280,6 +280,10 @@ jobs:
       # leg with multi-tenancy, whose migration is the second set the template keeps: this
       # repository's own tests build only the default model. KEEP IN SYNC with the command inside
       # ef.sh's sh -c, and with scripts/test-template.sh.
+      # It is also the first step that compiles the generated project, and dotnet-ef says only "Build
+      # failed" when the project does not compile. So a failure claims no cause: the annotation names
+      # both outputs and what each means, and a build of the Persistence project then prints the
+      # compiler's errors, if there are any.
       - name: First migration command on an unbuilt tree
         if: ${{ matrix.name == 'default' || contains(matrix.args, '--use-multitenancy true') }}
         working-directory: ../generated
@@ -288,7 +292,8 @@ jobs:
           dotnet tool restore
           dotnet restore ./*.slnx --verbosity quiet
           if ! dotnet dotnet-ef migrations has-pending-model-changes --project src/Infrastructure/*.Persistence; then
-            echo "::error::The initial migration this leg ships does not match its model. A model change regenerates both sets the template keeps, in the template repository: scripts/regenerate-initial-migrations.sh"
+            echo "::error::The first migration command failed (its output is above). If it says the model has pending changes, the initial migration this leg ships does not match its model: a model change regenerates both sets the template keeps, in the template repository: scripts/regenerate-initial-migrations.sh. If it says the build failed, this is the first step that compiles the generated project, and the compiler's errors follow."
+            dotnet build src/Infrastructure/*.Persistence --nologo --verbosity quiet || true
             exit 1
           fi
 
@@ -437,7 +442,10 @@ jobs:
           fi
           # The multi-tenant initial migration is a source of its own in template.json, and a template
           # whose source is missing does not load at all (MV012), whatever the options. grep reads the
-          # whole listing (no -q): under pipefail, a grep that stops early can fail unzip with SIGPIPE.
+          # whole listing (no -q), which is right in any shell. This job's steps run under Actions'
+          # default bash -e, without pipefail (no shell key here, none under defaults): a pipeline's
+          # status is its last command's, so the check that must fail the step is the last command of
+          # its pipe, never the left side of one.
           if ! unzip -Z1 ./nupkg/*.nupkg | grep -x 'content/.template.config/tenancy/Migrations/AppDbContextModelSnapshot.cs' > /dev/null; then
             echo "::error::The package does not hold .template.config/tenancy/Migrations/, the multi-tenant initial migration."
             exit 1
@@ -461,8 +469,9 @@ jobs:
       # The regeneration script's own test, and one more hold on the two committed sets. It generates
       # both initial migrations as a maintainer's run does (a project per set, created from this tree's
       # package in a private hive), writes nothing, and fails unless every committed file is what it
-      # generated, the id aside. A script that runs twice a year would otherwise rot unseen until the
-      # day an EF Core bump needs it; a set edited by hand fails here too. No database is contacted.
+      # generated, the id aside. A script that runs only when the model or the EF Core pin moves would
+      # otherwise rot unseen between those runs; a set edited by hand fails here too. No database is
+      # contacted.
       - name: Both shipped initial migrations are what the script generates
         run: |
           chmod +x scripts/regenerate-initial-migrations.sh

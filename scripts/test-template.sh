@@ -18,8 +18,9 @@
 # when anything failed. The working folder (under $TMPDIR) keeps every log and generated solution
 # after a failure.
 #
-# Because it packs, the legs get the package's content, as an install from nuget.org does and as the
-# last step of Template CI's pack job checks; the instantiate job installs the source folder instead.
+# Because it packs, the legs get the package's content, as an install from nuget.org does and as
+# Template CI's pack job checks ("Instantiate & build from the packed template"); the instantiate job
+# installs the source folder instead.
 # The pack csproj's TemplateContentExclude decides what the package holds, template.json's
 # sources[0].exclude what a folder install holds, and the two lists are kept in step by hand: a file
 # missing from one of them ships by one route and not by the other.
@@ -241,6 +242,9 @@ first_migration_probe() {
     dotnet restore ./*.slnx --verbosity quiet &&
     dotnet dotnet-ef migrations has-pending-model-changes --project src/Infrastructure/*.Persistence
 }
+# What template-ci.yml's step runs when that command failed: it is the first step that compiles the
+# leg, and dotnet-ef says only "Build failed" then, so the Persistence project's build shows the errors.
+persistence_errors() { dotnet build src/Infrastructure/*.Persistence --nologo --verbosity quiet; }
 build_solution() { dotnet build ./*.slnx -c Release; }
 # Mirrors template-ci.yml's "Format check (generated)" step, the generated ci.yml's Format check.
 format_solution() { dotnet format ./*.slnx --no-restore --verify-no-changes --severity warn; }
@@ -298,7 +302,10 @@ run_leg() {  # name out test browser args
       mig=ok
     else
       mig=FAIL
-      echo "    if it says the model has pending changes: scripts/regenerate-initial-migrations.sh regenerates both shipped sets" >&2
+      echo "    The command failed (its output is above). If it says the model has pending changes, the initial migration this leg" >&2
+      echo "    ships does not match its model: scripts/regenerate-initial-migrations.sh regenerates both shipped sets. If it says" >&2
+      echo "    the build failed, this is the first step that compiles the leg, and the compiler's errors follow." >&2
+      logged "$log" in_dir "$dir" persistence_errors || true
     fi
   fi
 
