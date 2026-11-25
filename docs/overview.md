@@ -134,8 +134,8 @@ options.
   [ADR-0019](adr/0019-multitenancy-toggle.md), [ADR-0022](adr/0022-tenant-on-the-principal.md)).
 <!--#endif -->
 <!--#if (IncludeUiTests && IncludeUI) -->
-- `--include-ui-tests`: Playwright browser tests, opt-in at run time
-  ([development.md](development.md#ui-tests-optional)).
+- `--include-ui-tests`: Playwright browser tests, opt-in at run time, which start the application
+  themselves through the AppHost ([development.md](development.md#ui-tests-optional)).
 <!--#endif -->
 
 To change an option later, generate the solution again with the changed option and merge the

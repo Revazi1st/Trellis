@@ -12,11 +12,13 @@ namespace Trellis.UiTests;
 /// <para>
 /// A first run is a claim about the database, so the run has to make it: with UI_TESTS_FIRST_RUN=1 the fact
 /// fails unless the list holds exactly the invoices the migration worker seeds, and without it the fact skips.
-/// CI's ui-tests job runs this class alone, with the variable, before the other browser tests create their
-/// invoices (ci.yml, "Keep pictures of the first run"). Opt-in (RUN_UI_TESTS=1) like every browser test.
+/// A test run starts its own application on its own database (<see cref="AppHostFixture"/>), so this class
+/// run alone sees only the seed, and beside the other browser tests it would see their invoices. CI's
+/// ui-tests job runs it alone, with the variable, in a step of its own (ci.yml, "Keep pictures of the first
+/// run"). Opt-in (RUN_UI_TESTS=1) like every browser test.
 /// </para>
 /// </summary>
-public sealed class FirstRunPicturesTests
+public sealed class FirstRunPicturesTests(AppHostFixture app)
 {
     private const int Laptop = 1280;
     private const int Phone = 400;
@@ -36,7 +38,7 @@ public sealed class FirstRunPicturesTests
     public async Task The_first_run_is_kept_as_pictures_of_the_list_and_of_one_invoice_in_both_schemes()
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,
-            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+            "Browser UI test — set RUN_UI_TESTS=1 with the browser installed (needs Docker and a .NET SDK on the host, or CI).");
         Assert.SkipUnless(UiTestEnvironment.FirstRun,
             "Pictures of a first run — set UI_TESTS_FIRST_RUN=1 when the database holds only what the migration worker seeds, and run this class alone.");
 
@@ -45,14 +47,14 @@ public sealed class FirstRunPicturesTests
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
         await page.SetViewportSizeAsync(Laptop, LaptopHeight);
-        await Session.SignInAsAdminAsync(page);
+        await Session.SignInAsAdminAsync(page, await app.WebBaseUrlAsync());
         // The list has finished loading (no "Loading…" status) before its rows are read.
         await Assertions.Expect(page.Locator("a.filter[aria-current='page']")).ToHaveTextAsync("All", new() { Timeout = 15_000 });
         await Assertions.Expect(page.Locator("p[role='status']")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
 
         IReadOnlyList<string> customers = await page.Locator("table.grid tbody td[data-th='Customer']").AllInnerTextsAsync();
         customers.ShouldBe(SeededCustomers, StringComparer.Ordinal, ignoreOrder: true,
-            customMessage: "the list holds something other than the seeded invoices, so this is not a first run: start from a freshly migrated database and run this class before any other browser test");
+            customMessage: "the list holds something other than the seeded invoices, so this is not a first run: run this class alone (--filter-class '*FirstRunPicturesTests'): a run starts its own application on its own database, and beside the other browser tests the list holds their invoices");
 
         await KeepInBothSchemesAsync(page, "first-run-invoices-1280");
 

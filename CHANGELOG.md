@@ -38,6 +38,42 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   another relational engine anyway: the places that are specific to PostgreSQL, with the SQL Server
   equivalent where the vendors' documentation gives one, an order of work, and a list of what nobody has
   verified.
+- **The browser tests start the application themselves** (with `--include-ui-tests`). With
+  `RUN_UI_TESTS=1` the first test starts the AppHost (PostgreSQL, the migration job, the API and the web
+  host) on a database server of the run's own and every test drives that application, so
+  `RUN_UI_TESTS=1 dotnet test tests/Trellis.UiTests` is the whole recipe once a browser is installed. It
+  needs Docker and a .NET SDK on the host, or CI, like the Aspire E2E; in the SDK container the tests
+  still skip and nothing starts. `UI_TESTS_BASE_URL` still points them at an application that is already
+  running, and in the dev container that is the only way: the AppHost cannot orchestrate from inside a
+  container, so without the address every browser test fails at once and says so. When a resource the
+  web host needs fails to start or exits with a code other than 0, the start ends at once instead of
+  waiting out its time limit (Aspire's `StartAsync` goes on waiting for a dependency that started and
+  then exited before it was healthy), and the Aspire E2E's start ends the same way. The failing tests
+  name that resource, each resource's state, the first error lines and the last lines of the migration
+  job, the API and the web host, and the AppHost's last lines; what every resource printed is kept in a
+  file per resource (`UI_TESTS_LOGS`), which the `ui-tests` job prints on failure and uploads as
+  `ui-app-logs` (`docs/development.md`, *UI tests*; ADR-0008's amendment).
+- **`ClientRoutesTests`** (with the UI). Every request a typed client of the UI sends is held to
+  `docs/api/openapi.v1.json`: each row of the test's table names the client, the member and the operation
+  the member means, by its `operationId` (the endpoint class's name, as `PayInvoice`), and the request
+  must be that operation, method and path, with only the query parameters it declares, by name. A
+  request the document does not hold fails, and so does one that is another operation's (a member that
+  sends its neighbour's route); a client member without a row fails too, so a route renamed on one side
+  no longer waits for a browser to be noticed.
+- **Every operation of the OpenAPI document carries one tag, and a feature declares it**: the `Tag`
+  constant of its `<Feature>Endpoints` class, held by `OpenApiDocumentTests`. The fact holds the tag's
+  value, so an operation fails, named, when its tag is one no `Tag` constant declares: the class name
+  ASP.NET Core gives an endpoint without `.WithTags(...)` (a group of one in a generated client), a
+  literal of its own, a misspelling. So does an operation with two.
+- **A test that starts the AppHost cannot share state with `aspire run` unnoticed.**
+  `UseThrowawayDatabase` now refuses an AppHost in which any resource but postgres keeps a volume, a
+  writable bind mount or a persistent lifetime, and `ThrowawayDatabaseTests` runs it on the AppHost's
+  own app model in every test run, without Docker. A resource you add with one must be stripped in that
+  step too; `ThrowawayDatabaseTests` fails until it is.
+- **Two decisions written down.** ADR-0012: a test project may reference a host, with an alias where a
+  second referenced project declares `Program`. ADR-0023: the outbox processor goes on after a
+  bookkeeping failure and is not stopped after several in a row, with what that costs in an outage and
+  what it does not bound; `OutboxRetryTests` has a test for a database that goes away after the claim.
 
 ### Changed
 
@@ -101,6 +137,28 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 - **The `remove-feature` and `add-feature` skills name the new docs**: removing the sample repoints
   the entries of `docs/overview.md` that link it and the sections of `docs/switching-database.md` that
   name it; a new feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
+- **The `ui-tests` job no longer starts the application by hand.** Its compose, migration and
+  host-starting steps are gone; it builds, installs a browser and runs the two `dotnet test` steps. The
+  first-run pictures keep their step and their names: the step is a test run of its own, so its database
+  holds only the seed by construction.
+- **Without `UI_TESTS_BASE_URL` the browser tests no longer look for `https://localhost:7170`.** They
+  start the application. To keep driving one you started, name its address.
+- **The browser test helpers changed shape**, so a browser test of your own needs three edits. Its class
+  takes the fixture in its constructor (`public sealed class MyFlowTests(AppHostFixture app)`); it reads
+  the address with `await app.WebBaseUrlAsync()`, after its `Assert.SkipUnless` guard, where it read
+  `UiTestEnvironment.WebBaseUrl`, which is gone; and it passes that address on:
+  `Session.SignInAsAdminAsync(page, address)`. When you upgrade a solution created with
+  `--include-ui-tests`, take the tests, `Trellis.UiTests.csproj` (two project references, a package
+  reference and a linked file) and the `ui-tests` job together: the new job starts no application for
+  the old tests, and the old tests look for port 7170. Or keep your job as it is: it starts the
+  application and already names it in `UI_TESTS_BASE_URL`, so the new tests drive that one and start
+  nothing.
+- **`UseThrowawayDatabase` moved** to `tests/TestSupport/AppHost/AppHostTestingExtensions.cs` (namespace
+  `Trellis.TestSupport.AppHost`), linked into ApiTests and UiTests. An Aspire test of your own adds the
+  `using`.
+- **`docs/deployment.md` says what the outbox gauges show while the database is unreachable**: they hold
+  the last value sampled, and event 1309 on every poll is the signal. A comment in `OutboxProcessor`
+  said the age climbs; it is corrected.
 
 ### Fixed
 
@@ -121,6 +179,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   a folder that `mktemp` happened to name `tmp.IjqPTbKzVc` failed the case, about once in a few hundred
   runs on Linux, in the CI job that runs the self-test. The assertion now leaves the folder's own path
   out, and a new case fails if it ever stops doing so.
+- **The browser tests no longer race each other** (with `--include-ui-tests`). Their classes ran in
+  parallel against one application, so a test that created an invoice and then looked for it at the
+  head of the list could find another class's invoice there, now and then. The classes run one at a
+  time; a browser test class of your own needs nothing for it.
 
 ## [0.2.0] - 2026-11-15
 

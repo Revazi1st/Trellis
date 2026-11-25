@@ -17,7 +17,7 @@ Read `AGENTS.md` (*Dependency flow*, *Boundaries*), then the change: every chang
 
 Check, each item against the rule it comes from:
 
-1. **Dependency flow** (AGENTS.md, *Dependency flow*; ADR-0002; `LayerDependencyTests`): `SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Api → Api.Common → Api.Contracts`; `Api → Api.Contracts ← UI.Common`; `UI.Web → UI.Common`. Inspect `.csproj` `ProjectReference`s and `using`s.
+1. **Dependency flow** (AGENTS.md, *Dependency flow*; ADR-0002; `LayerDependencyTests`): `SharedKernel ← Domain ← Application ← { Infrastructure ∥ Persistence } ← Api → Api.Common → Api.Contracts`; `Api → Api.Contracts ← UI.Common`; `UI.Web → UI.Common`. Inspect `.csproj` `ProjectReference`s and `using`s. A test project may reference what it exercises, a host included (ADR-0012, amendment of 2026-11-21; `.claude/rules/tests.md`): no finding for `ApiTests` → `Api`, the AppHost, `UI.Common` or `UI.Web`, nor for `UiTests` → the AppHost and ServiceDefaults.
 2. **The peer rule** (ADR-0002): `Trellis.Infrastructure` and `Trellis.Persistence` never reference each other.
 3. **Purity** (ADR-0013, ADR-0015, ADR-0017; `LayerDependencyTests`): Domain has no EF or ASP.NET; Api.Contracts has no references; UI.Common has no host-specific APIs and stays render-mode-agnostic.
 4. **New packages** (AGENTS.md, *Ask first* and *Never*; the LICENSE CEILINGS block in `Directory.Packages.props`; ADR-0011, ADR-0029): a new package was asked for before it was added; its version lives in `Directory.Packages.props`, never in a `.csproj`; it is none of the ceiling packages and carries no commercial licence.

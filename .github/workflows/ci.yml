@@ -425,8 +425,11 @@ jobs:
         run: ./scripts/dotnet.sh test tests/Trellis.IntegrationTests
 
 #if (IncludeUiTests && IncludeUI)
-  # Browser tests against the real API and Web hosts. A generated project carries this job only
-  # when it was created with --include-ui-tests (and the UI); otherwise there is no UiTests project.
+  # Browser tests against the whole application. The tests start it themselves: AppHostFixture boots the
+  # AppHost (PostgreSQL, the migration job, the API and the web host, as 'aspire run' does) on a database
+  # of the run's own, so the job only builds, installs a browser and runs 'dotnet test'. A generated
+  # project carries this job only when it was created with --include-ui-tests (and the UI); otherwise
+  # there is no UiTests project.
   ui-tests:
     name: Playwright UI
     runs-on: ubuntu-latest
@@ -440,70 +443,47 @@ jobs:
       - name: Setup .NET
         uses: ./.github/actions/setup-dotnet
 
-##if (UseRedis)
-#      - name: Start PostgreSQL and Valkey
-#        run: docker compose --profile redis up -d --wait
-##else
-      - name: Start PostgreSQL
-        run: docker compose up -d --wait
-##endif
-
       - name: Build
         run: dotnet build Trellis.slnx -c Release
-
-      - name: Migrate & seed
-        env:
-          DOTNET_ENVIRONMENT: Development
-        run: dotnet run --project tools/Trellis.MigrationService -c Release --no-build --no-launch-profile -- "--ConnectionStrings:trellis-db=Host=localhost;Port=5433;Database=trellis;Username=postgres;Password=postgres"
-
-      - name: Start API and Web
-        env:
-          ASPNETCORE_ENVIRONMENT: Development
-##if (UseRedis)
-#          ## ConnectionStrings:cache for the API's Redis L2; the web host does not read it.
-#          ConnectionStrings__cache: localhost:6379
-##endif
-        run: |
-          mkdir -p "$RUNNER_TEMP/applogs"
-          # Capture each host's output: when readiness times out, the startup exception is the only
-          # thing that explains why, and a bare "did not become ready" hides it (a dependency bump
-          # that breaks Program.cs looks identical to a slow boot otherwise).
-          dotnet run --project src/Presentation/Api/Trellis.Api -c Release --no-build --no-launch-profile -- \
-            "--ConnectionStrings:trellis-db=Host=localhost;Port=5433;Database=trellis;Username=postgres;Password=postgres" \
-            --urls http://localhost:5171 > "$RUNNER_TEMP/applogs/api.log" 2>&1 &
-          Services__api__http__0=http://localhost:5171 \
-            dotnet run --project src/Presentation/UI/Trellis.UI.Web -c Release --no-build --no-launch-profile -- \
-            --urls http://localhost:5170 > "$RUNNER_TEMP/applogs/web.log" 2>&1 &
-          for _ in $(seq 1 60); do
-            curl -fsS http://localhost:5170/alive >/dev/null 2>&1 && curl -fsS http://localhost:5171/alive >/dev/null 2>&1 && exit 0
-            sleep 2
-          done
-          echo "::group::api.log"; cat "$RUNNER_TEMP/applogs/api.log" || true; echo "::endgroup::"
-          echo "::group::web.log"; cat "$RUNNER_TEMP/applogs/web.log" || true; echo "::endgroup::"
-          echo "::error::API/Web did not become ready (see the api.log / web.log groups above)" && exit 1
 
       - name: Install Playwright browsers
         run: pwsh artifacts/bin/Trellis.UiTests/release/playwright.ps1 install chromium --with-deps
 
       # The app as a first run shows it (FirstRunPicturesTests): the invoice list and one seeded invoice,
-      # light and dark, saved as first-run-*.png among the screenshots below. Alone and first, while the
-      # database holds only what the migration job seeded: the tests of the next step create invoices.
+      # light and dark, saved as first-run-*.png among the screenshots below. Alone and first, in a test
+      # run of its own: every run starts its own application on its own database, so this one holds only
+      # what the migration job seeded, whatever the tests of the next step create.
       - name: Keep pictures of the first run
         env:
           RUN_UI_TESTS: "1"
           UI_TESTS_FIRST_RUN: "1"
-          UI_TESTS_BASE_URL: http://localhost:5170
           UI_TESTS_SCREENSHOTS: ${{ github.workspace }}/tests/Trellis.UiTests/TestResults/screenshots
+          UI_TESTS_LOGS: ${{ github.workspace }}/tests/Trellis.UiTests/TestResults/applogs/first-run
         run: dotnet test tests/Trellis.UiTests -c Release --no-build --filter-class '*FirstRunPicturesTests'
 
       - name: Run browser tests
         env:
           RUN_UI_TESTS: "1"
-          UI_TESTS_BASE_URL: http://localhost:5170
           # The test process runs in the build output (artifacts/bin/Trellis.UiTests/release), where the
-          # screenshots would land by default; the upload below reads this folder instead.
+          # screenshots and the application's logs would land by default; the steps below read these
+          # folders instead.
           UI_TESTS_SCREENSHOTS: ${{ github.workspace }}/tests/Trellis.UiTests/TestResults/screenshots
+          UI_TESTS_LOGS: ${{ github.workspace }}/tests/Trellis.UiTests/TestResults/applogs/browser-tests
         run: dotnet test tests/Trellis.UiTests -c Release --no-build
+
+      # What every resource of the application printed (the migration job, the API, the web host, the
+      # containers, and the AppHost itself), one group per file. A start that failed is explained here in
+      # full: the failing test's message names the resource that failed and each resource's state, and holds
+      # only a few lines of each host, its first error lines and its last lines.
+      - name: Show the application's logs
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for log in tests/Trellis.UiTests/TestResults/applogs/*/*.log; do
+            echo "::group::$log"
+            cat "$log"
+            echo "::endgroup::"
+          done
 
       # docs/design-system.md (Proof): every page at 400 and 1280 px in both colour schemes, for a reviewer to
       # open from the run's artifacts. Kept whether the tests passed or not: a failing page is the one to look
@@ -514,6 +494,17 @@ jobs:
         with:
           name: ui-screenshots
           path: tests/Trellis.UiTests/TestResults/screenshots
+          retention-days: 14
+          if-no-files-found: warn
+
+      # A start that gets going writes apphost.log at least, so a run with no file warns: the capture is
+      # broken, or no test step reached the start.
+      - name: Upload the application's logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ui-app-logs
+          path: tests/Trellis.UiTests/TestResults/applogs
           retention-days: 14
           if-no-files-found: warn
 

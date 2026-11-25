@@ -39,8 +39,8 @@ jobs:
       fail-fast: false
       # KEEP IN SYNC with scripts/test-template.sh, which runs these legs on a maintainer's machine:
       # it reads this list (one key per line, args in double quotes; a new key needs teaching there)
-      # and its run_leg mirrors the Instantiate, first-migration, Regenerate, Build, Format and Test
-      # steps below.
+      # and its run_leg mirrors the Instantiate, first-migration, Regenerate, Build, Format, Test and
+      # browser steps below.
       matrix:
         include:
           - name: default
@@ -62,6 +62,9 @@ jobs:
             regenerate-migration: true
             # Build alone missed a runtime-only DI failure once (ITenantContext); run the generated tests too.
             test: true
+            # The one leg that has the UiTests project: its browser tests run too, against the generated
+            # AppHost under its new name with every option on (the steps after the Aspire end-to-end).
+            browser: true
           # Each option that is off by default, on alone with the UI off. Without these legs Redis,
           # Serilog and multi-tenancy were only ever all off or all on, and never without the UI, so
           # code that works only while another option is on too went unseen (ApiFactory's separate
@@ -295,7 +298,8 @@ jobs:
       # its own step after the suites, as the shipped ci.yml does: its processes and Testcontainers
       # would otherwise race for the same host ports. The AppHost starts Linux images, so that step
       # runs on Linux runners only (the Windows job below runs only the projects that need no Docker).
-      # Playwright stays opt-in. KEEP IN SYNC with scripts/test-template.sh.
+      # The browser tests stay out of this step (RUN_UI_TESTS is not set, so they skip): the leg that
+      # has them runs them in the steps after the E2E. KEEP IN SYNC with scripts/test-template.sh.
       - name: Test generated solution
         if: ${{ matrix.test }}
         working-directory: ../generated
@@ -307,6 +311,54 @@ jobs:
         env:
           RUN_ASPIRE_E2E: "1"
         run: dotnet test ./tests/*.ApiTests -c Release --no-build -- --filter-trait Category=AspireE2E --ignore-exit-code 8
+
+      # The generated project's browser tests, as its own ci.yml's ui-tests job runs them: install the
+      # browser, the first-run pictures in a run of their own, then every browser test. Each run starts
+      # the generated AppHost itself (AppHostFixture) on a database of its own, so they come after the
+      # E2E for the reason the E2E comes after the suites. KEEP IN SYNC with the ui-tests job of ci.yml
+      # and with scripts/test-template.sh.
+      - name: Install Playwright browsers (generated)
+        if: ${{ matrix.browser }}
+        working-directory: ../generated
+        run: pwsh artifacts/bin/*.UiTests/release/playwright.ps1 install chromium --with-deps
+
+      - name: Keep pictures of the first run (generated)
+        if: ${{ matrix.browser }}
+        working-directory: ../generated
+        env:
+          RUN_UI_TESTS: "1"
+          UI_TESTS_FIRST_RUN: "1"
+          UI_TESTS_SCREENSHOTS: ${{ runner.temp }}/generated-ui/screenshots
+          UI_TESTS_LOGS: ${{ runner.temp }}/generated-ui/applogs/first-run
+        run: dotnet test ./tests/*.UiTests -c Release --no-build --filter-class '*FirstRunPicturesTests'
+
+      - name: Browser tests (generated)
+        if: ${{ matrix.browser }}
+        working-directory: ../generated
+        env:
+          RUN_UI_TESTS: "1"
+          UI_TESTS_SCREENSHOTS: ${{ runner.temp }}/generated-ui/screenshots
+          UI_TESTS_LOGS: ${{ runner.temp }}/generated-ui/applogs/browser-tests
+        run: dotnet test ./tests/*.UiTests -c Release --no-build
+
+      - name: Show the generated application's logs
+        if: ${{ failure() && matrix.browser }}
+        run: |
+          shopt -s nullglob
+          for log in "$RUNNER_TEMP"/generated-ui/applogs/*/*.log; do
+            echo "::group::$log"
+            cat "$log"
+            echo "::endgroup::"
+          done
+
+      - name: Upload the generated project's screenshots and logs
+        if: ${{ always() && matrix.browser }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: generated-ui-${{ matrix.name }}
+          path: ${{ runner.temp }}/generated-ui
+          retention-days: 14
+          if-no-files-found: ignore
 
   # The default options on Windows: the template installs and instantiates there, the generated
   # solution builds, and the test projects that need no Docker pass (Windows runners cannot run the

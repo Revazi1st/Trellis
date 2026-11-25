@@ -321,7 +321,8 @@ The three pages are built from the design system's documented components ([desig
   header ignored, cache scoped; the all-options leg runs it). `InvoiceApiFlowTests` is the opt-in Aspire E2E.
 - `ApiTests/Ui`: the forms' validator mirrors and due-date floor, `errors[]` placed under their
   inputs, success notifications, the loaded version sent as `If-Match` and the list's query string per
-  filter (`InvoiceApiClientTests`); `InvoicePagesTests` renders the pages: the API call and the current
+  filter (`InvoiceApiClientTests`); every request the client sends is the operation of the committed
+  contract its member means (`ClientRoutesTests`); `InvoicePagesTests` renders the pages: the API call and the current
   link for every filter in the address, the empty state and pager naming the filter, the Created column,
   the status pill for every status, a header's text on every cell but the link's, the pager's secondary
   buttons, the detail's summary pill and labelled line cells, and the back link on the detail (loaded or

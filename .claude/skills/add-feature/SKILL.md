@@ -109,8 +109,9 @@ after each layer.
       [`EndpointMetadataTests`].
 - [ ] `.RequireIdempotency()` on every non-GET endpoint outside `auth/` [`EndpointMetadataTests`];
       anything the endpoint does after the handler succeeded uses `CancellationToken.None`.
-- [ ] `.WithTags(...)`, `.WithSummary(...)` **and** `.WithDescription(...)` [`EndpointMetadataTests`,
-      `OpenApiDocumentTests`]. Problem responses, `Location` and the conditional-GET members are added
+- [ ] `.WithTags(<Feature>Endpoints.Tag)` (the feature's `const string Tag`, as `InvoiceEndpoints.Tag`
+      in `Features/Invoices/Tags.cs`), `.WithSummary(...)` **and** `.WithDescription(...)`
+      [`EndpointMetadataTests`, `OpenApiDocumentTests`]. Problem responses, `Location` and the conditional-GET members are added
       by shape (ADR-0025). A Result-produced status the shape cannot infer (an anonymous endpoint's
       401/403/409) is declared with a bare `.Produces(status)`, which the transformer gives the problem
       body; never `ProducesProblem` or a typed `Produces<T>(4xx)` [`OpenApiDocumentTests`].
@@ -151,7 +152,10 @@ after each layer.
 - [ ] A feature a person uses gets its pages, as Invoices has them: a list, a detail page and a form
       per write, the typed client, the nav link and the render tests below. An API-only feature says
       so, and why, in its doc's *UI* section, and `ui-reviewer` reads that sentence.
-- [ ] A typed client method over the contracts, through `ApiCall`; POSTs through the idempotent helper.
+- [ ] A typed client method over the contracts, through `ApiCall`; POSTs through the idempotent helper;
+      a row in `ClientRoutesTests.Calls` per request the method can send, naming the operation it means
+      by its `operationId` (the endpoint class's name), and for a new client a property on `UiHarness`
+      [`ClientRoutesTests`].
 - [ ] A page in `Pages/` that inherits `ProtectedPage` (overriding `RequiredPermission` when a permission
       gates the whole page), with a `<PageTitle>`, one `h1`, and a `class="back"` link to its list above
       the heading when it sits below one, there whatever the load state (`.claude/rules/ui.md`).

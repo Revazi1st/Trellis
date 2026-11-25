@@ -2,7 +2,7 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-08
-- **Amended**: 2026-10-11 — the lease is also the fence on every bookkeeping write, and every sibling handler runs on each attempt (see *Amendment* below)
+- **Amended**: 2026-10-11 — the lease is also the fence on every bookkeeping write, and every sibling handler runs on each attempt; 2026-11-21 — the batch goes on after a bookkeeping failure, and why it is not stopped (see the *Amendment* sections below)
 - **Refines**: ADR-0018 (the transactional outbox stays; this decides how the processor dispatches,
   retries and fails). It does not supersede it.
 
@@ -170,3 +170,58 @@ consumes the shared budget. `Attempts` still counts one per claim, however many 
     snapshot, so the shipped `InitialCreate` was regenerated (pre-release convention) with the
     `OutboxMessages` DDL unchanged. A database already migrated with the earlier `InitialCreate` adds a
     migration instead (`migrations add OutboxLeaseFence`), which comes out empty apart from the snapshot.
+
+## Amendment (2026-11-21): the batch goes on after a bookkeeping failure
+
+*Consequences* says a failed bookkeeping save costs one message, not the batch. That was a choice, and it
+was weighed again against the alternative: stop the batch after a number of bookkeeping failures in a
+row, because the database is then probably gone and the messages left can only fail too.
+
+The decision stands. The processor goes on, however many failures follow each other, and counts none.
+
+- **What going on costs in an outage is bounded, and inside the contract.** A message whose save fails
+  ran as far as its first save: the checkpoint of its first handler not yet credited. A checkpoint that
+  fails ends the message's dispatch (the amendment above: a checkpoint failure is not isolated), so no
+  handler behind it runs; the failure cannot be saved either, and the row keeps its lease. When the
+  lease expires the message is dispatched again and that one handler runs a second time. With the
+  database gone after a claim, the next poll fails at its first query, claims nothing and sleeps
+  (decision 8), so that is one repeated handler run for each message left in the batch, once: at most
+  `BatchSize` per processor per outage. Delivery was at-least-once before this, and handlers are
+  written for it.
+- **The bound is the outage's, not every failure's.** A row whose bookkeeping can never be written while
+  the database answers (a value its column refuses) is not bounded: its first uncredited handler runs
+  again every `LeaseDuration`, and `Attempts` does not move, because the attempt is counted by the save
+  that fails, so the row is never dead-lettered. Stopping the batch would not help that row, and going
+  on is what lets the rows behind it through. And if claims succeeded while every other save failed, a
+  full batch would be followed by the next claim without a sleep, and every due message would run its
+  first handler once per lease. Neither is changed here. The one way such a row is known to have come
+  about is closed where it began: a handler's exception message that PostgreSQL cannot store (half of a
+  surrogate pair, a NUL) is made storable before the processor writes it into `Error` (`StorableText`).
+- **What stopping would buy is the outage's repeated runs.** The rows not reached would get their leases
+  back at once and not after `LeaseDuration`, but the hand-back is a write to the same database: in the
+  case stopping is meant for, it fails too.
+- **What stopping would cost.** A threshold is one more setting with a wrong value for somebody. And a
+  failure that is not the whole database (one row whose save keeps failing) must not hold the rows
+  behind it, which is what the consequence was written for.
+- **The signals.** Each failed save is Warning 1305 (`OutboxBookkeepingFailed`) with the message, its
+  type and its lease. Many of them in one batch, then 1309 (`OutboxBatchFailed`) on every poll, is a
+  database outage. The backlog gauges do not move while it lasts: they are sampled by the poll's first
+  query, so `trellis.outbox.pending` and `trellis.outbox.oldest_pending_age` hold what the last poll
+  that reached the database counted, and show the real age at the first poll after it is back. One
+  message id logging 1305 once per lease while the database is up is the row whose bookkeeping cannot
+  be written. No dispatch duration is recorded for a message whose save failed, and its span keeps the
+  outcome it had before the save failed (`retry_scheduled`, say): the span describes the attempt, and
+  the row is what happened.
+
+`OutboxRetryTests` holds both ends of the outage. `A_failed_bookkeeping_save_costs_its_own_message_and_the_rest_of_the_batch_goes_on`:
+one row's saves fail and the rows behind it are processed.
+`A_database_that_goes_away_after_the_claim_costs_each_message_one_handler_run_and_the_batch_still_ends`:
+every save fails, the batch ends without an exception, each message logs one 1305, every row stays
+pending with its lease and nothing credited, and no handler behind the first has run; once the leases
+expire every row is processed and the later handlers ran once. A failure whose error text the database
+would refuse is booked (`A_handler_error_the_database_cannot_store_is_booked_with_U_FFFD_in_its_place`).
+No test covers a save that never succeeds for another reason.
+
+Revisit when one message is seen to log 1305 lease after lease (a save that can never succeed needs a
+way out: counting the attempt where the claim is written, say), or when an outage is seen to repeat
+more than a batch's worth of handler runs.

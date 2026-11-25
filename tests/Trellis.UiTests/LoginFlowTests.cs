@@ -7,21 +7,21 @@ namespace Trellis.UiTests;
 
 /// <summary>
 /// Drives the Blazor UI in a real browser: sign in as the seeded admin, then land on the invoice list.
-/// Opt-in (RUN_UI_TESTS=1) — needs installed browsers and the app running (`aspire run`).
+/// Opt-in (RUN_UI_TESTS=1): needs the browser installed; <see cref="AppHostFixture"/> starts the application.
 /// </summary>
-public sealed class LoginFlowTests
+public sealed class LoginFlowTests(AppHostFixture app)
 {
     [Fact]
     public async Task Signing_in_lands_on_the_invoice_list()
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,
-            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+            "Browser UI test — set RUN_UI_TESTS=1 with the browser installed (needs Docker and a .NET SDK on the host, or CI).");
 
         using IPlaywright playwright = await Playwright.CreateAsync();
         await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
-        await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/login");
+        await page.GotoAsync($"{await app.WebBaseUrlAsync()}/login");
         // Wait for the Blazor Server circuit to attach — values typed before it are lost.
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -43,13 +43,13 @@ public sealed class LoginFlowTests
     public async Task Wrong_password_shows_an_error_and_stays_on_the_login_page()
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,
-            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+            "Browser UI test — set RUN_UI_TESTS=1 with the browser installed (needs Docker and a .NET SDK on the host, or CI).");
 
         using IPlaywright playwright = await Playwright.CreateAsync();
         await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
-        await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/login");
+        await page.GotoAsync($"{await app.WebBaseUrlAsync()}/login");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await page.FillAsync("input[autocomplete='username']", UiTestEnvironment.SeededAdminEmail);
         await page.FillAsync("input[autocomplete='current-password']", "definitely-not-the-password");
@@ -63,14 +63,14 @@ public sealed class LoginFlowTests
     public async Task Signing_in_from_a_protected_page_returns_to_it()
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,
-            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+            "Browser UI test — set RUN_UI_TESTS=1 with the browser installed (needs Docker and a .NET SDK on the host, or CI).");
 
         using IPlaywright playwright = await Playwright.CreateAsync();
         await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
         // Anonymous on a protected page: sent to sign-in, carrying the page as returnUrl.
-        await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/invoices/new");
+        await page.GotoAsync($"{await app.WebBaseUrlAsync()}/invoices/new");
         await page.WaitForURLAsync(
             new Regex("/login\\?returnUrl=invoices%2Fnew$", RegexOptions.None, TimeSpan.FromSeconds(5)),
             new() { Timeout = 15_000 });
@@ -90,13 +90,13 @@ public sealed class LoginFlowTests
     public async Task Creating_a_draft_invoice_lands_on_its_detail_page()
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,
-            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+            "Browser UI test — set RUN_UI_TESTS=1 with the browser installed (needs Docker and a .NET SDK on the host, or CI).");
 
         using IPlaywright playwright = await Playwright.CreateAsync();
         await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
-        await Session.SignInAsAdminAsync(page);
+        await Session.SignInAsAdminAsync(page, await app.WebBaseUrlAsync());
 
         // Navigate via the nav link: per-circuit tokens do not survive a full page load (ADR-0007),
         // so a GotoAsync here would bounce back to the login page.
@@ -120,13 +120,13 @@ public sealed class LoginFlowTests
     public async Task An_issued_invoice_heads_the_list_the_back_link_returns_to_and_is_not_overdue()
     {
         Assert.SkipUnless(UiTestEnvironment.Enabled,
-            "Browser UI test — set RUN_UI_TESTS=1 with browsers installed and the app running.");
+            "Browser UI test — set RUN_UI_TESTS=1 with the browser installed (needs Docker and a .NET SDK on the host, or CI).");
 
         using IPlaywright playwright = await Playwright.CreateAsync();
         await using IBrowser browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         IPage page = await browser.NewPageAsync(new() { IgnoreHTTPSErrors = true });
 
-        await Session.SignInAsAdminAsync(page);
+        await Session.SignInAsAdminAsync(page, await app.WebBaseUrlAsync());
 
         // Create, add a line, issue due in 30 days: never overdue today. In-app navigation only (ADR-0007).
         await page.ClickAsync("a.nav-link:has-text('New')");
@@ -163,15 +163,4 @@ public sealed class LoginFlowTests
         await Assertions.Expect(page.Locator("p[role='status']")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
         await Assertions.Expect(page.Locator("td", new() { HasText = customer })).ToHaveCountAsync(0);
     }
-}
-
-/// <summary>
-/// Always-on guard so the assembly never reports "zero tests ran" (which fails the test platform)
-/// when the browser tests are skipped.
-/// </summary>
-public sealed class UiTestConfigurationTests
-{
-    [Fact]
-    public void Base_url_is_absolute_so_the_browser_can_navigate_to_it()
-        => Uri.TryCreate(UiTestEnvironment.WebBaseUrl, UriKind.Absolute, out _).ShouldBeTrue();
 }

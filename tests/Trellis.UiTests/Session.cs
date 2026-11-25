@@ -11,10 +11,13 @@ namespace Trellis.UiTests;
 /// </summary>
 internal static class Session
 {
-    /// <summary>Signs in as the seeded admin and waits for the invoice list the sign-in lands on.</summary>
-    public static async Task SignInAsAdminAsync(IPage page)
+    /// <summary>
+    /// Signs in as the seeded admin at <paramref name="webBaseUrl"/> (<see cref="AppHostFixture.WebBaseUrlAsync"/>)
+    /// and waits for the invoice list the sign-in lands on.
+    /// </summary>
+    public static async Task SignInAsAdminAsync(IPage page, string webBaseUrl)
     {
-        await page.GotoAsync($"{UiTestEnvironment.WebBaseUrl}/login");
+        await page.GotoAsync($"{webBaseUrl}/login");
         // Wait for the Blazor Server circuit to attach — values typed before it are lost.
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await page.FillAsync("input[autocomplete='username']", UiTestEnvironment.SeededAdminEmail);

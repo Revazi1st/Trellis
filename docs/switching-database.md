@@ -119,16 +119,18 @@ outside C#, the connection strings, and the behaviour to prove again. The files 
 - `tools/Trellis.AppHost/Program.cs`: the database server's resource, its image tag, its volume and its
   admin tool.
 - `src/Shared/Trellis.ServiceDefaults/ServiceNames.cs`: the server's resource name, which the AppHost
-  and two tests read.
+  and three tests read.
 - `tests/TestSupport/Database/PostgresTestDatabase.cs`: the tests' database server and provider
   (*Tests*).
 - `tests/Trellis.IntegrationTests/DatabaseFixture.cs`: Respawn's adapter and the schema it empties.
 - `tests/Trellis.IntegrationTests/OutboxRetryTests.Runbook.cs`: runs the runbook's re-drive statement
   as `docs/deployment.md` prints it.
-- `tests/Trellis.ApiTests/AppHostTestingExtensions.cs`: swaps the AppHost's database server for a
+- `tests/TestSupport/AppHost/AppHostTestingExtensions.cs`: swaps the AppHost's database server for a
   throwaway one, found by its resource name.
 - `tests/Trellis.ApiTests/ThrowawayDatabaseTests.cs`: pins that swap against an AppHost model with the
   same resource.
+- `tests/Trellis.ApiTests/AppHostStartTests.cs`: reads the AppHost model, the server among the resources
+  a start watches and its admin tool's resource among those it does not.
 - `tests/Trellis.ArchitectureTests/ContainerImageTests.cs`: the image allowlist names the server's image
   and the AppHost call that pulls it.
 
@@ -199,7 +201,7 @@ project that keeps both engines.
 |---|---|---|---|
 | `src/Presentation/Api/Trellis.Api/Program.cs`, `tools/Trellis.MigrationService/Program.cs` | `EnrichNpgsqlDbContext` with `DisableRetry` (and, in the API, `DisableHealthChecks`) | `EnrichSqlServerDbContext` of `Aspire.Microsoft.EntityFrameworkCore.SqlServer` | its settings: check that it can turn its own retry and health check off, as the two calls do today |
 | `tools/Trellis.AppHost/Program.cs` | `AddPostgres(…).WithImageTag("18").WithDataVolume().WithPersistentLifetime().WithPgAdmin()`, then `AddDatabase` | `AddSqlServer`. aspire.dev gives `2022-latest` as its default image tag, so pin the tag; it recommends a persistent lifetime because the server is slow to start, and warns that the password lives in the data volume | a counterpart to `WithPgAdmin()` |
-| `src/Shared/Trellis.ServiceDefaults/ServiceNames.cs` | `Postgres = "postgres"` | rename the constant and its three readers (the AppHost, `AppHostTestingExtensions`, `ThrowawayDatabaseTests`) | |
+| `src/Shared/Trellis.ServiceDefaults/ServiceNames.cs` | `Postgres = "postgres"` | rename the constant and its four readers (the AppHost, `AppHostTestingExtensions`, `ThrowawayDatabaseTests`, `AppHostStartTests`) | |
 | `tests/Trellis.ArchitectureTests/ContainerImageTests.cs` | the `postgres` and `pgadmin4` rows | the new image with its license: a decision under ADR-0011 | |
 
 ## Configuration outside C#
@@ -239,9 +241,12 @@ The other test files on the list, each with what changes there:
   version `Directory.Packages.props` pins.
 - `tests/Trellis.IntegrationTests/OutboxRetryTests.Runbook.cs`: the re-drive statement, which stays the
   runbook's text in [deployment.md](deployment.md#outbox-operations); the two change together.
-- `tests/Trellis.ApiTests/AppHostTestingExtensions.cs` and `tests/Trellis.ApiTests/ThrowawayDatabaseTests.cs`:
+- `tests/TestSupport/AppHost/AppHostTestingExtensions.cs` and `tests/Trellis.ApiTests/ThrowawayDatabaseTests.cs`:
   the Aspire test's throwaway database server, found by its resource name (`ServiceNames.Postgres`);
   `ThrowawayDatabaseTests` also declares the server with `AddPostgres`.
+- `tests/Trellis.ApiTests/AppHostStartTests.cs`: expects the server (`ServiceNames.Postgres`) among the
+  resources a test that starts the AppHost watches, and finds the admin tool by its resource type
+  (`PgAdminContainerResource`), which follows the counterpart to `WithPgAdmin()` or goes with it.
 - `tests/Trellis.ArchitectureTests/ContainerImageTests.cs`: the image allowlist (*Hosts and the AppHost*).
 
 `tests/Trellis.ArchitectureTests/PlantedViolations.cs` is not on the list, because it does not name the

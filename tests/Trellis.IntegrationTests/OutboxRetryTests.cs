@@ -105,7 +105,7 @@ public sealed partial class OutboxRetryTests(DatabaseFixture database) : Integra
     [Fact]
     public async Task A_failing_first_handler_does_not_delay_its_siblings_and_alone_is_retried()
     {
-        // The real receipt handler is first: an SMTP outage must not delay the metric or the writer behind it.
+        // The receipt handler fails: an SMTP outage must not delay the handlers around it.
         EmailSender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException(new InvalidOperationException("smtp down")));
         _writing.Enabled = true;
@@ -736,6 +736,43 @@ public sealed partial class OutboxRetryTests(DatabaseFixture database) : Integra
     }
 
     [Fact]
+    public async Task A_database_that_goes_away_after_the_claim_costs_each_message_one_handler_run_and_the_batch_still_ends()
+    {
+        // ADR-0023, amendment of 2026-11-21: the batch goes on after a bookkeeping failure, however many
+        // follow each other. Two paid invoices, so four rows; every save outside the claim fails.
+        await PayNewInvoiceAsync();
+        Time.Advance(TimeSpan.FromSeconds(1));
+        await PayNewInvoiceAsync();
+        var options = new OutboxOptions();
+        var log = new LogRecorder();
+        _bookkeepingFault.EveryMessage = true;
+
+        (await CreateLoopProcessor(options, Time, log).ProcessBatchAsync(Ct)).ShouldBe(4);
+
+        // Each message ran as far as its first save: the checkpoint of its first handler failed, then the
+        // save of that failure. Nothing about the attempt is durable, so each row holds what the claim gave
+        // it, the lease.
+        _bookkeepingFault.Failures.ShouldBe(8);
+        (await RowsAsync()).ShouldAllBe(r => r.Status == OutboxMessageStatus.Pending && r.Attempts == 0
+            && r.CompletedHandlers == null && r.NextAttemptAtUtc == Time.GetUtcNow() + options.LeaseDuration);
+        // One Warning 1305 per message, and nothing escaped the batch.
+        log.Lines.Count.ShouldBe(4);
+        log.Lines.ShouldAllBe(static line => line.Level == LogLevel.Warning && line.EventId.Id == 1305);
+        // A failed checkpoint ends its message's dispatch, so no handler behind the first one ran: the test
+        // handler registered after the real ones saw neither paid invoice.
+        _flaky.Calls.ShouldBe(0);
+
+        // The database is back: nothing is due before the leases run out, then every row is finished. The
+        // first handler of each message ran a second time (the price), every later one once.
+        _bookkeepingFault.EveryMessage = false;
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(0);
+        Time.Advance(options.LeaseDuration);
+        (await CreateOutboxProcessor(options).ProcessBatchAsync(Ct)).ShouldBe(4);
+        (await RowsAsync()).ShouldAllBe(static r => r.Status == OutboxMessageStatus.Processed);
+        _flaky.Calls.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task The_backlog_gauges_report_the_pending_count_and_the_oldest_age()
     {
         using var recorder = new MetricRecorder(MeterFactory);
@@ -1018,14 +1055,17 @@ public sealed partial class OutboxRetryTests(DatabaseFixture database) : Integra
 
         public Guid? MessageId { get; set; }
 
+        /// <summary>Every outbox row's saves fail, not one row's: the database went away after the claim.</summary>
+        public bool EveryMessage { get; set; }
+
         public int Failures => Volatile.Read(ref _failures);
 
         public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
-            if (MessageId is { } id
+            if ((EveryMessage || MessageId is not null)
                 && eventData.Context is { Database.CurrentTransaction: null } context
-                && context.ChangeTracker.Entries<OutboxMessage>().Any(entry => entry.Entity.Id == id))
+                && context.ChangeTracker.Entries<OutboxMessage>().Any(entry => EveryMessage || entry.Entity.Id == MessageId))
             {
                 Interlocked.Increment(ref _failures);
                 throw new DbUpdateException("Simulated: the database is unavailable.");
