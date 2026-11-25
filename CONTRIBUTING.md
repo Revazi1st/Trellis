@@ -92,8 +92,12 @@ The `add-toggle` skill covers adding a toggle; `docs/releasing.md` covers releas
 
 A change to the persistence model, and an EF Core bump, regenerate both initial migrations the
 template ships: `./scripts/regenerate-initial-migrations.sh` (it needs a local SDK and `jq`, and
-contacts no database). `MigrationSnapshotTests` fails until both are regenerated, and Template CI
-runs the script's `--check`, which fails while a committed set is not what the script generates.
+contacts no database). Until both are regenerated, `MigrationSnapshotTests` fails after an EF Core
+bump, and after a model change both models share when only one set was regenerated;
+`MigrationDriftTests` fails while the default set lags the model. The repository's tests build no
+multi-tenant model: the legs with multi-tenancy compare it with its set, and so does the script's
+`--check`, which fails while a committed set is not what the script generates (Template CI's pack job
+runs it).
 
 ## The website
 
