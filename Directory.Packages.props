@@ -88,8 +88,10 @@
   <ItemGroup Label="API">
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
-    <!-- Transitive pin: Microsoft.AspNetCore.OpenApi pulls Microsoft.OpenApi 2.0.0, which has GHSA-v5pm-xwqc-g5wc. -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
+    <!-- Transitive pin (via Microsoft.AspNetCore.OpenApi): added when 10.0.0 pulled Microsoft.OpenApi 2.0.0, which has
+         GHSA-v5pm-xwqc-g5wc (fixed in 2.7.5). 10.0.15 asks for [2.13.0, 3.0.0), clear of the advisory; the pin stays at or
+         above that floor or restore fails with NU1109, and the microsoft group's pull request did not raise it for 10.0.15. -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.13.1" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.21.0" />
     <PackageVersion Include="Asp.Versioning.Http" Version="10.2.3" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
