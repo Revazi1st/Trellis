@@ -43,7 +43,10 @@ public sealed class AppHostFixture : IAsyncDisposable
     private DistributedApplication? _app;
     private AppLogs? _logs;
 
-    public AppHostFixture() => _webBaseUrl = new Lazy<Task<string>>(ResolveAsync);
+    public AppHostFixture() => _webBaseUrl = new Lazy<Task<string>>(() => ResolveAsync(
+        SourceFor(UiTestEnvironment.Enabled, UiTestEnvironment.NamedBaseUrl, UiTestEnvironment.InContainer),
+        UiTestEnvironment.NamedBaseUrl,
+        StartAsync));
 
     /// <summary>
     /// The web host's address, without a trailing slash. Call it after the test's RUN_UI_TESTS guard: the
@@ -77,6 +80,11 @@ public sealed class AppHostFixture : IAsyncDisposable
         + "the AppHost would run the projects in the container and PostgreSQL beside it on the host, and the two cannot reach each other (ADR-0008). "
         + "Run the web host from its launch profile and name it, UI_TESTS_BASE_URL=http://localhost:5170, "
         + "or run the tests on a machine with a .NET SDK.";
+
+    /// <summary>What a test gets when it asks for the application without RUN_UI_TESTS=1.</summary>
+    internal const string AskedBeforeTheGuardMessage =
+        "A browser test asked for the application before its RUN_UI_TESTS guard (Assert.SkipUnless(UiTestEnvironment.Enabled, …)): "
+        + "without RUN_UI_TESTS=1 nothing may start.";
 
     /// <summary>
     /// Where the application comes from, given the opt-in, the address the environment names and whether the
@@ -120,17 +128,23 @@ public sealed class AppHostFixture : IAsyncDisposable
         return message.ToString();
     }
 
-    private Task<string> ResolveAsync()
-        => SourceFor(UiTestEnvironment.Enabled, UiTestEnvironment.NamedBaseUrl, UiTestEnvironment.InContainer) switch
+    /// <summary>
+    /// What the fixture does with where the application comes from: hands out the named address once it is
+    /// checked, hands out the address of the AppHost <paramref name="start"/> starts, or fails with the
+    /// sentence that says why nothing started. Only <see cref="AppSource.AppHost"/> calls
+    /// <paramref name="start"/>: the fixture passes <see cref="StartAsync"/>, and
+    /// <see cref="UiTestConfigurationTests"/> a stand-in that starts nothing. A refusal is a faulted task,
+    /// which the fixture's <see cref="Lazy{T}"/> keeps, so every test fails with the same sentence.
+    /// </summary>
+    internal static async Task<string> ResolveAsync(AppSource source, string? namedBaseUrl, Func<Task<string>> start)
+        => source switch
         {
-            AppSource.Named => UiTestEnvironment.ProblemWith(UiTestEnvironment.NamedBaseUrl!) is { } problem
+            AppSource.Named => UiTestEnvironment.ProblemWith(namedBaseUrl ?? string.Empty) is { } problem
                 ? throw new InvalidOperationException(problem)
-                : Task.FromResult(UiTestEnvironment.NamedBaseUrl!),
-            AppSource.AppHost => StartAsync(),
+                : namedBaseUrl!,
+            AppSource.AppHost => await start(),
             AppSource.Unreachable => throw new InvalidOperationException(InContainerMessage),
-            _ => throw new InvalidOperationException(
-                "A browser test asked for the application before its RUN_UI_TESTS guard (Assert.SkipUnless(UiTestEnvironment.Enabled, …)): "
-                + "without RUN_UI_TESTS=1 nothing may start."),
+            _ => throw new InvalidOperationException(AskedBeforeTheGuardMessage),
         };
 
     private async Task<string> StartAsync()

@@ -6,12 +6,15 @@ namespace Trellis.UiTests;
 
 /// <summary>
 /// What the browser tests decide before a browser or an application exists, so these run on every
-/// <c>dotnet test</c>, the SDK container's included: where the application comes from, and what a failed
-/// start leaves for the reader. They also keep the assembly from reporting "zero tests ran" (which fails the
-/// test platform) when every browser test is skipped.
+/// <c>dotnet test</c>, the SDK container's included: where the application comes from, what the fixture
+/// does with that, and what a failed start leaves for the reader. They are here for what they prove, not to
+/// keep a run green: a run whose browser tests all skip passes without them.
 /// </summary>
 public sealed class UiTestConfigurationTests
 {
+    /// <summary>What the stand-in start of the resolver theory hands back; nothing listens there.</summary>
+    private const string StartedAddress = "http://127.0.0.1:43117";
+
     /// <summary>
     /// The address a run names is checked when the first test asks for it, and a wrong one fails every browser
     /// test with this sentence instead of a navigation error per test.
@@ -47,9 +50,9 @@ public sealed class UiTestConfigurationTests
         => UiTestEnvironment.Named(value).ShouldBe(named);
 
     /// <summary>
-    /// The whole decision. Without the opt-in nothing starts, in a container or not (the positive control of
-    /// "an ordinary test run starts nothing"). A named address is used wherever the run is. Without one the
-    /// AppHost is started on a host and refused in a container, where it cannot orchestrate (ADR-0008).
+    /// The whole decision. Without the opt-in nothing starts, in a container or not. A named address is used
+    /// wherever the run is. Without one the AppHost is started on a host and refused in a container, where it
+    /// cannot orchestrate (ADR-0008). The next theory holds what the fixture does with each answer.
     /// </summary>
     [Theory]
     [InlineData(false, null, false, AppSource.Refused)]
@@ -63,6 +66,45 @@ public sealed class UiTestConfigurationTests
     internal void Nothing_starts_without_the_opt_in_or_in_a_container_and_a_named_address_is_used_instead_of_the_AppHost(
         bool enabled, string? namedBaseUrl, bool inContainer, AppSource source)
         => AppHostFixture.SourceFor(enabled, namedBaseUrl, inContainer).ShouldBe(source);
+
+    /// <summary>
+    /// What the fixture does with the decision, a row per source (the positive control of "an ordinary test
+    /// run starts nothing"): a test that asks before its guard, or in a container with no address, fails
+    /// with the sentence that says why, a named address is checked before it is handed out, and only the
+    /// AppHost source calls the start. The start is a stand-in that counts its calls and returns a fixed
+    /// address, and every row names its source: no row reads the environment, and none can start an AppHost,
+    /// on any machine or in CI's browser steps, where RUN_UI_TESTS=1.
+    /// </summary>
+    [Theory]
+    [InlineData(AppSource.Refused, null, null, "before its RUN_UI_TESTS guard", 0)]
+    [InlineData(AppSource.Refused, "http://localhost:5170", null, "before its RUN_UI_TESTS guard", 0)]
+    [InlineData(AppSource.Unreachable, null, null, AppHostFixture.InContainerMessage, 0)]
+    [InlineData(AppSource.Named, "localhost:5170", null, "UI_TESTS_BASE_URL is 'localhost:5170', which is not an absolute http or https address", 0)]
+    [InlineData(AppSource.Named, "http://localhost:5170", "http://localhost:5170", null, 0)]
+    [InlineData(AppSource.AppHost, null, StartedAddress, null, 1)]
+    internal async Task Only_the_AppHost_source_starts_anything_a_named_address_is_checked_and_every_other_source_fails_saying_why(
+        AppSource source, string? namedBaseUrl, string? address, string? refusal, int starts)
+    {
+        int started = 0;
+        Task<string> Start()
+        {
+            started++;
+            return Task.FromResult(StartedAddress);
+        }
+
+        if (refusal is null)
+        {
+            (await AppHostFixture.ResolveAsync(source, namedBaseUrl, Start)).ShouldBe(address);
+        }
+        else
+        {
+            InvalidOperationException refused = await Should.ThrowAsync<InvalidOperationException>(
+                () => AppHostFixture.ResolveAsync(source, namedBaseUrl, Start));
+            refused.Message.ShouldContain(refusal);
+        }
+
+        started.ShouldBe(starts);
+    }
 
     [Theory]
     [InlineData(null, false)]
