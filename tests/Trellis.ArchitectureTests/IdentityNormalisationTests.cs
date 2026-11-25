@@ -44,8 +44,8 @@ public sealed partial class IdentityNormalisationTests
         ["src/Infrastructure/Trellis.Persistence/Identity/IdentitySeed.cs"] = new(
             4,
             "the role FindByNameAsync and CreateAsync take the keys of Roles.Permissions, constants; the administrator's "
-            + "FindByEmailAsync and CreateAsync take the e-mail its one caller, the migration worker, reads from "
-            + "configuration (Seed:AdminEmail): no caller typed any of them"),
+            + "FindByEmailAsync and CreateAsync take the e-mail its one caller outside the tests, the migration worker, "
+            + "reads from configuration (Seed:AdminEmail): no caller typed any of them"),
         ["tools/Trellis.MigrationService/MigrationWorker.cs"] = new(
             1,
             "the default-password guard's FindByEmailAsync takes Seed:AdminEmail from configuration: no caller typed it"),
