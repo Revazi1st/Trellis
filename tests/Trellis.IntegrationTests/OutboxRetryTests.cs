@@ -42,8 +42,21 @@ public sealed partial class OutboxRetryTests(DatabaseFixture database) : Integra
     private const string WritingName = "test.writing";
     private const string BlockingName = "test.blocking";
     private const string LeaseLost = "lease_lost";
+    private const string LoneSurrogate = "a lone surrogate";
+    private const string Nul = "a NUL";
 
     private static readonly TimeSpan WaitBudget = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Text a handler's exception can carry that the database refuses to store, keyed by the name a theory row
+    /// passes: the runner hands a row its arguments through UTF-8, which would turn a lone surrogate into U+FFFD
+    /// before the handler ever threw it.
+    /// </summary>
+    private static readonly Dictionary<string, string> Unstorable = new(StringComparer.Ordinal)
+    {
+        [LoneSurrogate] = "\uD83D",   // the high half of U+1F600 without its low half: UTF-8 cannot encode it
+        [Nul] = "\0",                 // U+0000, which a text column does not hold
+    };
 
     private readonly WritingSwitch _writing = new();
     private readonly FlakyPaidHandler _flaky = new();
@@ -192,6 +205,48 @@ public sealed partial class OutboxRetryTests(DatabaseFixture database) : Integra
         paid.NextAttemptAtUtc.ShouldBe(Now + TimeSpan.FromSeconds(30));
         paid.Error.ShouldBe($"SMTP submission to {grinning}***@example.com failed: RecipientNotAccepted");
         await EmailSender.Received(1).SendAsync(address, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(LoneSurrogate)]
+    [InlineData(Nul)]
+    public async Task A_handler_error_the_database_cannot_store_is_booked_with_U_FFFD_in_its_place(string unstorable)
+    {
+        // The row keeps the handler's message as its Error. A save the database refuses for that text could never
+        // book the attempt: no back-off, no dead letter, the message dispatched again at every lease.
+        _flaky.Throw = true;
+        _flaky.Exception = () => new InvalidOperationException($"downstream {Unstorable[unstorable]} down");
+        await PayNewInvoiceAsync();
+        var log = new LogRecorder();
+
+        (await CreateLoopProcessor(new OutboxOptions(), Time, log).ProcessBatchAsync(Ct)).ShouldBe(2);
+
+        log.Lines.Select(static line => line.EventId.Name).ShouldBe(["OutboxHandlerFailed", "OutboxRetryScheduled"]);
+        OutboxMessage paid = await RowAsync(PaidType);
+        paid.Status.ShouldBe(OutboxMessageStatus.Pending);
+        paid.Attempts.ShouldBe(1);
+        paid.NextAttemptAtUtc.ShouldBe(Now + TimeSpan.FromSeconds(30));
+        paid.Error.ShouldBe("downstream � down");
+    }
+
+    [Theory]
+    [InlineData(LoneSurrogate)]
+    [InlineData(Nul)]
+    public async Task An_exhausted_handler_error_the_database_cannot_store_is_dead_lettered_with_U_FFFD_in_its_place(string unstorable)
+    {
+        // The other way a handler's exception reaches the row: the dead letter's reason, once the attempts run out.
+        _flaky.Throw = true;
+        _flaky.Exception = () => new InvalidOperationException($"downstream {Unstorable[unstorable]} down");
+        await PayNewInvoiceAsync();
+        var log = new LogRecorder();
+
+        (await CreateLoopProcessor(new OutboxOptions { MaxAttempts = 1 }, Time, log).ProcessBatchAsync(Ct)).ShouldBe(2);
+
+        log.Lines.Select(static line => line.EventId.Name).ShouldBe(["OutboxHandlerFailed", "OutboxDeadLettered"]);
+        OutboxMessage paid = await RowAsync(PaidType);
+        paid.Status.ShouldBe(OutboxMessageStatus.DeadLettered);
+        paid.Attempts.ShouldBe(1);
+        paid.Error.ShouldBe("downstream � down");
     }
 
     [Fact]
