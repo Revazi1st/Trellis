@@ -184,7 +184,6 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   head of the list could find another class's invoice there, now and then. The classes run one at a
   time; a browser test class of your own needs nothing for it.
 
-
 ## [0.2.0] - 2026-11-15
 
 A minor release. The Blazor UI gets a design system with a light and a dark theme and a switch between
