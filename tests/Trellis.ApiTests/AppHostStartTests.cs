@@ -134,6 +134,23 @@ public sealed class AppHostStartTests
     }
 
     /// <summary>
+    /// A failure published before the helper is called ends it too: the watch begins with every resource's
+    /// current state (<c>WatchAsync</c>'s replay, which the fixture's second and third calls rely on), and a
+    /// step that waits for nothing but its cancellation cannot end it any other way.
+    /// </summary>
+    [Fact(Timeout = WatchLimit)]
+    public async Task A_failure_from_before_the_helper_is_called_ends_it()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await using Planted planted = new(Api);
+        await planted.PublishAsync(Api, KnownResourceStates.Finished, exitCode: 134);
+
+        (await Should.ThrowAsync<DistributedApplicationException>(
+                planted.App.RunUnlessOneFailsAsync([Api], static token => Task.Delay(Timeout.Infinite, token), ct))).Message
+            .ShouldBe($"{Api} failed: {KnownResourceStates.Finished}, exit code 134");
+    }
+
+    /// <summary>
     /// The step is Aspire's own wait for the resource that fails, which stops on it as the watch does. Here the
     /// failure comes first, so both are done when the helper looks and the step's exception is read first: the
     /// start still ends with the resource's sentence (its state and exit code), the wait's exception under it.
