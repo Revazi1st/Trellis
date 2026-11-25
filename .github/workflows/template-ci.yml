@@ -39,8 +39,8 @@ jobs:
       fail-fast: false
       # KEEP IN SYNC with scripts/test-template.sh, which runs these legs on a maintainer's machine:
       # it reads this list (one key per line, args in double quotes; a new key needs teaching there)
-      # and its run_leg mirrors the Instantiate, first-migration, Build, Format, Test and browser
-      # steps below.
+      # and its run_leg mirrors the Instantiate, Content gate, first-migration, Build, Format, Test and
+      # browser steps below.
       matrix:
         include:
           - name: default
@@ -99,90 +99,13 @@ jobs:
         run: dotnet new trellis -n "${{ matrix.out }}" -o ../generated ${{ matrix.args }}
 
       # Nothing in a generated project may still carry the template's name, unprocessed template
-      # syntax, or files that never belong in a repository. Build output (restore already ran as a
-      # post-action) is skipped: it holds absolute runner paths, which contain the repository name.
+      # syntax, a maintainer-only script's name or files that never belong in a repository, and it
+      # holds the one initial migration the leg's options ask for. The checks live in a maintainer-only
+      # script, its header lists them, and scripts/test-template.sh runs the same script at this point
+      # of every leg; it reads the folder the leg generated, with the name and the flags dotnet new got
+      # above. ci.yml runs its self-test.
       - name: Content gate
-        working-directory: ../generated
-        run: |
-          fail=0
-          prune=(-path ./.git -o -path ./artifacts -o -name bin -o -name obj)
-          skip=(--exclude-dir=.git --exclude-dir=artifacts --exclude-dir=bin --exclude-dir=obj)
-
-          # The provenance marker is named after the template on purpose (checked in the leftovers step).
-          names=$(find . \( "${prune[@]}" \) -prune -o -iname '*trellis*' ! -path ./.trellis-template.json -print)
-          if [ -n "$names" ]; then
-            echo "::error::Generated files or directories still named after the template:"
-            echo "$names"
-            fail=1
-          fi
-
-          if grep -rInF "${skip[@]}" '#if (' .; then
-            echo "::error::Unprocessed template conditionals in the generated output (listed above)."
-            fail=1
-          fi
-
-          if grep -rInF "${skip[@]}" 'TRELLIS_' .; then
-            echo "::error::TRELLIS_ tokens survived instantiation (listed above)."
-            fail=1
-          fi
-
-          # The engine renames Trellis to the project's name, so a shipped sentence must read right
-          # after the rename: "a change to Trellis", never "a Trellis change", which ships as "a
-          # Acme.Shop change". Checked here, on what ships, so every file type and no excluded file counts.
-          if grep -rInwiF "${skip[@]}" 'a ${{ matrix.out }}' .; then
-            echo "::error::A sentence reads 'a ${{ matrix.out }} …' after the rename (listed above): its source says 'a Trellis …'; write 'a change to Trellis' instead."
-            fail=1
-          fi
-
-          # The template does not ship its maintainer-only scripts (check-template-toggles.sh,
-          # test-template.sh, check-readme-sync.sh, regenerate-initial-migrations.sh); a workflow step
-          # that runs one belongs in a block conditioned on the TemplateSource symbol (see ci.yml); a
-          # hook, an agent file, AGENTS.md or a doc that names one, likewise. Every generated file is
-          # searched, not only .github and .claude: the shipped mentions sit in AGENTS.md and docs/ too.
-          if grep -rInE "${skip[@]}" 'check-template-toggles|test-template\.sh|check-readme-sync|regenerate-initial-migrations' .; then
-            echo "::error::Generated files reference a maintainer-only script the template does not ship (listed above)."
-            fail=1
-          fi
-
-          # The engine replaces a port symbol's literal (17171 and the others in template.json) wherever it
-          # appears, and a migration id, a timestamp, can contain one: the shipped [Migration] attribute is
-          # then rewritten under a file still named after the real id, and 'migrations remove' in the
-          # generated project finds nothing to remove. MigrationSnapshotTests refuses such an id in the
-          # template repository; this is the same check on what shipped.
-          for designer in src/Infrastructure/*.Persistence/Migrations/*.Designer.cs; do
-            [ -e "$designer" ] || continue
-            id=$(sed -n 's/.*\[Migration("\([^"]*\)")\].*/\1/p' "$designer" | head -n 1)
-            file=$(basename "$designer" .Designer.cs)
-            if [ "$id" != "$file" ]; then
-              echo "::error file=$designer::the [Migration] attribute says '$id' but the file is '$file': a literal in the id was rewritten by the engine (a port symbol's replaces value in template.json); regenerate both shipped sets with scripts/regenerate-initial-migrations.sh, which generates again a minute later until the id holds none."
-              fail=1
-            fi
-          done
-
-          # The template keeps two initial migrations and a project gets one: the multi-tenant set with
-          # --use-multitenancy, the default one otherwise (template.json: a conditional source, and a
-          # modifier that keeps the default set out). Without that modifier dotnet new still succeeds
-          # and ships both, so what shipped is counted here: one migration, its designer and the
-          # snapshot, with the tenant columns exactly when the leg asked for them.
-          set -- src/Infrastructure/*.Persistence/Migrations/*.cs
-          tenant_columns=$(grep -c '"TenantId"' src/Infrastructure/*.Persistence/Migrations/*ModelSnapshot.cs || true)
-          case " ${{ matrix.args }} " in
-            *" --use-multitenancy true "*) wanted="some" ;;
-            *) wanted="no" ;;
-          esac
-          if [ "$#" -ne 3 ] || { [ "$wanted" = some ] && [ "$tenant_columns" -eq 0 ]; } || { [ "$wanted" = no ] && [ "$tenant_columns" -ne 0 ]; }; then
-            echo "::error::The generated project holds $# file(s) under Migrations/ and $tenant_columns TenantId line(s) in its snapshot; this leg must get one initial migration (3 files) with $wanted tenant columns. See the sources of .template.config/template.json."
-            fail=1
-          fi
-
-          junk=$(find . \( "${prune[@]}" \) -prune -o \( -name .DS_Store -o -name 'appsettings.*.local.json' -o -name '*.pfx' \) -print)
-          if [ -n "$junk" ]; then
-            echo "::error::Files that must never ship are in the generated output:"
-            echo "$junk"
-            fail=1
-          fi
-
-          exit "$fail"
+        run: ./scripts/check-generated-content.sh ../generated "${{ matrix.out }}" ${{ matrix.args }}
 
       # The generated project's own repository checks must pass on the day it is created.
       - name: Generated ADR link check
@@ -262,7 +185,7 @@ jobs:
           # glob: a shipped copy expands it, and with none it stays literal, so -e is false.
           for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md .claude/rules/site.md eng/readme \
                    scripts/check-template-toggles.sh scripts/test-template.sh scripts/check-readme-sync.sh scripts/regenerate-initial-migrations.sh \
-                   .template.config site .github/workflows/site.yml \
+                   scripts/check-generated-content.sh .template.config site .github/workflows/site.yml \
                    docs/adr/0031-documentation-site.md tests/*.ArchitectureTests/MigrationSnapshotTests.cs; do
             if [ -e "$f" ]; then
               echo "::error::$f is the template repository's own material and must not ship."
