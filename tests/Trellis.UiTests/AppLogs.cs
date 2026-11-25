@@ -34,16 +34,14 @@ internal sealed class AppLogs(string folder) : ILoggerProvider
     public ILogger CreateLogger(string categoryName)
         => _sinks.GetOrAdd(SinkNameOf(categoryName), name => new Sink(Path.Combine(Folder, name + ".log")));
 
-    /// <summary>The last lines <paramref name="sink"/> received, oldest first; none when it received nothing.</summary>
-    public IReadOnlyList<string> Tail(string sink)
-        => _sinks.TryGetValue(sink, out Sink? found) ? found.Tail() : [];
-
     /// <summary>
-    /// The first lines <paramref name="sink"/> received at Error or above, oldest first, without those that
-    /// are among its last lines (<see cref="Tail"/> holds them); none when it received no such line.
+    /// What <paramref name="sink"/> remembers, in one read: the first lines it received at Error or above,
+    /// without those that are among its last lines (the tail holds them), and its last lines, each oldest
+    /// first; both empty when it received nothing. One read, because the resources may still be printing: a
+    /// line that leaves the tail between two reads would be in neither.
     /// </summary>
-    public IReadOnlyList<string> FirstErrors(string sink)
-        => _sinks.TryGetValue(sink, out Sink? found) ? found.FirstErrors() : [];
+    public (IReadOnlyList<string> FirstErrors, IReadOnlyList<string> Tail) Read(string sink)
+        => _sinks.TryGetValue(sink, out Sink? found) ? found.Read() : ([], []);
 
     public void Dispose()
     {
@@ -117,21 +115,13 @@ internal sealed class AppLogs(string folder) : ILoggerProvider
             }
         }
 
-        public string[] Tail()
-        {
-            lock (_gate)
-            {
-                return [.. _tail];
-            }
-        }
-
-        public string[] FirstErrors()
+        public (string[] FirstErrors, string[] Tail) Read()
         {
             lock (_gate)
             {
                 // The tail holds the lines numbered after this one; an error among them is printed there.
                 long beforeTail = _received - _tail.Count;
-                return [.. _firstErrors.Where(error => error.Number <= beforeTail).Select(static error => error.Line)];
+                return ([.. _firstErrors.Where(error => error.Number <= beforeTail).Select(static error => error.Line)], [.. _tail]);
             }
         }
 

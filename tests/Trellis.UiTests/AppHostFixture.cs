@@ -120,14 +120,13 @@ public sealed class AppHostFixture : IAsyncDisposable
         message.Append(CultureInfo.InvariantCulture, $"Resources: {string.Join("; ", states.Select(static s => $"{s.Resource} = {s.State}"))}").AppendLine();
         foreach (string sink in new[] { ServiceNames.Migrations, ServiceNames.Api, ServiceNames.Web, AppLogs.AppHost })
         {
-            IReadOnlyList<string> errors = logs.FirstErrors(sink);
+            (IReadOnlyList<string> errors, IReadOnlyList<string> tail) = logs.Read(sink);
             if (errors.Count > 0)
             {
                 message.Append(CultureInfo.InvariantCulture, $"First error lines of {sink}:").AppendLine();
                 AppendIndented(message, errors);
             }
 
-            IReadOnlyList<string> tail = logs.Tail(sink);
             message.Append(CultureInfo.InvariantCulture, $"Last lines of {sink}:{(tail.Count == 0 ? " (it printed nothing)" : string.Empty)}").AppendLine();
             AppendIndented(message, tail);
         }

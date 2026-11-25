@@ -231,13 +231,13 @@ public sealed class UiTestConfigurationTests
                 Print(factory.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Api}"), LogLevel.Information, "Now listening on: http://localhost:44377");
             }
 
-            logs.Tail(AppLogs.AppHost).ShouldBe(
+            logs.Read(AppLogs.AppHost).Tail.ShouldBe(
             [
                 "Information Distributed application starting.",
                 "Warning     a warning of the client",
                 "Error       Health check api_http_/health_200_check with status Unhealthy",
             ]);
-            logs.Tail(ServiceNames.Api).ShouldBe(["Information Now listening on: http://localhost:44377"]);
+            logs.Read(ServiceNames.Api).Tail.ShouldBe(["Information Now listening on: http://localhost:44377"]);
         }
         finally
         {
