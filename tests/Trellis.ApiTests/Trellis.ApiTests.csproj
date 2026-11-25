@@ -34,7 +34,9 @@
        SharedKernel, no project of its own. ShouldBeSuccess() comes with the global using; the test database
        (TestSupport/Database: ITestDatabase and the server it starts) here and in IntegrationTests, every
        file in that folder in both, so a file there uses only what both projects reference (this one has
-       no Respawn). -->
+       no Respawn); and the AppHost step (TestSupport/AppHost: UseThrowawayDatabase) here and, with the
+       browser tests, in UiTests, so that file uses only what both reference (UiTests sees neither the
+       SharedKernel nor the Trellis.TestSupport global using). -->
   <ItemGroup>
     <Compile Include="..\TestSupport\ResultAssertions.cs" Link="TestSupport\ResultAssertions.cs" />
     <Compile Include="..\TestSupport\Database\*.cs" LinkBase="TestSupport\Database" />
