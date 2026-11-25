@@ -163,6 +163,22 @@ public sealed class AppHostFixture : IAsyncDisposable
             _ => throw new InvalidOperationException(AskedBeforeTheGuardMessage),
         };
 
+    /// <summary>
+    /// Hands the AppHost's lines to <paramref name="logs"/>: every category at Information, whatever the
+    /// AppHost's own appsettings filter, because the files are read after a failure; and the HTTP client's
+    /// categories (<see cref="HttpClientCategory"/>) at Warning. The health checks request every host and tile
+    /// over and over through that client, which at Information logs each request at its start, its send, its
+    /// answer and its end: that filled <c>apphost.log</c> and its last lines with nothing a failed start is
+    /// explained by. A check that fails is still in the file, as the health check's own error.
+    /// </summary>
+    internal static void CaptureInto(ILoggingBuilder logging, AppLogs logs)
+        => logging.AddProvider(logs)
+            .AddFilter<AppLogs>(category: null, LogLevel.Information)
+            .AddFilter<AppLogs>(HttpClientCategory, LogLevel.Warning);
+
+    /// <summary>The prefix of the categories <c>IHttpClientFactory</c>'s clients log under, one per client and handler.</summary>
+    internal const string HttpClientCategory = "System.Net.Http.HttpClient";
+
     private async Task<string> StartAsync()
     {
         using CancellationTokenSource timeout = new(StartTimeout);
@@ -178,8 +194,7 @@ public sealed class AppHostFixture : IAsyncDisposable
             IDistributedApplicationTestingBuilder appHost =
                 await DistributedApplicationTestingBuilder.CreateAsync<Projects.Trellis_AppHost>(ct);
             appHost.UseThrowawayDatabase();
-            // Every line, whatever the AppHost's own appsettings filter: the files are read after a failure.
-            appHost.Services.AddLogging(logging => logging.AddProvider(logs).AddFilter<AppLogs>(category: null, LogLevel.Information));
+            appHost.Services.AddLogging(logging => CaptureInto(logging, logs));
             resources = [.. appHost.Resources.Select(static resource => resource.Name)];
             // The web host and everything it waits for: the API, the migration job, the database and its
             // server. Not the tool tiles: a pgAdmin that crashes does not stop the browser tests.

@@ -201,6 +201,45 @@ public sealed class UiTestConfigurationTests
         }
     }
 
+    /// <summary>
+    /// The filter the fixture puts in front of the files, through a logger factory as the AppHost's: every
+    /// category at Information, a resource's lines among them, except the health checks' HTTP client, whose
+    /// warnings still come through.
+    /// </summary>
+    [Fact]
+    public void The_files_take_every_line_at_Information_but_the_HTTP_clients_only_from_Warning()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        try
+        {
+            using AppLogs logs = new(folder);
+            using (ILoggerFactory factory = LoggerFactory.Create(logging => AppHostFixture.CaptureInto(logging, logs)))
+            {
+                Print(factory.CreateLogger("Aspire.Hosting.DistributedApplication"), LogLevel.Information, "Distributed application starting.");
+                Print(factory.CreateLogger($"{AppHostFixture.HttpClientCategory}.health-checks.LogicalHandler"), LogLevel.Information, "Start processing HTTP request GET http://localhost:44377/readyz");
+                Print(factory.CreateLogger($"{AppHostFixture.HttpClientCategory}.health-checks.ClientHandler"), LogLevel.Information, "Sending HTTP request GET http://localhost:44377/readyz");
+                Print(factory.CreateLogger($"{AppHostFixture.HttpClientCategory}.health-checks.LogicalHandler"), LogLevel.Warning, "a warning of the client");
+                Print(factory.CreateLogger("Microsoft.Extensions.Diagnostics.HealthChecks.DefaultHealthCheckService"), LogLevel.Error, "Health check api_http_/health_200_check with status Unhealthy");
+                Print(factory.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Api}"), LogLevel.Information, "Now listening on: http://localhost:44377");
+            }
+
+            logs.Tail(AppLogs.AppHost).ShouldBe(
+            [
+                "Information Distributed application starting.",
+                "Warning     a warning of the client",
+                "Error       Health check api_http_/health_200_check with status Unhealthy",
+            ]);
+            logs.Tail(ServiceNames.Api).ShouldBe(["Information Now listening on: http://localhost:44377"]);
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
     /// <summary>One console line, as Aspire's forwarder hands it to a logger: the text is the whole message.</summary>
     private static void Print(ILogger logger, LogLevel level, string text, Exception? exception = null)
         => logger.Log(level, default, text, exception, static (state, _) => state);
