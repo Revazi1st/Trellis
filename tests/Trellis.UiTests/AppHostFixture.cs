@@ -11,6 +11,11 @@ using Xunit;
 
 [assembly: AssemblyFixture(typeof(Trellis.UiTests.AppHostFixture))]
 
+// One class at a time. Every browser test drives the same application and the same database, and a class
+// that reads a list must not find a row another class created meanwhile: CI saw the design proof's draft
+// head the invoice list between another test's create and its look at the first row.
+[assembly: Xunit.v3.Parallelization(Mode = Xunit.Sdk.ParallelMode.None)]
+
 namespace Trellis.UiTests;
 
 /// <summary>

@@ -253,6 +253,24 @@ public sealed class UiTestConfigurationTests
     /// category at Information, a resource's lines among them, except the health checks' HTTP client, whose
     /// warnings still come through.
     /// </summary>
+    /// <summary>
+    /// The browser test classes share one application and its data, so they run one after another: with
+    /// parallel classes a list one test reads can hold a row another test created meanwhile.
+    /// </summary>
+    [Fact]
+    public void The_browser_test_classes_run_one_at_a_time()
+    {
+        Xunit.v3.ParallelizationAttribute? parallelization = typeof(AppHostFixture).Assembly
+            .GetCustomAttributes(typeof(Xunit.v3.ParallelizationAttribute), inherit: false)
+            .Cast<Xunit.v3.ParallelizationAttribute>()
+            .SingleOrDefault();
+
+        parallelization.ShouldNotBeNull("the assembly must say how its test classes run beside each other");
+        parallelization.GetMode().ShouldBe(
+            Xunit.Sdk.ParallelMode.None,
+            "every browser test drives the same application: a class that reads a list must not see what another class writes meanwhile");
+    }
+
     [Fact]
     public void The_files_take_every_line_at_Information_but_the_HTTP_clients_only_from_Warning()
     {

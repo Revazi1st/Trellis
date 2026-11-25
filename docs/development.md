@@ -257,7 +257,9 @@ RUN_UI_TESTS=1 dotnet test tests/Trellis.UiTests
 Run the project, not the solution: beside the Testcontainers suites the AppHost's processes would
 race them for host ports, as the Aspire E2E would. Without `RUN_UI_TESTS=1` every browser test skips
 and nothing starts, so the normal suite stays fast and browser-free, in the SDK container too (the
-same opt-in pattern as the Aspire E2E test).
+same opt-in pattern as the Aspire E2E test). The browser test classes run one at a time: they share
+the one application and its data, so a class that reads a list must not find a row another class
+created meanwhile.
 
 To drive an application that is already running instead, name its web address in
 `UI_TESTS_BASE_URL`; nothing is started then. `aspire run` (with its data) gives the web host a port

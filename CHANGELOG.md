@@ -159,6 +159,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   U+FFFD, and the mask keeps the whole first character as a reader sees it, a whole emoji or a letter with
   its combining accent, as does the copy that masks the e-mail of security event 1102. If you copied the
   mask into code of your own, take the first text element there too (`StringInfo.GetNextTextElementLength`).
+- **The browser tests no longer race each other** (with `--include-ui-tests`). Their classes ran in
+  parallel against one application, so a test that created an invoice and then looked for it at the
+  head of the list could find another class's invoice there, now and then. The classes run one at a
+  time; a browser test class of your own needs nothing for it.
 
 ## [0.2.0] - 2026-11-15
 
