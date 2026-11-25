@@ -167,7 +167,7 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   with the option from 0.2.0 or earlier regenerated its own initial migration; keep it. The template's
   has another id, describes the same tables, and nothing is applied to your database
   (`docs/upgrading.md`, step 5). Turning the option on in an existing solution is unchanged: it is a
-  schema change of yours (the same step). ADR-0019 and ADR-0022 carry dated amendments.
+  schema change of yours (the same step). ADR-0019, ADR-0022 and ADR-0033 carry dated amendments.
 
 ### Fixed
 
