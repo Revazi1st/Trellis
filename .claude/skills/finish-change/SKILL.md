@@ -52,8 +52,10 @@ proposed commit message, `commit` also commits, and `pr` commits and opens the p
       `./scripts/check-adr-history.sh`: an accepted ADR only gains a dated amendment [CI *ADR history*].
       <!--#if (TemplateSource) -->
       In the template's source, also `./scripts/check-template-toggles.sh`: every directive alone on its
-      line and every symbol declared [CI *Build & Test*, *Template toggle check*]; and
-      `python3 eng/readme/render-diagrams.py --check`: the README's pictures match the tree, re-rendered
+      line and every symbol declared [CI *Build & Test*, *Template toggle check*]; and, when Template
+      CI's content gate changed, `./scripts/check-generated-content.sh --self-test`: each of its checks
+      flags its planted defect and passes a clean project [CI *Build & Test*, *Content gate
+      self-test*]; and `python3 eng/readme/render-diagrams.py --check`: the README's pictures match the tree, re-rendered
       without `--check` [CI *Build & Test*, *README pictures are current*]; and
       `./scripts/check-readme-sync.sh`: each copy its header lists, in the README, the package README
       and the site, agrees with its home (the pitch, the options, the commands, the use cases and their

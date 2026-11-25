@@ -75,19 +75,26 @@ Docker):
 It runs `scripts/check-template-toggles.sh` (toggle wiring, directive placement, exclude globs),
 packs the template once (the working tree as it is, untracked files included), installs the package
 into a private hive (`--debug:custom-hive`, so your real template list stays untouched), and for each
-leg instantiates it with the leg's flags, runs `scripts/ef.sh`'s first-migration command on the
-unbuilt tree (the default leg and the legs with multi-tenancy, where it also proves that the shipped
-migration matches the model), builds Release, runs the generated `ci.yml`'s format check
-(`dotnet format --verify-no-changes`) and then the tests on the legs Template CI tests and, when you
-set `RUN_UI_TESTS=1`, the browser tests of the leg that has them (it needs `pwsh`, installs Chromium
-and starts the generated AppHost twice), as Template CI's instantiate job does. It prints a table of results and exits 1 on any failure, keeping
-the logs and the generated solutions in the folder it names.
+leg instantiates it with the leg's flags, runs Template CI's content gate on what it generated
+(`scripts/check-generated-content.sh`, whose header lists the checks: no file or folder named after
+the template, no unprocessed directive or `TRELLIS_` token, no maintainer-only script named in a
+shipped file, one initial migration with the leg's tenant columns, no file that never ships), runs
+`scripts/ef.sh`'s first-migration command on the unbuilt tree (the default leg and the legs with
+multi-tenancy, where it also proves that the shipped migration matches the model), builds Release,
+runs the generated `ci.yml`'s format check (`dotnet format --verify-no-changes`) and then the tests
+on the legs Template CI tests and, when you set `RUN_UI_TESTS=1`, the browser tests of the leg that
+has them (it needs `pwsh`, installs Chromium and starts the generated AppHost twice), as Template
+CI's instantiate job does; a failed step ends its leg. It prints a table of results and exits 1 on
+any failure, keeping the logs and the generated solutions in the folder it names.
 Because it packs, the legs get the package's content, as an install from nuget.org does, where
 Template CI's instantiate job installs the source folder; the two exclude lists that decide those
 contents (`TemplateContentExclude` in the pack project, `sources[0].exclude` in `template.json`) are
-kept in step by hand. `RUN_ASPIRE_E2E=0` skips the Aspire E2E. The content gates (leftovers of the
-template's name, the consumer files, actionlint over the generated workflows) and the Windows leg
-run only in Template CI.
+kept in step by hand. `RUN_ASPIRE_E2E=0` skips the Aspire E2E. The rest runs only in Template CI:
+on each leg the generated project's own link, hook and doctor checks, actionlint over its workflows
+and the step that reads it for the template's name and its consumer files (with the loop over the
+files that must not ship); the Windows leg; and the pack job's checks of the package. The content
+gate runs alone on any generated folder (`./scripts/check-generated-content.sh <folder> <name>
+[flags]`), and `--self-test` plants each defect it looks for, as CI's *Content gate self-test* does.
 The `add-toggle` skill covers adding a toggle; `docs/releasing.md` covers releasing.
 
 A change to the persistence model, and an EF Core bump, regenerate both initial migrations the
