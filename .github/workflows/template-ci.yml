@@ -378,8 +378,9 @@ jobs:
 
   # The default options on Windows: the template installs and instantiates there, the generated
   # solution builds, and the test projects that need no Docker pass (Windows runners cannot run the
-  # Linux containers the integration and API tests start). Every step is PowerShell or a plain
-  # command, nothing that needs bash.
+  # Linux containers the integration and API tests start); then a multi-tenant project is created,
+  # not built, to see its initial migration land in place (the last step). Every step is PowerShell
+  # or a plain command, nothing that needs bash.
   instantiate-windows:
     name: Instantiate & build (windows)
     runs-on: windows-latest
@@ -411,6 +412,33 @@ jobs:
           foreach ($project in 'Domain.UnitTests', 'Application.UnitTests', 'ArchitectureTests') {
             dotnet test "tests/Acme.Shop.$project" -c Release --no-build
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      # The multi-tenant initial migration reaches a project through a source of its own in
+      # template.json, conditional on the option, whose target folder the engine renames with the
+      # project's name, beside a modifier that keeps the default set out. The Linux legs create, build
+      # and test such a project; nothing shows the conditional source and its renamed target on
+      # Windows, with its own paths. So this creates one from the same folder install (no build,
+      # nothing restored) and checks where the set landed: one *.Persistence folder, whose Migrations
+      # folder holds three files, a migration and its designer named after one id, and the snapshot
+      # with the tenant columns.
+      - name: Instantiate with multi-tenancy (where the initial migration lands)
+        run: |
+          dotnet new trellis -n Acme.Tenants -o ../generated-tenants --use-multitenancy true --skip-restore true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $persistence = @(Get-ChildItem -Path ../generated-tenants/src/Infrastructure -Directory -Filter '*.Persistence' -ErrorAction SilentlyContinue)
+          $files = @()
+          if ($persistence.Count -eq 1) {
+            $files = @(Get-ChildItem -Path (Join-Path $persistence[0].FullName 'Migrations') -File -ErrorAction SilentlyContinue)
+          }
+          $ids = @($files | ForEach-Object { if ($_.Name -match '^(\d{14})_') { $Matches[1] } })
+          $distinct = @($ids | Sort-Object -Unique)
+          $snapshot = @($files | Where-Object { $_.Name -eq 'AppDbContextModelSnapshot.cs' })
+          $tenant = ($snapshot.Count -eq 1) -and [bool](Select-String -LiteralPath $snapshot[0].FullName -Pattern '"TenantId"' -SimpleMatch -Quiet)
+          if ($persistence.Count -ne 1 -or $files.Count -ne 3 -or $ids.Count -ne 2 -or $distinct.Count -ne 1 -or -not $tenant) {
+            Write-Output "::error::A multi-tenant project created on Windows holds $($persistence.Count) *.Persistence folder(s) and $($files.Count) file(s) in its Migrations folder, $($ids.Count) of them named after $($distinct.Count) id(s), tenant columns in the snapshot: $tenant. It must hold one folder, and in it one migration, its designer and the multi-tenant snapshot (the sources of .template.config/template.json). The migration files it got:"
+            Get-ChildItem -Path ../generated-tenants/src -Recurse -File -Filter '*.cs' -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'Migrations' } | ForEach-Object { $_.FullName }
+            exit 1
           }
 
   pack:
