@@ -18,6 +18,14 @@ internal static class RegistrationErrors
 
     private const string GenericSentence = "The account could not be created with these details.";
 
+    private const string EmailSentence = "The email address cannot be used for an account.";
+
+    /// <summary>
+    /// An e-mail refused before Identity sees it (one its lookup cannot normalise): the answer Identity's own
+    /// <see cref="IdentityErrorDescriber.InvalidEmail"/> and <see cref="IdentityErrorDescriber.InvalidUserName"/> get.
+    /// </summary>
+    public static readonly Error EmailRejected = Error.Validation(RejectedCode, EmailSentence);
+
     /// <summary>
     /// A duplicate (Identity saw the e-mail already registered) is <see cref="AuthErrors.EmailAlreadyInUse"/>,
     /// the 409 the up-front lookup answers. Anything else is a <see cref="RejectedCode"/> validation error
@@ -51,7 +59,7 @@ internal static class RegistrationErrors
         nameof(IdentityErrorDescriber.PasswordRequiresLower) => "The password must contain a lower-case letter.",
         nameof(IdentityErrorDescriber.PasswordRequiresUpper) => "The password must contain an upper-case letter.",
         nameof(IdentityErrorDescriber.PasswordRequiresNonAlphanumeric) => "The password must contain a character that is neither a letter nor a digit.",
-        nameof(IdentityErrorDescriber.InvalidEmail) or nameof(IdentityErrorDescriber.InvalidUserName) => "The email address cannot be used for an account.",
+        nameof(IdentityErrorDescriber.InvalidEmail) or nameof(IdentityErrorDescriber.InvalidUserName) => EmailSentence,
         _ => GenericSentence,
     };
 }

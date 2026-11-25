@@ -74,6 +74,27 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    /// <summary>
+    /// The registration validator's e-mail rule asks for an <c>@</c> inside the text and nothing more, so U+FFFE,
+    /// which .NET's Unicode normalisation refuses, reaches Identity's duplicate lookup. Registration answers it as
+    /// it answers any e-mail Identity cannot take for an account (an apostrophe or a non-ASCII letter among them):
+    /// a 400 with the same sentence, not a 500.
+    /// </summary>
+    [Fact]
+    public async Task Register_EmailTheLookupCannotNormalise_IsRejectedNotA500()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string email = $"flow-{Guid.NewGuid():N}@inprocess{FromCodePoints("U+FFFE")}.test";
+
+        HttpResponseMessage response = await factory.CreateClient()
+            .PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest(email, Password), ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(response, ct)).ShouldBe("Auth.RegistrationRejected");
+        using JsonDocument problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        problem.RootElement.GetProperty("detail").GetString().ShouldBe("The email address cannot be used for an account.");
+    }
+
     [Fact]
     public async Task Register_WithTheShippedProductionConfiguration_IsClosed()
     {
@@ -310,6 +331,34 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         line.Message.ShouldBeOneOf(
             $"Sign-in failed for {maskedAddress}: no such account",
             $"Sign-in failed for \"{maskedAddress}\": no such account");
+    }
+
+    /// <summary>
+    /// Identity finds an account by its e-mail's normalised form, and .NET's Unicode normalisation refuses U+FFFE,
+    /// a noncharacter the JSON reader lets through, with an <see cref="ArgumentException"/>. Sign-in checks no
+    /// e-mail format, so an anonymous caller can type it: the answer is an unknown account's, after the same
+    /// password-hash work and with its 1102 event, never a 500. The domain carries a fresh marker, which the mask
+    /// keeps, so the test finds its own line, exactly one for the one sign-in; it reads a fragment of it, never the
+    /// whole line.
+    /// </summary>
+    [Fact]
+    public async Task Login_EmailTheLookupCannotNormalise_IsAnUnknownAccountNotA500()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string marker = Guid.NewGuid().ToString("N");
+        string email = $"ghost@{marker}{FromCodePoints("U+FFFE")}.inprocess.test";
+
+        int before = factory.Hasher.Verifications;
+        HttpResponseMessage response = await factory.CreateClient()
+            .PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(email, Password), ct);
+        int verifications = factory.Hasher.Verifications - before;
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await ProblemCodeAsync(response, ct)).ShouldBe("Auth.InvalidCredentials");
+        verifications.ShouldBe(1);
+        factory.Logs.All
+            .Where(e => e.EventName == "LoginFailedUnknownAccount" && e.Message.Contains(marker, StringComparison.Ordinal))
+            .ShouldHaveSingleItem();
     }
 
     [Fact]

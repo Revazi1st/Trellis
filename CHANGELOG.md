@@ -186,6 +186,20 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ### Security
 
+- **An e-mail holding U+FFFE is an unknown account at sign-in and a refused one at registration, not a
+  500.** Identity looks an account up by the e-mail's normalised form, and .NET's Unicode normalisation
+  throws for U+FFFE, which the JSON reader and both auth validators let through: since 0.1.0 (the same two
+  lookups behind the same validators), anyone, signed in or not, could post one to `auth/login` or, with
+  registration open, `auth/register` and get a 500 `Server.Failure` and an unhandled-exception Error line
+  at will, within the auth rate limit. `IdentityService` now asks the lookup's own normaliser before each
+  lookup: sign-in answers an e-mail it cannot take as it answers any unknown account (401
+  `Auth.InvalidCredentials` after the same password-hash work, security event 1102), and registration with
+  the 400 `Auth.RegistrationRejected` an e-mail Identity refuses gets. No code point is listed, so whatever
+  the platform's normalisation refuses is answered the same way. `IdentityNormalisationTests` now counts,
+  file by file under `src/` and `tools/`, every Identity call that normalises an e-mail or a user name, and
+  fails on one its file's row does not count with the reason it is safe: if your own code looks an account
+  up, creates one or changes its e-mail or user name with text a caller typed, ask the normaliser first, as
+  `IdentityService.CanBeLookedUp` does, and give the file its row.
 - **A line break or another control character typed at sign-in no longer forges a line in the security
   event log.** Since 0.1.0, anyone, signed in or not, could sign in with an e-mail that matches no account
   and carries a line break (CR, LF, CR LF, NEL, LS, PS or FF) or another control character (a vertical tab,
