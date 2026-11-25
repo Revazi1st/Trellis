@@ -343,9 +343,9 @@ compiled into the projects that need it by a linked `<Compile Include>` in their
 <!--#endif -->
 <!--#if (IncludeUiTests && IncludeUI) -->
 - **`UiTests`** (`--include-ui-tests`; optional, and opt-in at run time): the pages in a real browser
-  against the application the tests start themselves, through the AppHost. Needs `RUN_UI_TESTS=1`, an
-  installed browser, Docker and a local SDK or CI (see [UI tests](#ui-tests-optional)), otherwise it
-  skips. Write one for a flow only a browser shows; keep them few.
+  against the application the tests start themselves, through the AppHost. Skips without
+  `RUN_UI_TESTS=1`; with it, needs an installed browser, Docker and a local SDK or CI (see
+  [UI tests](#ui-tests-optional)). Write one for a flow only a browser shows; keep them few.
 <!--#endif -->
 <!--#if (UseMultitenancy) -->
 - **`TenancyTests`** (IntegrationTests) and **`TenantIsolationTests`** (ApiTests), with multi-tenancy
