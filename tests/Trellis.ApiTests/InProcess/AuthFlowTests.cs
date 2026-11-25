@@ -230,7 +230,7 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     public async Task SecurityEvents_NameTheAccountAtTheDocumentedLevelsAndNeverCarryAPassword()
     {
         // Runs under --use-serilog too: Serilog hands every event on to the registered ILoggerProviders
-        // (writeToProviders), this capturing one included.
+        // (writeToProviders), this capturing one included, in its own rendering: hence fragments, not whole lines.
         CancellationToken ct = TestContext.Current.CancellationToken;
         HttpClient client = factory.CreateClient();
         string email = NewEmail();
@@ -481,7 +481,12 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
 
     public sealed record CapturedLog(string Category, LogLevel Level, string? EventName, string Message);
 
-    /// <summary>Keeps every log line the host writes, so tests can assert on security events.</summary>
+    /// <summary>
+    /// Keeps every log line the host writes, so tests can assert on security events. Under <c>--use-serilog</c>
+    /// a line arrives as Serilog renders it, a string property in double quotes (<c>Sign-in failed for "g***@x.test"</c>),
+    /// so a test asserts a fragment or accepts both forms, never the whole line as the default formatter writes it;
+    /// <c>scripts/test-template.sh no-ui-with-serilog</c> is the run that shows it.
+    /// </summary>
     public sealed class CapturingLoggerProvider : ILoggerProvider
     {
         private readonly ConcurrentQueue<CapturedLog> _entries = new();
