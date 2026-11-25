@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using MailKit;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -118,6 +119,27 @@ public sealed class EmailSenderTests
         failure.Mailbox.ShouldBeNull("MailKit's rejected mailbox is the full address");
         failure.Message.ShouldContain("j***@example.com");
         failure.ToString().ShouldNotContain(Recipient);
+    }
+
+    [Fact]
+    public async Task Send_WhenTheRelayWantsAuthentication_ThrowsTheBaseTypeWithoutTheReply()
+    {
+        // MailKit 5 reads a 530 as SmtpServiceNotAuthenticatedException, whose message and ResponseText are the
+        // relay's reply; what leaves the adapter is the base ServiceNotAuthenticatedException in its own words.
+        using var relay = new TcpListener(IPAddress.Loopback, 0);
+        relay.Start();
+        Task<string> conversation = FakeRelayAsync(
+            relay, recipientReply: $"530 5.7.0 <{Recipient}>: Authentication required", TestContext.Current.CancellationToken);
+        await using ServiceProvider services = BuildServices(new CapturingLoggerProvider(), LocalRelay(relay));
+
+        ServiceNotAuthenticatedException failure = await Should.ThrowAsync<ServiceNotAuthenticatedException>(() => SendOneAsync(services));
+        await conversation;
+
+        failure.ShouldSatisfyAllConditions(
+            () => failure.Message.ShouldContain("j***@example.com"),
+            () => failure.Message.ShouldNotContain("Authentication required"),
+            () => failure.ToString().ShouldNotContain(Recipient),
+            () => failure.GetType().ShouldBe(typeof(ServiceNotAuthenticatedException), "MailKit's subclass carries the reply"));
     }
 
     [Fact]
