@@ -421,10 +421,11 @@ public sealed class EmailSenderTests
 
     /// <summary>
     /// Just enough of a relay for one plaintext submission: greets, answers EHLO with no extension (so no
-    /// STARTTLS and no AUTH; SMTPUTF8 alone when <paramref name="offersSmtpUtf8"/>), RCPT with
-    /// <paramref name="recipientReply"/> and every other command 250 (221 for QUIT, or a hang-up when
-    /// <paramref name="answersQuit"/> is false), swallows the DATA block, and returns everything the client sent
-    /// once it hangs up — with QUIT after a delivery, with a connection reset after a failure.
+    /// STARTTLS and no AUTH; with <paramref name="offersSmtpUtf8"/>, SMTPUTF8 and the 8BITMIME a relay that offers
+    /// it must offer too, RFC 6531), RCPT with <paramref name="recipientReply"/> and every other command 250 (221 for
+    /// QUIT, or a hang-up when <paramref name="answersQuit"/> is false), swallows the DATA block, and returns
+    /// everything the client sent once it hangs up — with QUIT after a delivery, with a connection reset after a
+    /// failure.
     /// </summary>
     private static async Task<string> FakeRelayAsync(
         TcpListener listener, string recipientReply, CancellationToken cancellationToken, bool answersQuit = true, bool offersSmtpUtf8 = false)
@@ -468,7 +469,7 @@ public sealed class EmailSenderTests
 
             await writer.WriteLineAsync(verb switch
             {
-                "EHLO" when offersSmtpUtf8 => "250-relay.test\r\n250 SMTPUTF8",
+                "EHLO" when offersSmtpUtf8 => "250-relay.test\r\n250-8BITMIME\r\n250 SMTPUTF8",
                 "RCPT" => recipientReply,
                 "QUIT" => "221 bye",
                 _ => "250 ok",
