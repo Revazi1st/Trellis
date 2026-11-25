@@ -54,9 +54,10 @@ internal static partial class SecurityEventLog
     /// <c>jane.doe@example.com</c> → <c>j***@example.com</c>: enough to spot a run against one domain,
     /// not enough to read back the address someone typed. The first character is kept as a reader sees it
     /// (a text element), never half of a surrogate pair. Infrastructure's <c>EmailAddressMask</c> is the
-    /// same mask (the peers keep a copy each); <c>EmailAddressMaskTests</c> holds both to the same rows.
+    /// same mask (the peers keep a copy each); <c>EmailAddressMaskTests</c> (ArchitectureTests) reaches
+    /// both by name and holds them to the same rows.
     /// </summary>
-    internal static string MaskEmail(string email)
+    private static string MaskEmail(string email)
     {
         int at = email.LastIndexOf('@');
         if (at <= 0 || at == email.Length - 1)

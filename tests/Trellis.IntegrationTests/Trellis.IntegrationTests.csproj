@@ -3,9 +3,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\Trellis.Application\Trellis.Application.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\Trellis.Persistence\Trellis.Persistence.csproj" />
-    <!-- For the e-mail mask alone (EmailAddressMaskTests, and the masked error OutboxRetryTests books);
-         the host here still fakes IEmailSender. -->
-    <ProjectReference Include="..\..\src\Infrastructure\Trellis.Infrastructure\Trellis.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

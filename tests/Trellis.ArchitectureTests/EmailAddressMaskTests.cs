@@ -1,18 +1,18 @@
 using System.Globalization;
+using System.Reflection;
 using Shouldly;
-using Trellis.Infrastructure.Email;
-using Trellis.Persistence.Identity;
 using Xunit;
 
-namespace Trellis.IntegrationTests;
+namespace Trellis.ArchitectureTests;
 
 /// <summary>
-/// The masked e-mail of the logs and of a failed send's error, without a database. Infrastructure and
-/// Persistence are peers (ADR-0002), so each keeps its copy: <c>EmailAddressMask</c> for the e-mail adapters,
-/// whose failure text the outbox writes into its row, and <c>SecurityEventLog.MaskEmail</c> for the sign-in
-/// events. One set of rows holds both. The mask keeps the local part's first character as a reader sees it,
-/// a text element: never half of a surrogate pair, which UTF-8 cannot encode (OutboxRetryTests books such a
-/// failure), and a letter written with a combining mark stays that letter.
+/// The two copies of the e-mail mask behave the same. Infrastructure and Persistence are peers (ADR-0002), so
+/// each keeps its own: <c>EmailAddressMask.Mask</c> for the e-mail adapters, whose failure text the outbox
+/// writes into its row, and the private <c>SecurityEventLog.MaskEmail</c> for the sign-in events. Each is
+/// reached by name through the layer anchors, as the other fitness facts reach a layer, and one set of rows
+/// holds both. The mask keeps the local part's first character as a reader sees it, a text element: never half
+/// of a surrogate pair, which is no character at all, and a letter written with a combining mark stays that
+/// letter.
 /// </summary>
 public sealed class EmailAddressMaskTests
 {
@@ -22,10 +22,11 @@ public sealed class EmailAddressMaskTests
     /// <summary>U+1F469 U+200D U+1F4BB, a woman technologist: three code points, one character on screen.</summary>
     private static readonly string Technologist = char.ConvertFromUtf32(0x1F469) + "‍" + char.ConvertFromUtf32(0x1F4BB);
 
-    private static readonly Dictionary<string, Func<string, string>> Copies = new(StringComparer.Ordinal)
+    /// <summary>Each copy by the layer that keeps it: its assembly, its type and its method, which takes the address and returns the mask.</summary>
+    private static readonly Dictionary<string, (Assembly Assembly, string Type, string Method)> Copies = new(StringComparer.Ordinal)
     {
-        ["Infrastructure"] = EmailAddressMask.Mask,
-        ["Persistence"] = SecurityEventLog.MaskEmail,
+        [Architecture.Infrastructure] = (Architecture.InfrastructureAssembly, Architecture.Infrastructure + ".Email.EmailAddressMask", "Mask"),
+        [Architecture.Persistence] = (Architecture.PersistenceAssembly, Architecture.Persistence + ".Identity.SecurityEventLog", "MaskEmail"),
     };
 
     private static readonly (string Address, string Masked)[] Rows =
@@ -36,7 +37,7 @@ public sealed class EmailAddressMaskTests
         (Grinning + "@example.com", Grinning + "***@example.com"),
         (Technologist + "dev@example.com", Technologist + "***@example.com"),
         ("émile@example.com", "é***@example.com"),   // é decomposed: the letter keeps its accent
-        ("؀@example.com", "؀***@example.com"),         // a prepended mark joins what follows: not the @
+        ("؀@example.com", "؀***@example.com"),          // a prepended mark joins what follows: not the @
         ("jane.doe", "***"),
         ("", "***"),
         ("@example.com", "***"),
@@ -61,10 +62,20 @@ public sealed class EmailAddressMaskTests
     [MemberData(nameof(EveryCopyAndRow))]
     public void Each_copy_keeps_the_first_character_whole_and_hides_the_rest_of_the_local_part(string copy, string address, string expected)
     {
-        string masked = Copies[copy](address);
+        string masked = Mask(copy)(address);
 
         UnpairedSurrogates(masked).ShouldBeEmpty();
         masked.ShouldBe(expected);
+    }
+
+    /// <summary>The copy's method as a delegate; a copy renamed or moved fails here, naming what was looked for.</summary>
+    private static Func<string, string> Mask(string copy)
+    {
+        (Assembly assembly, string typeName, string methodName) = Copies[copy];
+        Type type = assembly.GetType(typeName, throwOnError: true)!;
+        MethodInfo method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static, [typeof(string)])
+            .ShouldNotBeNull($"{typeName}.{methodName}(string) is the {copy} copy of the mask; if it moved, point {nameof(Copies)} at it");
+        return method.CreateDelegate<Func<string, string>>();
     }
 
     /// <summary>Each surrogate that is not half of a valid pair (a high one before a low one), as <c>U+D83D at 0</c>.</summary>

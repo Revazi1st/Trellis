@@ -1,12 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <!-- EmailAddressMaskTests holds Email/EmailAddressMask and Persistence's copy to the same rows, and
-         OutboxRetryTests books a failed send whose error that mask wrote. -->
-    <InternalsVisibleTo Include="Trellis.IntegrationTests" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\Core\Trellis.Application\Trellis.Application.csproj" />
   </ItemGroup>
 

@@ -7,9 +7,10 @@ namespace Trellis.Infrastructure.Email;
 /// Enough to tell which domain a message went to, not enough to read the address back. The same shape
 /// Persistence's security events use (ADR-0021); the two projects are peers, so each keeps its copy.
 /// <para>
-/// The local part keeps its first character as a reader sees it (a text element), never a lone UTF-16
-/// code unit: a first character outside the Basic Multilingual Plane is two units, and half of the pair is
-/// text UTF-8 cannot encode, so the outbox could not save the failure that carries it.
+/// The local part keeps its first character as a reader sees it (a text element), never half of a surrogate
+/// pair: a first character outside the Basic Multilingual Plane is two UTF-16 code units, and one of them alone
+/// is no character at all (UTF-8 cannot encode it, and the outbox stores it as U+FFFD). Persistence's copy is
+/// <c>SecurityEventLog.MaskEmail</c>; <c>EmailAddressMaskTests</c> (ArchitectureTests) holds both to the same rows.
 /// </para>
 /// </summary>
 internal static class EmailAddressMask
