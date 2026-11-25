@@ -194,7 +194,9 @@ The decision stands. The processor goes on, however many failures follow each ot
   that fails, so the row is never dead-lettered. Stopping the batch would not help that row, and going
   on is what lets the rows behind it through. And if claims succeeded while every other save failed, a
   full batch would be followed by the next claim without a sleep, and every due message would run its
-  first handler once per lease. Neither is changed here.
+  first handler once per lease. Neither is changed here. The one way such a row is known to have come
+  about is closed where it began: a handler's exception message that PostgreSQL cannot store (half of a
+  surrogate pair, a NUL) is made storable before the processor writes it into `Error` (`StorableText`).
 - **What stopping would buy is the outage's repeated runs.** The rows not reached would get their leases
   back at once and not after `LeaseDuration`, but the hand-back is a write to the same database: in the
   case stopping is meant for, it fails too.
@@ -216,8 +218,9 @@ one row's saves fail and the rows behind it are processed.
 `A_database_that_goes_away_after_the_claim_costs_each_message_one_handler_run_and_the_batch_still_ends`:
 every save fails, the batch ends without an exception, each message logs one 1305, every row stays
 pending with its lease and nothing credited, and no handler behind the first has run; once the leases
-expire every row is processed and the later handlers ran once. No test covers a save that never
-succeeds.
+expire every row is processed and the later handlers ran once. A failure whose error text the database
+would refuse is booked (`A_handler_error_the_database_cannot_store_is_booked_with_U_FFFD_in_its_place`).
+No test covers a save that never succeeds for another reason.
 
 Revisit when one message is seen to log 1305 lease after lease (a save that can never succeed needs a
 way out: counting the attempt where the claim is written, say), or when an outage is seen to repeat
