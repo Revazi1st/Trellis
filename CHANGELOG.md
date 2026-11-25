@@ -188,12 +188,15 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 - **A line break typed at sign-in no longer forges a line in the security event log.** Since 0.1.0,
   anyone, signed in or not, could sign in with an e-mail that matches no account and carries a line break
-  (CR, LF, NEL, LS, PS or FF) after the `@` or as its first character: security event 1102 logged the
-  masked address with the break as typed, so the 1102 line ended early and the rest read as a log line of
-  their own making, an invented sign-in or lockout included (CWE-117). Closed from this release:
-  `SecurityEventLog.LoginFailedUnknownAccount` replaces every line ending in the masked e-mail with a
-  space, and `AuthFlowTests` sends each one. No other security event carries text a caller typed. If you
-  log anything else a caller typed, pass it through `ReplaceLineEndings(" ")` as a template argument.
+  (CR, LF, CR LF, NEL, LS, PS or FF) or another control character (a vertical tab, an escape, a file
+  separator) after the `@` or as its first character: security event 1102 logged the masked address with
+  the character as typed, so the 1102 line ended early and the rest read as a log line of their own making,
+  an invented sign-in or lockout included (CWE-117), or an escape sequence moved a terminal's cursor.
+  Closed from this release: `SecurityEventLog.LoginFailedUnknownAccount` replaces every line ending in the
+  masked e-mail with a space, then every control character left, and `AuthFlowTests` sends the seven line
+  endings, a vertical tab, an escape and a file separator. No other security event carries text a caller
+  typed. If you log anything else a caller typed, pass it through `ReplaceLineEndings(" ")` as a template
+  argument, and replace every other control character in free text, as `SecurityEventLog` does.
 
 ## [0.2.0] - 2026-11-15
 

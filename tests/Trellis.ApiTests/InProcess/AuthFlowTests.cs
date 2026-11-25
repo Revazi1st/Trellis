@@ -260,13 +260,15 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
 
     /// <summary>
     /// Sign-in takes the e-mail as typed (its validator checks emptiness and length only), so an anonymous
-    /// caller can put a line break in it, and the mask keeps everything from the last <c>@</c> on and the
-    /// local part's first text element. Left as typed, the break would end the 1102 line early and what
-    /// follows would read as a line of its own (CWE-117). Each row is one line break a log reader may end
-    /// a line at (the ones <see cref="string.ReplaceLineEndings(string)"/> knows), named by its code points,
-    /// which the test types where <c>{chars}</c> stands: a red row says which one failed, and no raw separator
-    /// reaches the run's output. <c>{domain}</c> is a fresh domain per row, which the mask keeps, so the row
-    /// finds its own line among the fixture's.
+    /// caller can put a line break or another control character in it, and the mask keeps everything from the
+    /// last <c>@</c> on and the local part's first text element. Left as typed, a break would end the 1102 line
+    /// early and what follows would read as a line of its own (CWE-117), and an escape sequence would move a
+    /// terminal's cursor. Each row is one line break a log reader may end a line at (the ones
+    /// <see cref="string.ReplaceLineEndings(string)"/> knows) or one control character it leaves alone (a vertical
+    /// tab or a file separator, which some readers split at, an escape a terminal acts on), named by its code
+    /// points, which the test types where <c>{chars}</c> stands: a red row says which one failed, and no raw
+    /// separator reaches the run's output. <c>{domain}</c> is a fresh domain per row, which the mask keeps, so
+    /// the row finds its own line among the fixture's.
     /// </summary>
     [Theory]
     [InlineData("U+000A", "ghost@{domain}{chars}info: Forged[1101] Sign-in succeeded", "g***@{domain} info: Forged[1101] Sign-in succeeded")]
@@ -276,9 +278,13 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     [InlineData("U+2028", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
     [InlineData("U+2029", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
     [InlineData("U+000C", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+000B", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+001B", "ghost@{domain}{chars}[1A{chars}[2KForged", "g***@{domain} [1A [2KForged")]   // cursor up, erase the line
+    [InlineData("U+001C", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
     [InlineData("U+000A", "{chars}ghost@{domain}", " ***@{domain}")]          // the local part's first text element is the line break
     [InlineData("U+000D U+000A", "{chars}ghost@{domain}", " ***@{domain}")]   // CR LF is one text element, so the mask keeps both
-    public async Task SecurityEvents_UnknownEmailWithALineBreak_StaysOnTheOneLineWithItsMaskedAddress(string codePoints, string typed, string masked)
+    [InlineData("U+000B", "{chars}ghost@{domain}", " ***@{domain}")]
+    public async Task SecurityEvents_UnknownEmailWithALineBreakOrControlCharacter_StaysOnTheOneLineWithItsMaskedAddress(string codePoints, string typed, string masked)
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         string domain = $"{Guid.NewGuid():N}.inprocess.test";
@@ -297,7 +303,7 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
         CapturedLog line = factory.Logs.All
             .Where(e => e.EventName == "LoginFailedUnknownAccount" && e.Message.Contains(domain, StringComparison.Ordinal))
             .ShouldHaveSingleItem();
-        line.Message.IndexOfAny(['\r', '\n', '\u0085', '\u2028', '\u2029', '\f']).ShouldBe(-1, $"{codePoints} typed, line: {Printable(line.Message)}");
+        line.Message.Count(IsBreakOrControl).ShouldBe(0, $"{codePoints} typed, line: {Printable(line.Message)}");
         // Both forms, compiled in every configuration: under --use-serilog the line is Serilog's rendering, the address in double quotes.
         line.Message.ShouldBeOneOf(
             $"Sign-in failed for {maskedAddress}: no such account",
