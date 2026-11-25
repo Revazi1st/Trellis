@@ -29,13 +29,14 @@
 #      timestamp) can contain one, and the generated project's 'migrations remove' then finds nothing
 #      to remove (MigrationSnapshotTests refuses such an id in the template repository)
 #   7  one initial migration shipped (3 files under the Persistence project's Migrations/: it, its
-#      designer and the snapshot), with tenant columns in the snapshot exactly when FLAGS hold
-#      "--use-multitenancy true": the template keeps two sets, and without template.json's modifier
-#      dotnet new still succeeds and ships both
+#      designer and the one model snapshot), with tenant columns in the snapshot exactly when FLAGS
+#      hold "--use-multitenancy true": the template keeps two sets, and without template.json's
+#      modifier dotnet new still succeeds and ships both
 #   8  none of the files that must never ship: .DS_Store, appsettings.*.local.json, *.pfx
-# Every check runs. A failure prints what it found, then its message: a GitHub annotation (::error::)
-# under GitHub Actions, an "error:" line otherwise. The exit code is 1 when any check failed and 2 for a
-# bad argument; a passing project prints nothing.
+# Every check runs. A failed check prints its message, a GitHub annotation (::error::) under GitHub
+# Actions and an "error:" line otherwise, and what it found: the lines above the message for checks 2
+# to 5, the paths below it for 1 and 8, in the message itself for 6 and 7. The exit code is 1 when any
+# check failed and 2 for a bad argument; a passing project prints nothing.
 #
 # Template CI's instantiate job runs it on every leg right after dotnet new (its "Content gate" step),
 # scripts/test-template.sh runs it at the same point of every leg (the CONTENT column), and ci.yml runs
@@ -121,15 +122,23 @@ gate() {
   done
 
   # 7. What shipped is counted: one migration, its designer and the snapshot, with the tenant columns
-  # exactly when the leg asked for them.
+  # exactly when the leg asked for them. A pattern that matches nothing stays as it was written, so
+  # each list is emptied when its first word is not a file.
+  set -- src/Infrastructure/*.Persistence/Migrations/*ModelSnapshot.cs
+  [ -e "$1" ] || set --
+  snapshots=$#
+  tenant_columns=0
+  if [ "$snapshots" -ne 0 ]; then
+    tenant_columns=$(cat "$@" | grep -c '"TenantId"' || true)
+  fi
   set -- src/Infrastructure/*.Persistence/Migrations/*.cs
-  tenant_columns=$(grep -c '"TenantId"' src/Infrastructure/*.Persistence/Migrations/*ModelSnapshot.cs || true)
+  [ -e "$1" ] || set --
   case " $flags " in
     *" --use-multitenancy true "*) wanted="some" ;;
     *) wanted="no" ;;
   esac
-  if [ "$#" -ne 3 ] || { [ "$wanted" = some ] && [ "$tenant_columns" -eq 0 ]; } || { [ "$wanted" = no ] && [ "$tenant_columns" -ne 0 ]; }; then
-    error "The generated project holds $# file(s) under Migrations/ and $tenant_columns TenantId line(s) in its snapshot; this leg must get one initial migration (3 files) with $wanted tenant columns. See the sources of .template.config/template.json."
+  if [ "$#" -ne 3 ] || [ "$snapshots" -ne 1 ] || { [ "$wanted" = some ] && [ "$tenant_columns" -eq 0 ]; } || { [ "$wanted" = no ] && [ "$tenant_columns" -ne 0 ]; }; then
+    error "The generated project holds $# file(s) under Migrations/, $snapshots of them a model snapshot, with $tenant_columns TenantId line(s) in it; this leg must get one initial migration (3 files: the migration, its designer and the snapshot) with $wanted tenant columns. See the sources of .template.config/template.json."
     fail=1
   fi
 
@@ -232,6 +241,8 @@ self_test() {
   expect "1: a folder named after the template" fail "error: Generated files or directories still named after the template:" "./src/Core/Trellis.Domain"
   printf '%s\n' '# Notes' | put docs/TRELLIS-notes.md
   expect "1: a file named after the template, in capitals" fail "error: Generated files or directories still named after the template:" "./docs/TRELLIS-notes.md"
+  printf '%s\n' '{}' | put docs/.trellis-template.json
+  expect "1: the marker's name anywhere but the root" fail "error: Generated files or directories still named after the template:" "./docs/.trellis-template.json"
 
   # 2
   printf '%s\n' 'namespace Acme.Shop.Api;' "${h}if (UseRedis)" 'using StackExchange.Redis;' "${h}endif" \
@@ -248,6 +259,15 @@ self_test() {
   expect "4: a sentence that reads 'a $name'" fail \
     "error: A sentence reads 'a $name $ellipsis' after the rename (listed above): its source says 'a Trellis $ellipsis'; write 'a change to Trellis' instead." \
     "./docs/development.md:3:"
+  printf '%s\n' "A $name change starts with a failing test." | put docs/development.md
+  expect "4: a sentence that starts 'A $name'" fail \
+    "error: A sentence reads 'a $name $ellipsis' after the rename (listed above): its source says 'a Trellis $ellipsis'; write 'a change to Trellis' instead." \
+    "./docs/development.md:1:"
+
+  # 2 to 5 read text: a binary file (one with a NUL in it) that holds every one of their defects passes.
+  printf 'PNG\0%s\n' "${h}if (UseRedis)" 'TRELLIS_SDK_IMAGE' "a $name change" './scripts/test-template.sh' \
+    | put "src/Presentation/UI/$name.UI.Web/wwwroot/logo.png"
+  expect "2 to 5: their defects inside a binary file" pass "" ""
 
   # 5: this week's defect first, a test's comment that names a script the template does not ship.
   for script in test-template.sh check-template-toggles.sh check-readme-sync.sh regenerate-initial-migrations.sh \
@@ -275,16 +295,25 @@ self_test() {
   printf '%s\n' '[Migration("20261102090000_Second")]' 'partial class Second' '{' '}' \
     | put "$migrations/20261102090000_Second.Designer.cs"
   expect "7: two migrations shipped" fail \
-    "error: The generated project holds 5 file(s) under Migrations/ and 0 TenantId line(s) in its snapshot; this leg must get one initial migration (3 files) with no tenant columns." ""
+    "error: The generated project holds 5 file(s) under Migrations/, 1 of them a model snapshot, with 0 TenantId line(s) in it; this leg must get one initial migration (3 files: the migration, its designer and the snapshot) with no tenant columns." ""
   rm -r "${tree:?}/$migrations"
   expect "7: no migration shipped" fail \
-    "this leg must get one initial migration (3 files) with no tenant columns. See the sources of .template.config/template.json." ""
+    "error: The generated project holds 0 file(s) under Migrations/, 0 of them a model snapshot, with 0 TenantId line(s) in it; this leg must get one initial migration (3 files: the migration, its designer and the snapshot) with no tenant columns. See the sources of .template.config/template.json." ""
+  # Three files, none of them the snapshot: the count alone would pass it, on a multi-tenant leg too.
+  mv "$tree/$migrations/AppDbContextModelSnapshot.cs" "$tree/$migrations/20261102090000_Second.cs"
+  expect "7: three files and no snapshot" fail \
+    "error: The generated project holds 3 file(s) under Migrations/, 0 of them a model snapshot, with 0 TenantId line(s) in it; this leg must get one initial migration (3 files: the migration, its designer and the snapshot) with no tenant columns." ""
+  seed tenant
+  mv "$tree/$migrations/AppDbContextModelSnapshot.cs" "$tree/$migrations/20261102090000_Second.cs"
+  expect "7: three files and no snapshot on a leg with multi-tenancy" fail \
+    "0 of them a model snapshot, with 0 TenantId line(s) in it; this leg must get one initial migration (3 files: the migration, its designer and the snapshot) with some tenant columns." "" \
+    --include-ui false --use-multitenancy true
   seed tenant
   expect "7: tenant columns on a leg without multi-tenancy" fail \
-    "error: The generated project holds 3 file(s) under Migrations/ and 2 TenantId line(s) in its snapshot; this leg must get one initial migration (3 files) with no tenant columns." "" \
+    "error: The generated project holds 3 file(s) under Migrations/, 1 of them a model snapshot, with 2 TenantId line(s) in it; this leg must get one initial migration (3 files: the migration, its designer and the snapshot) with no tenant columns." "" \
     --include-ui false
   expect "7: no tenant columns on a leg with multi-tenancy" fail \
-    "error: The generated project holds 3 file(s) under Migrations/ and 0 TenantId line(s) in its snapshot; this leg must get one initial migration (3 files) with some tenant columns." "" \
+    "error: The generated project holds 3 file(s) under Migrations/, 1 of them a model snapshot, with 0 TenantId line(s) in it; this leg must get one initial migration (3 files: the migration, its designer and the snapshot) with some tenant columns." "" \
     --include-ui false --use-multitenancy true
 
   # 8
