@@ -76,11 +76,11 @@ It runs `scripts/check-template-toggles.sh` (toggle wiring, directive placement,
 packs the template once (the working tree as it is, untracked files included), installs the package
 into a private hive (`--debug:custom-hive`, so your real template list stays untouched), and for each
 leg instantiates it with the leg's flags, runs `scripts/ef.sh`'s first-migration command on the
-unbuilt tree (the default leg only), regenerates the initial migration where the leg does, builds
-Release, runs the generated `ci.yml`'s format check (`dotnet format --verify-no-changes`) and then
-the tests on the legs Template CI tests and, when you set `RUN_UI_TESTS=1`, the browser tests of the
-leg that has them (it needs `pwsh`, installs Chromium and starts the generated AppHost twice), as
-Template CI's instantiate job does. It prints a table of results and exits 1 on any failure, keeping
+unbuilt tree (the default leg and the legs with multi-tenancy, where it also proves that the shipped
+migration matches the model), builds Release, runs the generated `ci.yml`'s format check
+(`dotnet format --verify-no-changes`) and then the tests on the legs Template CI tests and, when you
+set `RUN_UI_TESTS=1`, the browser tests of the leg that has them (it needs `pwsh`, installs Chromium
+and starts the generated AppHost twice), as Template CI's instantiate job does. It prints a table of results and exits 1 on any failure, keeping
 the logs and the generated solutions in the folder it names.
 Because it packs, the legs get the package's content, as an install from nuget.org does, where
 Template CI's instantiate job installs the source folder; the two exclude lists that decide those
@@ -89,6 +89,11 @@ kept in step by hand. `RUN_ASPIRE_E2E=0` skips the Aspire E2E. The content gates
 template's name, the consumer files, actionlint over the generated workflows) and the Windows leg
 run only in Template CI.
 The `add-toggle` skill covers adding a toggle; `docs/releasing.md` covers releasing.
+
+A change to the persistence model, and an EF Core bump, regenerate both initial migrations the
+template ships: `./scripts/regenerate-initial-migrations.sh` (it needs a local SDK and `jq`, and
+contacts no database). `MigrationSnapshotTests` fails until both are regenerated, and Template CI
+runs the script's `--check`, which fails while a committed set is not what the script generates.
 
 ## The website
 

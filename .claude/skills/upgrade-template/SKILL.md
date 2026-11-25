@@ -94,7 +94,9 @@ until the upgrade is merged. It needs the `dotnet` CLI on the host or in the dev
       (`./scripts/ef.sh migrations add <Name> --project src/Infrastructure/Trellis.Persistence`) and
       never regenerate `InitialCreate`, which the database's `__EFMigrationsHistory` already records
       (the `add-migration` skill) [`MigrationDriftTests` fails while the model and the migrations
-      disagree].
+      disagree]. A `Migrations/` that differs only because the template now ships the multi-tenant
+      initial migration under its own id is not a model change: keep yours and apply nothing
+      (`MigrationDriftTests` stays green).
 - [ ] **Run the gates**: `./scripts/dotnet.sh build Trellis.slnx -c Release`,
       `./scripts/dotnet.sh test Trellis.slnx`, `./scripts/check-adr-links.sh` (a new template ADR needs
       its line in `docs/INDEX.md`, above *Project decisions*, or the check fails) and

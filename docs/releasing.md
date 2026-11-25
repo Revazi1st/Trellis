@@ -61,7 +61,9 @@ published release, so it never documents a version nuget.org does not have.
    needs); every npm update, which here means the documentation site's (`site/`: Astro and Starlight
    are 0.x releases its build leans on, so read the notes and look at the site before merging); and
    the weekly GitHub Actions group, whose pull request edits workflow files, which the Actions token
-   may never merge. `dependabot.yml` holds every new version back for a week
+   may never merge. An EF Core bump is red until its branch has both shipped initial migrations
+   regenerated: check the branch out, run `scripts/regenerate-initial-migrations.sh`, commit the
+   result. `dependabot.yml` holds every new version back for a week
    (`cooldown`; version updates only, a security update still arrives at once). Two repository
    settings make it work, both set once: *Settings → General → Allow auto-merge* (with
    *Automatically delete head branches*), and a ruleset on `main` that requires the CI, Template CI
