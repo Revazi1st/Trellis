@@ -134,6 +134,25 @@ public sealed class AppHostStartTests
     }
 
     /// <summary>
+    /// The step is Aspire's own wait for the resource that fails, which stops on it as the watch does. Here the
+    /// failure comes first, so both are done when the helper looks and the step's exception is read first: the
+    /// start still ends with the resource's sentence (its state and exit code), the wait's exception under it.
+    /// </summary>
+    [Fact(Timeout = WatchLimit)]
+    public async Task A_wait_that_Aspire_stops_on_a_watched_failure_ends_the_start_with_the_resources_sentence()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await using Planted planted = new(Api);
+        await planted.PublishAsync(Api, KnownResourceStates.Finished, exitCode: 134);
+
+        DistributedApplicationException failed = await Should.ThrowAsync<DistributedApplicationException>(
+            planted.App.RunUnlessOneFailsAsync([Api], token => planted.App.ResourceNotifications.WaitForResourceHealthyAsync(
+                Api, WaitBehavior.StopOnResourceUnavailable, token), ct));
+        failed.Message.ShouldBe($"{Api} failed: {KnownResourceStates.Finished}, exit code 134");
+        failed.InnerException.ShouldBeOfType<DistributedApplicationException>();
+    }
+
+    /// <summary>
     /// An unwatched resource fails first and a watched one after it: the start ends on the second, so the first
     /// was read and passed over. The watch reads changes in the order they were published.
     /// </summary>

@@ -210,8 +210,9 @@ public sealed class AppHostFixture : IAsyncDisposable
             // start at once with its own sentence. Healthy is each host's own /health answering (the AppHost's
             // WithHttpHealthCheck), and the API starts only once the migration job has migrated, seeded and
             // exited with 0. The waits keep StopOnResourceUnavailable, Aspire's own stop for the resource a
-            // wait names; the watch covers the resources behind it. The time limit covers what is left: a
-            // resource that keeps running and never becomes healthy.
+            // wait names, and when that stop comes first the helper still ends with the resource's sentence;
+            // the watch covers the resources behind it. The time limit covers what is left: a resource that
+            // keeps running and never becomes healthy.
             await started.RunUnlessOneFailsAsync(needed, started.StartAsync, ct);
             await started.RunUnlessOneFailsAsync(needed, token => started.ResourceNotifications.WaitForResourceHealthyAsync(
                 ServiceNames.Api, WaitBehavior.StopOnResourceUnavailable, token), ct);

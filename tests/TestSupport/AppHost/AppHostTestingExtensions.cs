@@ -148,8 +148,11 @@ internal static class AppHostTestingExtensions
     /// begins with each one's current state, so a failure from before the step is seen too) and applies
     /// <see cref="FailureOf"/> to the watched names only. A failure that comes first cancels the step, lets it
     /// unwind, and throws a <see cref="DistributedApplicationException"/> whose message is that sentence. A step
-    /// that ends first is the outcome, its exception included, and the watch is stopped. The caller's own
-    /// cancellation (a time limit) cancels both, and surfaces from the step as a cancellation.
+    /// that ends first is the outcome, its exception included, and the watch is stopped; but a step that fails
+    /// while a watched resource has failed (Aspire's own wait stops on the resource it names) ends with that
+    /// resource's sentence too, the step's exception as the inner one, so the message gives the resource, its
+    /// state and its exit code whichever of the two noticed first. The caller's own cancellation (a time limit)
+    /// cancels both, and surfaces from the step as a cancellation.
     /// </summary>
     internal static async Task RunUnlessOneFailsAsync(
         this DistributedApplication app,
@@ -173,11 +176,27 @@ internal static class AppHostTestingExtensions
 
         // The step ended first, or the caller cancelled. The watch is stopped and awaited without throwing: its
         // cancellation is nobody's outcome, and a watch that broke leaves the step to end on its own, under the
-        // caller's limit. The step's own outcome is what this returns.
+        // caller's limit.
         await watchCancellation.CancelAsync();
         await ((Task)failure).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        // A step that faulted may have stopped on the failure itself: Aspire's own wait for the resource it names
+        // does, with a sentence that gives neither the state nor the exit code. A watched resource that has
+        // failed by now is named as the watch names it, the step's exception under it.
+        if (running is { IsFaulted: true, Exception.InnerException: { } stepFailure }
+            && FailureAmong(app.ResourceNotifications, watched) is { } failed)
+        {
+            throw new DistributedApplicationException(failed, stepFailure);
+        }
+
+        // Otherwise the step's own outcome is what this returns.
         await running;
     }
+
+    /// <summary>The first watched resource whose current state is a failure, as <see cref="FailureOf"/> says it.</summary>
+    private static string? FailureAmong(ResourceNotificationService notifications, IReadOnlyCollection<string> watched)
+        => watched
+            .Select(name => notifications.TryGetCurrentState(name, out ResourceEvent? current) ? FailureOf(name, current.Snapshot) : null)
+            .FirstOrDefault(static sentence => sentence is not null);
 
     /// <summary>The first watched resource that fails, as <see cref="FailureOf"/> says it; the watch ends only by cancellation.</summary>
     private static async Task<string?> FirstFailureAsync(
