@@ -10,7 +10,9 @@ namespace Trellis.ArchitectureTests;
 /// Every <c>[LoggerMessage]</c> method of Persistence's <c>SecurityEventLog</c> that takes a string is private,
 /// reached only through a wrapper that puts the text on one line (<c>LoginFailedUnknownAccount</c> masks the
 /// e-mail, then replaces each line ending and every other control character), or is listed here with the reason
-/// no caller typed its string. The class is internal, so it is reached by name through the layer anchor, as
+/// no caller typed its string. The fact holds who can call an event, not what a wrapper does to the text: that
+/// is held by the wrapper's own rows (1102's are in <c>AuthFlowTests</c>), and a new wrapper lands with rows of
+/// its own. The class is internal, so it is reached by name through the layer anchor, as
 /// <see cref="EmailAddressMaskTests"/> reaches its mask.
 /// </summary>
 public sealed class SecurityEventLogTests

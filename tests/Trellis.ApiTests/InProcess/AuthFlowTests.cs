@@ -281,6 +281,8 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     [InlineData("U+000B", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
     [InlineData("U+001B", "ghost@{domain}{chars}[1A{chars}[2KForged", "g***@{domain} [1A [2KForged")]   // cursor up, erase the line
     [InlineData("U+001C", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+007F", "ghost@{domain}{chars}Forged", "g***@{domain} Forged")]
+    [InlineData("U+009B", "ghost@{domain}{chars}1A{chars}2KForged", "g***@{domain} 1A 2KForged")]   // CSI: the one-character form of ESC [
     [InlineData("U+000A", "{chars}ghost@{domain}", " ***@{domain}")]          // the local part's first text element is the line break
     [InlineData("U+000D U+000A", "{chars}ghost@{domain}", " ***@{domain}")]   // CR LF is one text element, so the mask keeps both
     [InlineData("U+000B", "{chars}ghost@{domain}", " ***@{domain}")]
@@ -490,8 +492,7 @@ public sealed class AuthFlowTests(AuthFlowTests.Factory factory) : IClassFixture
     /// <summary>
     /// Keeps every log line the host writes, so tests can assert on security events. Under <c>--use-serilog</c>
     /// a line arrives as Serilog renders it, a string property in double quotes (<c>Sign-in failed for "g***@x.test"</c>),
-    /// so a test asserts a fragment or accepts both forms, never the whole line as the default formatter writes it;
-    /// <c>scripts/test-template.sh no-ui-with-serilog</c> is the run that shows it.
+    /// so a test asserts a fragment or accepts both forms, never the whole line as the default formatter writes it.
     /// </summary>
     public sealed class CapturingLoggerProvider : ILoggerProvider
     {

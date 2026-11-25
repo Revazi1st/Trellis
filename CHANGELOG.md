@@ -194,7 +194,7 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   of their own making, an invented sign-in or lockout included (CWE-117), or an escape sequence acted on
   the terminal showing the log. Closed from this release: `SecurityEventLog.LoginFailedUnknownAccount`
   turns every line ending in the masked e-mail into a space, then every control character left, and
-  `AuthFlowTests` sends the seven line endings, a vertical tab, an escape and a file separator. No other
+  `AuthFlowTests` sends the seven line endings, a vertical tab, an escape, a file separator, DEL and a C1 control. No other
   security event carries text a caller typed, and `SecurityEventLogTests` now fails on an event other code
   can call with a string unless it names the reason no caller typed it. If you log anything else a caller
   typed, pass it through `ReplaceLineEndings(" ")` as a template argument, and replace every other control
