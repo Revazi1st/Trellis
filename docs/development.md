@@ -267,9 +267,12 @@ web host is at `http://localhost:5170`.
 In the dev container the tests cannot start the application: the AppHost cannot orchestrate from
 inside a container (ADR-0008), so without an address every browser test fails at once and says so.
 Run the projects from their `(dev container)` launch profiles
-([above](#from-the-ide-in-the-dev-container-no-local-sdk)) and name the web host:
+([above](#from-the-ide-in-the-dev-container-no-local-sdk)) and name the web host. The dev
+container's image carries no browser and none of the system libraries Chromium needs: install it
+there with its dependencies, as CI does, after the build above:
 
 ```bash
+pwsh artifacts/bin/Trellis.UiTests/debug/playwright.ps1 install chromium --with-deps  # once per container
 RUN_UI_TESTS=1 UI_TESTS_BASE_URL=http://localhost:5170 dotnet test tests/Trellis.UiTests
 ```
 
