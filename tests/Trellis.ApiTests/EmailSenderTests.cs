@@ -161,6 +161,7 @@ public sealed class EmailSenderTests
         // What the outbox records (the message, and the exception as text) comes first; every failed condition is reported.
         failure.ShouldSatisfyAllConditions(
             () => failure.Message.ShouldContain("j***@example.com does not pass MailKit's SMTPUTF8 address check (MixedScripts)."),
+            () => failure.Message.ShouldNotContain("Email:Smtp:FromAddress", customMessage: "the recipient's address is not the setting"),
             () => failure.Message.ShouldEndWith(MailKitRefusedTheAddress),
             () => failure.Message.ShouldNotContain("relay's reply"),
             () => failure.ToString().ShouldNotContain(recipient),
@@ -173,7 +174,8 @@ public sealed class EmailSenderTests
     public async Task Send_FromAnAddressMailKitRefusesForSmtpUtf8_NamesTheSendersMaskNotTheRecipients()
     {
         // MailKit checks the sender before the recipients, so a refused Email:Smtp:FromAddress fails every message.
-        // The message names the refused address's mask (b***), which the recipient's (j***) cannot stand in for.
+        // The message names the setting and the refused address's mask (b***), which the recipient's (j***) cannot
+        // stand in for.
         const string sender = "bαжlling@example.com";
         using var relay = new TcpListener(IPAddress.Loopback, 0);
         relay.Start();
@@ -186,12 +188,34 @@ public sealed class EmailSenderTests
         string wire = await conversation;
 
         failure.ShouldSatisfyAllConditions(
-            () => failure.Message.ShouldContain("b***@example.com does not pass MailKit's SMTPUTF8 address check (MixedScripts)."),
+            () => failure.Message.ShouldContain("Email:Smtp:FromAddress (b***@example.com) does not pass MailKit's SMTPUTF8 address check (MixedScripts)."),
             () => failure.Message.ShouldEndWith(MailKitRefusedTheAddress),
             () => failure.Message.ShouldNotContain("relay's reply"),
             () => failure.ToString().ShouldNotContain(sender),
             () => failure.Mailbox.Address.ShouldBe("b***@example.com", "MailKit's invalid mailbox is the full address"),
             () => wire.ShouldNotContain("MAIL FROM"));
+    }
+
+    [Fact]
+    public async Task Send_FromAnAddressMailKitRefusesForSmtpUtf8_NamesTheSettingWhenTheSendersMaskIsTheRecipients()
+    {
+        // j***@example.com is the mask of this sender and of the recipient alike: without the setting's name, a
+        // refused Email:Smtp:FromAddress, which fails every message, would read as one refused recipient.
+        const string sender = "jαжbilling@example.com";
+        using var relay = new TcpListener(IPAddress.Loopback, 0);
+        relay.Start();
+        Task<string> conversation = FakeRelayAsync(
+            relay, recipientReply: "250 ok", TestContext.Current.CancellationToken, offersSmtpUtf8: true);
+        await using ServiceProvider services = BuildServices(
+            new CapturingLoggerProvider(), LocalRelay(relay, $"Email:Smtp:FromAddress={sender}"));
+
+        SmtpUtf8AddressException failure = await Should.ThrowAsync<SmtpUtf8AddressException>(() => SendOneAsync(services, Recipient));
+        await conversation;
+
+        failure.ShouldSatisfyAllConditions(
+            () => failure.Message.ShouldContain("Email:Smtp:FromAddress (j***@example.com) does not pass MailKit's SMTPUTF8 address check (MixedScripts)."),
+            () => failure.ToString().ShouldNotContain(sender),
+            () => failure.Mailbox.Address.ShouldBe("j***@example.com", "MailKit's invalid mailbox is the full address"));
     }
 
     [Fact]
