@@ -63,6 +63,8 @@ public sealed partial class DatabaseEngineTests
             "swaps the AppHost's database server for a throwaway one, found by its resource name",
         ["tests/Trellis.ApiTests/ThrowawayDatabaseTests.cs"] =
             "pins that swap against an AppHost model with the same resource",
+        ["tests/Trellis.ApiTests/AppHostStartTests.cs"] =
+            "reads the AppHost model: the server among the resources a start watches, its admin tool's resource among those it does not",
         ["tests/Trellis.ArchitectureTests/ContainerImageTests.cs"] =
             "the image allowlist names the server's image and the AppHost call that pulls it",
     };

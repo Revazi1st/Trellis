@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
 using Shouldly;
 using Trellis.ServiceDefaults;
@@ -126,13 +127,22 @@ public sealed class UiTestConfigurationTests
     public void A_resources_lines_go_to_a_file_of_its_name_and_every_other_line_to_the_AppHosts(string category, string sink)
         => AppLogs.SinkNameOf(category).ShouldBe(sink);
 
+    /// <summary>
+    /// The message of a failed start, on a planted folder. The API crashed and, as in CI, the reason sits above
+    /// the last lines: here it is the ninth of forty, the first at Error, and the stack trace under it fills
+    /// the last lines, so the reason is read only from the API's first error lines. The migration job printed
+    /// no error line, and the web host's one error (the watch's own stop of its start, a text that carries its
+    /// stack trace) is among its last lines, so neither gets a block of first error lines; nor does the
+    /// AppHost, whose first error is a health probe from while the containers came up.
+    /// </summary>
     [Fact]
-    public void A_failed_start_names_each_resources_state_its_last_lines_and_the_folder_that_holds_them_all()
+    public void A_failed_start_names_each_resources_state_its_first_error_lines_its_last_lines_and_the_folder_that_holds_them_all()
     {
+        const string Reason = "Unhandled exception. OptionsValidationException: 'Outbox:BatchSize must be between 1 and 1000.'";
         string folder = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         try
         {
-            // The resources Describe tails, by the constants it reads: a rename moves both sides.
+            // The resources Describe reads, by the constants it reads: a rename moves both sides.
             using AppLogs logs = new(folder);
             ILogger migrations = logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Migrations}");
             for (int line = 1; line <= 20; line++)
@@ -140,27 +150,133 @@ public sealed class UiTestConfigurationTests
                 Print(migrations, LogLevel.Information, $"line {line}");
             }
 
-            Print(logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Api}"), LogLevel.Error, "Host terminated unexpectedly", new InvalidOperationException("no signing key"));
+            ILogger api = logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Api}");
+            for (int line = 1; line <= 40; line++)
+            {
+                Print(api, line < 9 ? LogLevel.Information : LogLevel.Error, line == 9 ? Reason : $"api line {line}");
+            }
+
+            // The web host: its two waits, then the watch's own stop of its start. A resource's logger folds an
+            // exception into the line's text, so the stack trace comes as lines of the text, not as an exception.
+            ILogger web = logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Web}");
+            Print(web, LogLevel.Information, "Waiting for resource 'api' to enter the 'Running' state.");
+            Print(web, LogLevel.Information, "Waiting for resource 'api' to become healthy.");
+            Print(web, LogLevel.Error, string.Join(
+                '\n',
+                "Failed to create resource web",
+                "System.OperationCanceledException: The operation was canceled.",
+                "   at System.Threading.CancellationToken.ThrowOperationCanceledException()"));
+
+            // The AppHost: a health probe that failed while the containers came up, as in a healthy start,
+            // fifteen lines that push it out of the last ones, and an exception with a stack trace, as a failed
+            // health check logs it.
+            ILogger appHost = logs.CreateLogger("Microsoft.Extensions.Diagnostics.HealthChecks.DefaultHealthCheckService");
+            Print(appHost, LogLevel.Error, "Health check postgres_check with status Unhealthy");
+            for (int entry = 1; entry <= 15; entry++)
+            {
+                Print(appHost, LogLevel.Information, $"apphost entry {entry}");
+            }
+
+            Exception withStack = ExceptionDispatchInfo.SetCurrentStackTrace(new InvalidOperationException("no signing key"));
+            Print(appHost, LogLevel.Error, "Host terminated unexpectedly", withStack);
 
             string message = AppHostFixture.Describe(
-                $"Stopped waiting for resource '{ServiceNames.Api}'.",
-                [(ServiceNames.Migrations, "Finished, exit code 0"), (ServiceNames.Api, "FailedToStart")],
+                $"{ServiceNames.Api} failed: Finished, exit code 134",
+                [(ServiceNames.Migrations, "Finished, exit code 0"), (ServiceNames.Api, "Finished, exit code 134")],
                 logs);
 
-            message.ShouldContain($"did not come up for the browser tests: Stopped waiting for resource '{ServiceNames.Api}'.");
-            message.ShouldContain($"Resources: {ServiceNames.Migrations} = Finished, exit code 0; {ServiceNames.Api} = FailedToStart");
+            message.ShouldContain($"did not come up for the browser tests: {ServiceNames.Api} failed: Finished, exit code 134");
+            message.ShouldContain($"Resources: {ServiceNames.Migrations} = Finished, exit code 0; {ServiceNames.Api} = Finished, exit code 134");
             // The last fifteen lines of a resource, not its first ones.
             message.ShouldNotContain("line 5" + Environment.NewLine);
             message.ShouldContain("line 6" + Environment.NewLine);
             message.ShouldContain("line 20" + Environment.NewLine);
-            message.ShouldContain("Host terminated unexpectedly");
-            message.ShouldContain("no signing key");
-            message.ShouldContain($"Last lines of {ServiceNames.Web}: (it printed nothing)");
+            // The reason, under the API's first error lines and above its last ones: the first five lines at
+            // Error, and nothing the API printed at Information.
+            int firstErrors = message.IndexOf($"First error lines of {ServiceNames.Api}:", StringComparison.Ordinal);
+            firstErrors.ShouldBeGreaterThan(-1);
+            message.IndexOf(Reason, StringComparison.Ordinal).ShouldBeGreaterThan(firstErrors);
+            message.IndexOf($"Last lines of {ServiceNames.Api}:", StringComparison.Ordinal).ShouldBeGreaterThan(message.IndexOf(Reason, StringComparison.Ordinal));
+            message.ShouldNotContain("api line 8" + Environment.NewLine);
+            message.ShouldContain("api line 13" + Environment.NewLine);
+            message.ShouldNotContain("api line 14" + Environment.NewLine);
+            message.ShouldNotContain("api line 25" + Environment.NewLine);
+            message.ShouldContain("api line 26" + Environment.NewLine);
+            message.ShouldContain("api line 40" + Environment.NewLine);
+            message.ShouldNotContain($"First error lines of {ServiceNames.Migrations}:");
+            // The web host's error is among its last lines, printed there and cut after its next line, as an
+            // exception is.
+            message.ShouldNotContain($"First error lines of {ServiceNames.Web}:");
+            message.ShouldContain(
+                $"Last lines of {ServiceNames.Web}:" + Environment.NewLine
+                + "  Information Waiting for resource 'api' to enter the 'Running' state." + Environment.NewLine
+                + "  Information Waiting for resource 'api' to become healthy." + Environment.NewLine
+                + "  Error       Failed to create resource web" + Environment.NewLine
+                + "              System.OperationCanceledException: The operation was canceled." + Environment.NewLine);
+            // The AppHost's last lines only: its early probe is not in the message, and the error among its last
+            // lines is printed there, its exception by its first line, under it.
+            message.ShouldNotContain($"First error lines of {AppLogs.AppHost}:");
+            message.ShouldNotContain("postgres_check");
+            message.ShouldContain($"Last lines of {AppLogs.AppHost}:");
+            message.ShouldContain(
+                "  Error       Host terminated unexpectedly" + Environment.NewLine
+                + "              System.InvalidOperationException: no signing key" + Environment.NewLine);
+            message.ShouldNotContain("   at ");
             message.ShouldContain(folder);
 
-            // Every line is on disk while the application still runs: a cancelled job keeps what was printed.
+            // Every line is on disk while the application still runs: a cancelled job keeps what was printed,
+            // an exception with its stack trace.
             ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Migrations}.log")).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length.ShouldBe(20);
-            ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Api}.log")).ShouldContain("no signing key");
+            ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Api}.log")).ShouldContain(Reason);
+            string appHostFile = ReadWhileOpen(Path.Combine(folder, $"{AppLogs.AppHost}.log"));
+            appHostFile.ShouldContain("Health check postgres_check with status Unhealthy");
+            appHostFile.ShouldContain("System.InvalidOperationException: no signing key");
+            appHostFile.ShouldContain("   at ");
+            ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Web}.log"))
+                .ShouldContain("   at System.Threading.CancellationToken.ThrowOperationCanceledException()");
+
+            // A resource that printed nothing says so.
+            using AppLogs silent = new(Path.Combine(folder, "silent"));
+            AppHostFixture.Describe("planted", [], silent).ShouldContain($"Last lines of {ServiceNames.Web}: (it printed nothing)");
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The filter the fixture puts in front of the files, through a logger factory as the AppHost's: every
+    /// category at Information, a resource's lines among them, except the health checks' HTTP client, whose
+    /// warnings still come through.
+    /// </summary>
+    [Fact]
+    public void The_files_take_every_line_at_Information_but_the_HTTP_clients_only_from_Warning()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        try
+        {
+            using AppLogs logs = new(folder);
+            using (ILoggerFactory factory = LoggerFactory.Create(logging => AppHostFixture.CaptureInto(logging, logs)))
+            {
+                Print(factory.CreateLogger("Aspire.Hosting.DistributedApplication"), LogLevel.Information, "Distributed application starting.");
+                Print(factory.CreateLogger($"{AppHostFixture.HttpClientCategory}.health-checks.LogicalHandler"), LogLevel.Information, "Start processing HTTP request GET http://localhost:44377/readyz");
+                Print(factory.CreateLogger($"{AppHostFixture.HttpClientCategory}.health-checks.ClientHandler"), LogLevel.Information, "Sending HTTP request GET http://localhost:44377/readyz");
+                Print(factory.CreateLogger($"{AppHostFixture.HttpClientCategory}.health-checks.LogicalHandler"), LogLevel.Warning, "a warning of the client");
+                Print(factory.CreateLogger("Microsoft.Extensions.Diagnostics.HealthChecks.DefaultHealthCheckService"), LogLevel.Error, "Health check api_http_/health_200_check with status Unhealthy");
+                Print(factory.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Api}"), LogLevel.Information, "Now listening on: http://localhost:44377");
+            }
+
+            logs.Read(AppLogs.AppHost).Tail.ShouldBe(
+            [
+                "Information Distributed application starting.",
+                "Warning     a warning of the client",
+                "Error       Health check api_http_/health_200_check with status Unhealthy",
+            ]);
+            logs.Read(ServiceNames.Api).Tail.ShouldBe(["Information Now listening on: http://localhost:44377"]);
         }
         finally
         {

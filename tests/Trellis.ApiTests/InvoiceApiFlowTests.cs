@@ -49,9 +49,15 @@ public sealed class InvoiceApiFlowTests
         // Without a health check a resource reports healthy as soon as its process runs.
         appHost.Resources.Single(static r => r.Name == ServiceNames.Web).Annotations.OfType<HealthCheckAnnotation>()
             .ShouldNotBeEmpty("the AppHost no longer checks the web host's /health");
+        string[] needed = AppHostTestingExtensions.NeededBy(appHost.Resources, ServiceNames.Web);
+#else
+        string[] needed = AppHostTestingExtensions.NeededBy(appHost.Resources, ServiceNames.Api);
 #endif
         await using DistributedApplication app = await appHost.BuildAsync(ct);
-        await app.StartAsync(ct);
+        // StartAsync does not return while a resource waits for a dependency, also one that started and then
+        // exited before it was healthy: the first needed resource that fails (AppHostTestingExtensions.FailureOf)
+        // ends the start instead.
+        await app.RunUnlessOneFailsAsync(needed, app.StartAsync, ct);
 
         // Healthy implies the migration worker already completed (api WaitsForCompletion on it).
         await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Api, ct);

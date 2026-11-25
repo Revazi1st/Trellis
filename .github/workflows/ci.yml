@@ -472,8 +472,9 @@ jobs:
         run: dotnet test tests/Trellis.UiTests -c Release --no-build
 
       # What every resource of the application printed (the migration job, the API, the web host, the
-      # containers, and the AppHost itself), one group per file. A start that failed is explained here:
-      # the failing test's message holds only each resource's state and last lines.
+      # containers, and the AppHost itself), one group per file. A start that failed is explained here in
+      # full: the failing test's message names the resource that failed and each resource's state, and holds
+      # only a few lines of each host, its first error lines and its last lines.
       - name: Show the application's logs
         if: failure()
         run: |

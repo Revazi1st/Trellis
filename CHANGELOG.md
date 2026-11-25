@@ -45,10 +45,14 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   needs Docker and a .NET SDK on the host, or CI, like the Aspire E2E; in the SDK container the tests
   still skip and nothing starts. `UI_TESTS_BASE_URL` still points them at an application that is already
   running, and in the dev container that is the only way: the AppHost cannot orchestrate from inside a
-  container, so without the address every browser test fails at once and says so. When the application
-  does not come up, the failing tests name each resource's state and last lines, and what every resource
-  printed is kept in a file per resource (`UI_TESTS_LOGS`), which the `ui-tests` job prints on failure
-  and uploads as `ui-app-logs` (`docs/development.md`, *UI tests*; ADR-0008's amendment).
+  container, so without the address every browser test fails at once and says so. When a resource the
+  web host needs fails to start or exits with a code other than 0, the start ends at once instead of
+  waiting out its time limit (Aspire's `StartAsync` goes on waiting for a dependency that started and
+  then exited before it was healthy), and the Aspire E2E's start ends the same way. The failing tests
+  name that resource, each resource's state, the first error lines and the last lines of the migration
+  job, the API and the web host, and the AppHost's last lines; what every resource printed is kept in a
+  file per resource (`UI_TESTS_LOGS`), which the `ui-tests` job prints on failure and uploads as
+  `ui-app-logs` (`docs/development.md`, *UI tests*; ADR-0008's amendment).
 - **`ClientRoutesTests`** (with the UI). Every request a typed client of the UI sends is held to
   `docs/api/openapi.v1.json`: each row of the test's table names the client, the member and the operation
   the member means, by its `operationId` (the endpoint class's name, as `PayInvoice`), and the request
@@ -73,6 +77,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ### Changed
 
+- **The shipped `InitialCreate` is regenerated on EF Core 10.0.15**, with the packages' move to the
+  .NET 10.0.15 servicing release (its id is now `20261125094954_InitialCreate`, its `Up` and `Down`
+  unchanged, so your first `migrations add` shows your model change and not a version line). Upgrading
+  a project whose database already applied an earlier one, keep yours (`docs/upgrading.md`, step 5).
+  The `Microsoft.OpenApi` pin moves to 2.13.1, the floor `Microsoft.AspNetCore.OpenApi` 10.0.15 asks
+  for.
 - **Everything in Persistence that only PostgreSQL understands is in `PostgresDialect.cs`.** The
   provider and its retrying strategy, the design-time provider, the `xmin` concurrency token, the outbox
   payload's `jsonb`, the outbox index's filter, the `FOR UPDATE SKIP LOCKED` claim and the reading of a

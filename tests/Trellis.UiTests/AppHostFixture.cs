@@ -23,8 +23,11 @@ namespace Trellis.UiTests;
 /// <para>
 /// Nothing starts in the constructor: xUnit creates an assembly fixture before any test runs, and a run
 /// without RUN_UI_TESTS=1 (the SDK container, an ordinary <c>dotnet test</c>) skips every browser test, so
-/// it must start nothing. A start that fails is kept: every test fails with the same message, which holds
-/// each resource's state and last lines, and the whole of what they printed is in
+/// it must start nothing. The start ends as soon as a resource the web host needs fails (the web host
+/// itself and everything it waits for: <c>RunUnlessOneFailsAsync</c> over <c>NeededBy</c>), and otherwise
+/// at <see cref="StartTimeout"/>. A start that fails is kept: every test fails with the same message, which
+/// holds the reason, each resource's state, the first error lines and the last lines of the migration job,
+/// the API and the web host, and the AppHost's last lines; the whole of what each resource printed is in
 /// <see cref="UiTestEnvironment.LogRoot"/>.
 /// </para>
 /// <para>
@@ -73,7 +76,7 @@ public sealed class AppHostFixture : IAsyncDisposable
     /// <summary>
     /// What a test gets when the run is in a container and names no address. The AppHost is not started
     /// there: its projects would run in the container and PostgreSQL beside it on the host, the two cannot
-    /// reach each other, and the wait would end at <see cref="StartTimeout"/> with nothing to read.
+    /// reach each other, and the start would fail on that instead of on anything the tests are about.
     /// </summary>
     internal const string InContainerMessage =
         "The browser tests cannot start the application from inside a container (the dev container, the SDK container): "
@@ -106,8 +109,9 @@ public sealed class AppHostFixture : IAsyncDisposable
     }
 
     /// <summary>
-    /// The message of a start that failed: why, each resource's state, the last lines of the resources the
-    /// application is made of and of the AppHost itself, and where every line is.
+    /// The message of a start that failed: why, each resource's state, then for the resources the
+    /// application is made of their first error lines (when they printed any before their last lines) and
+    /// their last lines, for the AppHost itself its last lines, and where every line is.
     /// </summary>
     internal static string Describe(string reason, IEnumerable<(string Resource, string State)> states, AppLogs logs)
     {
@@ -116,16 +120,29 @@ public sealed class AppHostFixture : IAsyncDisposable
         message.Append(CultureInfo.InvariantCulture, $"Resources: {string.Join("; ", states.Select(static s => $"{s.Resource} = {s.State}"))}").AppendLine();
         foreach (string sink in new[] { ServiceNames.Migrations, ServiceNames.Api, ServiceNames.Web, AppLogs.AppHost })
         {
-            IReadOnlyList<string> tail = logs.Tail(sink);
-            message.Append(CultureInfo.InvariantCulture, $"Last lines of {sink}:{(tail.Count == 0 ? " (it printed nothing)" : string.Empty)}").AppendLine();
-            foreach (string line in tail)
+            (IReadOnlyList<string> errors, IReadOnlyList<string> tail) = logs.Read(sink);
+            // Not the AppHost's: its first errors are the health probes of containers still coming up, in a healthy start too.
+            if (errors.Count > 0 && !string.Equals(sink, AppLogs.AppHost, StringComparison.Ordinal))
             {
-                message.Append("  ").AppendLine(line);
+                message.Append(CultureInfo.InvariantCulture, $"First error lines of {sink}:").AppendLine();
+                AppendIndented(message, errors);
             }
+
+            message.Append(CultureInfo.InvariantCulture, $"Last lines of {sink}:{(tail.Count == 0 ? " (it printed nothing)" : string.Empty)}").AppendLine();
+            AppendIndented(message, tail);
         }
 
         message.Append(CultureInfo.InvariantCulture, $"Every line each resource printed is in {logs.Folder} (one file per resource; UI_TESTS_LOGS names the folder).");
         return message.ToString();
+
+        static void AppendIndented(StringBuilder text, IReadOnlyList<string> lines)
+        {
+            foreach (string line in lines)
+            {
+                // A line of several is two (AppLogs): its next line, or its exception's first, goes under its text.
+                text.Append("  ").AppendLine(line.Replace(Environment.NewLine, Environment.NewLine + "  ", StringComparison.Ordinal));
+            }
+        }
     }
 
     /// <summary>
@@ -147,6 +164,22 @@ public sealed class AppHostFixture : IAsyncDisposable
             _ => throw new InvalidOperationException(AskedBeforeTheGuardMessage),
         };
 
+    /// <summary>
+    /// Hands the AppHost's lines to <paramref name="logs"/>: every category at Information, whatever the
+    /// AppHost's own appsettings filter, because the files are read after a failure; and the HTTP client's
+    /// categories (<see cref="HttpClientCategory"/>) at Warning. The health checks request every host and tile
+    /// over and over through that client, which at Information logs each request at its start, its send, its
+    /// answer and its end: that filled <c>apphost.log</c> and its last lines with nothing a failed start is
+    /// explained by. A check that fails is still in the file, as the health check's own error.
+    /// </summary>
+    internal static void CaptureInto(ILoggingBuilder logging, AppLogs logs)
+        => logging.AddProvider(logs)
+            .AddFilter<AppLogs>(category: null, LogLevel.Information)
+            .AddFilter<AppLogs>(HttpClientCategory, LogLevel.Warning);
+
+    /// <summary>The prefix of the categories <c>IHttpClientFactory</c>'s clients log under, one per client and handler.</summary>
+    internal const string HttpClientCategory = "System.Net.Http.HttpClient";
+
     private async Task<string> StartAsync()
     {
         using CancellationTokenSource timeout = new(StartTimeout);
@@ -166,23 +199,32 @@ public sealed class AppHostFixture : IAsyncDisposable
             // cannot succeed. CI must show the browser tests failing fast with the message and the logs.
             appHost.CreateResourceBuilder(appHost.Resources.OfType<ProjectResource>().Single(static r => string.Equals(r.Name, ServiceNames.Api, StringComparison.Ordinal)))
                 .WithEnvironment("Outbox__BatchSize", "0");
-            // Every line, whatever the AppHost's own appsettings filter: the files are read after a failure.
-            appHost.Services.AddLogging(logging => logging.AddProvider(logs).AddFilter<AppLogs>(category: null, LogLevel.Information));
+            appHost.Services.AddLogging(logging => CaptureInto(logging, logs));
             resources = [.. appHost.Resources.Select(static resource => resource.Name)];
+            // The web host and everything it waits for: the API, the migration job, the database and its
+            // server. Not the tool tiles: a pgAdmin that crashes does not stop the browser tests.
+            string[] needed = AppHostTestingExtensions.NeededBy(appHost.Resources, ServiceNames.Web);
 
-            app = await appHost.BuildAsync(ct);
-            await app.StartAsync(ct);
+            DistributedApplication started = app = await appHost.BuildAsync(ct);
 
-            // Healthy is each host's own /health answering (the AppHost's WithHttpHealthCheck), and the API
-            // starts only once the migration worker has migrated, seeded and exited with 0. A resource that
-            // fails or exits ends the wait at once: that is the testing builder's default, named here so the
-            // start does not depend on it. The time limit covers what is left, a resource that keeps running
-            // and never becomes healthy.
-            await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Api, WaitBehavior.StopOnResourceUnavailable, ct);
-            await app.ResourceNotifications.WaitForResourceHealthyAsync(ServiceNames.Web, WaitBehavior.StopOnResourceUnavailable, ct);
+            // StartAsync does not return while a resource waits for a dependency, and a resource goes on waiting
+            // for a dependency that started and then exited before it was healthy (CI saw the web host wait for an
+            // API that had crashed at boot, until the time limit). So the start and the two waits each run under a
+            // watch of the needed resources: the first of them that fails to start, or exits with a code other
+            // than 0, ends the start at once with its own sentence. Healthy is each host's own /health answering
+            // (the AppHost's WithHttpHealthCheck), and the API starts only once the migration job has migrated,
+            // seeded and exited with 0. The waits keep StopOnResourceUnavailable, Aspire's own stop for the
+            // resource a wait names, and when that stop comes first the helper still ends with the resource's
+            // sentence; the watch covers the resources behind it. The time limit covers what is left: a resource
+            // that keeps running and never becomes healthy.
+            await started.RunUnlessOneFailsAsync(needed, started.StartAsync, ct);
+            await started.RunUnlessOneFailsAsync(needed, token => started.ResourceNotifications.WaitForResourceHealthyAsync(
+                ServiceNames.Api, WaitBehavior.StopOnResourceUnavailable, token), ct);
+            await started.RunUnlessOneFailsAsync(needed, token => started.ResourceNotifications.WaitForResourceHealthyAsync(
+                ServiceNames.Web, WaitBehavior.StopOnResourceUnavailable, token), ct);
 
-            string address = UiTestEnvironment.WithoutTrailingSlash(app.GetEndpoint(ServiceNames.Web).ToString());
-            _app = app;
+            string address = UiTestEnvironment.WithoutTrailingSlash(started.GetEndpoint(ServiceNames.Web).ToString());
+            _app = started;
             return address;
         }
         catch (Exception exception)
