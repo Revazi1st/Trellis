@@ -29,7 +29,7 @@ Agent entry point — read only what the task needs.
 - [domain.md](../.claude/rules/domain.md) — `src/Core/Trellis.Domain/**/*.cs`: aggregates, lifecycle rules, value objects and what they guarantee, IDs, events, specifications, choosing an `ErrorType`
 - [infrastructure.md](../.claude/rules/infrastructure.md) — `src/Infrastructure/Trellis.Infrastructure/**/*.cs`: adapters, options, outbound HTTP, e-mail
 - [persistence.md](../.claude/rules/persistence.md) — `src/Infrastructure/Trellis.Persistence/**/*.cs`: EF configurations, the dialect, interceptors, tenancy, outbox, retention, options, migrations, Identity
-- [sharedkernel.md](../.claude/rules/sharedkernel.md) — `src/Core/Trellis.SharedKernel/**/*.cs`: Result and errors, CQRS contracts, the decorator pipeline, cancellation filters, the unit of work
+- [sharedkernel.md](../.claude/rules/sharedkernel.md) — `src/Core/Trellis.SharedKernel/**/*.cs`: Result and errors, CQRS contracts, the decorator pipeline, cancellation filters, the unit of work, the `TimeSpan` limit attribute
 - [tests.md](../.claude/rules/tests.md) — `tests/**/*.cs`: the stack, test names, the shared test support (`tests/TestSupport/`: `ShouldBeSuccess()`, `InvoiceFactory`) and RSLT001 over tests, arranging through the drivers (`InvoiceDriver`, `InvoiceHttpDriver`) and the switchable `TestCurrentUser`, each test project's conventions (one folder per use case, the validator boundary tests), the fitness suites and their positive controls, the fixture contract and helpers, the test database, the OpenAPI snapshot
 - [tools.md](../.claude/rules/tools.md) — `tools/**/*.{cs,csproj}`, `.github/**/*.{yml,yaml}`, `docker-compose.yml`: AppHost, MigrationService, the RSLT001 analyzer, CI supply-chain gates
 <!--#if (IncludeUI) -->
