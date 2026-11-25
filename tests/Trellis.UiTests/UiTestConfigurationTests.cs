@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Shouldly;
+using Trellis.ServiceDefaults;
 using Xunit;
 
 namespace Trellis.UiTests;
@@ -131,34 +132,35 @@ public sealed class UiTestConfigurationTests
         string folder = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         try
         {
+            // The resources Describe tails, by the constants it reads: a rename moves both sides.
             using AppLogs logs = new(folder);
-            ILogger migrations = logs.CreateLogger("Acme.Shop.AppHost.Resources.migrations");
+            ILogger migrations = logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Migrations}");
             for (int line = 1; line <= 20; line++)
             {
                 Print(migrations, LogLevel.Information, $"line {line}");
             }
 
-            Print(logs.CreateLogger("Acme.Shop.AppHost.Resources.api"), LogLevel.Error, "Host terminated unexpectedly", new InvalidOperationException("no signing key"));
+            Print(logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Api}"), LogLevel.Error, "Host terminated unexpectedly", new InvalidOperationException("no signing key"));
 
             string message = AppHostFixture.Describe(
-                "Stopped waiting for resource 'api'.",
-                [("migrations", "Finished, exit code 0"), ("api", "FailedToStart")],
+                $"Stopped waiting for resource '{ServiceNames.Api}'.",
+                [(ServiceNames.Migrations, "Finished, exit code 0"), (ServiceNames.Api, "FailedToStart")],
                 logs);
 
-            message.ShouldContain("did not come up for the browser tests: Stopped waiting for resource 'api'.");
-            message.ShouldContain("Resources: migrations = Finished, exit code 0; api = FailedToStart");
+            message.ShouldContain($"did not come up for the browser tests: Stopped waiting for resource '{ServiceNames.Api}'.");
+            message.ShouldContain($"Resources: {ServiceNames.Migrations} = Finished, exit code 0; {ServiceNames.Api} = FailedToStart");
             // The last fifteen lines of a resource, not its first ones.
             message.ShouldNotContain("line 5" + Environment.NewLine);
             message.ShouldContain("line 6" + Environment.NewLine);
             message.ShouldContain("line 20" + Environment.NewLine);
             message.ShouldContain("Host terminated unexpectedly");
             message.ShouldContain("no signing key");
-            message.ShouldContain("Last lines of web: (it printed nothing)");
+            message.ShouldContain($"Last lines of {ServiceNames.Web}: (it printed nothing)");
             message.ShouldContain(folder);
 
             // Every line is on disk while the application still runs: a cancelled job keeps what was printed.
-            ReadWhileOpen(Path.Combine(folder, "migrations.log")).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length.ShouldBe(20);
-            ReadWhileOpen(Path.Combine(folder, "api.log")).ShouldContain("no signing key");
+            ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Migrations}.log")).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length.ShouldBe(20);
+            ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Api}.log")).ShouldContain("no signing key");
         }
         finally
         {
