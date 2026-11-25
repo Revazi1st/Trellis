@@ -12,6 +12,7 @@ using NSubstitute;
 using Shouldly;
 using Trellis.Domain.Invoices;
 using Trellis.Domain.Invoices.Events;
+using Trellis.Infrastructure.Email;
 using Trellis.IntegrationTests.Telemetry;
 using Trellis.Persistence;
 using Trellis.Persistence.Outbox;
@@ -166,6 +167,31 @@ public sealed partial class OutboxRetryTests(DatabaseFixture database) : Integra
         (await RowAsync(PaidType)).Status.ShouldBe(OutboxMessageStatus.Processed);
         _flaky.Calls.ShouldBe(3);
         await EmailSender.Received(2).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());   // the failed try and the one that went out
+    }
+
+    [Fact]
+    public async Task A_failed_send_to_an_address_that_starts_outside_the_BMP_is_booked_with_the_address_masked()
+    {
+        // The SMTP adapter names the recipient in what it throws through EmailAddressMask, and the row stores that
+        // text. Half a surrogate pair there cannot be encoded for the database: the save of the failure is
+        // refused, and the attempt is never booked (no back-off, no dead letter, a new try at every lease).
+        string grinning = char.ConvertFromUtf32(0x1F600);
+        string address = grinning + "jane@example.com";
+        EmailSender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(static call => Task.FromException(new InvalidOperationException(
+                $"SMTP submission to {EmailAddressMask.Mask(call.ArgAt<string>(0))} failed: RecipientNotAccepted")));
+        InvoiceId id = await Services.IssuedInvoiceAsync(customerEmail: address);
+        await PayAsync(id);
+        var log = new LogRecorder();
+
+        (await CreateLoopProcessor(new OutboxOptions(), Time, log).ProcessBatchAsync(Ct)).ShouldBe(2);
+
+        log.Lines.Select(static line => line.EventId.Name).ShouldBe(["OutboxHandlerFailed", "OutboxRetryScheduled"]);
+        OutboxMessage paid = await RowAsync(PaidType);
+        paid.Attempts.ShouldBe(1);
+        paid.NextAttemptAtUtc.ShouldBe(Now + TimeSpan.FromSeconds(30));
+        paid.Error.ShouldBe($"SMTP submission to {grinning}***@example.com failed: RecipientNotAccepted");
+        await EmailSender.Received(1).SendAsync(address, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 
 namespace Trellis.Persistence.Identity;
@@ -51,13 +52,19 @@ internal static partial class SecurityEventLog
 
     /// <summary>
     /// <c>jane.doe@example.com</c> → <c>j***@example.com</c>: enough to spot a run against one domain,
-    /// not enough to read back the address someone typed.
+    /// not enough to read back the address someone typed. The first character is kept as a reader sees it
+    /// (a text element), never half of a surrogate pair. Infrastructure's <c>EmailAddressMask</c> is the
+    /// same mask (the peers keep a copy each); <c>EmailAddressMaskTests</c> holds both to the same rows.
     /// </summary>
-    private static string MaskEmail(string email)
+    internal static string MaskEmail(string email)
     {
         int at = email.LastIndexOf('@');
-        return at > 0 && at < email.Length - 1
-            ? string.Concat(email.AsSpan(0, 1), "***", email.AsSpan(at))
-            : "***";
+        if (at <= 0 || at == email.Length - 1)
+        {
+            return "***";
+        }
+
+        ReadOnlySpan<char> localPart = email.AsSpan(0, at);
+        return string.Concat(localPart[..StringInfo.GetNextTextElementLength(localPart)], "***", email.AsSpan(at));
     }
 }

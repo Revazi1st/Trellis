@@ -87,6 +87,19 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   the entries of `docs/overview.md` that link it and the sections of `docs/switching-database.md` that
   name it; a new feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
 
+### Fixed
+
+- **The outbox books a failed e-mail to an address that starts with an emoji.** The masked address in
+  the SMTP adapter's errors (`j***@example.com`) kept the first UTF-16 code unit, so for an address whose
+  first character lies outside the Basic Multilingual Plane (an emoji, a rare CJK character) it ended in
+  half a surrogate pair. PostgreSQL's driver refuses that text, so the outbox could not save the failed
+  attempt: it was never booked, never backed off and never dead-lettered, and the send was tried again
+  each time its lease ran out (10.5 minutes with the defaults), with an `OutboxBookkeepingFailed` warning
+  each time. The mask now keeps the first character as a reader sees it, a whole emoji or a letter with
+  its combining accent, and so does the copy that masks the e-mail of security event 1102. If you copied
+  the mask into code of your own, take the first text element there too
+  (`StringInfo.GetNextTextElementLength`).
+
 ## [0.2.0] - 2026-11-15
 
 A minor release. The Blazor UI gets a design system with a light and a dark theme and a switch between
