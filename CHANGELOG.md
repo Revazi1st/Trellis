@@ -91,8 +91,9 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   MailKit's 5.0 porting guide. When the relay offers SMTPUTF8, MailKit now refuses an internationalized
   address that fails its SMTPUTF8 address check (two non-ASCII scripts in one address, for one) before
   `MAIL FROM`, and quotes the address in its `SmtpUtf8AddressException`. The SMTP adapter rethrows that
-  exception with its reason and the masked address only, saying that MailKit refused it before
-  `MAIL FROM`, and the outbox retries it as it retries a refused recipient. The `Email:Smtp` settings
+  exception with its reason and the masked address only, named `Email:Smtp:FromAddress` when it is the
+  sender's (every message then fails), saying that MailKit refused it before `MAIL FROM`, and the
+  outbox retries it as it retries a refused recipient. The `Email:Smtp` settings
   and the adapter's other failures are unchanged; a relay's 530 now arrives as MailKit's new
   `SmtpServiceNotAuthenticatedException` and still leaves the adapter as `ServiceNotAuthenticatedException`
   without the reply. A test holds every public exception type of MailKit and MimeKit.Core to how the
