@@ -27,9 +27,9 @@ namespace Trellis.ApiTests.Ui;
 /// string built in a branch are all seen. A member the table below does not call fails the second fact,
 /// and so does a new client. What it does not see: a branch of a member no row takes (give it a row, as
 /// the invoice list has two), the headers and the body, the base address, which the host sets
-/// (<c>AddSharedUi</c>'s caller), and a row whose <c>operationId</c> is itself wrong (it states what the
-/// member is for, and the check holds the request to it). An operation no client calls is not a failure:
-/// the UI need not use the whole API.
+/// (<c>AddSharedUi</c>'s caller), and a row whose <c>operationId</c> is wrong in the same way as its
+/// member's route (the row states what the member is for, and the check holds the request to it). An
+/// operation no client calls is not a failure: the UI need not use the whole API.
 /// </para>
 /// </summary>
 public sealed partial class ClientRoutesTests
