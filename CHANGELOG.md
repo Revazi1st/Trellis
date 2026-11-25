@@ -85,13 +85,18 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   Architecture the tests enforce." The package description on nuget.org is the same sentence.
 - **E-mail goes out through MailKit 5.0** (it was 4.18). MailKit now brings `MimeKit.Core` (MIT) in
   place of the whole MimeKit, so BouncyCastle and `System.Security.Cryptography.Pkcs` are no longer in
-  the API's packages; a project that signs, encrypts or DKIM-signs mail adds `MimeKit.Cryptography` and
-  calls `CryptographyModule.Initialize()` at startup. When the relay offers SMTPUTF8, MailKit now
-  refuses an internationalized address that fails its SMTPUTF8 address check (two scripts in one
-  address, for one) before `MAIL FROM`, and quotes the address in its `SmtpUtf8AddressException`. The SMTP
-  adapter rethrows that exception with its reason and the masked address only, and the outbox retries
-  it as it retries a refused recipient. The `Email:Smtp` settings and the adapter's other failures are
-  unchanged.
+  the API's packages. A project that uses S/MIME, OpenPGP, DKIM or ARC (to sign, encrypt, verify or
+  decrypt) adds a reference to `MimeKit.Cryptography`, or to the `MimeKit` package that brings it, and
+  calls `CryptographyModule.Initialize()` once at startup; code of your own that calls MailKit follows
+  MailKit's 5.0 porting guide. When the relay offers SMTPUTF8, MailKit now refuses an internationalized
+  address that fails its SMTPUTF8 address check (two non-ASCII scripts in one address, for one) before
+  `MAIL FROM`, and quotes the address in its `SmtpUtf8AddressException`. The SMTP adapter rethrows that
+  exception with its reason and the masked address only, saying that MailKit refused it before
+  `MAIL FROM`, and the outbox retries it as it retries a refused recipient. The `Email:Smtp` settings
+  and the adapter's other failures are unchanged; a relay's 530 now arrives as MailKit's new
+  `SmtpServiceNotAuthenticatedException` and still leaves the adapter as `ServiceNotAuthenticatedException`
+  without the reply. A test holds every public exception type of MailKit and MimeKit.Core to how the
+  adapter treats it, so a MailKit update that adds one fails until the type has its row.
 - **The `remove-feature` and `add-feature` skills name the new docs**: removing the sample repoints
   the entries of `docs/overview.md` that link it and the sections of `docs/switching-database.md` that
   name it; a new feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
