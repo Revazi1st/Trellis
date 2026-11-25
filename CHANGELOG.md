@@ -87,6 +87,21 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   the entries of `docs/overview.md` that link it and the sections of `docs/switching-database.md` that
   name it; a new feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
 
+### Fixed
+
+- **The outbox books a failure whose error text the database cannot store.** The processor writes a
+  failed handler's exception message into the row's `Error`. When that text held half of a UTF-16
+  surrogate pair (which PostgreSQL's driver cannot encode) or a NUL (which a PostgreSQL text column
+  refuses), the save of the failure was refused: the attempt was never counted, never backed off and never
+  dead-lettered, and the message was dispatched again each time its lease ran out (10.5 minutes with the
+  defaults), for ever, with an `OutboxBookkeepingFailed` warning each time. A failed e-mail to an address
+  that starts with an emoji or another character outside the Basic Multilingual Plane did this: the masked
+  address in the SMTP adapter's errors (`j***@example.com`) kept the first UTF-16 code unit, so it began
+  with half a surrogate pair. The processor now stores the text with each such character replaced by
+  U+FFFD, and the mask keeps the whole first character as a reader sees it, a whole emoji or a letter with
+  its combining accent, as does the copy that masks the e-mail of security event 1102. If you copied the
+  mask into code of your own, take the first text element there too (`StringInfo.GetNextTextElementLength`).
+
 ## [0.2.0] - 2026-11-15
 
 A minor release. The Blazor UI gets a design system with a light and a dark theme and a switch between

@@ -346,7 +346,8 @@ internal sealed class OutboxProcessor(
             return DeadLetteredOutcome;
         }
 
-        message.Error = exception.Message;
+        // Storable first: a save the database refuses for the handler's text could never book this attempt.
+        message.Error = StorableText.From(exception.Message);
         message.NextAttemptAtUtc = timeProvider.GetUtcNow() + OutboxBackoff.DelayAfter(options, message.Attempts);
         activity?.SetTag(OutboxMetrics.OutcomeAttribute, RetryScheduledOutcome);
         await context.SaveChangesAsync(CancellationToken.None);
@@ -375,12 +376,16 @@ internal sealed class OutboxProcessor(
         return DeadLetteredOutcome;
     }
 
-    /// <summary>Writes the dead letter into the row and onto the span; the counter and the Critical line wait for the save (<see cref="AnnounceDeadLetter"/>).</summary>
+    /// <summary>
+    /// Writes the dead letter into the row and onto the span; the counter and the Critical line wait for the save
+    /// (<see cref="AnnounceDeadLetter"/>). The reason is a handler's exception message or a parser's, so the row
+    /// gets it storable (<see cref="StorableText"/>), as a back-off does.
+    /// </summary>
     private static void DeadLetter(OutboxMessage message, Activity? activity, string reason, string reasonTag)
     {
         message.Status = OutboxMessageStatus.DeadLettered;
         message.ProcessedAtUtc = null;
-        message.Error = reason;
+        message.Error = StorableText.From(reason);
         activity?.SetStatus(ActivityStatusCode.Error, reason);
         activity?.SetTag(OutboxMetrics.OutcomeAttribute, DeadLetteredOutcome);
         activity?.SetTag(OutboxMetrics.ReasonAttribute, reasonTag);
