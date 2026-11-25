@@ -39,8 +39,8 @@ jobs:
       fail-fast: false
       # KEEP IN SYNC with scripts/test-template.sh, which runs these legs on a maintainer's machine:
       # it reads this list (one key per line, args in double quotes; a new key needs teaching there)
-      # and its run_leg mirrors the Instantiate, first-migration, Regenerate, Build, Format, Test and
-      # browser steps below.
+      # and its run_leg mirrors the Instantiate, first-migration, Build, Format, Test and browser
+      # steps below.
       matrix:
         include:
           - name: default
@@ -58,8 +58,6 @@ jobs:
           - name: all-options
             args: "--use-redis true --use-serilog true --use-multitenancy true --include-ui-tests true"
             out: Acme.Full
-            # Multi-tenancy adds columns, so the shipped initial migration is regenerated first.
-            regenerate-migration: true
             # Build alone missed a runtime-only DI failure once (ITenantContext); run the generated tests too.
             test: true
             # The one leg that has the UiTests project: its browser tests run too, against the generated
@@ -85,7 +83,6 @@ jobs:
           - name: no-ui-with-multitenancy
             args: "--include-ui false --use-multitenancy true"
             out: Acme.Tenants
-            regenerate-migration: true
             test: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -157,10 +154,26 @@ jobs:
             id=$(sed -n 's/.*\[Migration("\([^"]*\)")\].*/\1/p' "$designer" | head -n 1)
             file=$(basename "$designer" .Designer.cs)
             if [ "$id" != "$file" ]; then
-              echo "::error file=$designer::the [Migration] attribute says '$id' but the file is '$file': a literal in the id was rewritten by the engine (a port symbol's replaces value in template.json); regenerate the migration at another minute."
+              echo "::error file=$designer::the [Migration] attribute says '$id' but the file is '$file': a literal in the id was rewritten by the engine (a port symbol's replaces value in template.json); regenerate both shipped sets with scripts/regenerate-initial-migrations.sh, which generates again a minute later until the id holds none."
               fail=1
             fi
           done
+
+          # The template keeps two initial migrations and a project gets one: the multi-tenant set with
+          # --use-multitenancy, the default one otherwise (template.json: a conditional source, and a
+          # modifier that keeps the default set out). Without that modifier dotnet new still succeeds
+          # and ships both, so what shipped is counted here: one migration, its designer and the
+          # snapshot, with the tenant columns exactly when the leg asked for them.
+          set -- src/Infrastructure/*.Persistence/Migrations/*.cs
+          tenant_columns=$(grep -c '"TenantId"' src/Infrastructure/*.Persistence/Migrations/*ModelSnapshot.cs || true)
+          case " ${{ matrix.args }} " in
+            *" --use-multitenancy true "*) wanted="some" ;;
+            *) wanted="no" ;;
+          esac
+          if [ "$#" -ne 3 ] || { [ "$wanted" = some ] && [ "$tenant_columns" -eq 0 ]; } || { [ "$wanted" = no ] && [ "$tenant_columns" -ne 0 ]; }; then
+            echo "::error::The generated project holds $# file(s) under Migrations/ and $tenant_columns TenantId line(s) in its snapshot; this leg must get one initial migration (3 files) with $wanted tenant columns. See the sources of .template.config/template.json."
+            fail=1
+          fi
 
           junk=$(find . \( "${prune[@]}" \) -prune -o \( -name .DS_Store -o -name 'appsettings.*.local.json' -o -name '*.pfx' \) -print)
           if [ -n "$junk" ]; then
@@ -249,7 +262,7 @@ jobs:
           # glob: a shipped copy expands it, and with none it stays literal, so -e is false.
           for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .github/CODEOWNERS .github/ISSUE_TEMPLATE docs/releasing.md .claude/rules/site.md eng/readme \
                    scripts/check-template-toggles.sh scripts/test-template.sh scripts/check-readme-sync.sh scripts/regenerate-initial-migrations.sh \
-                   site .github/workflows/site.yml \
+                   .template.config site .github/workflows/site.yml \
                    docs/adr/0031-documentation-site.md tests/*.ArchitectureTests/MigrationSnapshotTests.cs; do
             if [ -e "$f" ]; then
               echo "::error::$f is the template repository's own material and must not ship."
@@ -262,25 +275,22 @@ jobs:
       # A consumer's first migration on a tree nothing has built yet, as scripts/ef.sh runs it inside
       # the SDK container: dotnet-ef reads the project's metadata before it builds, and that needs the
       # restore's assets file (NETSDK1004 without it), so ef.sh restores the solution first. Read-only,
-      # so the steps after it see the tree as generated. KEEP IN SYNC with the command inside ef.sh's
-      # sh -c, and with scripts/test-template.sh.
+      # so the steps after it see the tree as generated. It is also the check that the initial
+      # migration a leg ships matches that leg's model, so it runs on the default leg and on every
+      # leg with multi-tenancy, whose migration is the second set the template keeps: this
+      # repository's own tests build only the default model. KEEP IN SYNC with the command inside
+      # ef.sh's sh -c, and with scripts/test-template.sh.
       - name: First migration command on an unbuilt tree
-        if: ${{ matrix.name == 'default' }}
+        if: ${{ matrix.name == 'default' || contains(matrix.args, '--use-multitenancy true') }}
         working-directory: ../generated
         run: |
           rm -rf artifacts
           dotnet tool restore
           dotnet restore ./*.slnx --verbosity quiet
-          dotnet dotnet-ef migrations has-pending-model-changes --project src/Infrastructure/*.Persistence
-
-      - name: Regenerate the initial migration
-        if: ${{ matrix.regenerate-migration }}
-        working-directory: ../generated
-        # The same step docs/development.md tells consumers to run after enabling multi-tenancy.
-        run: |
-          dotnet tool restore
-          dotnet dotnet-ef migrations remove --force --project src/Infrastructure/*.Persistence
-          dotnet dotnet-ef migrations add InitialCreate --project src/Infrastructure/*.Persistence
+          if ! dotnet dotnet-ef migrations has-pending-model-changes --project src/Infrastructure/*.Persistence; then
+            echo "::error::The initial migration this leg ships does not match its model. A model change regenerates both sets the template keeps, in the template repository: scripts/regenerate-initial-migrations.sh"
+            exit 1
+          fi
 
       - name: Build generated solution
         working-directory: ../generated
@@ -425,6 +435,13 @@ jobs:
             echo "::error::The package contains files that must never ship (listed above)."
             exit 1
           fi
+          # The multi-tenant initial migration is a source of its own in template.json, and a template
+          # whose source is missing does not load at all (MV012), whatever the options. grep reads the
+          # whole listing (no -q): under pipefail, a grep that stops early can fail unzip with SIGPIPE.
+          if ! unzip -Z1 ./nupkg/*.nupkg | grep -x 'content/.template.config/tenancy/Migrations/AppDbContextModelSnapshot.cs' > /dev/null; then
+            echo "::error::The package does not hold .template.config/tenancy/Migrations/, the multi-tenant initial migration."
+            exit 1
+          fi
 
       # The `instantiate` job validates the SOURCE tree (template.json's exclude list); real users
       # install the .nupkg, whose content set comes from the pack csproj — verify that artifact too.
@@ -433,6 +450,23 @@ jobs:
           dotnet new install ./nupkg/*.nupkg
           dotnet new trellis -n Acme.Packed -o "$RUNNER_TEMP/packed" --skip-restore true
           dotnet build "$RUNNER_TEMP"/packed/*.slnx -c Release
+          # The second set ships from the package too: a multi-tenant project gets it, and only it.
+          dotnet new trellis -n Acme.PackedTenants -o "$RUNNER_TEMP/packed-tenants" --include-ui false --use-multitenancy true --skip-restore true
+          set -- "$RUNNER_TEMP"/packed-tenants/src/Infrastructure/*.Persistence/Migrations/*.cs
+          if [ "$#" -ne 3 ] || ! grep -q '"TenantId"' "$RUNNER_TEMP"/packed-tenants/src/Infrastructure/*.Persistence/Migrations/*ModelSnapshot.cs; then
+            echo "::error::A multi-tenant project created from the package does not hold exactly the multi-tenant initial migration ($# file(s) under Migrations/)."
+            exit 1
+          fi
+
+      # The regeneration script's own test, and one more hold on the two committed sets. It generates
+      # both initial migrations as a maintainer's run does (a project per set, created from this tree's
+      # package in a private hive), writes nothing, and fails unless every committed file is what it
+      # generated, the id aside. A script that runs twice a year would otherwise rot unseen until the
+      # day an EF Core bump needs it; a set edited by hand fails here too. No database is contacted.
+      - name: Both shipped initial migrations are what the script generates
+        run: |
+          chmod +x scripts/regenerate-initial-migrations.sh
+          ./scripts/regenerate-initial-migrations.sh --check
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: template-package
