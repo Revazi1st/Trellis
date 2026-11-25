@@ -33,9 +33,18 @@ internal sealed class IdentityService(
     /// the second INSERT then loses at the unique user-name index, which <see cref="UniqueConstraintErrors"/>
     /// turns into the same 409 <see cref="AuthErrors.EmailAlreadyInUse"/> a sequential duplicate gets.
     /// </para>
+    /// <para>
+    /// An e-mail Identity cannot look up (<see cref="CanBeLookedUp"/>) is refused before the lookup with the
+    /// 400 Identity's own refusal of an e-mail gets (<see cref="RegistrationErrors.EmailRejected"/>).
+    /// </para>
     /// </summary>
     public async Task<Result<Guid>> RegisterAsync(string email, string password, CancellationToken cancellationToken)
     {
+        if (!CanBeLookedUp(email))
+        {
+            return Result.Failure<Guid>(RegistrationErrors.EmailRejected);
+        }
+
         if (await userManager.FindByEmailAsync(email) is not null)
         {
             return Result.Failure<Guid>(AuthErrors.EmailAlreadyInUse);
@@ -115,11 +124,12 @@ internal sealed class IdentityService(
     /// An unknown e-mail and a wrong password both answer <see cref="AuthErrors.InvalidCredentials"/>
     /// after the same password-hash work. A locked account answers <see cref="AuthErrors.AccountLockedOut"/>
     /// whatever password is supplied: the lockout check runs before the password check, so a 403 never
-    /// confirms a password (docs/threat-model.md accepts that it confirms the account exists).
+    /// confirms a password (docs/threat-model.md accepts that it confirms the account exists). An e-mail Identity
+    /// cannot look up (<see cref="CanBeLookedUp"/>) is an unknown account: no account can hold one.
     /// </summary>
     public async Task<Result<AuthenticatedUser>> ValidateCredentialsAsync(string email, string password, CancellationToken cancellationToken)
     {
-        ApplicationUser? user = await userManager.FindByEmailAsync(email);
+        ApplicationUser? user = CanBeLookedUp(email) ? await userManager.FindByEmailAsync(email) : null;
 
         if (user is null)
         {
@@ -172,6 +182,33 @@ internal sealed class IdentityService(
         return user is null
             ? Result.Failure<AuthenticatedUser>(AuthErrors.InvalidCredentials)
             : await BuildAuthenticatedUserAsync(user);
+    }
+
+    /// <summary>
+    /// Whether Identity can look the e-mail up at all. It finds an account by the e-mail's normalised form, and its
+    /// normaliser (<see cref="UpperInvariantLookupNormalizer"/>, <see cref="string.Normalize()"/> underneath) throws
+    /// an <see cref="ArgumentException"/> for text .NET calls invalid Unicode: a lone surrogate, which the JSON reader
+    /// already refuses, and U+FFFE, which it lets through and neither validator looks for. Out of a lookup that
+    /// exception would be a 500 an anonymous caller could ask for at will. The same text cannot be stored either
+    /// (creating an account normalises it the same way), so no account holds such an e-mail.
+    /// <para>
+    /// The framework has no way to ask without the exception (<see cref="string.IsNormalized()"/> throws the same one),
+    /// and the set of refused characters is the platform's, so the question is put to the normaliser the lookup uses,
+    /// and its refusal is caught at that one call. That is not a fault swallowed: the call has one input, the caller's
+    /// text, and does no I/O, so all it can refuse is that text.
+    /// </para>
+    /// </summary>
+    private bool CanBeLookedUp(string email)
+    {
+        try
+        {
+            _ = userManager.NormalizeEmail(email);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Identity's error codes only: its descriptions can repeat what the user typed.</summary>

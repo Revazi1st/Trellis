@@ -34,7 +34,10 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   spending the same password-hash work on both (`DummyPasswordHash`), so neither the answer nor
   its timing tells them apart. A locked account answers 403 `Auth.AccountLockedOut` whatever
   password is supplied (lockout is checked first, so a 403 never confirms a password); that it
-  confirms the account exists is an accepted risk (docs/threat-model.md).
+  confirms the account exists is an accepted risk (docs/threat-model.md). An e-mail Identity's lookup
+  cannot normalise (one holding U+FFFE, which .NET's Unicode normalisation refuses) is an unknown
+  account too, with the same answer, hash work and 1102 event, never a 500: `IdentityService` asks the
+  lookup's normaliser first.
 - **Registration** is governed by `Registration:Mode` (`RegistrationOptions`, validated at boot):
   `Closed` — the default, and the value in `appsettings.json` — answers 403
   `Auth.RegistrationClosed` and creates nothing; `Open` lets anyone create a Member account.
@@ -87,7 +90,9 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   e-mail racing each other are decided by the unique user-name index: the loser gets the same 409
   `Auth.EmailAlreadyInUse` as a sequential duplicate (ADR-0018, amendment of 2026-10-11). A password or
   e-mail Identity refuses answers 400 `Auth.RegistrationRejected` with one fixed sentence per Identity
-  error code — never Identity's own text, which repeats the e-mail.
+  error code — never Identity's own text, which repeats the e-mail. So does an e-mail its lookup cannot
+  normalise, refused before the lookup with the sentence an e-mail Identity refuses gets
+  (`RegistrationErrors.EmailRejected`).
 
 ## API (`src/Presentation/Api/Trellis.Api/Features/Auth/`)
 
@@ -269,7 +274,8 @@ idempotency — real Identity + PostgreSQL) · `ApiTests/InProcess/AuthRateLimit
 challenge header, algorithm pin) ·
 `ApiTests/InProcess/AuthFlowTests` (open and closed registration, an unknown mode failing the
 boot; rotation, replay killing the family, logout twice, revoke-all; lockout 4×401 → 403 → 403
-with its security events; equal hash work for an unknown e-mail; refresh-token expiry on an
+with its security events; equal hash work for an unknown e-mail; an e-mail holding U+FFFE an unknown
+account at sign-in and a 400 at registration; refresh-token expiry on an
 adjustable clock; 400 for missing fields) ·
 `ApiTests/Ui` (client-side: failure sentences, transport failures as results, refresh tolerance and
 hold-off, bearer attachment, sign-out revoking the refresh token, the return-URL guard, protected
