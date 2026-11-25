@@ -162,6 +162,10 @@ public sealed class AppHostFixture : IAsyncDisposable
             IDistributedApplicationTestingBuilder appHost =
                 await DistributedApplicationTestingBuilder.CreateAsync<Projects.Trellis_AppHost>(ct);
             appHost.UseThrowawayDatabase();
+            // FAILURE CONTROL, never merged: the API refuses this value at boot (OutboxOptions), so the start
+            // cannot succeed. CI must show the browser tests failing fast with the message and the logs.
+            appHost.CreateResourceBuilder(appHost.Resources.OfType<ProjectResource>().Single(static r => string.Equals(r.Name, ServiceNames.Api, StringComparison.Ordinal)))
+                .WithEnvironment("Outbox__BatchSize", "0");
             // Every line, whatever the AppHost's own appsettings filter: the files are read after a failure.
             appHost.Services.AddLogging(logging => logging.AddProvider(logs).AddFilter<AppLogs>(category: null, LogLevel.Information));
             resources = [.. appHost.Resources.Select(static resource => resource.Name)];
