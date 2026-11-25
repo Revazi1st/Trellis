@@ -54,9 +54,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   parameters are that operation's, by name. A client member without a row in the test's table fails, so a
   route renamed on one side no longer waits for a browser to be noticed.
 - **Every operation of the OpenAPI document carries one tag, and a feature declares it**: the `Tag`
-  constant of its `<Feature>Endpoints` class, held by `OpenApiDocumentTests`. An endpoint without
-  `.WithTags(...)` fails naming the operation (ASP.NET Core tags it with its class name, a group of one
-  in a generated client), and so does a literal tag and an operation with two.
+  constant of its `<Feature>Endpoints` class, held by `OpenApiDocumentTests`. The fact holds the tag's
+  value, so an operation fails, named, when its tag is one no `Tag` constant declares: the class name
+  ASP.NET Core gives an endpoint without `.WithTags(...)` (a group of one in a generated client), a
+  literal of its own, a misspelling. So does an operation with two.
 - **A test that starts the AppHost cannot share state with `aspire run` unnoticed.**
   `UseThrowawayDatabase` now refuses an AppHost in which any resource but postgres keeps a volume, a
   writable bind mount or a persistent lifetime, and `ThrowawayDatabaseTests` runs it on the AppHost's
