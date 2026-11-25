@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MimeKit.Utils;
 using Shouldly;
 using Trellis.Application.Abstractions;
 using Trellis.Infrastructure;
@@ -114,6 +115,29 @@ public sealed class EmailSenderTests
         failure.Mailbox.ShouldBeNull("MailKit's rejected mailbox is the full address");
         failure.Message.ShouldContain("j***@example.com");
         failure.ToString().ShouldNotContain(Recipient);
+    }
+
+    [Fact]
+    public async Task Send_ToAnAddressSmtpUtf8DoesNotAllow_ThrowsWithoutTheAddress()
+    {
+        // A relay that offers SMTPUTF8 has MailKit check every internationalized address before MAIL FROM, and
+        // MailKit's own message quotes the address. Greek and Cyrillic in one local part: EmailAddress accepts
+        // it, SMTPUTF8's one-script rule does not.
+        const string recipient = "jαжne@example.com";
+        using var relay = new TcpListener(IPAddress.Loopback, 0);
+        relay.Start();
+        Task<string> conversation = FakeRelayAsync(
+            relay, recipientReply: "250 ok", TestContext.Current.CancellationToken, offersSmtpUtf8: true);
+        await using ServiceProvider services = BuildServices(new CapturingLoggerProvider(), LocalRelay(relay));
+
+        SmtpUtf8AddressException failure = await Should.ThrowAsync<SmtpUtf8AddressException>(() => SendOneAsync(services, recipient));
+        string wire = await conversation;
+
+        wire.ShouldNotContain("MAIL FROM");
+        failure.Error.ShouldBe(SmtpUtf8AddressError.MixedScripts);
+        failure.Mailbox.Address.ShouldBe("j***@example.com", "MailKit's invalid mailbox is the full address");
+        failure.Message.ShouldContain("j***@example.com");
+        failure.ToString().ShouldNotContain(recipient);
     }
 
     [Fact]
@@ -278,11 +302,11 @@ public sealed class EmailSenderTests
         services.GetRequiredService<IOptions<EmailOptions>>().Value.Provider.ShouldBe(EmailProvider.Logging);
     }
 
-    private static async Task SendOneAsync(ServiceProvider services)
+    private static async Task SendOneAsync(ServiceProvider services, string to = Recipient)
     {
         await using AsyncServiceScope scope = services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<IEmailSender>()
-            .SendAsync(Recipient, Subject, Body, TestContext.Current.CancellationToken);
+            .SendAsync(to, Subject, Body, TestContext.Current.CancellationToken);
     }
 
     /// <summary>The settings a test states, and nothing else: <c>Email:Provider</c> when given, then each <c>key=value</c>.</summary>
@@ -319,13 +343,13 @@ public sealed class EmailSenderTests
 
     /// <summary>
     /// Just enough of a relay for one plaintext submission: greets, answers EHLO with no extension (so no
-    /// STARTTLS and no AUTH), RCPT with <paramref name="recipientReply"/> and every other command 250 (221 for
-    /// QUIT, or a hang-up when <paramref name="answersQuit"/> is false), swallows the DATA block, and returns
-    /// everything the client sent once it hangs up — with QUIT after a delivery, with a connection reset after
-    /// a failure.
+    /// STARTTLS and no AUTH; SMTPUTF8 alone when <paramref name="offersSmtpUtf8"/>), RCPT with
+    /// <paramref name="recipientReply"/> and every other command 250 (221 for QUIT, or a hang-up when
+    /// <paramref name="answersQuit"/> is false), swallows the DATA block, and returns everything the client sent
+    /// once it hangs up — with QUIT after a delivery, with a connection reset after a failure.
     /// </summary>
     private static async Task<string> FakeRelayAsync(
-        TcpListener listener, string recipientReply, CancellationToken cancellationToken, bool answersQuit = true)
+        TcpListener listener, string recipientReply, CancellationToken cancellationToken, bool answersQuit = true, bool offersSmtpUtf8 = false)
     {
         using TcpClient connection = await listener.AcceptTcpClientAsync(cancellationToken);
         await using NetworkStream stream = connection.GetStream();
@@ -366,6 +390,7 @@ public sealed class EmailSenderTests
 
             await writer.WriteLineAsync(verb switch
             {
+                "EHLO" when offersSmtpUtf8 => "250-relay.test\r\n250 SMTPUTF8",
                 "RCPT" => recipientReply,
                 "QUIT" => "221 bye",
                 _ => "250 ok",

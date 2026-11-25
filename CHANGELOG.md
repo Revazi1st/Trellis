@@ -83,6 +83,15 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 - **The template's description is one sentence**, the one `dotnet new trellis --help` prints:
   "Trellis is a dotnet new template for .NET 10 that generates a rich-DDD solution with Clean
   Architecture the tests enforce." The package description on nuget.org is the same sentence.
+- **E-mail goes out through MailKit 5.0** (it was 4.18). MailKit now brings `MimeKit.Core` (MIT) in
+  place of the whole MimeKit, so BouncyCastle and `System.Security.Cryptography.Pkcs` are no longer in
+  the API's packages; a project that signs, encrypts or DKIM-signs mail adds `MimeKit.Cryptography` and
+  calls `CryptographyModule.Initialize()` at startup. When the relay offers SMTPUTF8, MailKit now
+  refuses an internationalized address that SMTPUTF8 does not allow (two scripts in one address, for
+  one) before `MAIL FROM`, and quotes the address in its `SmtpUtf8AddressException`. The SMTP
+  adapter rethrows that exception with its reason and the masked address only, and the outbox retries
+  it as it retries a refused recipient. The `Email:Smtp` settings and the adapter's other failures are
+  unchanged.
 - **The `remove-feature` and `add-feature` skills name the new docs**: removing the sample repoints
   the entries of `docs/overview.md` that link it and the sections of `docs/switching-database.md` that
   name it; a new feature gets its line in `docs/INDEX.md` and no entry in `docs/overview.md`.
