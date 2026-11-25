@@ -372,6 +372,7 @@
         "scripts/test-template.sh",
         "scripts/check-readme-sync.sh",
         "scripts/regenerate-initial-migrations.sh",
+        "scripts/check-generated-content.sh",
         "docs/releasing.md",
         ".claude/rules/site.md",
         "docs/adr/0031-documentation-site.md",

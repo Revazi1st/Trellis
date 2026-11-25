@@ -11,12 +11,15 @@
 # It runs scripts/check-template-toggles.sh, packs the template once (the working tree as it is,
 # untracked files included), installs the package into a private hive (--debug:custom-hive), so your
 # own template list is never touched, and then for each leg: instantiates it with the leg's flags,
-# on the default leg and on every leg with multi-tenancy runs scripts/ef.sh's first-migration command
-# on the unbuilt tree (which also proves that the initial migration the leg ships matches its model),
-# builds Release, runs the generated ci.yml's format check (dotnet format --verify-no-changes) and,
-# on the legs Template CI tests, runs dotnet test. A table of results follows, and the exit code is 1
-# when anything failed. The working folder (under $TMPDIR) keeps every log and generated solution
-# after a failure.
+# runs Template CI's content gate on what it generated (scripts/check-generated-content.sh, whose
+# header lists the checks: the template's name, unprocessed directives, maintainer-only script names,
+# the shipped migration and more), on the default leg and on every leg with multi-tenancy runs
+# scripts/ef.sh's first-migration command on the unbuilt tree (which also proves that the initial
+# migration the leg ships matches its model), builds Release, runs the generated ci.yml's format check
+# (dotnet format --verify-no-changes) and, on the legs Template CI tests, runs dotnet test. A failed
+# step ends its leg, as in Template CI. A table of results follows, and the exit code is 1 when
+# anything failed. The working folder (under $TMPDIR) keeps every log and generated solution after a
+# failure.
 #
 # Because it packs, the legs get the package's content, as an install from nuget.org does and as
 # Template CI's pack job checks ("Instantiate & build from the packed template"); the instantiate job
@@ -35,8 +38,10 @@
 # the pack. The variable is read and unset first, so the suites never start a browser beside
 # Testcontainers; without it the BROWSER column says "skip".
 # Needs a .NET SDK that satisfies global.json, a running Docker (Testcontainers, the E2E), and jq and
-# git (for the toggle check). Template CI's content gates (leftovers of the template's name, the
-# consumer files, actionlint over the generated workflows) and its Windows job run only in CI.
+# git (for the toggle check). The rest of Template CI runs only there: on each leg, the generated
+# project's own ADR link, hook and doctor checks, actionlint over its workflows and the step that reads
+# it for the template's name and its consumer files (the leftovers step, with the must-not-ship loop);
+# the Windows job; and the pack job's checks of the package.
 #
 # KEEP IN SYNC with .github/workflows/template-ci.yml. The legs and their flags are read from its
 # instantiate matrix (keys name, args, out, test and browser, one per line, args in
@@ -274,13 +279,13 @@ in_dir() {  # $1 = folder, rest = command (a function above, or a program)
 }
 
 # Results, one entry per leg (indexed arrays: macOS still ships bash 3.2).
-r_name=() r_inst=() r_mig=() r_build=() r_fmt=() r_test=() r_browser=() r_time=()
+r_name=() r_inst=() r_content=() r_mig=() r_build=() r_fmt=() r_test=() r_browser=() r_time=()
 failed=0
 
 run_leg() {  # name out test browser args
   local name="$1" out="$2" test="$3" browser="$4" args="$5"
   local dir="$work/$name" log="$work/logs/$name.log" started=$SECONDS
-  local inst=- mig=- build=- fmt=- tst=- brw=" " flags=()
+  local inst=- content=- mig=- build=- fmt=- tst=- brw=" " flags=()
   # MIGRATION is the first-migration probe, on the legs Template CI runs it on.
   probes_migration "$name" "$args" || mig=" "
   [ "$test" = 1 ] || tst=" "
@@ -296,7 +301,18 @@ run_leg() {  # name out test browser args
     inst=FAIL
   fi
 
-  if [ "$inst" = ok ] && probes_migration "$name" "$args"; then
+  # Template CI's "Content gate" step, the script it runs, on what the leg generated, before anything
+  # compiles it. Its stdin is /dev/null, as the browser steps' below is.
+  if [ "$inst" = ok ]; then
+    echo "==> $name: scripts/check-generated-content.sh (Template CI's content gate)"
+    if logged "$log" ./scripts/check-generated-content.sh "$dir" "$out" ${flags[@]+"${flags[@]}"} </dev/null; then
+      content=ok
+    else
+      content=FAIL
+    fi
+  fi
+
+  if [ "$content" = ok ] && probes_migration "$name" "$args"; then
     echo "==> $name: the first migration command on an unbuilt tree (scripts/ef.sh's)"
     if logged "$log" in_dir "$dir" first_migration_probe; then
       mig=ok
@@ -309,7 +325,7 @@ run_leg() {  # name out test browser args
     fi
   fi
 
-  if [ "$inst" = ok ] && [ "$mig" != FAIL ]; then
+  if [ "$content" = ok ] && [ "$mig" != FAIL ]; then
     echo "==> $name: dotnet build -c Release"
     if logged "$log" in_dir "$dir" build_solution; then build=ok; else build=FAIL; fi
   fi
@@ -342,13 +358,14 @@ run_leg() {  # name out test browser args
   local elapsed=$((SECONDS - started))
   r_name+=("$name")
   r_inst+=("$inst")
+  r_content+=("$content")
   r_mig+=("$mig")
   r_build+=("$build")
   r_fmt+=("$fmt")
   r_test+=("$tst")
   r_browser+=("$brw")
   r_time+=("$((elapsed / 60))m$(printf '%02d' $((elapsed % 60)))s")
-  case "$inst $mig $build $fmt $tst $brw" in
+  case "$inst $content $mig $build $fmt $tst $brw" in
     *FAIL*) failed=1 ;;
   esac
 }
@@ -358,10 +375,11 @@ while IFS='|' read -r name out test browser args; do
 done <<< "$legs"
 
 echo
-printf '%-26s %-12s %-10s %-6s %-7s %-6s %-8s %s\n' LEG INSTANTIATE MIGRATION BUILD FORMAT TEST BROWSER TIME
+printf '%-26s %-12s %-8s %-10s %-6s %-7s %-6s %-8s %s\n' LEG INSTANTIATE CONTENT MIGRATION BUILD FORMAT TEST BROWSER TIME
 for i in "${!r_name[@]}"; do
-  printf '%-26s %-12s %-10s %-6s %-7s %-6s %-8s %s\n' \
-    "${r_name[$i]}" "${r_inst[$i]}" "${r_mig[$i]}" "${r_build[$i]}" "${r_fmt[$i]}" "${r_test[$i]}" "${r_browser[$i]}" "${r_time[$i]}"
+  printf '%-26s %-12s %-8s %-10s %-6s %-7s %-6s %-8s %s\n' \
+    "${r_name[$i]}" "${r_inst[$i]}" "${r_content[$i]}" "${r_mig[$i]}" "${r_build[$i]}" "${r_fmt[$i]}" "${r_test[$i]}" \
+    "${r_browser[$i]}" "${r_time[$i]}"
 done
 echo "(blank: the leg does not have that step; -: skipped after an earlier failure; skip: the browser tests run with RUN_UI_TESTS=1)"
 

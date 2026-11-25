@@ -86,6 +86,13 @@ jobs:
       - name: Template toggle check
         run: ./scripts/check-template-toggles.sh
 
+      # Template source only: Template CI's content gate is a script that every leg of
+      # template-ci.yml and of scripts/test-template.sh runs on what it generated. Its self-test plants
+      # each defect the gate looks for in a throwaway tree, so a check that stopped finding its defect,
+      # or started flagging a clean project, fails here.
+      - name: Content gate self-test
+        run: ./scripts/check-generated-content.sh --self-test
+
       # Template source only: the README's pictures are drawn from this tree by
       # eng/readme/render-diagrams.py; a stale one would show a project or a folder that no longer
       # exists. Re-render with: python3 eng/readme/render-diagrams.py
