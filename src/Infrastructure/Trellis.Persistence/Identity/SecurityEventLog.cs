@@ -9,8 +9,9 @@ namespace Trellis.Persistence.Identity;
 /// e-mail that matches no account carries the masked e-mail (<see cref="MaskEmail"/>), its line endings and
 /// every other control character replaced by spaces. None of them ever carries a password, and none carries a
 /// line break or a control character a caller typed: the masked e-mail is the only text here a caller chooses
-/// (the rest are user ids and Identity's error codes). An event that takes a string is private behind such a
-/// wrapper or names the reason no caller typed it in <c>SecurityEventLogTests</c> (ArchitectureTests).
+/// (the rest are user ids and Identity's error codes). An event that takes a string is private, reached through
+/// a wrapper that puts the text on one line (<see cref="LoginFailedUnknownAccount"/>), or names the reason no
+/// caller typed it in <c>SecurityEventLogTests</c> (ArchitectureTests), which fails on any other.
 /// </summary>
 internal static partial class SecurityEventLog
 {

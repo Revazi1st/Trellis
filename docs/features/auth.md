@@ -51,11 +51,10 @@ handler each. `TokenIssuer` mints the access+refresh pair (shared by login/refre
   e-mail such as `j***@example.com`, every line ending and every other control character in it a space:
   sign-in checks no e-mail format, so a line break typed into the address stays on the 1102 line instead of
   starting a forged one, and an escape sequence never reaches a terminal), 1103 `AccountLockedOut` (Warning,
-  user id — the counter just
-  tripped), 1104 `LoginRejectedLockedOut` (Information, user id), 1105 `FailedSignInNotCounted` and
-  1106 `FailedSignInCountNotReset` (Warning, user id and Identity error codes — the lockout counter's
-  writes report failure as an `IdentityResult`, never discarded). Never the password, never the
-  e-mail as typed.
+  user id — the counter just tripped), 1104 `LoginRejectedLockedOut` (Information, user id), 1105
+  `FailedSignInNotCounted` and 1106 `FailedSignInCountNotReset` (Warning, user id and Identity error
+  codes — the lockout counter's writes report failure as an `IdentityResult`, never discarded). Never the
+  password, never the e-mail as typed.
 - **The caller on every signal**: right after authentication, `UserTelemetryMiddleware` (Api.Common)
   puts the signed-in caller's user id in the log scope (`CallerUserId`; not `UserId`, which the security
   events above use for the account an event is about) and on the request span (`enduser.id`), so the
