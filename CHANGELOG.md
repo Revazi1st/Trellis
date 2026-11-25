@@ -61,7 +61,8 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 - **A test that starts the AppHost cannot share state with `aspire run` unnoticed.**
   `UseThrowawayDatabase` now refuses an AppHost in which any resource but postgres keeps a volume, a
   writable bind mount or a persistent lifetime, and `ThrowawayDatabaseTests` runs it on the AppHost's
-  own app model in every test run, without Docker. A resource you add with one is stripped in that step.
+  own app model in every test run, without Docker. A resource you add with one must be stripped in that
+  step too; `ThrowawayDatabaseTests` fails until it is.
 - **Two decisions written down.** ADR-0012: a test project may reference a host, with an alias where a
   second referenced project declares `Program`. ADR-0023: the outbox processor goes on after a
   bookkeeping failure and is not stopped after several in a row, with what that costs in an outage and
