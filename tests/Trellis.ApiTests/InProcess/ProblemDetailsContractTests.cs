@@ -39,6 +39,8 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
 
     private const string SignIn = "auth/login";
 
+    private const string Register = "auth/register";
+
     [Fact]
     public async Task Validation_failure_lists_each_field_with_its_json_path_and_rule_code()
     {
@@ -215,6 +217,32 @@ public sealed class ProblemDetailsContractTests(ApiFactory factory, RequestLimit
         only.Field.ShouldBe(field);
         only.Code.ShouldBe(ProblemCatalog.InvalidValueCode);
         only.Description.ShouldBe(ProblemCatalog.NulCharacterDescription);
+    }
+
+    /// <summary>
+    /// Identity's normaliser throws for a lone surrogate, as it does for U+FFFE, but one never reaches it: well-formed
+    /// UTF-8 has no encoding for a surrogate, so the one way a body can name one is its JSON escape, and the reader
+    /// refuses the escape of a high surrogate with no low one after it while the body binds, naming the member. The
+    /// rows are the fields that carry text into Identity: sign-in's e-mail (to the normaliser) and password (to the
+    /// password hasher), and registration's e-mail. The bodies hold the six-character escape a client sends, never a
+    /// .NET string holding the surrogate.
+    /// </summary>
+    [Theory]
+    [InlineData(SignIn, """{"email":"ghost\uD800@inprocess.test","password":"any-password"}""", "email")]
+    [InlineData(SignIn, """{"email":"ghost@inprocess.test","password":"any\uD800password"}""", "password")]
+    [InlineData(Register, """{"email":"ghost\uD800@inprocess.test","password":"Any-password1"}""", "email")]
+    public async Task A_lone_surrogate_in_a_sign_in_or_registration_body_string_is_a_400_that_names_the_field(string route, string body, string field)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string path = $"/api/v1/{route}";
+
+        // Both endpoints are anonymous and rate-limited per caller: each row goes from a client of its own, without a token.
+        HttpResponseMessage response = await factory.CreateClient().PostAsync(path, new StringContent(body, Encoding.UTF8, "application/json"), ct);
+
+        ProblemResponse problem = await ShouldBeProblemAsync(response, HttpStatusCode.BadRequest, "Request.Malformed", path, ct);
+        WireFieldError only = problem.Errors.ShouldNotBeNull().ShouldHaveSingleItem();
+        only.Field.ShouldBe(field);
+        only.Code.ShouldBe(ProblemCatalog.InvalidValueCode);
     }
 
     [Fact]
