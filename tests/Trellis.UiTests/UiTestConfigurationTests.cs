@@ -131,7 +131,8 @@ public sealed class UiTestConfigurationTests
     /// The message of a failed start, on a planted folder. The API crashed and, as in CI, the reason sits above
     /// the last lines: here it is the ninth of forty, the first at Error, and the stack trace under it fills
     /// the last lines, so the reason is read only from the API's first error lines. The migration job printed
-    /// no error line and the web host nothing, so neither gets a block of first error lines; nor does the
+    /// no error line, and the web host's one error (the watch's own stop of its start, a text that carries its
+    /// stack trace) is among its last lines, so neither gets a block of first error lines; nor does the
     /// AppHost, whose first error is a health probe from while the containers came up.
     /// </summary>
     [Fact]
@@ -154,6 +155,17 @@ public sealed class UiTestConfigurationTests
             {
                 Print(api, line < 9 ? LogLevel.Information : LogLevel.Error, line == 9 ? Reason : $"api line {line}");
             }
+
+            // The web host: its two waits, then the watch's own stop of its start. A resource's logger folds an
+            // exception into the line's text, so the stack trace comes as lines of the text, not as an exception.
+            ILogger web = logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Web}");
+            Print(web, LogLevel.Information, "Waiting for resource 'api' to enter the 'Running' state.");
+            Print(web, LogLevel.Information, "Waiting for resource 'api' to become healthy.");
+            Print(web, LogLevel.Error, string.Join(
+                '\n',
+                "Failed to create resource web",
+                "System.OperationCanceledException: The operation was canceled.",
+                "   at System.Threading.CancellationToken.ThrowOperationCanceledException()"));
 
             // The AppHost: a health probe that failed while the containers came up, as in a healthy start,
             // fifteen lines that push it out of the last ones, and an exception with a stack trace, as a failed
@@ -192,8 +204,15 @@ public sealed class UiTestConfigurationTests
             message.ShouldContain("api line 26" + Environment.NewLine);
             message.ShouldContain("api line 40" + Environment.NewLine);
             message.ShouldNotContain($"First error lines of {ServiceNames.Migrations}:");
+            // The web host's error is among its last lines, printed there and cut after its next line, as an
+            // exception is.
             message.ShouldNotContain($"First error lines of {ServiceNames.Web}:");
-            message.ShouldContain($"Last lines of {ServiceNames.Web}: (it printed nothing)");
+            message.ShouldContain(
+                $"Last lines of {ServiceNames.Web}:" + Environment.NewLine
+                + "  Information Waiting for resource 'api' to enter the 'Running' state." + Environment.NewLine
+                + "  Information Waiting for resource 'api' to become healthy." + Environment.NewLine
+                + "  Error       Failed to create resource web" + Environment.NewLine
+                + "              System.OperationCanceledException: The operation was canceled." + Environment.NewLine);
             // The AppHost's last lines only: its early probe is not in the message, and the error among its last
             // lines is printed there, its exception by its first line, under it.
             message.ShouldNotContain($"First error lines of {AppLogs.AppHost}:");
@@ -213,6 +232,12 @@ public sealed class UiTestConfigurationTests
             appHostFile.ShouldContain("Health check postgres_check with status Unhealthy");
             appHostFile.ShouldContain("System.InvalidOperationException: no signing key");
             appHostFile.ShouldContain("   at ");
+            ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Web}.log"))
+                .ShouldContain("   at System.Threading.CancellationToken.ThrowOperationCanceledException()");
+
+            // A resource that printed nothing says so.
+            using AppLogs silent = new(Path.Combine(folder, "silent"));
+            AppHostFixture.Describe("planted", [], silent).ShouldContain($"Last lines of {ServiceNames.Web}: (it printed nothing)");
         }
         finally
         {

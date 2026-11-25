@@ -10,8 +10,9 @@ namespace Trellis.UiTests;
 /// <c>{AppHost}.Resources.{resource}</c>; this provider writes each resource's lines to
 /// <c>{resource}.log</c> in <see cref="Folder"/> as they arrive, the AppHost's own lines to
 /// <c>apphost.log</c>, and remembers two things of each for the message of a failed start: its first lines
-/// logged at Error or above, and its last lines, a line's exception by its first line only (the file holds
-/// the whole of it). The first error lines are there because the last ones are often the bottom of a stack
+/// logged at Error or above, and its last lines, each cut after its second line (an exception's type and
+/// message, or the next line of a text that carries its own stack trace; the file holds the whole of it).
+/// The first error lines are there because the last ones are often the bottom of a stack
 /// trace, while what went wrong is the exception's message above it (a resource's standard error arrives at
 /// Error). The files are what explains a start that failed: CI prints them and keeps them as an artifact.
 /// </summary>
@@ -24,8 +25,10 @@ internal sealed class AppLogs(string folder) : ILoggerProvider
     private const int TailLength = 15;
     private const int FirstErrorsLength = 5;
 
-    /// <summary>Puts an exception's first line under its log line's text, past the level's column.</summary>
+    /// <summary>Puts a log line's second line (an exception's first) under its text, past the level's column.</summary>
     private const string Indent = "            ";
+
+    private static readonly char[] LineBreaks = ['\r', '\n'];
 
     private readonly ConcurrentDictionary<string, Sink> _sinks = new(StringComparer.Ordinal);
 
@@ -74,17 +77,17 @@ internal sealed class AppLogs(string folder) : ILoggerProvider
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             string line = string.Create(CultureInfo.InvariantCulture, $"{logLevel,-11} {formatter(state, exception)}");
-            // The file takes an exception whole. The message of a failed start takes its first line, the type
-            // and the message: the AppHost logs every failed health check with its exception, and their stack
-            // traces would fill the AppHost's last lines as its HTTP client's requests did.
-            string remembered = line;
             if (exception is not null)
             {
-                string whole = exception.ToString();
-                line += Environment.NewLine + whole;
-                int end = whole.IndexOfAny(['\r', '\n']);
-                remembered += Environment.NewLine + Indent + (end < 0 ? whole : whole[..end]);
+                line += Environment.NewLine + exception;
             }
+
+            // The file takes a line whole. The message of a failed start takes its first line and the next: an
+            // exception's type and message, or the second line of a text that carries a stack trace itself (a
+            // resource's logger folds an exception into the text, as in Aspire's "Failed to create resource").
+            // The AppHost logs every failed health check with its exception, and their stack traces would fill
+            // the AppHost's last lines as its HTTP client's requests did.
+            string remembered = FirstTwoLines(line);
 
             lock (_gate)
             {
@@ -113,6 +116,21 @@ internal sealed class AppLogs(string folder) : ILoggerProvider
                     _tail.Dequeue();
                 }
             }
+        }
+
+        /// <summary>A line's first line, and under it the next one; a line with no break, or nothing after it, is itself.</summary>
+        private static string FirstTwoLines(string line)
+        {
+            int end = line.IndexOfAny(LineBreaks);
+            if (end < 0)
+            {
+                return line;
+            }
+
+            ReadOnlySpan<char> rest = line.AsSpan(end + (line.AsSpan(end).StartsWith("\r\n", StringComparison.Ordinal) ? 2 : 1));
+            int restEnd = rest.IndexOfAny(LineBreaks);
+            ReadOnlySpan<char> next = restEnd < 0 ? rest : rest[..restEnd];
+            return next.IsWhiteSpace() ? line[..end] : string.Concat(line.AsSpan(0, end), Environment.NewLine + Indent, next);
         }
 
         public (string[] FirstErrors, string[] Tail) Read()
