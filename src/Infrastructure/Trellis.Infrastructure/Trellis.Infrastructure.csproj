@@ -5,7 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The SMTP client of Email/SmtpEmailSender.cs (MimeKit comes with it). -->
+    <!-- The SMTP client of Email/SmtpEmailSender.cs (MimeKit.Core, the message model, comes with it). -->
     <PackageReference Include="MailKit" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
