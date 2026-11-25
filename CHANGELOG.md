@@ -73,6 +73,12 @@ changelog; its `.trellis-template.json` records which version of this one it cam
 
 ### Changed
 
+- **The shipped `InitialCreate` is regenerated on EF Core 10.0.15**, with the packages' move to the
+  .NET 10.0.15 servicing release (its id is now `20261125094954_InitialCreate`, its `Up` and `Down`
+  unchanged, so your first `migrations add` shows your model change and not a version line). Upgrading
+  a project whose database already applied an earlier one, keep yours (`docs/upgrading.md`, step 5).
+  The `Microsoft.OpenApi` pin moves to 2.13.1, the floor `Microsoft.AspNetCore.OpenApi` 10.0.15 asks
+  for.
 - **Everything in Persistence that only PostgreSQL understands is in `PostgresDialect.cs`.** The
   provider and its retrying strategy, the design-time provider, the `xmin` concurrency token, the outbox
   payload's `jsonb`, the outbox index's filter, the `FOR UPDATE SKIP LOCKED` claim and the reading of a
