@@ -157,7 +157,7 @@ public sealed class AppHostFixture : IAsyncDisposable
         try
         {
             // Before anything prints: the message of a start refused before its first line then names a
-            // folder that exists, and a folder that cannot be written fails here, with that message.
+            // folder that exists, and a folder that cannot be created fails here, with that message.
             Directory.CreateDirectory(logs.Folder);
             IDistributedApplicationTestingBuilder appHost =
                 await DistributedApplicationTestingBuilder.CreateAsync<Projects.Trellis_AppHost>(ct);

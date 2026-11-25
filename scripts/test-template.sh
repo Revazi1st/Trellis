@@ -325,7 +325,8 @@ run_leg() {  # name out test regen browser args
   # The browser steps, on a leg that has them, only when asked (they install a browser and start the
   # generated AppHost twice), and, as Template CI runs them, once every earlier step of the leg passed:
   # the tests on a leg that has them, the format check on one that does not. Their stdin is /dev/null:
-  # it is the leg list of the loop below, and a command that read it would drop the legs after this one.
+  # left alone it is the leg list of the loop below, and a command that read it would drop the legs after
+  # this one.
   if [ "$browser" = 1 ]; then
     brw=-
     if [ "$browser_tests" != 1 ]; then

@@ -13,7 +13,7 @@ namespace Trellis.UiTests;
 /// </summary>
 public sealed class UiTestConfigurationTests
 {
-    /// <summary>What the stand-in start of the resolver theory hands back; nothing listens there.</summary>
+    /// <summary>What the stand-in start of the resolver theory hands back; nothing connects to it.</summary>
     private const string StartedAddress = "http://127.0.0.1:43117";
 
     /// <summary>
