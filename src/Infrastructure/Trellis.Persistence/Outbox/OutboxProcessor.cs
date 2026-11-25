@@ -51,7 +51,7 @@ internal sealed class OutboxProcessor(
             catch (Exception exception) when (exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
             {
                 // Warning, not Error: the next poll retries the claim (log-level policy: a scheduled retry
-                // is a Warning). A database that stays down shows as this line repeating every PollInterval.
+                // is a Warning). A database that stays down shows as this line on every poll.
                 // The backlog gauges do not move meanwhile: the sample is the poll's first query, so they
                 // hold what the last poll that reached the database counted, and show the real age again at
                 // the first poll after it is back.
