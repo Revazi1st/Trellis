@@ -102,12 +102,20 @@ default is safe; changing the setting reopens it), or **addressed** (fixed in th
 - **Personal data in outbox rows** — *open*. `InvoicePaidDomainEvent` carries the customer e-mail,
   so outbox payloads hold personal data until processed and then for `Retention` windows (3 days
   processed, 30 days dead-lettered), longer in backups. Prefer ids over personal data in event
-  payloads, or shorten the windows if your data-protection regime requires it. A failed send's
-  exception is written there too, as the row's `Error`, and into the handler-failed, retry and
-  dead-letter log lines and the span. The SMTP adapter's exceptions name an address only masked (`j***@example.com`: the
-  recipient, or the address MailKit refused) and never carry the relay's reply; `EmailSenderTests`
-  (a refused recipient, a 530, MailKit's SMTPUTF8 refusals) and `MailKitExceptionTypeTests` (every
-  public exception type of MailKit and MimeKit.Core) hold that.
+  payloads, or shorten the windows if your data-protection regime requires it. What a handler
+  throws is kept there too: a failing row's `Error` holds the exception's message as thrown (the
+  failed handlers' names when several fail) until an attempt succeeds and clears it, and a
+  dead-lettered row's keeps it for the dead-letter window, longer in backups; the span and the
+  handler-failed and retry log lines carry the whole exception, inner exceptions included, and the
+  dead-letter line its message. So a handler of your own must not quote personal data in what it
+  throws or wraps. The SMTP adapter's exceptions name an address only masked (`j***@example.com`: the
+  recipient, or the address MailKit refused) and never carry the relay's reply. `EmailSenderTests`
+  holds that for a refused recipient, a 530 and MailKit's SMTPUTF8 refusals, and
+  `MailKitExceptionTypeTests` holds every public exception type of MailKit and MimeKit.Core to a
+  row saying which of the adapter's catches rethrows it, or why it cannot reach the adapter or is
+  let through. No test holds what the refused-credentials and broken-conversation arms throw, nor
+  a listed type that starts quoting an address in a later MailKit release (only its release notes
+  would say so).
 - **Personal data in audit columns and telemetry** — *open*. `CreatedBy` and `ModifiedBy` hold the
   acting user's id, a `Guid` (`system` for the migration job), never the e-mail: a dump of a business
   table does not list its editors by address, and a changed e-mail leaves the trail joined to its user
