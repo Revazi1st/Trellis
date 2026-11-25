@@ -26,8 +26,9 @@ namespace Trellis.UiTests;
 /// it must start nothing. The start ends as soon as a resource the web host needs fails (the web host
 /// itself and everything it waits for: <c>RunUnlessOneFailsAsync</c> over <c>NeededBy</c>), and otherwise
 /// at <see cref="StartTimeout"/>. A start that fails is kept: every test fails with the same message, which
-/// holds the reason, each resource's state and the last lines of the migration job, the API, the web host
-/// and the AppHost, and the whole of what each resource printed is in <see cref="UiTestEnvironment.LogRoot"/>.
+/// holds the reason, each resource's state, and the first error lines and the last lines of the migration
+/// job, the API, the web host and the AppHost; the whole of what each resource printed is in
+/// <see cref="UiTestEnvironment.LogRoot"/>.
 /// </para>
 /// <para>
 /// It needs what the Aspire E2E needs (ADR-0008): a .NET SDK on the host or CI, and Docker. In a container
@@ -108,8 +109,9 @@ public sealed class AppHostFixture : IAsyncDisposable
     }
 
     /// <summary>
-    /// The message of a start that failed: why, each resource's state, the last lines of the resources the
-    /// application is made of and of the AppHost itself, and where every line is.
+    /// The message of a start that failed: why, each resource's state, then for the resources the
+    /// application is made of and for the AppHost itself their first error lines (when they printed any
+    /// before their last lines) and their last lines, and where every line is.
     /// </summary>
     internal static string Describe(string reason, IEnumerable<(string Resource, string State)> states, AppLogs logs)
     {
@@ -118,16 +120,28 @@ public sealed class AppHostFixture : IAsyncDisposable
         message.Append(CultureInfo.InvariantCulture, $"Resources: {string.Join("; ", states.Select(static s => $"{s.Resource} = {s.State}"))}").AppendLine();
         foreach (string sink in new[] { ServiceNames.Migrations, ServiceNames.Api, ServiceNames.Web, AppLogs.AppHost })
         {
+            IReadOnlyList<string> errors = logs.FirstErrors(sink);
+            if (errors.Count > 0)
+            {
+                message.Append(CultureInfo.InvariantCulture, $"First error lines of {sink}:").AppendLine();
+                AppendIndented(message, errors);
+            }
+
             IReadOnlyList<string> tail = logs.Tail(sink);
             message.Append(CultureInfo.InvariantCulture, $"Last lines of {sink}:{(tail.Count == 0 ? " (it printed nothing)" : string.Empty)}").AppendLine();
-            foreach (string line in tail)
-            {
-                message.Append("  ").AppendLine(line);
-            }
+            AppendIndented(message, tail);
         }
 
         message.Append(CultureInfo.InvariantCulture, $"Every line each resource printed is in {logs.Folder} (one file per resource; UI_TESTS_LOGS names the folder).");
         return message.ToString();
+
+        static void AppendIndented(StringBuilder text, IReadOnlyList<string> lines)
+        {
+            foreach (string line in lines)
+            {
+                text.Append("  ").AppendLine(line);
+            }
+        }
     }
 
     /// <summary>

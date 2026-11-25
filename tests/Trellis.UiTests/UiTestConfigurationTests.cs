@@ -126,13 +126,20 @@ public sealed class UiTestConfigurationTests
     public void A_resources_lines_go_to_a_file_of_its_name_and_every_other_line_to_the_AppHosts(string category, string sink)
         => AppLogs.SinkNameOf(category).ShouldBe(sink);
 
+    /// <summary>
+    /// The message of a failed start, on a planted folder. The API crashed as CI saw it: its reason is the ninth
+    /// of forty lines, the first at Error, and the stack trace under it fills the last lines, so the reason is
+    /// read only from the API's first error lines. The migration job printed no error line and the web host
+    /// nothing, so neither gets a block of first error lines.
+    /// </summary>
     [Fact]
-    public void A_failed_start_names_each_resources_state_its_last_lines_and_the_folder_that_holds_them_all()
+    public void A_failed_start_names_each_resources_state_its_first_error_lines_its_last_lines_and_the_folder_that_holds_them_all()
     {
+        const string Reason = "Unhandled exception. OptionsValidationException: 'Outbox:BatchSize must be between 1 and 1000.'";
         string folder = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         try
         {
-            // The resources Describe tails, by the constants it reads: a rename moves both sides.
+            // The resources Describe reads, by the constants it reads: a rename moves both sides.
             using AppLogs logs = new(folder);
             ILogger migrations = logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Migrations}");
             for (int line = 1; line <= 20; line++)
@@ -140,27 +147,50 @@ public sealed class UiTestConfigurationTests
                 Print(migrations, LogLevel.Information, $"line {line}");
             }
 
-            Print(logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Api}"), LogLevel.Error, "Host terminated unexpectedly", new InvalidOperationException("no signing key"));
+            ILogger api = logs.CreateLogger($"Acme.Shop.AppHost.Resources.{ServiceNames.Api}");
+            for (int line = 1; line <= 40; line++)
+            {
+                Print(api, line < 9 ? LogLevel.Information : LogLevel.Error, line == 9 ? Reason : $"api line {line}");
+            }
+
+            Print(logs.CreateLogger("Aspire.Hosting.Dcp.DcpExecutor"), LogLevel.Error, "Host terminated unexpectedly", new InvalidOperationException("no signing key"));
 
             string message = AppHostFixture.Describe(
-                $"Stopped waiting for resource '{ServiceNames.Api}'.",
-                [(ServiceNames.Migrations, "Finished, exit code 0"), (ServiceNames.Api, "FailedToStart")],
+                $"{ServiceNames.Api} failed: Finished, exit code 134",
+                [(ServiceNames.Migrations, "Finished, exit code 0"), (ServiceNames.Api, "Finished, exit code 134")],
                 logs);
 
-            message.ShouldContain($"did not come up for the browser tests: Stopped waiting for resource '{ServiceNames.Api}'.");
-            message.ShouldContain($"Resources: {ServiceNames.Migrations} = Finished, exit code 0; {ServiceNames.Api} = FailedToStart");
+            message.ShouldContain($"did not come up for the browser tests: {ServiceNames.Api} failed: Finished, exit code 134");
+            message.ShouldContain($"Resources: {ServiceNames.Migrations} = Finished, exit code 0; {ServiceNames.Api} = Finished, exit code 134");
             // The last fifteen lines of a resource, not its first ones.
             message.ShouldNotContain("line 5" + Environment.NewLine);
             message.ShouldContain("line 6" + Environment.NewLine);
             message.ShouldContain("line 20" + Environment.NewLine);
+            // The reason, under the API's first error lines and above its last ones: the first five lines at
+            // Error, and nothing the API printed at Information.
+            int firstErrors = message.IndexOf($"First error lines of {ServiceNames.Api}:", StringComparison.Ordinal);
+            firstErrors.ShouldBeGreaterThan(-1);
+            message.IndexOf(Reason, StringComparison.Ordinal).ShouldBeGreaterThan(firstErrors);
+            message.IndexOf($"Last lines of {ServiceNames.Api}:", StringComparison.Ordinal).ShouldBeGreaterThan(message.IndexOf(Reason, StringComparison.Ordinal));
+            message.ShouldNotContain("api line 8" + Environment.NewLine);
+            message.ShouldContain("api line 13" + Environment.NewLine);
+            message.ShouldNotContain("api line 14" + Environment.NewLine);
+            message.ShouldNotContain("api line 25" + Environment.NewLine);
+            message.ShouldContain("api line 26" + Environment.NewLine);
+            message.ShouldContain("api line 40" + Environment.NewLine);
+            message.ShouldNotContain($"First error lines of {ServiceNames.Migrations}:");
+            message.ShouldNotContain($"First error lines of {ServiceNames.Web}:");
+            message.ShouldContain($"Last lines of {ServiceNames.Web}: (it printed nothing)");
+            // An error among the last lines is printed once, there.
+            message.ShouldNotContain($"First error lines of {AppLogs.AppHost}:");
             message.ShouldContain("Host terminated unexpectedly");
             message.ShouldContain("no signing key");
-            message.ShouldContain($"Last lines of {ServiceNames.Web}: (it printed nothing)");
             message.ShouldContain(folder);
 
             // Every line is on disk while the application still runs: a cancelled job keeps what was printed.
             ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Migrations}.log")).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length.ShouldBe(20);
-            ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Api}.log")).ShouldContain("no signing key");
+            ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Api}.log")).ShouldContain(Reason);
+            ReadWhileOpen(Path.Combine(folder, $"{AppLogs.AppHost}.log")).ShouldContain("no signing key");
         }
         finally
         {
