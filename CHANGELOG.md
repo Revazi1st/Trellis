@@ -49,10 +49,10 @@ changelog; its `.trellis-template.json` records which version of this one it cam
   web host needs fails to start or exits with a code other than 0, the start ends at once instead of
   waiting out its time limit (Aspire's `StartAsync` goes on waiting for a dependency that has exited),
   and the Aspire E2E's start ends the same way. The failing tests name that resource, each resource's
-  state, and the first error lines and the last lines of the migration job, the API, the web host and
-  the AppHost; what every resource printed is kept in a file per resource (`UI_TESTS_LOGS`), which the
-  `ui-tests` job prints on failure and uploads as `ui-app-logs` (`docs/development.md`, *UI tests*;
-  ADR-0008's amendment).
+  state, the first error lines and the last lines of the migration job, the API and the web host, and
+  the AppHost's last lines; what every resource printed is kept in a file per resource
+  (`UI_TESTS_LOGS`), which the `ui-tests` job prints on failure and uploads as `ui-app-logs`
+  (`docs/development.md`, *UI tests*; ADR-0008's amendment).
 - **`ClientRoutesTests`** (with the UI). Every request a typed client of the UI sends is held to
   `docs/api/openapi.v1.json`: each row of the test's table names the client, the member and the operation
   the member means, by its `operationId` (the endpoint class's name, as `PayInvoice`), and the request

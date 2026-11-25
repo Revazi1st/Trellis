@@ -281,9 +281,11 @@ ends at once when a resource the web host needs fails to start or exits with a c
 web host and everything it waits for, down to the database server; not pgAdmin or the mail catcher,
 which nothing waits for), and the message says first which one, in what state and, when it exited,
 with what exit code. A resource that keeps running and never becomes healthy ends the start at the
-time limit instead. The message then holds each resource's state and, for the migration job, the API,
-the web host and the AppHost, the first lines each logged as an error and the last lines each printed:
-the reason a host crashed is usually among the first, and the bottom of its stack trace is the last.
+time limit instead. The message then holds each resource's state and, for the migration job, the API
+and the web host, the first lines each logged as an error and the last lines each printed (the reason a
+host crashed is usually among the first, and the bottom of its stack trace is the last), and the
+AppHost's last lines: its first errors are the health checks of containers still coming up, which a
+healthy start logs too.
 Everything each resource printed is in `TestResults/applogs` under the test run's working directory
 (`artifacts/bin/Trellis.UiTests/debug/TestResults/applogs` after the commands above), one file per
 resource (`migrations.log`, `api.log`, `web.log`, the containers', and `apphost.log` for the AppHost

@@ -128,10 +128,11 @@ public sealed class UiTestConfigurationTests
         => AppLogs.SinkNameOf(category).ShouldBe(sink);
 
     /// <summary>
-    /// The message of a failed start, on a planted folder. The API crashed as CI saw it: its reason is the ninth
-    /// of forty lines, the first at Error, and the stack trace under it fills the last lines, so the reason is
-    /// read only from the API's first error lines. The migration job printed no error line and the web host
-    /// nothing, so neither gets a block of first error lines.
+    /// The message of a failed start, on a planted folder. The API crashed and, as in CI, the reason sits above
+    /// the last lines: here it is the ninth of forty, the first at Error, and the stack trace under it fills
+    /// the last lines, so the reason is read only from the API's first error lines. The migration job printed
+    /// no error line and the web host nothing, so neither gets a block of first error lines; nor does the
+    /// AppHost, whose first error is a health probe from while the containers came up.
     /// </summary>
     [Fact]
     public void A_failed_start_names_each_resources_state_its_first_error_lines_its_last_lines_and_the_folder_that_holds_them_all()
@@ -154,9 +155,18 @@ public sealed class UiTestConfigurationTests
                 Print(api, line < 9 ? LogLevel.Information : LogLevel.Error, line == 9 ? Reason : $"api line {line}");
             }
 
-            // An exception with a stack trace, as a failed health check logs it.
+            // The AppHost: a health probe that failed while the containers came up, as in a healthy start,
+            // fifteen lines that push it out of the last ones, and an exception with a stack trace, as a failed
+            // health check logs it.
+            ILogger appHost = logs.CreateLogger("Microsoft.Extensions.Diagnostics.HealthChecks.DefaultHealthCheckService");
+            Print(appHost, LogLevel.Error, "Health check postgres_check with status Unhealthy");
+            for (int entry = 1; entry <= 15; entry++)
+            {
+                Print(appHost, LogLevel.Information, $"apphost entry {entry}");
+            }
+
             Exception withStack = ExceptionDispatchInfo.SetCurrentStackTrace(new InvalidOperationException("no signing key"));
-            Print(logs.CreateLogger("Aspire.Hosting.Dcp.DcpExecutor"), LogLevel.Error, "Host terminated unexpectedly", withStack);
+            Print(appHost, LogLevel.Error, "Host terminated unexpectedly", withStack);
 
             string message = AppHostFixture.Describe(
                 $"{ServiceNames.Api} failed: Finished, exit code 134",
@@ -184,8 +194,11 @@ public sealed class UiTestConfigurationTests
             message.ShouldNotContain($"First error lines of {ServiceNames.Migrations}:");
             message.ShouldNotContain($"First error lines of {ServiceNames.Web}:");
             message.ShouldContain($"Last lines of {ServiceNames.Web}: (it printed nothing)");
-            // An error among the last lines is printed once, there, and its exception by its first line, under it.
+            // The AppHost's last lines only: its early probe is not in the message, and the error among its last
+            // lines is printed there, its exception by its first line, under it.
             message.ShouldNotContain($"First error lines of {AppLogs.AppHost}:");
+            message.ShouldNotContain("postgres_check");
+            message.ShouldContain($"Last lines of {AppLogs.AppHost}:");
             message.ShouldContain(
                 "  Error       Host terminated unexpectedly" + Environment.NewLine
                 + "              System.InvalidOperationException: no signing key" + Environment.NewLine);
@@ -197,6 +210,7 @@ public sealed class UiTestConfigurationTests
             ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Migrations}.log")).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length.ShouldBe(20);
             ReadWhileOpen(Path.Combine(folder, $"{ServiceNames.Api}.log")).ShouldContain(Reason);
             string appHostFile = ReadWhileOpen(Path.Combine(folder, $"{AppLogs.AppHost}.log"));
+            appHostFile.ShouldContain("Health check postgres_check with status Unhealthy");
             appHostFile.ShouldContain("System.InvalidOperationException: no signing key");
             appHostFile.ShouldContain("   at ");
         }

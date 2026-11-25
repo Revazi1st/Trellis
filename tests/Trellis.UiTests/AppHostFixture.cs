@@ -26,8 +26,8 @@ namespace Trellis.UiTests;
 /// it must start nothing. The start ends as soon as a resource the web host needs fails (the web host
 /// itself and everything it waits for: <c>RunUnlessOneFailsAsync</c> over <c>NeededBy</c>), and otherwise
 /// at <see cref="StartTimeout"/>. A start that fails is kept: every test fails with the same message, which
-/// holds the reason, each resource's state, and the first error lines and the last lines of the migration
-/// job, the API, the web host and the AppHost; the whole of what each resource printed is in
+/// holds the reason, each resource's state, the first error lines and the last lines of the migration job,
+/// the API and the web host, and the AppHost's last lines; the whole of what each resource printed is in
 /// <see cref="UiTestEnvironment.LogRoot"/>.
 /// </para>
 /// <para>
@@ -110,8 +110,8 @@ public sealed class AppHostFixture : IAsyncDisposable
 
     /// <summary>
     /// The message of a start that failed: why, each resource's state, then for the resources the
-    /// application is made of and for the AppHost itself their first error lines (when they printed any
-    /// before their last lines) and their last lines, and where every line is.
+    /// application is made of their first error lines (when they printed any before their last lines) and
+    /// their last lines, for the AppHost itself its last lines, and where every line is.
     /// </summary>
     internal static string Describe(string reason, IEnumerable<(string Resource, string State)> states, AppLogs logs)
     {
@@ -121,7 +121,8 @@ public sealed class AppHostFixture : IAsyncDisposable
         foreach (string sink in new[] { ServiceNames.Migrations, ServiceNames.Api, ServiceNames.Web, AppLogs.AppHost })
         {
             (IReadOnlyList<string> errors, IReadOnlyList<string> tail) = logs.Read(sink);
-            if (errors.Count > 0)
+            // Not the AppHost's: its first errors are the health probes of containers still coming up, in a healthy start too.
+            if (errors.Count > 0 && !string.Equals(sink, AppLogs.AppHost, StringComparison.Ordinal))
             {
                 message.Append(CultureInfo.InvariantCulture, $"First error lines of {sink}:").AppendLine();
                 AppendIndented(message, errors);
